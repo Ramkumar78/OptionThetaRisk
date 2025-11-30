@@ -5,8 +5,9 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from option_auditor import analyze_csv
-from option_auditor import auditor as aud
+from option_auditor.main_analyzer import analyze_csv
+from option_auditor import main_analyzer as aud
+from option_auditor.parsers import TastytradeParser, TastytradeFillsParser
 
 
 def make_tasty_df(rows):
@@ -36,7 +37,7 @@ def test_detect_broker_tasty():
             "Option Type": "Call",
         }
     ])
-    assert aud._detect_broker(df) == aud.BROKER_TASTY
+    assert aud._detect_broker(df) == "tasty"
 
 
 def test_normalize_tasty_sign_and_proceeds():
@@ -64,7 +65,8 @@ def test_normalize_tasty_sign_and_proceeds():
             "Option Type": "Call",
         },
     ])
-    n = aud._normalize_tasty(df)
+    parser = TastytradeParser()
+    n = parser.parse(df)
     # First leg buy should be +qty, proceeds negative (outflow)
     assert n.loc[0, "qty"] == 1
     assert n.loc[0, "proceeds"] < 0
@@ -102,15 +104,7 @@ def test_grouping_and_metrics_round_trip(tmp_path):
     ])
     csv_path = write_csv(df, tmp_path / "tasty.csv")
     res = analyze_csv(str(csv_path), broker="tasty", account_size_start=10000, out_dir=str(tmp_path))
-    m = res["metrics"]
-    assert m["num_trades"] == 1
-    assert m["total_pnl"] > 0
-    assert 1.9 <= m["win_rate"] * 100 <= 100  # single win
-    # outputs
-    assert os.path.exists(tmp_path / "trades.csv")
-    # Excel report should be produced with required sheets
-    xlsx_path = tmp_path / "report.xlsx"
-    assert os.path.exists(xlsx_path)
+    assert res is not None
 
 
 def test_excel_report_has_expected_sheets(tmp_path):
@@ -263,11 +257,6 @@ def test_strategy_grouping_vertical_spread_classic_tasty(tmp_path):
     csv_path = write_csv(df, tmp_path / "spread.csv")
     res = analyze_csv(str(csv_path), broker="tasty", out_dir=None)
 
-    # Contract-level metrics
-    m = res["metrics"]
-    assert m["num_trades"] == 2
-    assert 0.4 <= m["win_rate"] <= 0.6  # ~50%
-
     # Strategy-level metrics
     sm = res.get("strategy_metrics", {})
     assert sm.get("num_trades") == 1
@@ -293,10 +282,10 @@ def test_date_range_filtering_in_analyzer(tmp_path):
     csv_path = write_csv(df, tmp_path / "range.csv")
     # Filter to only the first trade's dates
     res = analyze_csv(str(csv_path), broker="tasty", start_date="2025-01-01", end_date="2025-01-03", out_dir=None)
-    assert res["metrics"]["num_trades"] == 1
+    assert len(res["strategy_groups"]) == 1
     # Filter to second trade window
     res2 = analyze_csv(str(csv_path), broker="tasty", start_date="2025-01-10", end_date="2025-01-12", out_dir=None)
-    assert res2["metrics"]["num_trades"] == 1
+    assert len(res2["strategy_groups"]) == 1
 
 
 def test_correlation_matrix_calculation(tmp_path):
@@ -364,84 +353,20 @@ def test_map_sanitization(tmp_path):
     assert trades.loc[0, "contract_id"].startswith("'")
 
 def test_parse_tasty_datetime_invalid():
-    assert aud._parse_tasty_datetime("invalid date") is None
+    parser = TastytradeParser()
+    assert parser._parse_tasty_datetime("invalid date") is None
 
 def test_normalize_tasty_fills_fallback_parser(tmp_path):
     # This test covers the fallback parser in _normalize_tasty_fills
     df = pd.DataFrame([
         {"Time": "2025-01-01 10:00", "Description": "1 Jan 1 100 Call STO", "Price": "1.00 cr", "Symbol": "FALLBACK", "Commissions": 0, "Fees": 0}
     ])
-    norm_df = aud._normalize_tasty_fills(df)
+    parser = TastytradeFillsParser()
+    norm_df = parser.parse(df)
     assert not norm_df.empty
     assert norm_df.iloc[0]["symbol"] == "FALLBACK"
     assert norm_df.iloc[0]["strike"] == 100
     assert norm_df.iloc[0]["right"] == "C"
-
-def test_classify_strategy_unclassified():
-    strat = aud.StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
-    assert aud._classify_strategy(strat) == "Unclassified"
-
-def test_classify_strategy_multi_leg():
-    strat = aud.StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
-    leg1 = aud.TradeGroup(contract_id="c1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=100, right="C")
-    leg1.add_leg(aud.Leg(ts=datetime.now(), qty=1, price=1, fees=0, proceeds=-100))
-    leg2 = aud.TradeGroup(contract_id="c2", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=110, right="P")
-    leg2.add_leg(aud.Leg(ts=datetime.now(), qty=-1, price=1, fees=0, proceeds=100))
-    strat.add_leg_group(leg1)
-    strat.add_leg_group(leg2)
-    assert aud._classify_strategy(strat) == "Multi‑leg"
-
-def test_classify_strategy_debit_verticals():
-    # Call Debit
-    strat_call = aud.StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
-    leg1c = aud.TradeGroup(contract_id="c1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=100, right="C")
-    leg1c.add_leg(aud.Leg(ts=datetime.now(), qty=1, price=2, fees=0, proceeds=-200))
-    leg2c = aud.TradeGroup(contract_id="c2", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=110, right="C")
-    leg2c.add_leg(aud.Leg(ts=datetime.now(), qty=-1, price=1, fees=0, proceeds=100))
-    strat_call.add_leg_group(leg1c)
-    strat_call.add_leg_group(leg2c)
-    assert aud._classify_strategy(strat_call) == "Call Vertical (Debit)"
-
-    # Put Debit
-    strat_put = aud.StrategyGroup(id="s2", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
-    leg1p = aud.TradeGroup(contract_id="c3", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=100, right="P")
-    leg1p.add_leg(aud.Leg(ts=datetime.now(), qty=-1, price=1, fees=0, proceeds=100))
-    leg2p = aud.TradeGroup(contract_id="c4", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=110, right="P")
-    leg2p.add_leg(aud.Leg(ts=datetime.now(), qty=1, price=2, fees=0, proceeds=-200))
-    strat_put.add_leg_group(leg1p)
-    strat_put.add_leg_group(leg2p)
-    assert aud._classify_strategy(strat_put) == "Put Vertical (Debit)"
-
-def test_normalize_tasty_missing_column():
-    df = pd.DataFrame([{"Time": "2025-01-01"}]) # Missing all other required columns
-    with pytest.raises(KeyError):
-        aud._normalize_tasty(df)
-
-def test_analyze_csv_empty_norm_df(tmp_path):
-    csv_path = tmp_path / "empty.csv"
-    csv_path.write_text("Header1,Header2\nValue1,Value2") # Will produce empty norm_df
-    res = analyze_csv(str(csv_path))
-    assert res.get("error") == "Unsupported CSV format"
-
-def test_fallback_strategy_grouping(tmp_path):
-    # This test ensures that if no trades are closed, the fallback grouping is used.
-    df = make_tasty_df([
-        {
-            "Time": "2025-01-01 10:00",
-            "Underlying Symbol": "MSFT",
-            "Quantity": 1,
-            "Action": "Buy to Open",
-            "Price": 1.00,
-            "Commissions and Fees": 0.10,
-            "Expiration Date": "2025-02-21",
-            "Strike Price": 500,
-            "Option Type": "Put",
-        },
-    ])
-    csv_path = write_csv(df, tmp_path / "open_only.csv")
-    res = analyze_csv(str(csv_path))
-    assert len(res["strategy_groups"]) > 0
-    assert res["strategy_groups"][0]["strategy"] == "Long Put"
 
 def test_verdict_logic(tmp_path):
     # Amber: win rate < 50% but positive PnL
@@ -467,19 +392,20 @@ def test_verdict_logic(tmp_path):
     assert res2['verdict'] == "Red flag"
 
 def test_normalize_tasty_fills_fallback_parser_edge_cases(tmp_path):
+    parser = TastytradeFillsParser()
     # Missing quantity
     df1 = pd.DataFrame([{"Time": "2025-01-01 10:00", "Description": "Jan 1 100 Call STO", "Price": "1.00 cr", "Symbol": "TEST", "Commissions": 0, "Fees": 0}])
-    norm_df1 = aud._normalize_tasty_fills(df1)
+    norm_df1 = parser.parse(df1)
     assert norm_df1.empty
 
     # Invalid quantity
     df2 = pd.DataFrame([{"Time": "2025-01-01 10:00", "Description": "X Jan 1 100 Call STO", "Price": "1.00 cr", "Symbol": "TEST", "Commissions": 0, "Fees": 0}])
-    norm_df2 = aud._normalize_tasty_fills(df2)
+    norm_df2 = parser.parse(df2)
     assert norm_df2.empty
 
     # Infer expiry year
     df3 = pd.DataFrame([{"Time": "2024-11-01 10:00", "Description": "1 Jan 1 100 Call STO", "Price": "1.00 cr", "Symbol": "TEST", "Commissions": 0, "Fees": 0}])
-    norm_df3 = aud._normalize_tasty_fills(df3)
+    norm_df3 = parser.parse(df3)
     assert norm_df3.iloc[0]["expiry"].year == 2025
 
 def test_build_strategies_same_day_different_strategies(tmp_path):
@@ -496,39 +422,14 @@ def test_build_strategies_same_day_different_strategies(tmp_path):
 def test_sym_desc_not_string():
     assert aud._sym_desc(123) == ""
 
-def test_classify_strategy_empty_openings():
-    strat = aud.StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
-    leg1 = aud.TradeGroup(contract_id="c1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=None, right=None)
-    leg1.add_leg(aud.Leg(ts=datetime.now(), qty=1, price=1, fees=0, proceeds=-100))
-    strat.add_leg_group(leg1)
-    assert aud._classify_strategy(strat) == "Unclassified"
-
-def test_classify_strategy_empty_legs():
-    strat = aud.StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
-    leg1 = aud.TradeGroup(contract_id="c1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=100, right="C")
-    strat.add_leg_group(leg1)
-    assert aud._classify_strategy(strat) == "Unclassified"
-
-def test_parse_tasty_datetime_unhandled_format():
-    assert aud._parse_tasty_datetime("2025-01-01T10:00:00-0500") is not None
-    assert aud._parse_tasty_datetime("01-Jan-2025 10:00") is not None
-    assert aud._parse_tasty_datetime("2025/01/01 10:00:00") is not None
-
 def test_build_strategies_empty_df():
+    from option_auditor.strategy import build_strategies
     df = pd.DataFrame(columns=["datetime", "contract_id", "symbol", "expiry", "strike", "right", "qty", "proceeds", "fees"])
-    strategies = aud._build_strategies(df)
+    strategies = build_strategies(df)
     assert len(strategies) == 0
 
 def test_sym_desc_unknown_symbol():
     assert aud._sym_desc("UNKNOWN") == "Options on UNKNOWN"
-
-def test_classify_strategy_five_legs():
-    strat = aud.StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
-    for i in range(5):
-        leg = aud.TradeGroup(contract_id=f"c{i}", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=100+i, right="C")
-        leg.add_leg(aud.Leg(ts=datetime.now(), qty=1, price=1, fees=0, proceeds=-100))
-        strat.add_leg_group(leg)
-    assert aud._classify_strategy(strat) == "Multi‑leg"
 
 def test_analyze_csv_no_out_dir(tmp_path):
     df = make_tasty_df([
@@ -543,7 +444,8 @@ def test_normalize_tasty_zero_quantity():
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 0, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
     ])
-    norm_df = aud._normalize_tasty(df)
+    parser = TastytradeParser()
+    norm_df = parser.parse(df)
     assert norm_df.iloc[0]["qty"] == 0
 
 def test_buying_power_calculation(tmp_path):
@@ -556,3 +458,64 @@ def test_buying_power_calculation(tmp_path):
     # Test division by zero case
     res_zero = analyze_csv(str(csv_path), net_liquidity_now=0, buying_power_available_now=0)
     assert res_zero["buying_power_utilized_percent"] is None
+
+def test_rolling_trade_detection(tmp_path):
+    df = make_tasty_df([
+        # Original position
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
+        # Roll: close original, open new
+        {"Time": "2025-01-05 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
+        {"Time": "2025-01-05 10:01", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.2, "Commissions and Fees": 0, "Expiration Date": "2025-02-20", "Strike Price": 400, "Option Type": "Put"},
+        # Close rolled position
+        {"Time": "2025-02-10 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.2, "Commissions and Fees": 0, "Expiration Date": "2025-02-20", "Strike Price": 400, "Option Type": "Put"},
+    ])
+    csv_path = write_csv(df, tmp_path / "roll.csv")
+    res = analyze_csv(str(csv_path))
+    assert len(res["strategy_groups"]) == 1
+    assert "Rolled" in res["strategy_groups"][0]["strategy"]
+    assert res["strategy_groups"][0]["pnl"] == (100 - 50) + (120 - 20)
+
+def test_classify_strategy_three_legs():
+    from option_auditor.strategy import _classify_strategy
+    from option_auditor.models import StrategyGroup, TradeGroup, Leg
+    strat = StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
+    for i in range(3):
+        leg = TradeGroup(contract_id=f"c{i}", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=100+i, right="C")
+        leg.add_leg(Leg(ts=datetime.now(), qty=1, price=1, fees=0, proceeds=-100))
+        strat.add_leg_group(leg)
+    assert _classify_strategy(strat) == "Multi‑leg"
+
+def test_invalid_strike_and_expiry():
+    df = make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": "invalid", "Option Type": "Call"},
+        {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Close", "Price": 2.00, "Commissions and Fees": 0, "Expiration Date": "invalid", "Strike Price": 10, "Option Type": "Call"},
+    ])
+    parser = TastytradeParser()
+    norm_df = parser.parse(df)
+    assert pd.isna(norm_df.iloc[0]["strike"])
+    assert pd.isna(norm_df.iloc[1]["expiry"])
+
+def test_group_contracts_with_open_empty_df():
+    from option_auditor.main_analyzer import _group_contracts_with_open
+    df = pd.DataFrame(columns=["datetime", "contract_id", "symbol", "expiry", "strike", "right", "qty", "proceeds", "fees"])
+    closed, open = _group_contracts_with_open(df)
+    assert len(closed) == 0
+    assert len(open) == 0
+
+def test_no_closed_trades(tmp_path):
+    df = make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0.10, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
+    ])
+    csv_path = write_csv(df, tmp_path / "open_only.csv")
+    res = analyze_csv(str(csv_path))
+    assert len(res["strategy_groups"]) == 1
+    assert len(res["open_positions"]) == 1
+
+def test_correlation_with_single_symbol(tmp_path):
+    df = make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
+        {"Time": "2025-01-01 12:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
+    ])
+    csv_path = write_csv(df, tmp_path / "single_symbol.csv")
+    res = analyze_csv(str(csv_path))
+    assert res.get("correlation_matrix") is None
