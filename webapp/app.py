@@ -67,6 +67,21 @@ def create_app() -> Flask:
         _, ext = os.path.splitext(filename.lower())
         return ext in ALLOWED_EXTENSIONS
 
+    @app.after_request
+    def add_security_headers(response):
+        # Basic Content-Security-Policy
+        # Allow default self, Bootstrap CDN, HTMX, etc.
+        # This is restrictive but allows what we use.
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; "
+            "object-src 'none';"
+        )
+        return response
+
     @app.errorhandler(413)
     def too_large(e):  # pragma: no cover
         return render_template("error.html", message="Upload too large. Max size is limited."), 413
