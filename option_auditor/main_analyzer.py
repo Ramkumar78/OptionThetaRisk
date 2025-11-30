@@ -5,6 +5,7 @@ from .config import SYMBOL_DESCRIPTIONS
 from typing import Optional, Dict, List, Tuple
 import pandas as pd
 import numpy as np
+import os
 from datetime import datetime
 
 def _detect_broker(df: pd.DataFrame) -> Optional[str]:
@@ -12,7 +13,7 @@ def _detect_broker(df: pd.DataFrame) -> Optional[str]:
     if "Underlying Symbol" in cols:
         return "tasty"
     if "Description" in cols and "Symbol" in cols:
-        return "tasty_fills"
+        return "tasty"
     return None
 
 def _group_contracts_with_open(legs_df: pd.DataFrame) -> Tuple[List[TradeGroup], List[TradeGroup]]:
@@ -68,9 +69,11 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     
     parser = None
     if chosen_broker == "tasty":
-        parser = TastytradeParser()
-    elif chosen_broker == "tasty_fills":
-        parser = TastytradeFillsParser()
+        # Auto-select parser based on columns even if broker is forced to "tasty"
+        if "Description" in df.columns and "Symbol" in df.columns:
+            parser = TastytradeFillsParser()
+        else:
+            parser = TastytradeParser()
     else:
         return {"error": "Unsupported broker"}
 
@@ -78,6 +81,7 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     if norm_df.empty:
         return {"error": "No options trades found"}
 
+    effective_window = None
     if start_date or end_date:
         s = pd.to_datetime(start_date) if start_date else None
         e = pd.to_datetime(end_date) if end_date else None
@@ -88,28 +92,122 @@ def analyze_csv(csv_path: str, broker: str = "auto",
         if e:
             mask &= (dt <= (pd.Timestamp(e.date()) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)))
         norm_df = norm_df[mask].copy()
+        effective_window = {
+            "start": s.date().isoformat() if s is not None else None,
+            "end": (e - pd.Timedelta(days=0)).date().isoformat() if e is not None else None,
+        }
 
     contract_groups, open_groups = _group_contracts_with_open(norm_df)
     strategies = build_strategies(norm_df)
     
+    # --- Portfolio Correlation ---
+    correlation_matrix_df = None
+    correlation_json = None
+    if contract_groups:
+        daily_pnl_data = []
+        for group in contract_groups:
+            if group.exit_ts and group.symbol:
+                day = group.exit_ts.date()
+                daily_pnl_data.append({"date": day, "symbol": group.symbol, "pnl": group.pnl})
+        if daily_pnl_data:
+            daily_df = pd.DataFrame(daily_pnl_data)
+            if not daily_df.empty:
+                pnl_pivot = daily_df.groupby(['date', 'symbol'])['pnl'].sum().unstack(level='symbol').fillna(0)
+                if len(pnl_pivot.columns) > 1:
+                    correlation_matrix_df = pnl_pivot.corr()
+                    correlation_json = correlation_matrix_df.round(4).reset_index().to_dict(orient='records')
+
+    # Calc Metrics
+    total_pnl_contracts = float(sum(g.pnl for g in contract_groups))
+    wins_contracts = [g for g in contract_groups if g.pnl > 0]
+    win_rate_contracts = len(wins_contracts) / len(contract_groups) if contract_groups else 0.0
+    avg_hold_contracts = np.mean([
+        (g.exit_ts - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts and g.exit_ts else 0.0
+        for g in contract_groups
+    ]) if contract_groups else 0.0
+
     total_pnl = sum(s.pnl for s in strategies)
-    win_rate = len([s for s in strategies if s.pnl > 0]) / len(strategies) if strategies else 0.0
+    wins = [s for s in strategies if s.pnl > 0]
+    win_rate = len(wins) / len(strategies) if strategies else 0.0
     
     verdict = "Green flag"
-    if total_pnl < 0 or win_rate < 0.3:
+    if total_pnl < 0:
+        verdict = "Red flag"
+    elif win_rate < 0.3:
         verdict = "Red flag"
     elif win_rate < 0.5:
         verdict = "Amber"
+
+    # Symbol Breakdown
+    sym_stats = {}
+    for s in strategies:
+        if s.symbol not in sym_stats:
+            sym_stats[s.symbol] = {'pnl': 0, 'trades': 0, 'wins': 0}
+        sym_stats[s.symbol]['pnl'] += s.pnl
+        sym_stats[s.symbol]['trades'] += 1
+        if s.pnl > 0: sym_stats[s.symbol]['wins'] += 1
+
+    symbols_list = sorted([
+        {"symbol": k, "pnl": v['pnl'], "win_rate": v['wins'] / v['trades'], "trades": v['trades'], "description": _sym_desc(k)}
+        for k, v in sym_stats.items()
+    ], key=lambda x: x['pnl'], reverse=True)
+
+    strategy_rows = [{"symbol": s.symbol, "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "", "strategy": s.strategy_name, "pnl": s.pnl, "hold_days": s.hold_days(), "theta_per_day": s.realized_theta(), "description": _sym_desc(s.symbol)} for s in strategies]
+
+    open_rows = [{"symbol": g.symbol, "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "", "contract": f"{g.right or ''} {g.strike}", "qty_open": g.qty_net, "opened": g.entry_ts.isoformat() if g.entry_ts else "", "days_open": (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0, "description": _sym_desc(g.symbol)} for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min)]
 
     buying_power_utilized_percent = None
     if net_liquidity_now is not None and buying_power_available_now is not None and net_liquidity_now > 0:
         buying_power_utilized_percent = (net_liquidity_now - buying_power_available_now) / net_liquidity_now * 100
 
+    # Optional outputs
+    if out_dir:
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            # trades.csv
+            pd.DataFrame([{
+                "symbol": g.symbol, "contract_id": g.contract_id,
+                "entry_ts": g.entry_ts.isoformat() if g.entry_ts else "",
+                "exit_ts": g.exit_ts.isoformat() if g.exit_ts else "", "pnl": g.pnl,
+            } for g in contract_groups]).map(
+                lambda x: f"'{x}" if isinstance(x, str) and x.startswith(("=", "+", "-", "@")) else x
+            ).to_csv(os.path.join(out_dir, "trades.csv"), index=False)
+
+            # report.xlsx
+            summary_rows = [
+                {"Metric": "Strategy Trades", "Value": len(strategies)},
+                {"Metric": "Strategy Win Rate", "Value": win_rate},
+                {"Metric": "Strategy Total PnL", "Value": total_pnl},
+                {"Metric": "Verdict", "Value": verdict},
+            ]
+            if account_size_start is not None: summary_rows.append({"Metric": "Account Size (Start)", "Value": account_size_start})
+            if net_liquidity_now is not None: summary_rows.append({"Metric": "Net Liquidity (Now)", "Value": net_liquidity_now})
+            if buying_power_utilized_percent is not None:
+                summary_rows.append({"Metric": "Buying Power Utilized", "Value": f"{buying_power_utilized_percent:.1f}%"})
+
+            with pd.ExcelWriter(os.path.join(out_dir, "report.xlsx"), engine="openpyxl") as writer:
+                pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+                pd.DataFrame(symbols_list).to_excel(writer, sheet_name="Symbols", index=False)
+                pd.DataFrame(strategy_rows).to_excel(writer, sheet_name="Strategies", index=False)
+                pd.DataFrame(open_rows).to_excel(writer, sheet_name="Open Positions", index=False)
+                if correlation_matrix_df is not None:
+                    correlation_matrix_df.to_excel(writer, sheet_name="Correlation")
+        except Exception:
+            pass
+
     return {
+        "metrics": {
+            "num_trades": len(contract_groups), "win_rate": win_rate_contracts,
+            "total_pnl": total_pnl_contracts, "avg_hold_days": avg_hold_contracts,
+        },
+        "strategy_metrics": {"num_trades": len(strategies), "win_rate": win_rate, "total_pnl": total_pnl},
         "verdict": verdict,
-        "symbols": sorted([{"symbol": k, "pnl": v['pnl'], "win_rate": v['wins'] / v['trades'], "trades": v['trades'], "description": _sym_desc(k)} for k, v in pd.DataFrame([s.__dict__ for s in strategies]).groupby("symbol").apply(lambda x: {"pnl": x.pnl.sum(), "wins": (x.pnl > 0).sum(), "trades": len(x)}).to_dict().items()], key=lambda x: x['pnl'], reverse=True),
-        "strategy_groups": [{"symbol": s.symbol, "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "", "strategy": s.strategy_name, "pnl": s.pnl, "hold_days": s.hold_days(), "theta_per_day": s.realized_theta(), "description": _sym_desc(s.symbol)} for s in strategies],
-        "open_positions": [{"symbol": g.symbol, "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "", "contract": f"{g.right or ''} {g.strike}", "qty_open": g.qty_net, "opened": g.entry_ts.isoformat() if g.entry_ts else "", "days_open": (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0, "description": _sym_desc(g.symbol)} for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min)],
+        "symbols": symbols_list,
+        "strategy_groups": strategy_rows,
+        "open_positions": open_rows,
+        "broker": chosen_broker,
+        "date_window": effective_window,
+        "correlation_matrix": correlation_json,
         "account_size_start": account_size_start,
         "net_liquidity_now": net_liquidity_now,
         "buying_power_utilized_percent": buying_power_utilized_percent,

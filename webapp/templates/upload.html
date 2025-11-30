@@ -1,84 +1,123 @@
 {% extends "base.html" %}
 
 {% block content %}
-<article>
-  <header>
-    <h2 class="text-2xl font-semibold text-center">Upload Your Trades CSV</h2>
-  </header>
-  
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div class="alert" role="alert">
-          {{ message }}
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-
-  <form hx-post="/analyze" hx-target="#results-container" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#loading-spinner">
-    
-    <label for="csv">CSV File
-      <input type="file" name="csv" id="csv" required>
-    </label>
-
-    <div class="grid">
-        <label for="broker">Broker
-          <select name="broker" id="broker">
-            <option value="auto">Auto-detect</option>
-            <option value="tasty">Tastytrade</option>
-            <option value="ibkr">Interactive Brokers</option>
-          </select>
-        </label>
-        <label for="date_mode">Date Range
-          <select name="date_mode" id="date_mode">
-            <option value="all">All Data</option>
-            <option value="ytd">Year to Date</option>
-            <option value="1y">Last 1 Year</option>
-            <option value="6m">Last 6 Months</option>
-            <option value="1m">Last 1 Month</option>
-            <option value="14d">Last 14 Days</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="range">Custom Range</option>
-          </select>
-        </label>
-    </div>
-
-    <div id="custom-range-fields" class="grid" style="display: none;">
-      <label for="start_date">Start Date
-        <input type="date" name="start_date" id="start_date">
-      </label>
-      <label for="end_date">End Date
-        <input type="date" name="end_date" id="end_date">
-      </label>
-    </div>
-    
-    <details>
-      <summary>Optional: Account Metrics</summary>
-      <div class="grid">
-        <label for="account_size_start">Account Size (Start)
-          <input type="number" name="account_size_start" id="account_size_start" placeholder="e.g., 25000">
-        </label>
-        <label for="net_liquidity_now">Net Liquidity (Now)
-          <input type="number" name="net_liquidity_now" id="net_liquidity_now" placeholder="e.g., 26500">
-        </label>
-        <label for="buying_power_available_now">Buying Power Available (Now)
-          <input type="number" name="buying_power_available_now" id="buying_power_available_now" placeholder="e.g., 22000">
-        </label>
+<div class="row justify-content-center">
+  <div class="col-lg-8 col-md-10">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-primary text-white py-3">
+        <h2 class="h4 mb-0 text-center">Upload Your Trades CSV</h2>
       </div>
-    </details>
+      <div class="card-body p-4">
 
-    <button type="submit" id="loading-spinner">Analyze Trades</button>
-  </form>
-</article>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
 
-<div id="results-container" class="fade-in">
+        <form hx-post="/analyze" hx-target="#results-container" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="needs-validation">
+
+          <div class="mb-4">
+            <label for="csv" class="form-label fw-bold">CSV File</label>
+            <input class="form-control form-control-lg" type="file" name="csv" id="csv" required>
+            <div class="form-text">Supported brokers: Tastytrade, Interactive Brokers.</div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label for="broker" class="form-label fw-bold">Broker</label>
+              <select class="form-select" name="broker" id="broker">
+                <option value="auto" selected>Auto-detect</option>
+                <option value="tasty">Tastytrade</option>
+                <option value="ibkr">Interactive Brokers</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="date_mode" class="form-label fw-bold">Date Range</label>
+              <select class="form-select" name="date_mode" id="date_mode">
+                <option value="all" selected>All Data</option>
+                <option value="ytd">Year to Date</option>
+                <option value="1y">Last 1 Year</option>
+                <option value="6m">Last 6 Months</option>
+                <option value="1m">Last 1 Month</option>
+                <option value="14d">Last 14 Days</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="range">Custom Range</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="custom-range-fields" class="row g-3 mb-4" style="display: none;">
+            <div class="col-md-6">
+              <label for="start_date" class="form-label">Start Date</label>
+              <input type="date" class="form-control" name="start_date" id="start_date">
+            </div>
+            <div class="col-md-6">
+              <label for="end_date" class="form-label">End Date</label>
+              <input type="date" class="form-control" name="end_date" id="end_date">
+            </div>
+          </div>
+
+          <div class="accordion mb-4" id="advancedOptions">
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#metricsCollapse" aria-expanded="false" aria-controls="metricsCollapse">
+                  Optional: Account Metrics
+                </button>
+              </h2>
+              <div id="metricsCollapse" class="accordion-collapse collapse" data-bs-parent="#advancedOptions">
+                <div class="accordion-body">
+                  <div class="row g-3">
+                    <div class="col-md-4">
+                      <label for="account_size_start" class="form-label">Account Size (Start)</label>
+                      <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" name="account_size_start" id="account_size_start" placeholder="25000">
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <label for="net_liquidity_now" class="form-label">Net Liquidity (Now)</label>
+                      <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" name="net_liquidity_now" id="net_liquidity_now" placeholder="26500">
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <label for="buying_power_available_now" class="form-label">Buying Power (Now)</label>
+                      <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" name="buying_power_available_now" id="buying_power_available_now" placeholder="22000">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg" id="analyze-btn">Analyze Trades</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="results-container" class="mt-5 mb-5 fade-in">
   <!-- Results will be loaded here -->
 </div>
 
 <script>
   document.getElementById('date_mode').addEventListener('change', function() {
-    document.getElementById('custom-range-fields').style.display = this.value === 'range' ? 'grid' : 'none';
+    const isRange = this.value === 'range';
+    const rangeFields = document.getElementById('custom-range-fields');
+    rangeFields.style.display = isRange ? 'flex' : 'none';
   });
 </script>
 {% endblock %}
