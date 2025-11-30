@@ -559,7 +559,6 @@ def _build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                     strat.exit_ts = next_strat.exit_ts
                     strat.strategy_name = f"Rolled {strat.strategy_name}"
                     processed_strat_ids.add(next_strat.id)
-                    # Continue to see if it was rolled again
         
         merged_strategies.append(strat)
 
