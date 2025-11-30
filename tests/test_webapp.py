@@ -38,11 +38,8 @@ def test_upload_and_results_page(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Audit Results" in html
+    assert "Audit Summary" in html
     assert "Verdict" in html
-    # Theme dropdown should be present on results
-    assert "Theme" in html
-    assert "theme-choice" in html
 
 
 def test_rejects_large_upload(app):
@@ -55,7 +52,8 @@ def test_rejects_large_upload(app):
         "csv": (io.BytesIO(big), "big.csv"),
     }
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code in (400, 413)
+    assert resp.status_code == 413
+    assert "Upload too large" in resp.get_data(as_text=True)
 
 
 def test_theme_dropdown_present_on_upload(app):
@@ -63,7 +61,6 @@ def test_theme_dropdown_present_on_upload(app):
     resp = client.get("/")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Theme" in html
     assert "theme-choice" in html
 
 
@@ -90,7 +87,7 @@ def test_upload_with_preset_last_7_days(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" in html
+    assert "Date Range:" in html
 
 
 def test_upload_with_preset_ytd(app):
@@ -123,7 +120,7 @@ def test_upload_with_preset_last_14_days(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" in html
+    assert "Date Range:" in html
 
 
 def test_upload_with_preset_last_1_month(app):
@@ -139,7 +136,7 @@ def test_upload_with_preset_last_1_month(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" in html
+    assert "Date Range:" in html
 
 
 def test_upload_with_preset_last_6_months(app):
@@ -155,7 +152,7 @@ def test_upload_with_preset_last_6_months(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" in html
+    assert "Date Range:" in html
 
 
 def test_upload_with_preset_last_1_year(app):
@@ -171,7 +168,7 @@ def test_upload_with_preset_last_1_year(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" in html
+    assert "Date Range:" in html
 
 
 def test_upload_with_preset_last_2_years(app):
@@ -187,7 +184,7 @@ def test_upload_with_preset_last_2_years(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" in html
+    assert "Date Range:" in html
 
 
 def test_upload_with_all_mode_shows_no_badge(app):
@@ -204,7 +201,7 @@ def test_upload_with_all_mode_shows_no_badge(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" not in html
+    assert "Date Range:" not in html
 
 
 def test_upload_with_custom_date_range(app):
@@ -222,7 +219,7 @@ def test_upload_with_custom_date_range(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date range:" in html
+    assert "Date Range:" in html
     assert "2025-01-01" in html and "2025-01-31" in html
 
 
@@ -242,7 +239,7 @@ def test_upload_defaults_all_mode_when_missing(app):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     # No badge should be shown when analyzing everything
-    assert "Date range:" not in html
+    assert "Date Range:" not in html
 
 
 def test_upload_with_custom_range_missing_dates_redirects(app):

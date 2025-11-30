@@ -5,12 +5,11 @@ groups options trades into round-trips (entry → exit), computes key metrics, a
 "Options Audit Report" with insights and risk flags.
 
 #### Features
-- Auto-detects broker CSV format (Tastytrade or IBKR) or allow `--broker` override.
-- Groups trades per option contract and closes a group when position returns to zero.
-- Computes per-trade metrics: PnL (incl. fees), hold time, realized-theta approximation (PnL per day held).
-- Portfolio metrics: win rate, average hold time, average realized theta.
-- Risk flags including an "Over-leveraged" heuristic if `--account-size` is provided.
-- Console summary plus optional CSV and Markdown outputs.
+- **Multi-Broker Ingestion Engine:** Seamlessly processes CSV exports from major brokerage platforms, including Tastytrade and Interactive Brokers, with an intelligent auto-detection engine and manual override capabilities.
+- **Heuristic-based Trade Reconstruction Engine:** Automatically clusters disparate execution legs into complex Option Strategies (Iron Condors, Verticals) using temporal locality algorithms.
+- **Advanced Performance Analytics:** Delivers a comprehensive suite of per-trade and portfolio-level metrics, including PnL with fee attribution, duration analysis, and a proprietary Realized-Theta model (PnL per day held).
+- **Risk Management & Compliance Module:** Employs a sophisticated "Over-leveraged" heuristic, benchmarked against a configurable account size, to flag high-risk trading behavior.
+- **Multi-Format Reporting Suite:** Generates a variety of outputs, including an executive summary for the console, a detailed CSV for further analysis, and a presentation-ready Markdown report.
 
 #### Installation
 Requires Python 3.9+.
