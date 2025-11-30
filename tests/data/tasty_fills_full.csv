@@ -1,0 +1,396 @@
+Symbol,Status,MarketOrFill,Price,TIF,Time,TimeStampAtType,Order #,Description
+QQQ,Filled,1.25 cr,1.25 cr,Day,"11/26, 5:53p",Fill,#423471188,"-1 Jan 9 43d 600 Put STO
+1 Jan 9 43d 595 Put BTO"
+XLE,Filled,0.79 cr,0.76 cr,Day,"11/26, 5:30p",Fill,#423459342,"-1 Jan 16 50d 86 Put STO
+1 Jan 16 50d 81 Put BTO"
+AMAT,Filled,0.78 cr,0.78 cr,Day,"11/26, 5:27p",Fill,#423458110,"-1 Jan 9 43d 230 Put STO
+1 Jan 9 43d 225 Put BTO"
+IWM,Filled,1.25 cr,1.25 cr,Day,"11/26, 5:22p",Fill,#423455855,"-1 Jan 9 43d 240 Put STO
+1 Jan 9 43d 235 Put BTO"
+SLV,Filled,0.68 cr,0.68 cr,Day,"11/26, 5:18p",Fill,#423453907,"-1 Jan 9 43d 45 Put STO
+1 Jan 9 43d 42 Put BTO"
+SLV,Filled,0.29 db,0.29 db,GTC,"11/26, 5:01p",Fill,#423443422,"1 Dec 31 34d 43.5 Put BTC
+-1 Dec 31 34d 41.5 Put STC"
+IWM,Filled,0.72 db,0.72 db,GTC,"11/26, 2:45p",Fill,#423324491,"1 Jan 16 50d 229 Put BTC
+-1 Jan 16 50d 224 Put STC"
+C,Filled,0.36 db,0.38 db,Day,"11/26, 2:39p",Fill,#423314932,"1 Jan 2 36d 100 Put BTC
+-1 Jan 2 36d 99 Put STC"
+GLD,Filled,0.91 db,0.91 db,GTC,"11/26, 2:38p",Fill,#423313972,"1 Jan 2 36d 364 Put BTC
+-1 Jan 2 36d 359 Put STC"
+PFE,Filled,1.73 cr,1.73 cr,Day,"11/26, 2:35p",Fill,#423309841,"-1 Dec 26 29d 24 Call STC
+1 Dec 26 29d 28 Call BTC"
+XSP,Filled,0.33 db,0.33 db,GTC,"11/25, 8:35p",Fill,#423229039,"1 Dec 19 22d 674 Put BTC
+-1 Dec 19 22d 673 Put STC"
+AMAT,Filled,1.15 db,1.15 db,GTC,"11/25, 8:22p",Fill,#423213017,"1 Jan 2 36d 225 Put BTC
+-1 Jan 2 36d 220 Put STC"
+FXI,Filled,0.38 cr,0.38 cr,GTC,"11/25, 4:41p",Fill,#423126495,"-1 Jan 2 36d 38 Put STO
+1 Jan 2 36d 36 Put BTO"
+TLT,Filled,0.58 cr,0.58 cr,Day,"11/25, 4:40p",Fill,#423126296,"-1 Jan 2 36d 89 Put STO
+1 Jan 2 36d 85 Put BTO"
+SLV,Filled,0.46 cr,0.46 cr,Day,"11/25, 3:02p",Fill,#423051884,"-1 Dec 31 34d 43.5 Put STO
+1 Dec 31 34d 41.5 Put BTO"
+IEF,Filled,1.50 cr,1.50 cr,GTC,"11/25, 2:48p",Fill,#422881901,"-1 Dec 26 29d 95.5 Call STC
+1 Dec 26 29d 97.5 Call BTC"
+ABNB,Filled,2.91 db,2.91 db,Day,"11/25, 2:42p",Fill,#423023175,"1 Jun 18 203d 125 Put BTC
+-1 Jun 18 203d 120 Put STC"
+KHC,Filled,24.85 cr,24.85 cr,GTC,"11/25, 2:30p",Fill,#422976993,"-100 STC
+1 Dec 5 8d 25 Call BTC"
+IWM,Filled,1.13 cr,1.13 cr,Day,"11/24, 5:22p",Fill,#422859182,"-1 Jan 16 50d 229 Put STO
+1 Jan 16 50d 224 Put BTO"
+GLD,Filled,1.38 cr,1.36 cr,Day,"11/21, 6:31p",Fill,#422565868,"-1 Jan 2 36d 364 Put STO
+1 Jan 2 36d 359 Put BTO"
+XLV,Filled,1.65 cr,1.59 cr,Day,"11/21, 5:40p",Fill,#422535936,"-1 Jan 2 36d 156 Put STO
+1 Jan 2 36d 152 Put BTO"
+C,Filled,0.43 cr,0.43 cr,Day,"11/20, 4:55p",Fill,#422124568,"-1 Jan 2 36d 100 Put STO
+1 Jan 2 36d 99 Put BTO"
+AMAT,Filled,1.90 cr,1.90 cr,Day,"11/20, 4:49p",Fill,#422122027,"-1 Jan 2 36d 225 Put STO
+1 Jan 2 36d 220 Put BTO"
+NKE,Filled,0.95 db,0.98 db,Day,"11/19, 5:43p",Fill,#421827697,"1 Nov 28 1d 68 Put BTC
+-1 Nov 28 1d 67 Put STC"
+STZ,Filled,4.32 db,4.32 db,Day,"11/19, 5:43p",Fill,#421827319,"1 Nov 28 1d 140 Put BTC
+-1 Nov 28 1d 135 Put STC"
+COIN,Filled,7.63 db,7.81 db,Day,"11/19, 5:41p",Fill,#421826339,"1 Dec 26 29d 290 Put BTC
+-1 Dec 26 29d 280 Put STC"
+ADBE,Filled,4.06 db,4.08 db,Day,"11/19, 5:41p",Fill,#421826063,"1 Dec 5 8d 335 Put BTC
+-1 Dec 5 8d 330 Put STC"
+PYPL,Filled,2.50 db,2.50 db,Day,"11/19, 4:32p",Fill,#421791336,"1 Nov 21 Exp 67.5 Put BTC
+-1 Nov 21 Exp 65 Put STC"
+F,Filled,4.16 cr,4.16 cr,Day,"11/19, 4:18p",Fill,#421782519,"1 Dec 19 22d 12 Call BTC
+-1 Jan 15 414d 7.85 Call STC"
+CRCL,Filled,7.63 db,7.95 db,Day,"11/19, 3:51p",Fill,#421763217,"1 Dec 19 22d 85 Put BTC
+-1 Dec 19 22d 75 Put STC"
+HIMS,Filled,0.98 db,0.98 db,Day,"11/19, 3:49p",Fill,#421761453,"1 Dec 5 8d 46 Put BTC
+-1 Dec 5 8d 45 Put STC"
+XSP,Filled,0.28 cr,0.28 cr,Day,"11/19, 3:00p",Fill,#421715761,"-1 Nov 19 Exp 666 Put STO
+1 Nov 19 Exp 665 Put BTO"
+GLD,Filled,3.13 db,3.13 db,Day,"11/19, 2:41p",Fill,#421693591,"1 Nov 28 1d 385 Put BTC
+-1 Nov 28 1d 380 Put STC"
+META,Filled,705.02 cr,705.00 cr,Day,"11/18, 2:39p",Fill,#421414624,"-100 STC
+-1 Nov 28 1d 705 Put STC"
+SO,Filled,1.10 db,1.10 db,Day,"11/17, 3:37p",Fill,#421174617,"1 Dec 19 22d 90 Put BTC
+-1 Dec 19 22d 85 Put STC"
+XSP,Filled,0.29 cr,0.29 cr,Day,"11/17, 2:52p",Fill,#421133465,"-1 Nov 17 Exp 674 Put STO
+1 Nov 17 Exp 673 Put BTO"
+XSP,Filled,0.33 cr,0.31 cr,Day,"11/14, 5:01p",Fill,#420924712,"-1 Dec 19 22d 674 Put STO
+1 Dec 19 22d 673 Put BTO"
+ORCL,Filled,270.08 cr,270.00 cr,Day,"11/14, 2:36p",Fill,#420787035,"-100 STC
+-1 Nov 28 1d 270 Put STC"
+XSP,Filled,0.27 cr,0.27 cr,Day,"11/13, 5:48p",Fill,#420603162,"-1 Nov 13 Exp 675 Put STO
+1 Nov 13 Exp 674 Put BTO"
+PFE,Filled,1.94 db,1.97 db,Day,"11/12, 8:57p",Fill,#420391303,"1 Dec 26 29d 24 Call BTO
+-1 Dec 26 29d 28 Call STO"
+SPX,Filled,1.80 cr,1.80 cr,Day,"11/12, 8:37p",Fill,#420378085,"1 Nov 13 Exp 6815 Put BTO
+-1 Nov 13 Exp 6820 Put STO
+-1 Nov 13 Exp 6895 Call STO
+1 Nov 13 Exp 6900 Call BTO"
+COIN,Filled,4.11 cr,4.11 cr,Day,"11/12, 7:14p",Fill,#420299138,"-1 Dec 26 29d 290 Put STO
+1 Dec 26 29d 280 Put BTO"
+CRCL,Filled,4.05 cr,3.66 cr,Day,"11/12, 4:58p",Fill,#420273236,"-1 Dec 19 22d 85 Put STO
+1 Dec 19 22d 75 Put BTO"
+CRCL,Filled,1.62 db,1.64 db,Day,"11/11, 8:25p",Fill,#420078893,"1 Nov 14 Exp 102 Call BTO
+-2 Nov 14 Exp 112 Call STO
+1 Nov 14 Exp 122 Call BTO"
+IEF,Filled,1.20 db,1.20 db,Day,"11/11, 8:03p",Fill,#420067450,"1 Dec 26 29d 95.5 Call BTO
+-1 Dec 26 29d 97.5 Call STO"
+SO,Filled,1.22 cr,1.18 cr,Day,"11/11, 6:08p",Fill,#420012185,"-1 Dec 19 22d 90 Put STO
+1 Dec 19 22d 85 Put BTO"
+T,Filled,0.11 db,0.11 db,Day,"11/11, 6:05p",Fill,#420010306,"1 Dec 5 8d 24 Put BTC
+-1 Dec 5 8d 23 Put STC"
+KMI,Filled,0.08 db,0.08 db,Day,"11/11, 6:04p",Fill,#420009955,"1 Dec 19 22d 25 Put BTC
+-1 Dec 19 22d 24 Put STC"
+FXI,Filled,0.14 db,0.14 db,Day,"11/11, 6:04p",Fill,#420009806,"1 Dec 5 8d 40 Put BTC
+-1 Dec 5 8d 39.5 Put STC"
+ENPH,Filled,1.16 db,1.18 db,Day,"11/10, 8:43p",Fill,#419809645,"1 Dec 19 22d 30 Put BTC
+-1 Dec 19 22d 25 Put STC"
+HOOD,Filled,1.86 cr,1.86 cr,Day,"11/05, 8:58p",Fill,#418796347,"1 Nov 7 Exp 150 Call BTC
+-1 Nov 14 Exp 150 Call STC"
+SBUX,Filled,0.69 db,0.69 db,Day,"11/05, 8:50p",Fill,#418788493,"1 Nov 28 1d 84 Put BTC
+-1 Nov 28 1d 83 Put STC"
+HOOD,Filled,1.68 db,1.68 db,Day,"11/05, 6:00p",Fill,#418703004,"-1 Nov 7 Exp 150 Call STO
+1 Nov 14 Exp 150 Call BTO"
+XYZ,Filled,0.70 db,0.71 db,Day,"11/04, 3:50p",Fill,#418323696,"1 Nov 28 1d 79 Put BTC
+-1 Nov 28 1d 78 Put STC"
+IWM,Filled,0.30 db,0.30 db,Day,"11/04, 3:48p",Fill,#418322332,"1 Nov 28 1d 248 Put BTC
+-1 Nov 28 1d 247.5 Put STC"
+TTD,Filled,0.89 db,0.89 db,Day,"11/04, 3:37p",Fill,#418314816,"1 Nov 28 1d 45 Put BTC
+-1 Nov 28 1d 43 Put STC"
+TSN,Filled,0.59 db,0.59 db,Day,"11/04, 3:35p",Fill,#418313243,"1 Nov 21 Exp 50 Put BTC
+-1 Nov 21 Exp 47.5 Put STC"
+SPCE,Filled,0.24 db,0.34 db,Day,"11/04, 3:25p",Fill,#418305389,"1 Nov 28 1d 3.5 Put BTC
+-1 Nov 28 1d 3 Put STC"
+ZM,Filled,0.45 db,0.45 db,Day,"11/04, 3:05p",Fill,#418279539,"1 Dec 5 8d 84 Put BTC
+-1 Dec 5 8d 83 Put STC"
+BRK/B,Filled,2.49 db,2.54 db,Day,"11/04, 3:03p",Fill,#418285254,"1 Dec 5 8d 485 Put BTC
+-1 Dec 5 8d 480 Put STC"
+DIA,Filled,0.28 db,0.28 db,Day,"11/04, 2:58p",Fill,#418279250,"1 Nov 14 Exp 467 Put BTC
+-1 Nov 14 Exp 466 Put STC"
+PFE,Filled,1.01 db,1.01 db,GTC,"11/04, 2:37p",Fill,#417305602,"1 Dec 5 8d 25 Put BTC
+-1 Dec 5 8d 22 Put STC"
+EXEL,Filled,0.39 db,0.39 db,Day,"11/03, 5:24p",Fill,#418087782,"1 Nov 21 Exp 36 Put BTC
+-1 Nov 21 Exp 35 Put STC"
+MSFT,Filled,5.27 cr,5.27 cr,GTC,"11/03, 2:30p",Fill,#417845364,"-1 Dec 19 22d 515 Call STC
+1 Dec 19 22d 525 Call BTC"
+F,Filled,4.11 db,4.11 db,Day,"10/31, 6:02p",Fill,#417812955,"-1 Dec 19 22d 12 Call STO
+1 Jan 15 414d 7.85 Call BTO"
+MSFT,Filled,5.02 db,5.02 db,Day,"10/31, 3:42p",Fill,#417688555,"1 Dec 19 22d 515 Call BTO
+-1 Dec 19 22d 525 Call STO"
+XLP,Filled,0.84 db,0.84 db,Day,"10/31, 2:43p",Fill,#417685566,"1 Nov 21 Exp 79 Put BTC
+-1 Nov 21 Exp 78 Put STC"
+XLRE,Filled,0.37 db,0.57 db,Day,"10/31, 2:33p",Fill,#417676805,"1 Nov 21 Exp 41 Put BTC
+-1 Nov 21 Exp 40 Put STC"
+MCD,Filled,2.87 db,2.87 db,Day,"10/31, 2:32p",Fill,#417675527,"1 Nov 28 1d 305 Put BTC
+-1 Nov 28 1d 300 Put STC"
+LULU,Filled,2.42 db,2.42 db,Day,"10/31, 2:31p",Fill,#417675055,"1 Nov 21 Exp 170 Put BTC
+-1 Nov 21 Exp 165 Put STC"
+XLF,Filled,52.99 cr,52.99 cr,Day,"10/31, 1:52p",Fill,#417629204,"-100 STC
+-1 Oct 31 Exp 53 Put STC"
+FI,Filled,123.99 cr,123.99 cr,Day,"10/31, 1:43p",Fill,#417616121,"-100 STC
+-1 Dec 5 8d 124 Put STC"
+COIN,Filled,3.87 db,3.87 db,Day,"10/31, 1:34p",Fill,#417601423,"1 Dec 19 22d 320 Put BTC
+-1 Dec 19 22d 310 Put STC"
+RKT,Filled,1.02 db,1.02 db,Day,"10/30, 7:59p",Fill,#417553529,"-1 Oct 31 Exp 14 Put STC
+1 Oct 31 Exp 16 Put BTC
+1 Oct 31 Exp 16.5 Call BTC
+-1 Oct 31 Exp 17.5 Call STC"
+COIN,Filled,4.20 cr,4.20 cr,Day,"10/30, 7:28p",Fill,#417524982,"-1 Dec 19 22d 320 Put STO
+1 Dec 19 22d 310 Put BTO"
+INTC,Filled,10.60 cr,10.60 cr,Day,"10/30, 3:26p",Fill,#417393079,"1 Dec 19 22d 46 Call BTC
+-1 Jan 15 414d 37 Call STC"
+SLV,Filled,0.20 db,0.20 db,GTC,"10/30, 3:15p",Fill,#417386069,"1 Nov 21 Exp 43 Put BTC
+-1 Nov 21 Exp 42.5 Put STC"
+SBUX,Filled,4.03 cr,4.03 cr,Day,"10/30, 2:49p",Fill,#417320185,"1 Oct 31 Exp 90 Call BTC
+-1 Dec 19 22d 85 Call STC"
+MSFT,Filled,1.28 db,1.28 db,Day,"10/30, 1:32p",Fill,#417274507,"1 Nov 28 1d 510 Put BTC
+-1 Nov 28 1d 505 Put STC"
+MSFT,Filled,1.17 db,1.17 db,Day,"10/30, 1:32p",Fill,#417273804,"1 Nov 21 Exp 565 Call BTC
+-1 Nov 21 Exp 575 Call STC"
+BMY,Filled,0.28 db,0.28 db,GTC,"10/30, 1:30p",Fill,#417072891,"1 Nov 21 Exp 42 Put BTC
+-1 Nov 21 Exp 41 Put STC"
+KMI,Filled,0.23 cr,0.23 cr,Day,"10/29, 6:01p",Fill,#417029732,"-1 Dec 19 22d 25 Put STO
+1 Dec 19 22d 24 Put BTO"
+KHC,Filled,0.44 cr,0.38 cr,Day,"10/29, 4:25p",Fill,#417089929,-1 Dec 5 8d 25 Call STO
+KHC,Filled,0.10 db,0.10 db,Day,"10/29, 4:17p",Fill,#417086560,1 Nov 28 1d 27 Call BTC
+INTC,Filled,10.63 db,10.72 db,Day,"10/29, 4:14p",Fill,#417085258,"-1 Dec 19 22d 46 Call STO
+1 Jan 15 414d 37 Call BTO"
+INTC,Filled,24.84 cr,24.39 cr,GTC,"10/29, 3:15p",Fill,#417054432,"-100 STC
+1 Nov 28 1d 25 Call BTC"
+ADBE,Filled,1.75 cr,1.75 cr,Day,"10/29, 2:26p",Fill,#417021342,"-1 Dec 5 8d 335 Put STO
+1 Dec 5 8d 330 Put BTO"
+ENPH,Filled,1.39 cr,1.39 cr,Day,"10/29, 1:45p",Fill,#416979624,"-1 Dec 19 22d 30 Put STO
+1 Dec 19 22d 25 Put BTO"
+CTSH,Filled,0.20 db,0.20 db,Day,"10/29, 1:33p",Fill,#416962036,"1 Nov 21 Exp 65 Put BTC
+-1 Nov 21 Exp 62.5 Put STC"
+TSN,Filled,0.49 cr,0.49 cr,Day,"10/28, 7:11p",Fill,#416879577,"-1 Nov 21 Exp 50 Put STO
+1 Nov 21 Exp 47.5 Put BTO"
+AVGO,Filled,1.56 db,1.56 db,Day,"10/28, 7:08p",Fill,#416774612,"1 Dec 5 8d 350 Put BTC
+-1 Dec 5 8d 345 Put STC"
+MSFT,Filled,2.60 cr,2.60 cr,Day,"10/28, 6:44p",Fill,#416864115,"-1 Nov 21 Exp 565 Call STO
+1 Nov 21 Exp 575 Call BTO"
+AMZN,Filled,1.60 db,1.60 db,Day,"10/28, 5:25p",Fill,#416657225,"1 Nov 28 1d 220 Put BTC
+-1 Nov 28 1d 215 Put STC"
+SOFI,Filled,1.51 cr,1.51 cr,Day,"10/28, 4:30p",Fill,#416732336,"1 Oct 31 Exp 33 Call BTC
+-1 Nov 7 Exp 30 Call STC"
+HIMS,Filled,0.38 cr,0.38 cr,Day,"10/28, 3:39p",Fill,#416760682,"-1 Dec 5 8d 46 Put STO
+1 Dec 5 8d 45 Put BTO"
+KO,Filled,1.98 cr,1.98 cr,Day,"10/28, 2:52p",Fill,#416714299,"-1 Oct 31 Exp 68 Put STC
+-1 Oct 31 Exp 69 Call STC"
+SPGI,Filled,1.42 db,1.42 db,Day,"10/28, 2:42p",Fill,#416725200,"1 Nov 14 Exp 485 Put BTC
+-1 Nov 14 Exp 480 Put STC"
+TMUS,Filled,0.77 db,0.77 db,Day,"10/28, 2:38p",Fill,#416661464,"1 Nov 7 Exp 217.5 Put BTC
+-1 Nov 7 Exp 215 Put STC"
+UNG,Filled,0.08 db,0.08 db,Day,"10/28, 2:27p",Fill,#416693076,"1 Oct 31 Exp 12 Put BTC
+-1 Oct 31 Exp 11 Put STC"
+UPS,Filled,4.25 cr,4.25 cr,Day,"10/28, 1:31p",Fill,#416648240,"1 Oct 31 Exp 95 Call BTC
+-1 Nov 7 Exp 90 Call STC"
+GAP,Filled,0.14 db,0.14 db,Day,"10/28, 1:30p",Fill,#416628306,"1 Nov 21 Exp 20 Put BTC
+-1 Nov 21 Exp 19 Put STC"
+SOFI,Filled,1.29 db,1.29 db,Day,"10/27, 6:02p",Fill,#416521418,"-1 Oct 31 Exp 33 Call STO
+1 Nov 7 Exp 30 Call BTO"
+UPS,Filled,2.06 db,2.10 db,Day,"10/27, 5:43p",Fill,#416520919,"-1 Oct 31 Exp 95 Call STO
+1 Nov 7 Exp 90 Call BTO"
+SMH,Filled,0.58 db,0.73 db,Day,"10/27, 3:08p",Fill,#416433667,"1 Nov 28 1d 337.5 Put BTC
+-1 Nov 28 1d 335 Put STC"
+NVDA,Filled,3.59 cr,3.59 cr,Day,"10/27, 2:30p",Fill,#416402658,"-1 Nov 21 Exp 175 Call STC
+1 Nov 21 Exp 180 Call BTC"
+ZM,Filled,0.44 cr,0.44 cr,Day,"10/24, 8:50p",Fill,#416190982,"-1 Dec 5 8d 84 Put STO
+1 Dec 5 8d 83 Put BTO"
+SPGI,Filled,1.75 cr,1.75 cr,Day,"10/24, 7:57p",Fill,#416221744,"-1 Nov 14 Exp 485 Put STO
+1 Nov 14 Exp 480 Put BTO"
+T,Filled,0.15 cr,0.15 cr,Day,"10/24, 7:16p",Fill,#416201722,"-1 Dec 5 8d 24 Put STO
+1 Dec 5 8d 23 Put BTO"
+CCJ,Filled,0.82 db,0.82 db,Day,"10/24, 6:55p",Fill,#416191304,"1 Nov 21 Exp 80 Put BTC
+-1 Nov 21 Exp 77 Put STC"
+BRK/B,Filled,1.38 cr,1.38 cr,Day,"10/24, 6:52p",Fill,#416189850,"-1 Dec 5 8d 485 Put STO
+1 Dec 5 8d 480 Put BTO"
+FI,Filled,0.43 cr,0.40 cr,Day,"10/24, 6:51p",Fill,#416189324,"-1 Dec 5 8d 125 Put STO
+1 Dec 5 8d 124 Put BTO"
+SBUX,Filled,3.63 db,3.63 db,Day,"10/24, 4:42p",Fill,#416120399,"-1 Oct 31 Exp 90 Call STO
+1 Dec 19 22d 85 Call BTO"
+KO,Filled,0.01 db,0.01 db,Day,"10/24, 4:32p",Fill,#416113751,1 Oct 24 Exp 68 Put BTC
+COIN,Filled,1.73 db,1.73 db,Day,"10/24, 3:49p",Fill,#416077098,"1 Dec 5 8d 315 Put BTC
+-1 Dec 5 8d 310 Put STC"
+AVGO,Filled,2.17 cr,2.17 cr,Day,"10/24, 3:30p",Fill,#416061154,"-1 Dec 5 8d 350 Put STO
+1 Dec 5 8d 345 Put BTO"
+HIMS,Filled,2.72 db,2.72 db,Day,"10/24, 3:22p",Fill,#416052701,"1 Nov 28 1d 47 Put BTC
+-1 Nov 28 1d 40 Put STC"
+KO,Filled,0.90 db,0.90 db,Day,"10/24, 2:56p",Fill,#416021648,1 Oct 24 Exp 69 Call BTC
+CTSH,Filled,0.71 cr,0.71 cr,Day,"10/23, 7:36p",Fill,#415887624,"-1 Nov 21 Exp 65 Put STO
+1 Nov 21 Exp 62.5 Put BTO"
+FXI,Filled,0.17 cr,0.17 cr,Day,"10/23, 7:18p",Fill,#415878405,"-1 Dec 5 8d 40 Put STO
+1 Dec 5 8d 39.5 Put BTO"
+TMUS,Filled,0.92 cr,0.92 cr,Day,"10/23, 7:00p",Fill,#415869439,"-1 Nov 7 Exp 217.5 Put STO
+1 Nov 7 Exp 215 Put BTO"
+PFE,Filled,1.07 cr,1.07 cr,Day,"10/23, 5:39p",Fill,#415823713,"-1 Dec 5 8d 25 Put STO
+1 Dec 5 8d 22 Put BTO"
+COIN,Filled,2.30 cr,2.12 cr,Day,"10/23, 5:23p",Fill,#415815235,"-1 Dec 5 8d 315 Put STO
+1 Dec 5 8d 310 Put BTO"
+HIMS,Filled,3.17 cr,3.17 cr,Day,"10/23, 2:30p",Fill,#415650106,"-1 Nov 28 1d 47 Put STO
+1 Nov 28 1d 40 Put BTO"
+MCD,Filled,1.73 cr,1.72 cr,Day,"10/21, 6:41p",Fill,#415230754,"-1 Nov 28 1d 305 Put STO
+1 Nov 28 1d 300 Put BTO"
+CCJ,Filled,1.18 cr,1.18 cr,Day,"10/21, 5:49p",Fill,#415201297,"-1 Nov 21 Exp 80 Put STO
+1 Nov 21 Exp 77 Put BTO"
+ABNB,Filled,2.05 cr,2.05 cr,Day,"10/21, 5:44p",Fill,#415199112,"-1 Jun 18 203d 125 Put STO
+1 Jun 18 203d 120 Put BTO"
+ADBE,Filled,1.29 db,1.29 db,Day,"10/21, 3:54p",Fill,#415135383,"1 Nov 21 Exp 335 Put BTC
+-1 Nov 21 Exp 330 Put STC"
+KSS,Filled,1.09 db,1.13 db,Day,"10/21, 3:54p",Fill,#415134983,"1 Nov 21 Exp 16 Put BTC
+-1 Nov 21 Exp 12.5 Put STC"
+ALGN,Filled,2.26 db,2.26 db,Day,"10/21, 3:53p",Fill,#415134403,"1 Nov 21 Exp 130 Put BTC
+-1 Nov 21 Exp 125 Put STC"
+ORCL,Filled,2.15 cr,2.15 cr,Day,"10/20, 6:14p",Fill,#414914847,"-1 Nov 28 1d 275 Put STO
+1 Nov 28 1d 270 Put BTO"
+KO,Filled,0.25 db,0.25 db,Day,"10/20, 5:26p",Fill,#414891506,"-1 Oct 24 Exp 68 Put STO
+1 Oct 31 Exp 68 Put BTO"
+KO,Filled,0.27 db,0.27 db,Day,"10/20, 5:25p",Fill,#414891317,"-1 Oct 24 Exp 69 Call STO
+1 Oct 31 Exp 69 Call BTO"
+SBUX,Filled,0.44 cr,0.42 cr,Day,"10/20, 3:59p",Fill,#414837198,"-1 Nov 28 1d 84 Put STO
+1 Nov 28 1d 83 Put BTO"
+KHC,Filled,0.34 cr,0.34 cr,Day,"10/20, 3:45p",Fill,#414825440,-1 Nov 28 1d 27 Call STO
+KHC,Filled,25.76 cr,25.76 cr,Day,"10/20, 3:43p",Fill,#414822949,-200 STC
+AMD,Filled,1.60 db,1.60 db,Day,"10/20, 3:36p",Fill,#414816366,"1 Nov 28 1d 220 Put BTC
+-1 Nov 28 1d 215 Put STC"
+MSFT,Filled,1.82 cr,1.82 cr,Day,"10/20, 2:30p",Fill,#414695886,"-1 Nov 28 1d 510 Put STO
+1 Nov 28 1d 505 Put BTO"
+XLRE,Filled,0.20 cr,0.20 cr,Day,"10/17, 5:56p",Fill,#414549968,"-1 Nov 21 Exp 41 Put STO
+1 Nov 21 Exp 40 Put BTO"
+XLP,Filled,0.29 cr,0.29 cr,Day,"10/17, 5:36p",Fill,#414548957,"-1 Nov 21 Exp 79 Put STO
+1 Nov 21 Exp 78 Put BTO"
+GLD,Filled,2.13 cr,2.13 cr,Day,"10/17, 5:14p",Fill,#414539466,"-1 Nov 28 1d 385 Put STO
+1 Nov 28 1d 380 Put BTO"
+RKT,Filled,1.02 cr,1.01 cr,Day,"10/17, 4:18p",Fill,#414501158,"1 Oct 31 Exp 14 Put BTO
+-1 Oct 31 Exp 16 Put STO
+-1 Oct 31 Exp 16.5 Call STO
+1 Oct 31 Exp 17.5 Call BTO"
+LAZR,Filled,0.08 db,0.08 db,Day,"10/17, 3:25p",Fill,#414458249,1 Oct 17 Exp 2 Call BTO
+KHC,Filled,0.04 db,0.04 db,Day,"10/17, 3:08p",Fill,#414439741,3 Oct 17 Exp 25.5 Call BTO
+MGM,Filled,0.01 cr,0.01 cr,Day,"10/17, 2:37p",Fill,#414397286,-1 Oct 17 Exp 33.5 Call STC
+FSLY,Filled,0.01 cr,0.01 cr,Day,"10/17, 2:35p",Fill,#414395965,-1 Oct 17 Exp 8.5 Call STC
+XYZ,Filled,0.18 db,0.18 db,Day,"10/16, 3:42p",Fill,#414109752,"-1 Nov 7 Exp 78 Put STC
+1 Nov 7 Exp 79 Put BTC
+1 Nov 28 1d 78 Put BTO
+-1 Nov 28 1d 79 Put STO"
+BB,Filled,0.10 db,0.10 db,Day,"10/16, 3:38p",Fill,#414106420,1 Oct 24 Exp 5 Call BTO
+NVDA,Filled,2.90 db,2.90 db,Day,"10/16, 3:03p",Fill,#414072400,"1 Nov 21 Exp 175 Call BTO
+-1 Nov 21 Exp 180 Call STO"
+NKE,Filled,0.42 cr,0.42 cr,Day,"10/15, 8:46p",Fill,#413975429,"-1 Nov 28 1d 68 Put STO
+1 Nov 28 1d 67 Put BTO"
+INTC,Filled,2.05 db,2.05 db,Day,"10/15, 8:37p",Fill,#413968827,"1 Nov 7 Exp 23 Call BTC
+-1 Nov 28 1d 25 Call STO"
+SMH,Filled,0.14 db,0.14 db,Day,"10/15, 8:35p",Fill,#413967572,"-1 Oct 31 Exp 335 Put STC
+1 Oct 31 Exp 337.5 Put BTC
+1 Nov 28 1d 335 Put BTO
+-1 Nov 28 1d 337.5 Put STO"
+META,Filled,2.11 cr,2.11 cr,Day,"10/15, 8:27p",Fill,#413962467,"-1 Nov 28 1d 710 Put STO
+1 Nov 28 1d 705 Put BTO"
+UNG,Filled,0.12 cr,0.12 cr,Day,"10/15, 7:06p",Fill,#413865963,"-1 Oct 17 Exp 11 Put STC
+1 Oct 17 Exp 12 Put BTC
+1 Oct 31 Exp 11 Put BTO
+-1 Oct 31 Exp 12 Put STO"
+DIA,Filled,0.25 db,0.25 db,Day,"10/15, 7:00p",Fill,#413905200,"-1 Oct 17 Exp 466 Put STC
+1 Oct 17 Exp 467 Put BTC
+1 Nov 14 Exp 466 Put BTO
+-1 Nov 14 Exp 467 Put STO"
+FSLY,Filled,0.20 db,0.20 db,Day,"10/15, 6:30p",Fill,#413900574,1 Oct 17 Exp 8.5 Call BTO
+IWM,Filled,0.20 cr,0.20 cr,Day,"10/15, 5:51p",Fill,#413872872,"-1 Nov 28 1d 248 Put STO
+1 Nov 28 1d 247.5 Put BTO"
+NVAX,Filled,0.15 db,0.15 db,Day,"10/15, 5:47p",Fill,#413871047,1 Oct 17 Exp 9.5 Call BTO
+MGM,Filled,0.14 db,0.14 db,Day,"10/15, 5:46p",Fill,#413870463,1 Oct 17 Exp 33.5 Call BTO
+AMD,Filled,0.07 cr,0.07 cr,Day,"10/15, 5:39p",Fill,#413867155,"-1 Nov 14 Exp 215 Put STC
+1 Nov 14 Exp 220 Put BTC
+1 Nov 28 1d 215 Put BTO
+-1 Nov 28 1d 220 Put STO"
+SPCE,Filled,0.05 cr,0.01 db,Day,"10/15, 5:38p",Fill,#413866520,"-1 Oct 31 Exp 3 Put STC
+1 Oct 31 Exp 3.5 Put BTC
+1 Nov 28 1d 3 Put BTO
+-1 Nov 28 1d 3.5 Put STO"
+HIMS,Filled,6.20 cr,6.20 cr,Day,"10/15, 5:33p",Fill,#413864297,-1 Nov 21 Exp 55 Put STC
+EXEL,Filled,0.12 cr,0.12 cr,Day,"10/15, 5:31p",Fill,#413863379,"-1 Oct 17 Exp 35 Put STC
+1 Oct 17 Exp 36 Put BTC
+1 Nov 21 Exp 35 Put BTO
+-1 Nov 21 Exp 36 Put STO"
+HIMS,Filled,7.51 db,7.51 db,Day,"10/15, 5:27p",Fill,#413860999,"-1 Oct 24 Exp 54 Put STC
+1 Oct 24 Exp 57 Put BTC
+1 Nov 21 Exp 55 Put BTO"
+TTD,Filled,0.34 cr,0.34 cr,Day,"10/15, 5:21p",Fill,#413857940,"-1 Oct 31 Exp 43 Put STC
+1 Oct 31 Exp 45 Put BTC
+1 Nov 28 1d 43 Put BTO
+-1 Nov 28 1d 45 Put STO"
+AMZN,Filled,0.05 db,0.05 db,Day,"10/15, 5:18p",Fill,#413856623,"-1 Nov 7 Exp 215 Put STC
+1 Nov 7 Exp 220 Put BTC
+1 Nov 28 1d 215 Put BTO
+-1 Nov 28 1d 220 Put STO"
+GNRC,Filled,1.60 db,1.60 db,Day,"10/14, 4:33p",Fill,#413477979,"1 Nov 21 Exp 165 Put BTC
+-1 Nov 21 Exp 160 Put STC"
+BMY,Filled,0.32 cr,0.32 cr,Day,"10/13, 8:23p",Fill,#413289662,"-1 Nov 21 Exp 42 Put STO
+1 Nov 21 Exp 41 Put BTO"
+ADBE,Filled,2.12 cr,2.12 cr,Day,"10/13, 7:57p",Fill,#413276224,"-1 Nov 21 Exp 335 Put STO
+1 Nov 21 Exp 330 Put BTO"
+STZ,Filled,2.08 cr,2.08 cr,Day,"10/13, 7:55p",Fill,#413274738,"-1 Nov 28 1d 140 Put STO
+1 Nov 28 1d 135 Put BTO"
+CME,Filled,1.98 db,1.98 db,Day,"10/13, 7:37p",Fill,#413265107,"2 Nov 21 Exp 260 Put BTC
+-2 Nov 21 Exp 250 Put STC"
+SMH,Filled,1.02 cr,1.02 cr,Day,"10/13, 7:25p",Fill,#413257854,"-1 Oct 31 Exp 337.5 Put STO
+1 Oct 31 Exp 335 Put BTO"
+AMD,Filled,2.32 cr,2.20 cr,Day,"10/13, 3:00p",Fill,#413081554,"-1 Nov 14 Exp 220 Put STO
+1 Nov 14 Exp 215 Put BTO"
+ORCL,Filled,3.73 db,3.73 db,Day,"10/13, 2:34p",Fill,#413043032,"1 Nov 21 Exp 290 Put BTC
+-1 Nov 21 Exp 280 Put STC"
+CME,Filled,2.35 cr,2.35 cr,Day,"10/10, 3:25p",Fill,#412637431,"-1 Nov 21 Exp 260 Put STO
+1 Nov 21 Exp 250 Put BTO"
+CME,Filled,2.02 cr,2.02 cr,Day,"10/10, 3:00p",Fill,#412638376,"-1 Nov 21 Exp 260 Put STO
+1 Nov 21 Exp 250 Put BTO"
+ORCL,Filled,3.92 cr,3.92 cr,Day,"10/10, 2:50p",Fill,#412624365,"-1 Nov 21 Exp 290 Put STO
+1 Nov 21 Exp 280 Put BTO"
+CRM,Filled,3.45 db,3.45 db,Day,"10/09, 8:26p",Fill,#412532038,"1 Nov 7 Exp 240 Put BTC
+-1 Nov 7 Exp 230 Put STC"
+KSS,Filled,1.56 cr,1.56 cr,Day,"10/09, 7:28p",Fill,#412504108,"-1 Nov 21 Exp 16 Put STO
+1 Nov 21 Exp 12.5 Put BTO"
+HIMS,Filled,1.34 cr,1.34 cr,Day,"10/09, 6:55p",Fill,#412488567,"-1 Oct 24 Exp 57 Put STO
+1 Oct 24 Exp 54 Put BTO"
+AMZN,Filled,2.00 cr,2.00 cr,Day,"10/09, 6:28p",Fill,#412475378,"-1 Nov 7 Exp 220 Put STO
+1 Nov 7 Exp 215 Put BTO"
+ENPH,Filled,0.79 db,0.79 db,Day,"10/09, 6:06p",Fill,#412463844,"1 Nov 21 Exp 30 Put BTC
+-1 Nov 21 Exp 25 Put STC"
+SLV,Filled,0.24 cr,0.24 cr,Day,"10/09, 5:57p",Fill,#412458450,"-1 Nov 21 Exp 43 Put STO
+1 Nov 21 Exp 42.5 Put BTO"
+DIA,Filled,0.38 cr,0.38 cr,Day,"10/08, 5:39p",Fill,#412149885,"-1 Oct 17 Exp 467 Put STO
+1 Oct 17 Exp 466 Put BTO"
+ENPH,Filled,1.01 cr,1.01 cr,Day,"10/08, 4:51p",Fill,#412122156,"-1 Nov 21 Exp 30 Put STO
+1 Nov 21 Exp 25 Put BTO"
+GNRC,Filled,2.00 cr,1.95 cr,Day,"10/08, 4:48p",Fill,#412120379,"-1 Nov 21 Exp 165 Put STO
+1 Nov 21 Exp 160 Put BTO"
+ALGN,Filled,2.16 cr,2.15 cr,Day,"10/08, 4:17p",Fill,#412099682,"-1 Nov 21 Exp 130 Put STO
+1 Nov 21 Exp 125 Put BTO"
+GAP,Filled,0.35 cr,0.35 cr,Day,"10/08, 4:01p",Fill,#412088764,"-1 Nov 21 Exp 20 Put STO
+1 Nov 21 Exp 19 Put BTO"
+INTC,Filled,0.15 cr,0.15 cr,Day,"10/08, 3:51p",Fill,#412081247,"1 Oct 10 Exp 23 Call BTC
+-1 Nov 7 Exp 23 Call STO"
+XYZ,Filled,0.45 cr,0.45 cr,Day,"10/08, 3:19p",Fill,#412044966,"-1 Nov 7 Exp 79 Put STO
+1 Nov 7 Exp 78 Put BTO"
+SPCE,Filled,0.15 cr,0.15 cr,Day,"10/08, 3:12p",Fill,#412046418,"-1 Oct 31 Exp 3.5 Put STO
+1 Oct 31 Exp 3 Put BTO"
+CRM,Filled,0.28 cr,0.28 cr,Day,"10/08, 2:54p",Fill,#412006630,"-1 Oct 17 Exp 230 Put STC
+1 Oct 17 Exp 240 Put BTC
+1 Nov 7 Exp 230 Put BTO
+-1 Nov 7 Exp 240 Put STO"

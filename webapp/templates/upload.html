@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Option Auditor — Web UI</title>
+  <link id="theme-css" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{padding-top:40px}
+    /* Improve readability on dark theme */
+    :root[data-theme='dracula'] body { color:#e8edf2; }
+    :root[data-theme='dracula'] .text-muted { color:#cfd6dd !important; }
+    :root[data-theme='dracula'] .card { background-color:#2b3035; color:#e8edf2; }
+    :root[data-theme='dracula'] .form-control, :root[data-theme='dracula'] .form-select {
+      background-color:#1f2327; color:#e8edf2; border-color:#3a3f44;
+    }
+    :root[data-theme='dracula'] .form-control::placeholder { color:#9aa3ab; }
+    :root[data-theme='dracula'] .btn-primary { color:#fff; }
+    /* Loading overlay contrast */
+    :root[data-theme='dracula'] #loading_overlay { background:rgba(0,0,0,0.6) !important; }
+  </style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;">
+</head>
+<body>
+<div class="container">
+  <!-- Top bar with Theme selector (top-left) -->
+  <div class="d-flex align-items-center mb-2">
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        Theme
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item theme-choice" data-theme="light" href="#">Light</a></li>
+        <li><a class="dropdown-item theme-choice" data-theme="dracula" href="#">Dracula</a></li>
+      </ul>
+    </div>
+  </div>
+  <h1 class="mb-4">The Option Auditor</h1>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'warning' if category=='warning' else category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="card">
+    <div class="card-body">
+      <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="csv" class="form-label">Broker CSV file</label>
+          <input class="form-control" type="file" id="csv" name="csv" accept=".csv" required>
+          <div class="form-text">Only .csv files. Max size 5 MB.</div>
+        </div>
+        <div class="mb-3">
+          <label for="broker" class="form-label">Broker</label>
+          <select class="form-select" id="broker" name="broker">
+            <option value="auto" selected>Auto-detect</option>
+            <option value="tasty">Tastytrade</option>
+            <option value="ibkr">Interactive Brokers (IBKR)</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="account_size" class="form-label">Account size (optional)</label>
+          <input class="form-control" type="number" step="any" id="account_size" name="account_size" placeholder="e.g., 25000">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="date_mode">Date range</label>
+          <select class="form-select" id="date_mode" name="date_mode">
+            <option value="all" selected>Analyze everything in the CSV</option>
+            <option value="7d">Last 7 days</option>
+            <option value="14d">Last 14 days</option>
+            <option value="1m">Last 1 month</option>
+            <option value="6m">Last 6 months</option>
+            <option value="1y">Last 1 year</option>
+            <option value="2y">Last 2 years</option>
+            <option value="ytd">Year to date</option>
+            <option value="range">Custom date range…</option>
+          </select>
+          <div id="custom_date_row" class="row mt-2 d-none">
+            <div class="col-sm-6 mb-2">
+              <label for="start_date" class="form-label">Start date</label>
+              <input class="form-control" type="date" id="start_date" name="start_date" disabled>
+            </div>
+            <div class="col-sm-6 mb-2">
+              <label for="end_date" class="form-label">End date</label>
+              <input class="form-control" type="date" id="end_date" name="end_date" disabled>
+            </div>
+          </div>
+          <div class="form-text">Choose a preset period or select a custom range. Only trades within the window (inclusive) are analyzed.</div>
+        </div>
+        <button id="analyze_btn" type="submit" class="btn btn-primary">Analyze</button>
+      </form>
+    </div>
+  </div>
+
+  <p class="mt-4 text-muted">Security: CSVs are parsed as plain text; no code execution. Outputs are sanitized to mitigate spreadsheet formula injection.</p>
+ </div>
+
+<script>
+  // Apply stored theme early to avoid FOUC and set data-theme attribute
+  (function(){
+    try {
+      var theme = localStorage.getItem('opt_theme') || 'light';
+      var link = document.getElementById('theme-css');
+      var map = {
+        light: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
+        dracula: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/darkly/bootstrap.min.css'
+      };
+      if(link && map[theme]) link.href = map[theme];
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch(e){}
+  })();
+
+  // UI behavior: toggle date inputs based on dropdown and show a fun loading overlay on submit
+  (function(){
+    const mode = document.getElementById('date_mode');
+    const s = document.getElementById('start_date');
+    const e = document.getElementById('end_date');
+    const row = document.getElementById('custom_date_row');
+    const form = document.querySelector('form[action*="analyze"]');
+    const btn = document.getElementById('analyze_btn');
+
+    function update(){
+      const isCustom = mode.value === 'range';
+      s.disabled = !isCustom; e.disabled = !isCustom;
+      if(row){ row.classList.toggle('d-none', !isCustom); }
+      if(!isCustom){ s.value=''; e.value=''; }
+    }
+    mode.addEventListener('change', update);
+    update();
+
+    form.addEventListener('submit', function(){
+      btn.disabled = true;
+      document.getElementById('loading_overlay').classList.remove('d-none');
+    });
+
+    // Theme handling using open-source Bootswatch for dark theme ("Dracula" via Darkly)
+    const THEME_CSS = document.getElementById('theme-css');
+    const THEMES = {
+      light: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
+      dracula: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/darkly/bootstrap.min.css'
+    };
+    function applyTheme(name){
+      const href = THEMES[name] || THEMES.light;
+      if(THEME_CSS && THEME_CSS.href !== href){ THEME_CSS.href = href; }
+      try { localStorage.setItem('opt_theme', name); } catch(e){}
+      try { document.documentElement.setAttribute('data-theme', name); } catch(e){}
+    }
+    // Restore persisted theme
+    let current = 'light';
+    try { current = localStorage.getItem('opt_theme') || 'light'; } catch(e){}
+    applyTheme(current);
+    // Bind dropdown choices
+    document.querySelectorAll('.theme-choice').forEach(function(a){
+      a.addEventListener('click', function(ev){ ev.preventDefault(); applyTheme(a.getAttribute('data-theme')); });
+    });
+  })();
+  </script>
+  <!-- Loading overlay with a quip shown during analysis -->
+  <div id="loading_overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" style="background:rgba(255,255,255,0.85); z-index:1050;">
+    <div class="d-flex flex-column justify-content-center align-items-center h-100 text-center">
+      <div class="spinner-border text-primary mb-3" role="status" aria-hidden="true"></div>
+      <h5 class="mb-1">Analyzing your trades…</h5>
+      <p class="text-muted">Quip: turning coffee into theta and grouping spreads like a pro ☕️→θ</p>
+    </div>
+  </div>
+  <!-- Bootstrap JS (required for dropdown) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

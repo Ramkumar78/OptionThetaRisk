@@ -1,0 +1,260 @@
+import io
+import os
+from datetime import datetime, timedelta
+
+import pytest
+
+
+def make_csv_bytes():
+    # Minimal tasty CSV content with headers used by _normalize_tasty
+    content = (
+        "Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type\n"
+        "2025-01-01 10:00,MSFT,1,Buy to Open,1.00,0.10,2025-02-21,500,Put\n"
+        "2025-01-03 10:00,MSFT,1,Sell to Close,1.50,0.10,2025-02-21,500,Put\n"
+    )
+    return content.encode("utf-8")
+
+
+@pytest.fixture()
+def app():
+    from webapp.app import create_app
+
+    app = create_app()
+    app.config.update({
+        "TESTING": True,
+        "WTF_CSRF_ENABLED": False,
+    })
+    return app
+
+
+def test_upload_and_results_page(app):
+    client = app.test_client()
+    data = {
+        "broker": "tasty",
+        "account_size": "10000",
+    }
+    data["csv"] = (io.BytesIO(make_csv_bytes()), "sample.csv")
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Audit Results" in html
+    assert "Verdict" in html
+    # Theme dropdown should be present on results
+    assert "Theme" in html
+    assert "theme-choice" in html
+
+
+def test_rejects_large_upload(app):
+    client = app.test_client()
+    # Force a tiny max size to trigger 413
+    app.config["MAX_CONTENT_LENGTH"] = 100
+    big = b"A" * 1024  # 1 KB
+    data = {
+        "broker": "auto",
+        "csv": (io.BytesIO(big), "big.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code in (400, 413)
+
+
+def test_theme_dropdown_present_on_upload(app):
+    client = app.test_client()
+    resp = client.get("/")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Theme" in html
+    assert "theme-choice" in html
+
+
+def _csv_bytes_with_times(t1: datetime, t2: datetime):
+    # Build a closed trade around provided datetimes (classic tasty format)
+    content = (
+        "Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type\n"
+        f"{t1.strftime('%Y-%m-%d %H:%M')},MSFT,1,Buy to Open,1.00,0.00,{(t2+timedelta(days=30)).date()},500,Put\n"
+        f"{t2.strftime('%Y-%m-%d %H:%M')},MSFT,1,Sell to Close,1.10,0.00,{(t2+timedelta(days=30)).date()},500,Put\n"
+    )
+    return content.encode("utf-8")
+
+
+def test_upload_with_preset_last_7_days(app):
+    client = app.test_client()
+    now = datetime.now()
+    t1 = now - timedelta(days=2)
+    t2 = now - timedelta(days=1)
+    data = {
+        "broker": "tasty",
+        "date_mode": "7d",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last7.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" in html
+
+
+def test_upload_with_preset_ytd(app):
+    client = app.test_client()
+    now = datetime.now()
+    jan2 = datetime(now.year, 1, 2, 10, 0)
+    jan3 = datetime(now.year, 1, 3, 10, 0)
+    data = {
+        "broker": "tasty",
+        "date_mode": "ytd",
+        "csv": (io.BytesIO(_csv_bytes_with_times(jan2, jan3)), "ytd.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    # Expect to see the badge with Jan 1 as start
+    assert f"{now.year}-01-01" in html
+
+
+def test_upload_with_preset_last_14_days(app):
+    client = app.test_client()
+    now = datetime.now()
+    t1 = now - timedelta(days=10)
+    t2 = now - timedelta(days=5)
+    data = {
+        "broker": "tasty",
+        "date_mode": "14d",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last14.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" in html
+
+
+def test_upload_with_preset_last_1_month(app):
+    client = app.test_client()
+    now = datetime.now()
+    t1 = now - timedelta(days=20)
+    t2 = now - timedelta(days=18)
+    data = {
+        "broker": "tasty",
+        "date_mode": "1m",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last1m.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" in html
+
+
+def test_upload_with_preset_last_6_months(app):
+    client = app.test_client()
+    now = datetime.now()
+    t1 = now - timedelta(days=150)
+    t2 = now - timedelta(days=149)
+    data = {
+        "broker": "tasty",
+        "date_mode": "6m",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last6m.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" in html
+
+
+def test_upload_with_preset_last_1_year(app):
+    client = app.test_client()
+    now = datetime.now()
+    t1 = now - timedelta(days=300)
+    t2 = now - timedelta(days=299)
+    data = {
+        "broker": "tasty",
+        "date_mode": "1y",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last1y.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" in html
+
+
+def test_upload_with_preset_last_2_years(app):
+    client = app.test_client()
+    now = datetime.now()
+    t1 = now - timedelta(days=500)
+    t2 = now - timedelta(days=499)
+    data = {
+        "broker": "tasty",
+        "date_mode": "2y",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last2y.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" in html
+
+
+def test_upload_with_all_mode_shows_no_badge(app):
+    # When "All" is selected, no date badge should be shown
+    client = app.test_client()
+    now = datetime.now()
+    t1 = now - timedelta(days=2)
+    t2 = now - timedelta(days=1)
+    data = {
+        "broker": "tasty",
+        "date_mode": "all",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "all.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" not in html
+
+
+def test_upload_with_custom_date_range(app):
+    client = app.test_client()
+    # Build CSV with dates inside the custom range
+    t1 = datetime(2025, 1, 10, 10, 0)
+    t2 = datetime(2025, 1, 11, 10, 0)
+    data = {
+        "broker": "tasty",
+        "date_mode": "range",
+        "start_date": "2025-01-01",
+        "end_date": "2025-01-31",
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "custom.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Date range:" in html
+    assert "2025-01-01" in html and "2025-01-31" in html
+
+
+def test_upload_defaults_all_mode_when_missing(app):
+    # If the client sends no date_mode field at all, backend should treat it as 'all'
+    client = app.test_client()
+    # Build a simple closed trade
+    now = datetime.now()
+    t1 = now - timedelta(days=2)
+    t2 = now - timedelta(days=1)
+    data = {
+        "broker": "tasty",
+        # intentionally omit date_mode
+        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "no_date_mode.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    # No badge should be shown when analyzing everything
+    assert "Date range:" not in html
+
+
+def test_upload_with_custom_range_missing_dates_redirects(app):
+    # Selecting custom range without both dates should redirect with a warning flash
+    client = app.test_client()
+    # CSV content doesn't matter because it should not be processed
+    data = {
+        "broker": "tasty",
+        "date_mode": "range",
+        # omit start_date and end_date on purpose
+        "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Please select both start and end dates" in html
