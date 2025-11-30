@@ -4,15 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Option Auditor</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script type="text/tailwindcss">
-    {
-      "darkMode": "class",
-      "theme": {
-        "extend": {}
+  
+  <!-- 
+    This is the crucial fix. 
+    1. Define the tailwind config object FIRST.
+    2. Set darkMode to 'class'.
+    3. THEN, load the main Tailwind script. It will detect this config.
+  -->
+  <script>
+    tailwind = {
+      config: {
+        darkMode: 'class',
       }
     }
   </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
     /* Simple fade-in for HTMX swaps */
@@ -24,7 +31,7 @@
     th[data-sort-dir="desc"]:after { border-top: 5px solid; }
   </style>
   <script>
-    // Set theme on page load to prevent FOUC (Flash of Unstyled Content)
+    // This script must run early to prevent a "flash of unstyled content" (FOUC)
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       document.documentElement.classList.add('dark')
     } else {
@@ -55,25 +62,21 @@
     </footer>
   </div>
   <script>
-    // Sorting script from previous step
+    // Sorting script
     function sortTable(table, colIndex, type, direction) {
       const tbody = table.querySelector('tbody');
       const rows = Array.from(tbody.querySelectorAll('tr'));
-
       rows.sort((a, b) => {
         let valA = a.cells[colIndex].textContent.trim();
         let valB = b.cells[colIndex].textContent.trim();
-
         if (type === 'numeric') {
           valA = parseFloat(valA.replace(/[^0-9.-]+/g,""));
           valB = parseFloat(valB.replace(/[^0-9.-]+/g,""));
         }
-
         if (valA < valB) return direction === 'asc' ? -1 : 1;
         if (valA > valB) return direction === 'asc' ? 1 : -1;
         return 0;
       });
-
       rows.forEach(row => tbody.appendChild(row));
     }
 
@@ -84,7 +87,6 @@
         const colIndex = Array.from(th.parentNode.children).indexOf(th);
         const sortType = th.dataset.sortType || 'alpha';
         let sortDir = th.dataset.sortDir === 'asc' ? 'desc' : 'asc';
-        
         table.querySelectorAll('th[data-sortable]').forEach(header => delete header.dataset.sortDir);
         th.dataset.sortDir = sortDir;
         sortTable(table, colIndex, sortType, sortDir);
@@ -93,14 +95,11 @@
 
     // Theme switcher logic
     const themeChoice = document.getElementById('theme-choice');
-    
-    // Set dropdown to match current theme
     if (localStorage.theme) {
       themeChoice.value = localStorage.theme;
     } else {
       themeChoice.value = 'system';
     }
-
     themeChoice.addEventListener('change', function(e) {
       if (e.target.value === 'dark') {
         document.documentElement.classList.add('dark');
