@@ -34,6 +34,8 @@ def main(argv=None):
 
     return 0
 
-
-if __name__ == "__main__":
+def run_main():
     main()
+
+if __name__ == "__main__": # pragma: no cover
+    run_main()

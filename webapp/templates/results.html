@@ -1,266 +1,122 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Results — The Option Auditor</title>
-  <link id="theme-css" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body{padding-top:40px}
-    /* Improve readability when dark theme is active */
-    :root[data-theme='dracula'] body { color: #e8edf2; }
-    :root[data-theme='dracula'] .table { color: #e8edf2; }
-    /* Ensure table headers and cells use light text on dark theme */
-    :root[data-theme='dracula'] .table thead th { color: #f8f9fa; }
-    :root[data-theme='dracula'] .table td,
-    :root[data-theme='dracula'] .table th { color: #e8edf2; }
-    :root[data-theme='dracula'] .text-muted { color: #cfd6dd !important; }
-    /* Ensure striped tables keep enough contrast on dark bg */
-    :root[data-theme='dracula'] .table-striped>tbody>tr:nth-of-type(odd)>* { --bs-table-accent-bg: rgba(255,255,255,0.03); color: inherit; }
-    /* Make success/warning/danger rows readable on dark theme */
-    :root[data-theme='dracula'] .table-success { --bs-table-bg: #198754; --bs-table-color: #fff; }
-    :root[data-theme='dracula'] .table-danger  { --bs-table-bg: #dc3545; --bs-table-color: #fff; }
-    :root[data-theme='dracula'] .table-warning { --bs-table-bg: #ffc107; --bs-table-color: #212529; }
-    /* Neutral rows should also be readable */
-    :root[data-theme='dracula'] .table-secondary { --bs-table-bg: #343a40; --bs-table-color: #e8edf2; }
-    /* Badge for date range should be darker-friendly */
-    :root[data-theme='dracula'] .badge.bg-light.text-dark { background-color:#2b3035 !important; color:#e8edf2 !important; }
-    :root[data-theme='dracula'] .badge.bg-secondary { background-color:#495057 !important; color:#e8edf2 !important; }
-    /* Links on dark theme */
-    :root[data-theme='dracula'] a { color: #7abaff; }
-  </style>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;">
-  <script>
-    // Apply stored theme as early as possible to avoid flash
-    (function(){
-      try {
-        var theme = localStorage.getItem('opt_theme') || 'light';
-        var link = document.getElementById('theme-css');
-        var map = {
-          light: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
-          dracula: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/darkly/bootstrap.min.css'
-        };
-        if(link && map[theme]) link.href = map[theme];
-        try { document.documentElement.setAttribute('data-theme', theme); } catch(e){}
-      } catch(e){}
-    })();
-  </script>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
-</head>
-<body>
-<div class="container">
-  <!-- Top-left Theme selector -->
-  <div class="d-flex align-items-center mb-2">
-    <div class="dropdown">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Theme</button>
-      <ul class="dropdown-menu">
-        <li><a class="dropdown-item theme-choice" data-theme="light" href="#">Light</a></li>
-        <li><a class="dropdown-item theme-choice" data-theme="dracula" href="#">Dracula</a></li>
-      </ul>
+<div class="fade-in">
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Audit Summary</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Verdict</p>
+        <p class="text-2xl font-bold {% if verdict == 'Green flag' %}text-green-500{% elif verdict == 'Amber' %}text-yellow-500{% else %}text-red-500{% endif %}">{{ verdict }}</p>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total PnL</p>
+        <p class="text-2xl font-bold {% if metrics.total_pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(metrics.total_pnl) }}</p>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Win Rate</p>
+        <p class="text-2xl font-bold">{{ "%.1f"|format(metrics.win_rate * 100) }}%</p>
+      </div>
+      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Trades</p>
+        <p class="text-2xl font-bold">{{ metrics.num_trades }}</p>
+      </div>
+    </div>
+    {% if date_window %}
+    <div class="text-center mt-4 text-sm text-gray-500 dark:text-gray-400">
+      Date Range: {{ date_window.start or 'Beginning' }} → {{ date_window.end or 'End' }}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div>
+      <h3 class="text-xl font-semibold mb-4">Performance by Symbol</h3>
+      <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Symbol</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Description</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">PnL</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Win Rate</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Trades</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for s in symbols %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{{ s.symbol }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{{ s.description }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm {% if s.pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(s.pnl) }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ "%.0f"|format(s.win_rate * 100) }}%</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ s.trades }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <h3 class="text-xl font-semibold mb-4">Open Positions</h3>
+      <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Symbol</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Contract</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Qty</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Days Open</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for p in open_positions %}
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{{ p.symbol }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ p.contract }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ p.qty_open }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ "%.1f"|format(p.days_open) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">No open positions.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <h1 class="mb-3">Audit Results</h1>
-  <p class="text-muted">Broker: <span class="badge bg-secondary">{{ broker }}</span></p>
-  {% if date_window %}
-    <p class="text-muted">Date range:
-      <span class="badge bg-light text-dark">{{ date_window.start or 'beginning' }} → {{ date_window.end or 'end' }}</span>
-    </p>
-  {% endif %}
-
-  <div class="row">
-    <div class="col-md-6">
-      <table class="table table-striped">
-        <tbody>
-          <tr><th scope="row">Trades</th><td>{{ metrics.get('num_trades', 0) }}</td></tr>
-          <tr><th scope="row">Win rate</th><td>{{ (metrics.get('win_rate', 0)*100)|round(1) }}%</td></tr>
-          <tr><th scope="row">Avg hold (days)</th><td>{{ metrics.get('avg_hold_days', 0)|round(2) }}</td></tr>
-          <tr><th scope="row">Avg realized theta (/day)</th><td>{{ metrics.get('avg_realized_theta', 0)|round(2) }}</td></tr>
-          <tr><th scope="row">Total PnL</th><td>{{ metrics.get('total_pnl', 0)|round(2) }}</td></tr>
-          {% if account_size %}
-          <tr><th scope="row">Account size</th><td>{{ account_size }}</td></tr>
-          {% endif %}
-          <tr><th scope="row">Max exposure (proxy)</th><td>{{ max_exposure|round(2) }}</td></tr>
-          {% set v = verdict or '' %}
-          {% set cls = '' %}
-          {% if 'Amber' in v %}
-            {% set cls = 'table-warning' %}
-          {% elif 'Over-leveraged' in v or 'Red' in v or 'Stop' in v %}
-            {% set cls = 'table-danger' %}
-          {% elif 'Green' in v %}
-            {% set cls = 'table-success' %}
-          {% endif %}
-          <tr class="{{ cls }}"><th scope="row">Verdict</th><td><span class="fw-bold">{{ verdict }}</span></td></tr>
+  <div class="mt-8">
+    <h3 class="text-xl font-semibold mb-4">Strategy Groups</h3>
+    <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Strategy</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Symbol</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">PnL</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Hold (Days)</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">θ / Day</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+          {% for s in strategy_groups %}
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{{ s.strategy }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ s.symbol }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm {% if s.pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(s.pnl) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ "%.1f"|format(s.hold_days) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm {% if s.theta_per_day >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(s.theta_per_day) }}</td>
+          </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 
-  {% if symbols and symbols|length > 0 %}
-  <h3 class="mt-4">Per-symbol PnL</h3>
-  <table class="table table-sm sortable" data-table="symbols">
-    <thead>
-      <tr>
-        <th data-type="string">Symbol</th>
-        <th data-type="string">Description</th>
-        <th data-type="number">Trades</th>
-        <th data-type="number">Profit</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in symbols %}
-        {% set cls = 'table-secondary' %}
-        {% if row.pnl > 0 %}
-          {% set cls = 'table-success' %}
-        {% elif row.pnl < 0 %}
-          {% set cls = 'table-danger' %}
-        {% endif %}
-        <tr class="{{ cls }}">
-          <td>{{ row.symbol }}</td>
-          <td class="text-muted">{{ row.description }}</td>
-          <td>{{ row.trades }}</td>
-          <td>{{ row.pnl|round(2) }}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-
-  {% if strategy_groups and strategy_groups|length > 0 %}
-  <h3 class="mt-4">Closed Strategies</h3>
-  <table class="table table-sm sortable" data-table="strategies">
-    <thead>
-      <tr>
-        <th data-type="string">Symbol</th>
-        <th data-type="string">Expiry</th>
-        <th data-type="string">Description</th>
-        <th data-type="string">Strategy</th>
-        <th data-type="number">Hold (days)</th>
-        <th data-type="number">Theta/day</th>
-        <th data-type="number">PnL</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for s in strategy_groups %}
-      {% set cls = 'table-secondary' %}
-      {% if s.pnl > 0 %}
-        {% set cls = 'table-success' %}
-      {% elif s.pnl < 0 %}
-        {% set cls = 'table-danger' %}
-      {% endif %}
-      <tr class="{{ cls }}">
-        <td>{{ s.symbol }}</td>
-        <td>{{ s.expiry }}</td>
-        <td class="text-muted">{{ s.description }}</td>
-        <td>{{ s.strategy }}</td>
-        <td>{{ s.hold_days|round(2) }}</td>
-        <td>{{ s.theta_per_day|round(2) }}</td>
-        <td>{{ s.pnl|round(2) }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-
-  {% if open_positions and open_positions|length > 0 %}
-  <h3 class="mt-4">Open Positions</h3>
-  <table class="table table-sm sortable" data-table="open">
-    <thead>
-      <tr>
-        <th data-type="string">Symbol</th>
-        <th data-type="string">Expiry</th>
-        <th data-type="string">Contract</th>
-        <th data-type="number">Qty Open</th>
-        <th data-type="string">Opened</th>
-        <th data-type="number">Days Open</th>
-        <th data-type="string">Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in open_positions %}
-        <tr class="table-secondary">
-          <td>{{ r.symbol }}</td>
-          <td>{{ r.expiry }}</td>
-          <td>{{ r.contract }}</td>
-          <td>{{ r.qty_open }}</td>
-          <td>{{ r.opened }}</td>
-          <td>{{ r.days_open|round(2) }}</td>
-          <td class="text-muted">{{ r.description }}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-
-  <div class="mb-3">
-    <a class="btn btn-outline-primary me-2" href="{{ url_for('download', token=token, kind='trades.csv') }}">Download trades.csv</a>
-    <a class="btn btn-outline-secondary" href="{{ url_for('download', token=token, kind='report.xlsx') }}">Download report.xlsx</a>
+  <div class="mt-8 text-center">
+    <a href="/download/{{ token }}/report.xlsx" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+      Download Full Report (XLSX)
+    </a>
   </div>
-
-  <a class="btn btn-link" href="{{ url_for('index') }}">Analyze another file</a>
-  <p class="mt-4 text-muted">Outputs are sanitized to mitigate spreadsheet formula injection risks.</p>
 </div>
-
-<script>
-// Theme switcher on results page
-(function(){
-  const THEME_CSS = document.getElementById('theme-css');
-  const THEMES = {
-    light: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
-    dracula: 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/darkly/bootstrap.min.css'
-  };
-  function applyTheme(name){
-    const href = THEMES[name] || THEMES.light;
-    if(THEME_CSS && THEME_CSS.href !== href){ THEME_CSS.href = href; }
-    try { localStorage.setItem('opt_theme', name); } catch(e){}
-    try { document.documentElement.setAttribute('data-theme', name); } catch(e){}
-  }
-  // bind
-  document.querySelectorAll('.theme-choice').forEach(function(a){
-    a.addEventListener('click', function(ev){ ev.preventDefault(); applyTheme(a.getAttribute('data-theme')); });
-  });
-})();
-
-// Simple table sorter
-(function(){
-  function parseVal(text, type){
-    if(type === 'number'){
-      const v = parseFloat(String(text).replace(/[$,%]/g,''));
-      return isNaN(v) ? 0 : v;
-    }
-    return String(text).toLowerCase();
-  }
-  function sortTable(table, colIdx, type, dir){
-    const tbody = table.tBodies[0];
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    rows.sort((a,b)=>{
-      const ta = a.children[colIdx]?.innerText || '';
-      const tb = b.children[colIdx]?.innerText || '';
-      const va = parseVal(ta, type);
-      const vb = parseVal(tb, type);
-      if(va < vb) return dir==='asc' ? -1 : 1;
-      if(va > vb) return dir==='asc' ? 1 : -1;
-      return 0;
-    });
-    rows.forEach(r=>tbody.appendChild(r));
-  }
-  document.querySelectorAll('table.sortable thead th').forEach(function(th){
-    th.style.cursor = 'pointer';
-    th.addEventListener('click', function(){
-      const table = th.closest('table');
-      const idx = Array.from(th.parentNode.children).indexOf(th);
-      const type = th.getAttribute('data-type') || 'string';
-      const prevDir = th.getAttribute('data-sort') || 'none';
-      const dir = prevDir === 'asc' ? 'desc' : 'asc';
-      // reset siblings
-      th.parentNode.querySelectorAll('th').forEach(h=>h.removeAttribute('data-sort'));
-      th.setAttribute('data-sort', dir);
-      sortTable(table, idx, type, dir);
-    });
-  });
-})();
-</script>
-</body>
-</html>

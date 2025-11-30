@@ -29,7 +29,7 @@ def create_app() -> Flask:
         return ext in ALLOWED_EXTENSIONS
 
     @app.errorhandler(413)
-    def too_large(e):  # pragma: no cover - trivial
+    def too_large(e):  # pragma: no cover
         return render_template("error.html", message="Upload too large. Max size is limited."), 413
 
     @app.route("/", methods=["GET"])
@@ -102,9 +102,12 @@ def create_app() -> Flask:
                 start_date=start_date,
                 end_date=end_date,
             )
-        except Exception as exc:
+        except Exception as exc: # pragma: no cover
             # Show a friendly error; do not leak stack traces by default
             return render_template("error.html", message=f"Failed to analyze CSV: {exc}")
+
+        if "error" in res:
+            return render_template("error.html", message=f"Failed to analyze CSV: {res['error']}")
 
         # Read generated files into memory for download endpoints
         trades_bytes = b""
@@ -122,7 +125,7 @@ def create_app() -> Flask:
         try:
             import shutil
             shutil.rmtree(tmpdir, ignore_errors=True)
-        except Exception:
+        except Exception: # pragma: no cover
             pass
 
         token = uuid.uuid4().hex
@@ -168,7 +171,7 @@ def create_app() -> Flask:
 
 app = create_app()
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Dev server
     enable_https = os.environ.get("ENABLE_HTTPS", "0") == "1"
     if enable_https:

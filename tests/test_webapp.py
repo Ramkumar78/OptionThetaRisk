@@ -1,6 +1,7 @@
 import io
 import os
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -258,3 +259,100 @@ def test_upload_with_custom_range_missing_dates_redirects(app):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert "Please select both start and end dates" in html
+
+def test_upload_invalid_file_type(app):
+    client = app.test_client()
+    data = {
+        "csv": (io.BytesIO(b"this is not a csv"), "test.txt"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Only .csv files are allowed" in html
+
+def test_upload_no_file(app):
+    client = app.test_client()
+    data = {
+        "csv": (io.BytesIO(b""), ""),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Please choose a CSV file" in html
+
+def test_upload_invalid_account_size(app):
+    client = app.test_client()
+    data = {
+        "account_size": "not-a-number",
+        "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Account size must be a number" in html
+
+def test_analysis_error(app):
+    client = app.test_client()
+    # Create a CSV that will cause an error during analysis
+    csv_content = "Header1,Header2\nValue1,Value2"
+    data = {
+        "csv": (io.BytesIO(csv_content.encode("utf-8")), "error.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Failed to analyze CSV" in html
+
+def test_download_endpoints(app):
+    client = app.test_client()
+    # First, perform an analysis to get a valid token
+    data = {
+        "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    
+    # Extract the token from the response
+    import re
+    match = re.search(r'/download/([a-f0-9]+)/', html)
+    assert match
+    token = match.group(1)
+
+    # Test the trades.csv download
+    resp_trades = client.get(f"/download/{token}/trades.csv")
+    assert resp_trades.status_code == 200
+    assert resp_trades.mimetype == "text/csv"
+
+    # Test the report.xlsx download
+    resp_report = client.get(f"/download/{token}/report.xlsx")
+    assert resp_report.status_code == 200
+    assert resp_report.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    # Test invalid token
+    resp_invalid_token = client.get("/download/invalidtoken/trades.csv")
+    assert resp_invalid_token.status_code == 404
+
+    # Test invalid kind
+    resp_invalid_kind = client.get(f"/download/{token}/invalid.kind")
+    assert resp_invalid_kind.status_code == 400
+
+def test_download_nonexistent_file(app):
+    client = app.test_client()
+    # First, perform an analysis to get a valid token
+    data = {
+        "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
+    }
+    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    
+    # Extract the token from the response
+    import re
+    match = re.search(r'/download/([a-f0-9]+)/', html)
+    assert match
+    token = match.group(1)
+
+    # Test downloading a non-existent file kind
+    resp_nonexistent = client.get(f"/download/{token}/nonexistent.file")
+    assert resp_nonexistent.status_code == 400
