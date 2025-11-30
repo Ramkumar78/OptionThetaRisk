@@ -554,3 +554,47 @@ def test_build_strategies_empty_df():
 
 def test_sym_desc_unknown_symbol():
     assert aud._sym_desc("UNKNOWN") == "Options on UNKNOWN"
+
+def test_classify_strategy_five_legs():
+    strat = aud.StrategyGroup(id="s1", symbol="TEST", expiry=pd.Timestamp("2025-01-01"))
+    for i in range(5):
+        leg = aud.TradeGroup(contract_id=f"c{i}", symbol="TEST", expiry=pd.Timestamp("2025-01-01"), strike=100+i, right="C")
+        leg.add_leg(aud.Leg(ts=datetime.now(), qty=1, price=1, fees=0, proceeds=-100))
+        strat.add_leg_group(leg)
+    assert aud._classify_strategy(strat) == "Multi‑leg"
+
+def test_analyze_csv_no_out_dir(tmp_path):
+    df = make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
+        {"Time": "2025-01-02 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Sell to Close", "Price": 1.2, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
+    ])
+    csv_path = write_csv(df, tmp_path / "test.csv")
+    res = analyze_csv(str(csv_path), out_dir=None)
+    assert "trades.csv" not in os.listdir(tmp_path)
+
+def test_verdict_amber(tmp_path):
+    csv_path = tmp_path / "dummy.csv"
+    csv_path.write_text("Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type\n"
+                        "2025-01-01 10:00,MSFT,1,Buy to Open,1.00,0.10,2025-02-21,500,Put\n"
+                        "2025-01-03 10:00,MSFT,1,Sell to Close,1.50,0.10,2025-02-21,500,Put\n")
+
+    with patch('option_auditor.auditor._build_strategies') as mock_build:
+        s1 = aud.StrategyGroup("s1", "T", None, pnl=200)
+        s1.entry_ts = pd.Timestamp("2025-01-01")
+        s1.exit_ts = pd.Timestamp("2025-01-02")
+        s2 = aud.StrategyGroup("s2", "T", None, pnl=-50)
+        s2.entry_ts = pd.Timestamp("2025-01-01")
+        s2.exit_ts = pd.Timestamp("2025-01-02")
+        s3 = aud.StrategyGroup("s3", "T", None, pnl=-50)
+        s3.entry_ts = pd.Timestamp("2025-01-01")
+        s3.exit_ts = pd.Timestamp("2025-01-02")
+        mock_build.return_value = [s1, s2, s3]
+        res = aud.analyze_csv(str(csv_path))
+        assert res['verdict'] == "Amber"
+
+def test_normalize_tasty_zero_quantity():
+    df = make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 0, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
+    ])
+    norm_df = aud._normalize_tasty(df)
+    assert norm_df.iloc[0]["qty"] == 0

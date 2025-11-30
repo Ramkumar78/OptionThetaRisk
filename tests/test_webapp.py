@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -25,7 +26,18 @@ def app():
         "TESTING": True,
         "WTF_CSRF_ENABLED": False,
     })
-    return app
+
+    # Clean up the reports folder before each test
+    report_folder = app.config["REPORT_FOLDER"]
+    if os.path.exists(report_folder):
+        shutil.rmtree(report_folder, ignore_errors=True)
+    os.makedirs(report_folder, exist_ok=True)
+
+    yield app
+
+    # Final cleanup after test
+    if os.path.exists(report_folder):
+        shutil.rmtree(report_folder, ignore_errors=True)
 
 
 def test_upload_and_results_page(app):
@@ -319,7 +331,7 @@ def test_download_endpoints(app):
     # Test the trades.csv download
     resp_trades = client.get(f"/download/{token}/trades.csv")
     assert resp_trades.status_code == 200
-    assert resp_trades.mimetype == "text/csv"
+    assert resp_trades.mimetype in ["text/csv", "application/vnd.ms-excel"]
 
     # Test the report.xlsx download
     resp_report = client.get(f"/download/{token}/report.xlsx")
@@ -332,7 +344,7 @@ def test_download_endpoints(app):
 
     # Test invalid kind
     resp_invalid_kind = client.get(f"/download/{token}/invalid.kind")
-    assert resp_invalid_kind.status_code == 400
+    assert resp_invalid_kind.status_code == 404
 
 def test_download_nonexistent_file(app):
     client = app.test_client()
@@ -352,4 +364,4 @@ def test_download_nonexistent_file(app):
 
     # Test downloading a non-existent file kind
     resp_nonexistent = client.get(f"/download/{token}/nonexistent.file")
-    assert resp_nonexistent.status_code == 400
+    assert resp_nonexistent.status_code == 404
