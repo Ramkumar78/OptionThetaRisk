@@ -44,7 +44,9 @@ def test_upload_and_results_page(app):
     client = app.test_client()
     data = {
         "broker": "tasty",
-        "account_size": "10000",
+        "account_size_start": "10000",
+        "net_liquidity_now": "11000",
+        "buying_power_available_now": "5000",
     }
     data["csv"] = (io.BytesIO(make_csv_bytes()), "sample.csv")
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
@@ -52,6 +54,8 @@ def test_upload_and_results_page(app):
     html = resp.get_data(as_text=True)
     assert "Audit Summary" in html
     assert "Verdict" in html
+    assert "Account Growth" in html
+    assert "Buying Power Utilized" in html
 
 
 def test_rejects_large_upload(app):
@@ -73,7 +77,7 @@ def test_theme_dropdown_present_on_upload(app):
     resp = client.get("/")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "theme-choice" in html
+    assert "data-theme-switcher" in html
 
 
 def _csv_bytes_with_times(t1: datetime, t2: datetime):
@@ -292,13 +296,13 @@ def test_upload_no_file(app):
 def test_upload_invalid_account_size(app):
     client = app.test_client()
     data = {
-        "account_size": "not-a-number",
+        "account_size_start": "not-a-number",
         "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
     }
     resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Account size must be a number" in html
+    assert "Account Size Start must be a number" in html
 
 def test_analysis_error(app):
     client = app.test_client()
@@ -328,18 +332,13 @@ def test_download_endpoints(app):
     assert match
     token = match.group(1)
 
-    # Test the trades.csv download
-    resp_trades = client.get(f"/download/{token}/trades.csv")
-    assert resp_trades.status_code == 200
-    assert resp_trades.mimetype in ["text/csv", "application/vnd.ms-excel"]
-
     # Test the report.xlsx download
     resp_report = client.get(f"/download/{token}/report.xlsx")
     assert resp_report.status_code == 200
     assert resp_report.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
     # Test invalid token
-    resp_invalid_token = client.get("/download/invalidtoken/trades.csv")
+    resp_invalid_token = client.get("/download/invalidtoken/report.xlsx")
     assert resp_invalid_token.status_code == 404
 
     # Test invalid kind

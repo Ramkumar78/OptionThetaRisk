@@ -5,7 +5,7 @@ import os
 import shutil
 import tempfile
 import uuid
-from typing import Dict
+from typing import Dict, Optional
 
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, send_from_directory
 
@@ -47,14 +47,25 @@ def create_app() -> Flask:
     def analyze():
         file = request.files.get("csv")
         broker = request.form.get("broker", "auto")
-        account_size_raw = request.form.get("account_size", "").strip()
-        account_size = None
-        if account_size_raw:
-            try:
-                account_size = float(account_size_raw)
-            except ValueError:
-                flash("Account size must be a number", "warning")
-                return redirect(url_for("index"))
+        
+        had_error = False
+        def _to_float(name: str) -> Optional[float]:
+            nonlocal had_error
+            val = request.form.get(name, "").strip()
+            if val:
+                try:
+                    return float(val)
+                except ValueError:
+                    flash(f"{name.replace('_', ' ').title()} must be a number.", "warning")
+                    had_error = True
+            return None
+
+        account_size_start = _to_float("account_size_start")
+        net_liquidity_now = _to_float("net_liquidity_now")
+        buying_power_available_now = _to_float("buying_power_available_now")
+
+        if had_error:
+            return redirect(url_for("index"))
 
         if not file or file.filename == "":
             flash("Please choose a CSV file", "warning")
@@ -99,7 +110,9 @@ def create_app() -> Flask:
             res = analyze_csv(
                 csv_path,
                 broker=broker,
-                account_size=account_size,
+                account_size_start=account_size_start,
+                net_liquidity_now=net_liquidity_now,
+                buying_power_available_now=buying_power_available_now,
                 out_dir=request_dir, # Save reports in the same request-specific folder
                 report_format="all",
                 start_date=start_date,
@@ -114,15 +127,7 @@ def create_app() -> Flask:
         return render_template(
             "results.html",
             token=token,
-            broker=res.get("broker"),
-            metrics=res.get("metrics", {}),
-            verdict=res.get("verdict"),
-            max_exposure=res.get("max_exposure", 0.0),
-            account_size=account_size,
-            symbols=res.get("symbols", []),
-            strategy_groups=res.get("strategy_groups", []),
-            open_positions=res.get("open_positions", []),
-            date_window=res.get("date_window"),
+            **res
         )
 
     @app.route("/download/<token>/<filename>")

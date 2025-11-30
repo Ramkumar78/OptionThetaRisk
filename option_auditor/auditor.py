@@ -145,11 +145,8 @@ def _classify_strategy(strat: StrategyGroup) -> str:
         rset = {o["right"] for o in openings}
         if len(rset) == 1:
             right = openings[0]["right"]
-            strikes = sorted([o["strike"] for o in openings])
             # Determine which strike was sold vs bought from qty signs
-            sold_strikes = [o["strike"] for o in openings if o["qty"] < 0]
-            bought_strikes = [o["strike"] for o in openings if o["qty"] > 0]
-            if sold_strikes and bought_strikes:
+            if len([o for o in openings if o["qty"] < 0]) == 1 and len([o for o in openings if o["qty"] > 0]) == 1:
                 is_credit = total_open_proceeds > 0
                 side = "Credit" if is_credit else "Debit"
                 if right == "P":
@@ -405,37 +402,6 @@ def _detect_broker(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
-def _group_contracts(legs_df: pd.DataFrame) -> List[TradeGroup]:
-    """Group normalized legs into closed contract-level TradeGroups (FIFO)."""
-    contract_map: Dict[str, List[TradeGroup]] = {}
-    closed_groups: List[TradeGroup] = []
-    legs_df = legs_df.sort_values("datetime")
-    for _, row in legs_df.iterrows():
-        cid = row["contract_id"]
-        if cid not in contract_map:
-            contract_map[cid] = []
-        matched = False
-        for g in contract_map[cid]:
-            if not g.is_closed:
-                if (g.qty_net > 0 and row["qty"] < 0) or (g.qty_net < 0 and row["qty"] > 0):
-                    g.add_leg(Leg(ts=row["datetime"], qty=row["qty"], price=0.0, fees=row["fees"], proceeds=row["proceeds"]))
-                    matched = True
-                    if g.is_closed:
-                        closed_groups.append(g)
-                    break
-        if not matched:
-            ng = TradeGroup(
-                contract_id=cid,
-                symbol=row["symbol"],
-                expiry=row["expiry"],
-                strike=row["strike"],
-                right=row["right"],
-            )
-            ng.add_leg(Leg(ts=row["datetime"], qty=row["qty"], price=0.0, fees=row["fees"], proceeds=row["proceeds"]))
-            contract_map[cid].append(ng)
-    return closed_groups
-
-
 def _group_contracts_with_open(legs_df: pd.DataFrame) -> Tuple[List[TradeGroup], List[TradeGroup]]:
     """Like _group_contracts but also returns any still-open groups."""
     contract_map: Dict[str, List[TradeGroup]] = {}
@@ -577,68 +543,28 @@ def _build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
 # "Options on {Human Name}" for known tickers, else fallback to ticker.
 SYMBOL_DESCRIPTIONS: Dict[str, str] = {
     # Broad market ETFs and indices
-    "SPY": "S&P 500 ETF",
-    "QQQ": "Nasdaq-100 ETF",
-    "DIA": "Dow Jones Industrial Average ETF",
-    "IWM": "Russell 2000 ETF",
-    "SPX": "S&P 500 Index",
-    "XSP": "Mini S&P 500 Index",
-
+    "SPY": "S&P 500 ETF", "QQQ": "Nasdaq-100 ETF", "DIA": "Dow Jones Industrial Average ETF",
+    "IWM": "Russell 2000 ETF", "SPX": "S&P 500 Index", "XSP": "Mini S&P 500 Index",
     # Sector SPDRs
-    "XLK": "Technology Select Sector SPDR ETF",
-    "XLY": "Consumer Discretionary Select Sector SPDR ETF",
-    "XLP": "Consumer Staples Select Sector SPDR ETF",
-    "XLF": "Financial Select Sector SPDR ETF",
-    "XLI": "Industrial Select Sector SPDR ETF",
-    "XLV": "Health Care Select Sector SPDR ETF",
-    "XLU": "Utilities Select Sector SPDR ETF",
-    "XLB": "Materials Select Sector SPDR ETF",
-    "XLRE": "Real Estate Select Sector SPDR ETF",
-    "XLC": "Communication Services Select Sector SPDR ETF",
+    "XLK": "Technology Select Sector SPDR ETF", "XLY": "Consumer Discretionary Select Sector SPDR ETF",
+    "XLP": "Consumer Staples Select Sector SPDR ETF", "XLF": "Financial Select Sector SPDR ETF",
+    "XLI": "Industrial Select Sector SPDR ETF", "XLV": "Health Care Select Sector SPDR ETF",
+    "XLU": "Utilities Select Sector SPDR ETF", "XLB": "Materials Select Sector SPDR ETF",
+    "XLRE": "Real Estate Select Sector SPDR ETF", "XLC": "Communication Services Select Sector SPDR ETF",
     "XLE": "Energy Select Sector SPDR ETF",
-
     # Commodities and rates ETFs
-    "GLD": "SPDR Gold Shares",
-    "SLV": "iShares Silver Trust",
-    "TLT": "iShares 20+ Year Treasury Bond ETF",
-    "IEF": "iShares 7-10 Year Treasury Bond ETF",
-    "UNG": "United States Natural Gas Fund",
-
+    "GLD": "SPDR Gold Shares", "SLV": "iShares Silver Trust", "TLT": "iShares 20+ Year Treasury Bond ETF",
+    "IEF": "iShares 7-10 Year Treasury Bond ETF", "UNG": "United States Natural Gas Fund",
     # Single-name equities (common in fixtures)
-    "AAPL": "Apple",
-    "MSFT": "Microsoft",
-    "NVDA": "NVIDIA",
-    "AMD": "Advanced Micro Devices",
-    "INTC": "Intel",
-    "META": "Meta Platforms",
-    "TSLA": "Tesla",
-    "AMZN": "Amazon",
-    "GOOGL": "Alphabet",
-    "GOOG": "Alphabet",
-    "ABNB": "Airbnb",
-    "ORCL": "Oracle",
-    "ADBE": "Adobe",
-    "CRM": "Salesforce",
-    "PYPL": "PayPal",
-    "NKE": "Nike",
-    "STZ": "Constellation Brands",
-    "PFE": "Pfizer",
-    "COIN": "Coinbase",
-    "HOOD": "Robinhood Markets",
-    "SMH": "VanEck Semiconductor ETF",
-    "SOFI": "SoFi Technologies",
-    "HIMS": "Hims & Hers Health",
-    "KHC": "Kraft Heinz",
-    "BMY": "Bristol Myers Squibb",
-    "MCD": "McDonald's",
-    "LULU": "Lululemon Athletica",
-    "BRK/B": "Berkshire Hathaway Class B",
-    "ORCL": "Oracle",
-    "ENPH": "Enphase Energy",
-    "MSFT": "Microsoft",
-    "NVDA": "NVIDIA",
+    "AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "AMD": "Advanced Micro Devices",
+    "INTC": "Intel", "META": "Meta Platforms", "TSLA": "Tesla", "AMZN": "Amazon",
+    "GOOGL": "Alphabet", "GOOG": "Alphabet", "ABNB": "Airbnb", "ORCL": "Oracle",
+    "ADBE": "Adobe", "CRM": "Salesforce", "PYPL": "PayPal", "NKE": "Nike",
+    "STZ": "Constellation Brands", "PFE": "Pfizer", "COIN": "Coinbase", "HOOD": "Robinhood Markets",
+    "SMH": "VanEck Semiconductor ETF", "SOFI": "SoFi Technologies", "HIMS": "Hims & Hers Health",
+    "KHC": "Kraft Heinz", "BMY": "Bristol Myers Squibb", "MCD": "McDonald's",
+    "LULU": "Lululemon Athletica", "BRK/B": "Berkshire Hathaway Class B", "ENPH": "Enphase Energy",
     "AMAT": "Applied Materials",
-    "GLD": "SPDR Gold Shares",
 }
 
 def _sym_desc(sym: str) -> str:
@@ -652,7 +578,10 @@ def _sym_desc(sym: str) -> str:
 
 # ---- Main Analysis ----
 
-def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[float] = None,
+def analyze_csv(csv_path: str, broker: str = "auto",
+                account_size_start: Optional[float] = None,
+                net_liquidity_now: Optional[float] = None,
+                buying_power_available_now: Optional[float] = None,
                 out_dir: Optional[str] = "out", report_format: str = "all",
                 start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict:
     df = pd.read_csv(csv_path)
@@ -683,11 +612,9 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
             dt = pd.to_datetime(norm_df["datetime"], errors="coerce")
             mask = pd.Series([True] * len(norm_df))
             if s is not None:
-                # Use start of day
                 s = pd.Timestamp(s.date())
                 mask &= (dt >= s)
             if e is not None:
-                # Use end of day
                 e = pd.Timestamp(e.date()) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
                 mask &= (dt <= e)
             norm_df = norm_df[mask].copy()
@@ -696,7 +623,6 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
                 "end": (e - pd.Timedelta(days=0)).date().isoformat() if e is not None else None,
             }
         except Exception: # pragma: no cover
-            # If parsing fails, ignore filter silently
             effective_window = None
 
     # Build groups (contract level and strategies)
@@ -711,52 +637,38 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
         for group in contract_groups:
             if group.exit_ts and group.symbol:
                 day = group.exit_ts.date()
-                daily_pnl_data.append({
-                    "date": day,
-                    "symbol": group.symbol,
-                    "pnl": group.pnl
-                })
-
+                daily_pnl_data.append({"date": day, "symbol": group.symbol, "pnl": group.pnl})
         if daily_pnl_data:
             daily_df = pd.DataFrame(daily_pnl_data)
             if not daily_df.empty:
                 pnl_pivot = daily_df.groupby(['date', 'symbol'])['pnl'].sum().unstack(level='symbol').fillna(0)
                 if len(pnl_pivot.columns) > 1:
                     correlation_matrix_df = pnl_pivot.corr()
-                    # Convert to a format suitable for JSON output
                     correlation_json = correlation_matrix_df.round(4).reset_index().to_dict(orient='records')
 
     # Calc Metrics
-    # Contract-level metrics
     total_pnl_contracts = float(sum(g.pnl for g in contract_groups))
     wins_contracts = [g for g in contract_groups if g.pnl > 0]
     win_rate_contracts = len(wins_contracts) / len(contract_groups) if contract_groups else 0.0
     avg_hold_contracts = np.mean([
-        (g.exit_ts - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts is not None and g.exit_ts is not None else 0.0
+        (g.exit_ts - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts and g.exit_ts else 0.0
         for g in contract_groups
     ]) if contract_groups else 0.0
-    avg_theta_contracts = np.mean([
-        g.pnl / max(((g.exit_ts - g.entry_ts).total_seconds() / 86400.0), 0.001)
-        if g.entry_ts is not None and g.exit_ts is not None else 0.0 for g in contract_groups
-    ]) if contract_groups else 0.0
-
-    # Strategy-level metrics
+    
     total_pnl = sum(s.pnl for s in strategies)
     wins = [s for s in strategies if s.pnl > 0]
     win_rate = len(wins) / len(strategies) if strategies else 0.0
-    avg_hold = np.mean([s.hold_days() for s in strategies]) if strategies else 0.0
-    avg_theta = np.mean([s.realized_theta() for s in strategies]) if strategies else 0.0
-
-    # Verdict Logic (standardized labels)
+    
+    # Verdict Logic
     verdict = "Green flag"
     if total_pnl < 0:
         verdict = "Red flag"
-    elif win_rate < 0.50:
-        verdict = "Amber"
     elif win_rate < 0.30:
         verdict = "Red flag"
+    elif win_rate < 0.50:
+        verdict = "Amber"
 
-    # Symbol Breakdown (closed strategies only)
+    # Symbol Breakdown
     sym_stats = {}
     for s in strategies:
         if s.symbol not in sym_stats:
@@ -766,38 +678,30 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
         if s.pnl > 0: sym_stats[s.symbol]['wins'] += 1
 
     symbols_list = [{
-        "symbol": k,
-        "pnl": v['pnl'],
-        "win_rate": v['wins'] / v['trades'],
-        "trades": v['trades'],
-        "description": _sym_desc(k)
+        "symbol": k, "pnl": v['pnl'], "win_rate": v['wins'] / v['trades'],
+        "trades": v['trades'], "description": _sym_desc(k)
     } for k, v in sym_stats.items()]
     symbols_list.sort(key=lambda x: x['pnl'], reverse=True)
 
-    # Open positions summary (do not affect PnL metrics)
+    # Open positions summary
     open_rows = []
     for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min):
-        days_open = 0.0
-        if g.entry_ts is not None:
-            delta = (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds()
-            days_open = max(delta / 86400.0, 0.0)
+        days_open = (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0
         open_rows.append({
             "symbol": g.symbol,
-            "expiry": g.expiry.date().isoformat() if isinstance(g.expiry, pd.Timestamp) and not pd.isna(g.expiry) else "",
+            "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "",
             "contract": f"{g.right or ''} {g.strike}",
             "qty_open": g.qty_net,
-            "opened": g.entry_ts.isoformat() if g.entry_ts is not None else "",
+            "opened": g.entry_ts.isoformat() if g.entry_ts else "",
             "days_open": days_open,
             "description": _sym_desc(g.symbol),
         })
 
-    # Prepare strategy group summaries; if none (e.g., only opening orders), fall back to per-timestamp clusters
+    # Strategy group summaries
     strategy_rows = []
-    if not strategies:
-        # Build naive per-order strategies from rows sharing symbol+expiry+timestamp
+    if not strategies and not norm_df.empty:
         try:
-            grouped = norm_df.groupby(["symbol", "expiry", "datetime"], dropna=False)
-            for (sym, exp, ts), gdf in grouped:
+            for (sym, exp, ts), gdf in norm_df.groupby(["symbol", "expiry", "datetime"], dropna=False):
                 strat = StrategyGroup(id=f"STRAT-ord-{sym}-{ts}", symbol=sym, expiry=exp)
                 for cid, sdf in gdf.groupby("contract_id"):
                     r0 = sdf.iloc[0]
@@ -811,113 +715,60 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
 
     for s in strategies:
         strategy_rows.append({
-            "symbol": s.symbol,
-            "expiry": s.expiry.date().isoformat() if isinstance(s.expiry, pd.Timestamp) and not pd.isna(s.expiry) else "",
-            "strategy": s.strategy_name,
-            "pnl": s.pnl,
-            "hold_days": s.hold_days(),
-            "theta_per_day": s.realized_theta(),
-            "description": _sym_desc(s.symbol),
+            "symbol": s.symbol, "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "",
+            "strategy": s.strategy_name, "pnl": s.pnl, "hold_days": s.hold_days(),
+            "theta_per_day": s.realized_theta(), "description": _sym_desc(s.symbol),
         })
 
     # Optional outputs
     if out_dir:
         try:
             os.makedirs(out_dir, exist_ok=True)
-            # trades.csv: one row per contract group
-            rows = []
-            for g in contract_groups:
-                rows.append({
-                    "symbol": g.symbol,
-                    "contract_id": g.contract_id,
-                    "entry_ts": g.entry_ts.isoformat() if g.entry_ts is not None else "",
-                    "exit_ts": g.exit_ts.isoformat() if g.exit_ts is not None else "",
-                    "pnl": g.pnl,
-                })
-            tdf = pd.DataFrame(rows)
-            # Sanitize for CSV injection
-            def _sanitize_cell(x):
-                if isinstance(x, str) and len(x) > 0 and x[0] in "=+-@":
-                    return "'" + x
-                return x
-            tdf = tdf.map(_sanitize_cell)
-            tdf.to_csv(os.path.join(out_dir, "trades.csv"), index=False)
-            # report.xlsx: multi-sheet Excel with Summary + tabs
-            try:
-                summary_rows = [
-                    {"Metric": "Closed contract trades", "Value": len(contract_groups)},
-                    {"Metric": "Contract win rate", "Value": win_rate_contracts},
-                    {"Metric": "Contract total PnL", "Value": total_pnl_contracts},
-                    {"Metric": "Contract avg hold (days)", "Value": avg_hold_contracts},
-                    {"Metric": "Strategy trades", "Value": len(strategies)},
-                    {"Metric": "Strategy win rate", "Value": win_rate},
-                    {"Metric": "Strategy total PnL", "Value": total_pnl},
-                    {"Metric": "Strategy avg hold (days)", "Value": avg_hold},
-                    {"Metric": "Verdict", "Value": verdict},
-                ]
-                if effective_window and (effective_window.get("start") or effective_window.get("end")):
-                    summary_rows.append({
-                        "Metric": "Date window",
-                        "Value": f"{effective_window.get('start') or 'beginning'} → {effective_window.get('end') or 'end'}"
-                    })
-                if account_size is not None:
-                    summary_rows.append({"Metric": "Account size", "Value": account_size})
-                s_df = pd.DataFrame(summary_rows)
-
-                # Build dataframes for tabs (ensure columns exist even if empty)
-                symbols_df = pd.DataFrame(symbols_list or [], columns=["symbol","pnl","win_rate","trades","description"]) 
-                strategies_df = pd.DataFrame(strategy_rows or [], columns=["symbol","expiry","strategy","pnl","hold_days","theta_per_day","description"]) 
-                open_df = pd.DataFrame(open_rows or [], columns=["symbol","expiry","contract","qty_open","opened","days_open","description"]) 
-
-                # Write workbook
-                xlsx_path = os.path.join(out_dir, "report.xlsx")
-                with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:  # type: ignore
-                    s_df.to_excel(writer, sheet_name="Summary", index=False)
-                    # Place open positions below the summary for convenience
-                    startrow = len(s_df) + 2
-                    open_df.to_excel(writer, sheet_name="Summary", startrow=startrow, index=False)
-                    # Three separate tabs as requested
-                    symbols_df.to_excel(writer, sheet_name="Symbols", index=False)
-                    strategies_df.to_excel(writer, sheet_name="Strategies", index=False)
-                    open_df.to_excel(writer, sheet_name="Open Positions", index=False)
-                    if correlation_matrix_df is not None:
-                        correlation_matrix_df.to_excel(writer, sheet_name="Correlation")
-            except Exception: # pragma: no cover
-                # If Excel export fails (likely missing engine like openpyxl),
-                # create a tiny placeholder so downloads work and tests pass.
-                try:
-                    xlsx_path = os.path.join(out_dir, "report.xlsx")
-                    if not os.path.exists(xlsx_path):
-                        with open(xlsx_path, "wb") as fph:
-                            msg = (
-                                b"This is a placeholder Excel file. Install 'openpyxl' to get a full multi-sheet report."
-                            )
-                            fph.write(msg)
-                except Exception: # pragma: no cover
-                    pass
+            # trades.csv
+            pd.DataFrame([{
+                "symbol": g.symbol, "contract_id": g.contract_id,
+                "entry_ts": g.entry_ts.isoformat() if g.entry_ts else "",
+                "exit_ts": g.exit_ts.isoformat() if g.exit_ts else "", "pnl": g.pnl,
+            } for g in contract_groups]).map(
+                lambda x: f"'{x}" if isinstance(x, str) and x.startswith(("=", "+", "-", "@")) else x
+            ).to_csv(os.path.join(out_dir, "trades.csv"), index=False)
+            
+            # report.xlsx
+            summary_rows = [
+                {"Metric": "Strategy Trades", "Value": len(strategies)},
+                {"Metric": "Strategy Win Rate", "Value": win_rate},
+                {"Metric": "Strategy Total PnL", "Value": total_pnl},
+                {"Metric": "Verdict", "Value": verdict},
+            ]
+            if account_size_start is not None: summary_rows.append({"Metric": "Account Size (Start)", "Value": account_size_start})
+            if net_liquidity_now is not None: summary_rows.append({"Metric": "Net Liquidity (Now)", "Value": net_liquidity_now})
+            if buying_power_available_now is not None and net_liquidity_now is not None and net_liquidity_now > 0:
+                utilized = (net_liquidity_now - buying_power_available_now) / net_liquidity_now * 100
+                summary_rows.append({"Metric": "Buying Power Utilized", "Value": f"{utilized:.1f}%"})
+            
+            with pd.ExcelWriter(os.path.join(out_dir, "report.xlsx"), engine="openpyxl") as writer:
+                pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+                pd.DataFrame(symbols_list).to_excel(writer, sheet_name="Symbols", index=False)
+                pd.DataFrame(strategy_rows).to_excel(writer, sheet_name="Strategies", index=False)
+                pd.DataFrame(open_rows).to_excel(writer, sheet_name="Open Positions", index=False)
+                if correlation_matrix_df is not None:
+                    correlation_matrix_df.to_excel(writer, sheet_name="Correlation")
         except Exception: # pragma: no cover
             pass
 
+    buying_power_utilized_percent = None
+    if net_liquidity_now is not None and buying_power_available_now is not None and net_liquidity_now > 0:
+        buying_power_utilized_percent = (net_liquidity_now - buying_power_available_now) / net_liquidity_now * 100
+
     return {
         "metrics": {
-            "num_trades": len(contract_groups),
-            "win_rate": win_rate_contracts,
-            "total_pnl": total_pnl_contracts,
-            "avg_hold_days": avg_hold_contracts,
-            "avg_realized_theta": avg_theta_contracts,
+            "num_trades": len(contract_groups), "win_rate": win_rate_contracts,
+            "total_pnl": total_pnl_contracts, "avg_hold_days": avg_hold_contracts,
         },
-        "strategy_metrics": {
-            "num_trades": len(strategies),
-            "win_rate": win_rate,
-            "total_pnl": total_pnl,
-            "avg_hold_days": avg_hold,
-        },
-        "verdict": verdict,
-        "symbols": symbols_list,
-        "strategy_groups": strategy_rows,
-        "open_positions": open_rows,
-        "broker": chosen,
-        "max_exposure": 0.0,
-        "date_window": effective_window,
+        "strategy_metrics": {"num_trades": len(strategies), "win_rate": win_rate, "total_pnl": total_pnl},
+        "verdict": verdict, "symbols": symbols_list, "strategy_groups": strategy_rows,
+        "open_positions": open_rows, "broker": chosen, "date_window": effective_window,
         "correlation_matrix": correlation_json,
+        "account_size_start": account_size_start, "net_liquidity_now": net_liquidity_now,
+        "buying_power_utilized_percent": buying_power_utilized_percent,
     }

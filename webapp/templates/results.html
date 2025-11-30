@@ -1,122 +1,142 @@
 <div class="fade-in">
-  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Audit Summary</h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Verdict</p>
-        <p class="text-2xl font-bold {% if verdict == 'Green flag' %}text-green-500{% elif verdict == 'Amber' %}text-yellow-500{% else %}text-red-500{% endif %}">{{ verdict }}</p>
+  <!-- Main Summary Card -->
+  <article>
+    <header>
+      <h2>Audit Summary</h2>
+    </header>
+    <div class="grid">
+      <div>
+        <p><small>Verdict</small></p>
+        <h3>{{ verdict }}</h3>
       </div>
-      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total PnL</p>
-        <p class="text-2xl font-bold {% if metrics.total_pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(metrics.total_pnl) }}</p>
+      <div>
+        <p><small>Strategy PnL</small></p>
+        <h3>${{ "%.2f"|format(strategy_metrics.total_pnl) }}</h3>
       </div>
-      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Win Rate</p>
-        <p class="text-2xl font-bold">{{ "%.1f"|format(metrics.win_rate * 100) }}%</p>
+      <div>
+        <p><small>Strategy Win Rate</small></p>
+        <h3>{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
       </div>
-      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Trades</p>
-        <p class="text-2xl font-bold">{{ metrics.num_trades }}</p>
+      <div>
+        <p><small>Strategy Trades</small></p>
+        <h3>{{ strategy_metrics.num_trades }}</h3>
       </div>
     </div>
-    {% if date_window %}
-    <div class="text-center mt-4 text-sm text-gray-500 dark:text-gray-400">
-      Date Range: {{ date_window.start or 'Beginning' }} → {{ date_window.end or 'End' }}
+    {% if account_size_start and net_liquidity_now %}
+    <div class="grid">
+        <div>
+            <p><small>Account Growth</small></p>
+            <h3>{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
+        </div>
+        {% if buying_power_utilized_percent is not none %}
+        <div>
+            <p><small>Buying Power Utilized</small></p>
+            <h3>{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
-  </div>
+    {% if date_window %}
+    <footer>
+      <small>Date Range: {{ date_window.start or 'Beginning' }} → {{ date_window.end or 'End' }}</small>
+    </footer>
+    {% endif %}
+  </article>
 
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <div>
-      <h3 class="text-xl font-semibold mb-4">Performance by Symbol</h3>
-      <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-700">
+  <!-- Two-Column Layout for Symbol & Open Positions -->
+  <div class="grid">
+    <article>
+      <header>
+        <h5>Performance by Symbol</h5>
+      </header>
+      <figure>
+        <table role="grid">
+          <thead>
             <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Symbol</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Description</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">PnL</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Win Rate</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Trades</th>
+              <th>Symbol</th>
+              <th>PnL</th>
+              <th>Win Rate</th>
+              <th>Trades</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody>
             {% for s in symbols %}
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{{ s.symbol }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{{ s.description }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm {% if s.pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(s.pnl) }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ "%.0f"|format(s.win_rate * 100) }}%</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ s.trades }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div>
-      <h3 class="text-xl font-semibold mb-4">Open Positions</h3>
-      <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Symbol</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Contract</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Qty</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Days Open</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            {% for p in open_positions %}
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{{ p.symbol }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ p.contract }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ p.qty_open }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ "%.1f"|format(p.days_open) }}</td>
+              <td><strong>{{ s.symbol }}</strong><br><small>{{ s.description }}</small></td>
+              <td>${{ "%.2f"|format(s.pnl) }}</td>
+              <td>{{ "%.0f"|format(s.win_rate * 100) }}%</td>
+              <td>{{ s.trades }}</td>
             </tr>
             {% else %}
-            <tr>
-              <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">No open positions.</td>
-            </tr>
+            <tr><td colspan="4" style="text-align: center;"><small>No symbol data.</small></td></tr>
             {% endfor %}
           </tbody>
         </table>
-      </div>
-    </div>
+      </figure>
+    </article>
+    <article>
+      <header>
+        <h5>Open Positions</h5>
+      </header>
+      <figure>
+        <table role="grid">
+          <thead>
+            <tr>
+              <th>Contract</th>
+              <th>Qty</th>
+              <th>Days Open</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in open_positions %}
+            <tr>
+              <td><strong>{{ p.symbol }}</strong><br><small>{{ p.contract }}</small></td>
+              <td>{{ p.qty_open }}</td>
+              <td>{{ "%.1f"|format(p.days_open) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" style="text-align: center;"><small>No open positions.</small></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </figure>
+    </article>
   </div>
 
-  <div class="mt-8">
-    <h3 class="text-xl font-semibold mb-4">Strategy Groups</h3>
-    <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
-      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-        <thead class="bg-gray-50 dark:bg-gray-700">
+  <!-- Full-Width Strategy Table -->
+  <article>
+    <header>
+      <h5>Strategy Groups</h5>
+    </header>
+    <figure>
+      <table role="grid">
+        <thead>
           <tr>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Strategy</th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable>Symbol</th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">PnL</th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">Hold (Days)</th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider" data-sortable data-sort-type="numeric">θ / Day</th>
+            <th>Strategy</th>
+            <th>Symbol</th>
+            <th>PnL</th>
+            <th>Hold (Days)</th>
+            <th>θ / Day</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+        <tbody>
           {% for s in strategy_groups %}
           <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{{ s.strategy }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ s.symbol }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm {% if s.pnl >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(s.pnl) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ "%.1f"|format(s.hold_days) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm {% if s.theta_per_day >= 0 %}text-green-600{% else %}text-red-600{% endif %}">${{ "%.2f"|format(s.theta_per_day) }}</td>
+            <td>{{ s.strategy }}</td>
+            <td>{{ s.symbol }}</td>
+            <td>${{ "%.2f"|format(s.pnl) }}</td>
+            <td>{{ "%.1f"|format(s.hold_days) }}</td>
+            <td>${{ "%.2f"|format(s.theta_per_day) }}</td>
           </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align: center;"><small>No strategies found.</small></td></tr>
           {% endfor %}
         </tbody>
       </table>
-    </div>
-  </div>
-
-  <div class="mt-8 text-center">
-    <a href="/download/{{ token }}/report.xlsx" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-      Download Full Report (XLSX)
-    </a>
+    </figure>
+  </article>
+  
+  <div style="text-align: center; margin-top: 2rem;">
+      <a href="/download/{{ token }}/report.xlsx" role="button" class="secondary">Download Full Report (XLSX)</a>
   </div>
 </div>

@@ -11,10 +11,10 @@ from option_auditor import auditor as aud
 
 def make_tasty_df(rows):
     # Minimal columns used by _normalize_tasty
-    return pd.DataFrame(rows)[[
+    return pd.DataFrame(rows, columns=[
         "Time", "Underlying Symbol", "Quantity", "Action", "Price",
         "Commissions and Fees", "Expiration Date", "Strike Price", "Option Type"
-    ]]
+    ])
 
 
 def write_csv(df: pd.DataFrame, path):
@@ -101,7 +101,7 @@ def test_grouping_and_metrics_round_trip(tmp_path):
         },
     ])
     csv_path = write_csv(df, tmp_path / "tasty.csv")
-    res = analyze_csv(str(csv_path), broker="tasty", account_size=10000, out_dir=str(tmp_path))
+    res = analyze_csv(str(csv_path), broker="tasty", account_size_start=10000, out_dir=str(tmp_path))
     m = res["metrics"]
     assert m["num_trades"] == 1
     assert m["total_pnl"] > 0
@@ -137,42 +137,6 @@ def test_excel_report_has_expected_sheets(tmp_path):
     assert "Symbols" in sheets
     assert "Strategies" in sheets
     assert "Open Positions" in sheets
-
-
-def test_verdict_over_leveraged(tmp_path):
-    # Create large exposure by multiple buys at high price
-    rows = []
-    for i in range(5):
-        rows.append({
-            "Time": f"2025-01-01 10:{i:02d}",
-            "Underlying Symbol": "BIG",
-            "Quantity": 1,
-            "Action": "Buy to Open",
-            "Price": 50.0,
-            "Commissions and Fees": 0.0,
-            "Expiration Date": "2025-03-21",
-            "Strike Price": 100,
-            "Option Type": "Call",
-        })
-        rows.append({
-            "Time": f"2025-01-02 10:{i:02d}",
-            "Underlying Symbol": "BIG",
-            "Quantity": 1,
-            "Action": "Sell to Close",
-            "Price": 50.0,
-            "Commissions and Fees": 0.0,
-            "Expiration Date": "2025-03-21",
-            "Strike Price": 100,
-            "Option Type": "Call",
-        })
-    df = make_tasty_df(rows)
-    csv_path = write_csv(df, tmp_path / "expo.csv")
-    # Account is tiny, should flag over-leveraged per proxy
-    res = analyze_csv(str(csv_path), broker="tasty", account_size=1000, out_dir=None)
-    assert res["verdict"] in {"Over-leveraged", "Amber", "Red flag", "Green flag", "Stop trading"}
-    # With very small account size, our proxy likely exceeds 3x and triggers over-leveraged
-    # Not asserting strict equality to be robust to heuristic changes, but ensure metrics computed
-    assert res["metrics"]["num_trades"] == 5
 
 
 def test_csv_output_sanitization(tmp_path):
@@ -479,25 +443,28 @@ def test_fallback_strategy_grouping(tmp_path):
     assert len(res["strategy_groups"]) > 0
     assert res["strategy_groups"][0]["strategy"] == "Long Put"
 
-def test_verdict_logic_negative_pnl(tmp_path):
-    csv_path = tmp_path / "dummy.csv"
-    csv_path.write_text("Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type\n"
-                        "2025-01-01 10:00,MSFT,1,Buy to Open,1.00,0.10,2025-02-21,500,Put\n"
-                        "2025-01-03 10:00,MSFT,1,Sell to Close,1.50,0.10,2025-02-21,500,Put\n")
+def test_verdict_logic(tmp_path):
+    # Amber: win rate < 50% but positive PnL
+    df1 = make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
+        {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Close", "Price": 2.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
+        {"Time": "2025-01-03 10:00", "Underlying Symbol": "B", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 20, "Option Type": "Call"},
+        {"Time": "2025-01-04 10:00", "Underlying Symbol": "B", "Quantity": 1, "Action": "Sell to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 20, "Option Type": "Call"},
+        {"Time": "2025-01-05 10:00", "Underlying Symbol": "C", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 30, "Option Type": "Call"},
+        {"Time": "2025-01-06 10:00", "Underlying Symbol": "C", "Quantity": 1, "Action": "Sell to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 30, "Option Type": "Call"},
+    ])
+    csv_path1 = write_csv(df1, tmp_path / "amber.csv")
+    res1 = analyze_csv(str(csv_path1))
+    assert res1['verdict'] == "Amber"
 
-    with patch('option_auditor.auditor._build_strategies') as mock_build:
-        s1 = aud.StrategyGroup("s1", "T", None, pnl=100)
-        s1.entry_ts = pd.Timestamp("2025-01-01")
-        s1.exit_ts = pd.Timestamp("2025-01-02")
-        s2 = aud.StrategyGroup("s2", "T", None, pnl=100)
-        s2.entry_ts = pd.Timestamp("2025-01-01")
-        s2.exit_ts = pd.Timestamp("2025-01-02")
-        s3 = aud.StrategyGroup("s3", "T", None, pnl=-300)
-        s3.entry_ts = pd.Timestamp("2025-01-01")
-        s3.exit_ts = pd.Timestamp("2025-01-02")
-        mock_build.return_value = [s1, s2, s3] # win rate = 2/3 = 66.7%, but pnl < 0
-        res = aud.analyze_csv(str(csv_path))
-        assert res['verdict'] == "Red flag"
+    # Red flag: PnL < 0
+    df2 = make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
+        {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
+    ])
+    csv_path2 = write_csv(df2, tmp_path / "red.csv")
+    res2 = analyze_csv(str(csv_path2))
+    assert res2['verdict'] == "Red flag"
 
 def test_normalize_tasty_fills_fallback_parser_edge_cases(tmp_path):
     # Missing quantity
@@ -572,29 +539,20 @@ def test_analyze_csv_no_out_dir(tmp_path):
     res = analyze_csv(str(csv_path), out_dir=None)
     assert "trades.csv" not in os.listdir(tmp_path)
 
-def test_verdict_amber(tmp_path):
-    csv_path = tmp_path / "dummy.csv"
-    csv_path.write_text("Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type\n"
-                        "2025-01-01 10:00,MSFT,1,Buy to Open,1.00,0.10,2025-02-21,500,Put\n"
-                        "2025-01-03 10:00,MSFT,1,Sell to Close,1.50,0.10,2025-02-21,500,Put\n")
-
-    with patch('option_auditor.auditor._build_strategies') as mock_build:
-        s1 = aud.StrategyGroup("s1", "T", None, pnl=200)
-        s1.entry_ts = pd.Timestamp("2025-01-01")
-        s1.exit_ts = pd.Timestamp("2025-01-02")
-        s2 = aud.StrategyGroup("s2", "T", None, pnl=-50)
-        s2.entry_ts = pd.Timestamp("2025-01-01")
-        s2.exit_ts = pd.Timestamp("2025-01-02")
-        s3 = aud.StrategyGroup("s3", "T", None, pnl=-50)
-        s3.entry_ts = pd.Timestamp("2025-01-01")
-        s3.exit_ts = pd.Timestamp("2025-01-02")
-        mock_build.return_value = [s1, s2, s3]
-        res = aud.analyze_csv(str(csv_path))
-        assert res['verdict'] == "Amber"
-
 def test_normalize_tasty_zero_quantity():
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 0, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
     ])
     norm_df = aud._normalize_tasty(df)
     assert norm_df.iloc[0]["qty"] == 0
+
+def test_buying_power_calculation(tmp_path):
+    csv_path = write_csv(make_tasty_df([
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
+    ]), tmp_path / "dummy.csv")
+    res = analyze_csv(str(csv_path), net_liquidity_now=10000, buying_power_available_now=2500)
+    assert res["buying_power_utilized_percent"] == 75.0
+
+    # Test division by zero case
+    res_zero = analyze_csv(str(csv_path), net_liquidity_now=0, buying_power_available_now=0)
+    assert res_zero["buying_power_utilized_percent"] is None

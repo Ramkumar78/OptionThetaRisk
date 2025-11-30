@@ -1,79 +1,78 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-  <h2 class="text-2xl font-semibold text-center text-gray-900 dark:text-white mb-6">Upload Your Trades CSV</h2>
-
+<article>
+  <header>
+    <h2 class="text-2xl font-semibold text-center">Upload Your Trades CSV</h2>
+  </header>
+  
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-          <span class="block sm:inline">{{ message }}</span>
+        <div class="alert" role="alert">
+          {{ message }}
         </div>
       {% endfor %}
     {% endif %}
   {% endwith %}
 
-  <form hx-post="/analyze" hx-target="#results-container" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#loading-spinner" class="space-y-6">
+  <form hx-post="/analyze" hx-target="#results-container" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#loading-spinner">
     
-    <div>
-      <label for="csv" class="block text-sm font-medium text-gray-700 dark:text-gray-300">CSV File</label>
-      <input type="file" name="csv" id="csv" required class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-300 dark:hover:file:bg-blue-800">
+    <label for="csv">CSV File
+      <input type="file" name="csv" id="csv" required>
+    </label>
+
+    <div class="grid">
+        <label for="broker">Broker
+          <select name="broker" id="broker">
+            <option value="auto">Auto-detect</option>
+            <option value="tasty">Tastytrade</option>
+            <option value="ibkr">Interactive Brokers</option>
+          </select>
+        </label>
+        <label for="date_mode">Date Range
+          <select name="date_mode" id="date_mode">
+            <option value="all">All Data</option>
+            <option value="ytd">Year to Date</option>
+            <option value="1y">Last 1 Year</option>
+            <option value="6m">Last 6 Months</option>
+            <option value="1m">Last 1 Month</option>
+            <option value="14d">Last 14 Days</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="range">Custom Range</option>
+          </select>
+        </label>
     </div>
 
-    <div>
-      <label for="broker" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Broker</label>
-      <select name="broker" id="broker" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-        <option value="auto">Auto-detect</option>
-        <option value="tasty">Tastytrade</option>
-        <option value="ibkr">Interactive Brokers</option>
-      </select>
+    <div id="custom-range-fields" class="grid" style="display: none;">
+      <label for="start_date">Start Date
+        <input type="date" name="start_date" id="start_date">
+      </label>
+      <label for="end_date">End Date
+        <input type="date" name="end_date" id="end_date">
+      </label>
     </div>
-
-    <div>
-      <label for="account_size" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Account Size (Optional)</label>
-      <input type="number" name="account_size" id="account_size" placeholder="e.g., 25000" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-    </div>
-
-    <div>
-      <label for="date_mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Date Range</label>
-      <select name="date_mode" id="date_mode" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-        <option value="all">All Data</option>
-        <option value="ytd">Year to Date</option>
-        <option value="1y">Last 1 Year</option>
-        <option value="6m">Last 6 Months</option>
-        <option value="1m">Last 1 Month</option>
-        <option value="14d">Last 14 Days</option>
-        <option value="7d">Last 7 Days</option>
-        <option value="range">Custom Range</option>
-      </select>
-    </div>
-
-    <div id="custom-range-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4" style="display: none;">
-      <div>
-        <label for="start_date" class="block text-sm font-medium">Start Date</label>
-        <input type="date" name="start_date" id="start_date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+    
+    <details>
+      <summary>Optional: Account Metrics</summary>
+      <div class="grid">
+        <label for="account_size_start">Account Size (Start)
+          <input type="number" name="account_size_start" id="account_size_start" placeholder="e.g., 25000">
+        </label>
+        <label for="net_liquidity_now">Net Liquidity (Now)
+          <input type="number" name="net_liquidity_now" id="net_liquidity_now" placeholder="e.g., 26500">
+        </label>
+        <label for="buying_power_available_now">Buying Power Available (Now)
+          <input type="number" name="buying_power_available_now" id="buying_power_available_now" placeholder="e.g., 22000">
+        </label>
       </div>
-      <div>
-        <label for="end_date" class="block text-sm font-medium">End Date</label>
-        <input type="date" name="end_date" id="end_date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-      </div>
-    </div>
+    </details>
 
-    <div class="flex items-center justify-center pt-4">
-      <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-        Analyze Trades
-      </button>
-    </div>
+    <button type="submit" id="loading-spinner">Analyze Trades</button>
   </form>
-</div>
+</article>
 
-<div id="loading-spinner" class="htmx-indicator text-center p-8">
-  <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-  <p class="mt-2">Analyzing...</p>
-</div>
-
-<div id="results-container" class="mt-8">
+<div id="results-container" class="fade-in">
   <!-- Results will be loaded here -->
 </div>
 

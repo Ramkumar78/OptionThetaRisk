@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
-  <h2 class="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">An Error Occurred</h2>
-  <p class="text-gray-600 dark:text-gray-300">{{ message }}</p>
-  <div class="mt-6">
-    <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-      Go Back
-    </a>
-  </div>
-</div>
+<article>
+  <header>
+    <h2 class="error">An Error Occurred</h2>
+  </header>
+  <p>{{ message }}</p>
+  <footer>
+    <a href="/" role="button">Go Back</a>
+  </footer>
+</article>
 {% endblock %}

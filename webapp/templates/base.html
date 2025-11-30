@@ -4,116 +4,87 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Option Auditor</title>
-  
-  <!-- 
-    This is the crucial fix. 
-    1. Define the tailwind config object FIRST.
-    2. Set darkMode to 'class'.
-    3. THEN, load the main Tailwind script. It will detect this config.
-  -->
-  <script>
-    tailwind = {
-      config: {
-        darkMode: 'class',
-      }
-    }
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  
+  <!-- Pico.css -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
     /* Simple fade-in for HTMX swaps */
     .htmx-settling .fade-in { opacity: 0; }
-    .fade-in { opacity: 1; transition: opacity 500ms ease-in-out; }
-    th[data-sortable] { cursor: pointer; user-select: none; }
-    th[data-sortable]:after { content: ' '; display: inline-block; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; margin-left: 5px; }
-    th[data-sort-dir="asc"]:after { border-bottom: 5px solid; }
-    th[data-sort-dir="desc"]:after { border-top: 5px solid; }
+    .fade-in { opacity: 1; transition: opacity 300ms ease-in-out; }
+    
+    :root {
+      --pico-border-radius: 0.5rem;
+    }
+    
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+    }
   </style>
-  <script>
-    // This script must run early to prevent a "flash of unstyled content" (FOUC)
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-  </script>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
-  <div class="container mx-auto p-4 md:p-8">
-    <header class="flex justify-between items-center mb-8">
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Option Auditor</h1>
-      <div>
-        <label for="theme-choice" class="sr-only">Choose a theme</label>
-        <select id="theme-choice" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600">
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-          <option value="system">System</option>
-        </select>
-      </div>
-    </header>
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>Option Auditor</strong></li>
+    </ul>
+    <ul>
+      <li>
+        <details role="list" dir="rtl">
+          <summary aria-haspopup="listbox" role="link">Theme</summary>
+          <ul role="listbox">
+            <li><a href="#" data-theme-switcher="light">Light</a></li>
+            <li><a href="#" data-theme-switcher="dark">Dark</a></li>
+            <li><a href="#" data-theme-switcher="auto">Auto</a></li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </nav>
 
-    <main>
-      {% block content %}{% endblock %}
-    </main>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
 
-    <footer class="text-center mt-12 text-sm text-gray-500">
-      <p>Powered by Option Auditor</p>
-    </footer>
-  </div>
+  <footer class="container">
+    <small>Powered by Option Auditor</small>
+  </footer>
+
   <script>
-    // Sorting script
-    function sortTable(table, colIndex, type, direction) {
-      const tbody = table.querySelector('tbody');
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-      rows.sort((a, b) => {
-        let valA = a.cells[colIndex].textContent.trim();
-        let valB = b.cells[colIndex].textContent.trim();
-        if (type === 'numeric') {
-          valA = parseFloat(valA.replace(/[^0-9.-]+/g,""));
-          valB = parseFloat(valB.replace(/[^0-9.-]+/g,""));
+    // Pico.css Theme Switcher
+    const themeSwitcher = {
+      _scheme: 'auto',
+      change: (scheme) => {
+        themeSwitcher._scheme = scheme;
+        document.documentElement.setAttribute('data-theme', scheme);
+        localStorage.setItem('theme', scheme);
+      },
+      init() {
+        const savedScheme = localStorage.getItem('theme');
+        if (savedScheme) {
+          themeSwitcher._scheme = savedScheme;
         }
-        if (valA < valB) return direction === 'asc' ? -1 : 1;
-        if (valA > valB) return direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-      rows.forEach(row => tbody.appendChild(row));
-    }
+        document.querySelectorAll('[data-theme-switcher]').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.preventDefault();
+            themeSwitcher.change(el.getAttribute('data-theme-switcher'));
+          });
+        });
+        themeSwitcher.change(savedScheme || 'auto');
+      }
+    };
+    themeSwitcher.init();
 
-    document.body.addEventListener('click', function(e) {
-      const th = e.target.closest('th[data-sortable]');
-      if (th) {
-        const table = th.closest('table');
-        const colIndex = Array.from(th.parentNode.children).indexOf(th);
-        const sortType = th.dataset.sortType || 'alpha';
-        let sortDir = th.dataset.sortDir === 'asc' ? 'desc' : 'asc';
-        table.querySelectorAll('th[data-sortable]').forEach(header => delete header.dataset.sortDir);
-        th.dataset.sortDir = sortDir;
-        sortTable(table, colIndex, sortType, sortDir);
+    // HTMX progress indicator
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+      const indicator = document.getElementById('loading-spinner');
+      if (indicator) {
+        indicator.setAttribute('aria-busy', 'true');
       }
     });
-
-    // Theme switcher logic
-    const themeChoice = document.getElementById('theme-choice');
-    if (localStorage.theme) {
-      themeChoice.value = localStorage.theme;
-    } else {
-      themeChoice.value = 'system';
-    }
-    themeChoice.addEventListener('change', function(e) {
-      if (e.target.value === 'dark') {
-        document.documentElement.classList.add('dark');
-        localStorage.theme = 'dark';
-      } else if (e.target.value === 'light') {
-        document.documentElement.classList.remove('dark');
-        localStorage.theme = 'light';
-      } else {
-        localStorage.removeItem('theme');
-        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+      const indicator = document.getElementById('loading-spinner');
+      if (indicator) {
+        indicator.setAttribute('aria-busy', 'false');
       }
     });
   </script>
