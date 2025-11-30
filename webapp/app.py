@@ -24,7 +24,7 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
     # Limit uploads to 5 MB by default
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 5 * 1024 * 1024))
-    # Define a folder for storing reports, using the instance folder
+    # Define a folder for storing reports
     app.config["REPORT_FOLDER"] = os.path.join(app.instance_path, 'reports')
     os.makedirs(app.config["REPORT_FOLDER"], exist_ok=True)
 

@@ -56,6 +56,7 @@ def test_upload_and_results_page(app):
     assert "Verdict" in html
     assert "Account Growth" in html
     assert "Buying Power Utilized" in html
+    assert "54.5%" in html # (11000 - 5000) / 11000
 
 
 def test_rejects_large_upload(app):

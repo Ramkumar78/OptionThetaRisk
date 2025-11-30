@@ -536,7 +536,34 @@ def _build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
         strat.strategy_name = _classify_strategy(strat)
         strategies.append(strat)
 
-    return strategies
+    # 3. Detect and merge rolled trades
+    strategies.sort(key=lambda s: s.exit_ts if s.exit_ts is not None else pd.Timestamp.min)
+    merged_strategies: List[StrategyGroup] = []
+    processed_strat_ids = set()
+
+    for i, strat in enumerate(strategies):
+        if strat.id in processed_strat_ids:
+            continue
+
+        # Look for a subsequent trade that could be a roll
+        for j in range(i + 1, len(strategies)):
+            next_strat = strategies[j]
+            if next_strat.id in processed_strat_ids:
+                continue
+
+            if strat.symbol == next_strat.symbol and strat.exit_ts and next_strat.entry_ts:
+                time_diff_minutes = (next_strat.entry_ts - strat.exit_ts).total_seconds() / 60
+                if 0 <= time_diff_minutes <= 5: # 5 minute window for a roll
+                    # Merge them
+                    strat.pnl += next_strat.pnl
+                    strat.exit_ts = next_strat.exit_ts
+                    strat.strategy_name = f"Rolled {strat.strategy_name}"
+                    processed_strat_ids.add(next_strat.id)
+                    # Continue to see if it was rolled again
+        
+        merged_strategies.append(strat)
+
+    return merged_strategies
 
 # Minimal symbol descriptions (offline, no external calls)
 # Map tickers to their human names. We will render descriptions as
