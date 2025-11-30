@@ -3,11 +3,10 @@ from __future__ import annotations
 import io
 import os
 import shutil
-import tempfile
 import uuid
-from typing import Dict, Optional
+from typing import Optional
 
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
 
 from option_auditor import analyze_csv
 from datetime import datetime, timedelta
@@ -25,7 +24,7 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
     # Limit uploads to 5 MB by default
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 5 * 1024 * 1024))
-    # Define a folder for storing reports
+    # Define a folder for storing reports, using the instance folder
     app.config["REPORT_FOLDER"] = os.path.join(app.instance_path, 'reports')
     os.makedirs(app.config["REPORT_FOLDER"], exist_ok=True)
 
@@ -119,9 +118,11 @@ def create_app() -> Flask:
                 end_date=end_date,
             )
         except Exception as exc: # pragma: no cover
+            shutil.rmtree(request_dir, ignore_errors=True)
             return render_template("error.html", message=f"Failed to analyze CSV: {exc}")
 
         if "error" in res:
+            shutil.rmtree(request_dir, ignore_errors=True)
             return render_template("error.html", message=f"Failed to analyze CSV: {res['error']}")
 
         return render_template(
