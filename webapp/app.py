@@ -4,6 +4,8 @@ import io
 import os
 import shutil
 import uuid
+import threading
+import time
 from typing import Optional
 
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
@@ -11,6 +13,30 @@ from flask import Flask, render_template, request, redirect, url_for, flash, sen
 from option_auditor import analyze_csv
 from datetime import datetime, timedelta
 
+# Cleanup interval in seconds
+CLEANUP_INTERVAL = 3600 # 1 hour
+# Max age of reports in seconds
+MAX_REPORT_AGE = 3600 # 1 hour
+
+def cleanup_old_reports(report_folder: str):
+    """Background thread to clean up old report directories."""
+    while True:
+        try:
+            if os.path.exists(report_folder):
+                now = time.time()
+                for token in os.listdir(report_folder):
+                    path = os.path.join(report_folder, token)
+                    # Check if it's a directory and older than MAX_REPORT_AGE
+                    if os.path.isdir(path):
+                        try:
+                            mtime = os.path.getmtime(path)
+                            if now - mtime > MAX_REPORT_AGE:
+                                shutil.rmtree(path, ignore_errors=True)
+                        except OSError:
+                            pass
+        except Exception:
+            pass
+        time.sleep(CLEANUP_INTERVAL)
 
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
@@ -27,6 +53,13 @@ def create_app() -> Flask:
     # Define a folder for storing reports
     app.config["REPORT_FOLDER"] = os.path.join(app.instance_path, 'reports')
     os.makedirs(app.config["REPORT_FOLDER"], exist_ok=True)
+
+    # Start cleanup thread
+    # Note: In production with multiple workers (e.g. Gunicorn), each worker will spawn a thread.
+    # Ideally this should be an external cron, but this is a simple self-contained fix.
+    if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        t = threading.Thread(target=cleanup_old_reports, args=(app.config["REPORT_FOLDER"],), daemon=True)
+        t.start()
 
     ALLOWED_EXTENSIONS = {".csv"}
 

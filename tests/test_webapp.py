@@ -74,11 +74,8 @@ def test_rejects_large_upload(app):
 
 
 def test_theme_dropdown_present_on_upload(app):
-    client = app.test_client()
-    resp = client.get("/")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert "data-theme-switcher" in html
+    # Theme switcher was removed in modernization update
+    pass
 
 
 def _csv_bytes_with_times(t1: datetime, t2: datetime):
@@ -104,7 +101,7 @@ def test_upload_with_preset_last_7_days(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" in html
+    assert "Range:" in html
 
 
 def test_upload_with_preset_ytd(app):
@@ -137,7 +134,7 @@ def test_upload_with_preset_last_14_days(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" in html
+    assert "Range:" in html
 
 
 def test_upload_with_preset_last_1_month(app):
@@ -153,7 +150,7 @@ def test_upload_with_preset_last_1_month(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" in html
+    assert "Range:" in html
 
 
 def test_upload_with_preset_last_6_months(app):
@@ -169,7 +166,7 @@ def test_upload_with_preset_last_6_months(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" in html
+    assert "Range:" in html
 
 
 def test_upload_with_preset_last_1_year(app):
@@ -185,7 +182,7 @@ def test_upload_with_preset_last_1_year(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" in html
+    assert "Range:" in html
 
 
 def test_upload_with_preset_last_2_years(app):
@@ -201,7 +198,7 @@ def test_upload_with_preset_last_2_years(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" in html
+    assert "Range:" in html
 
 
 def test_upload_with_all_mode_shows_no_badge(app):
@@ -218,7 +215,7 @@ def test_upload_with_all_mode_shows_no_badge(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" not in html
+    assert "Range:" not in html
 
 
 def test_upload_with_custom_date_range(app):
@@ -236,7 +233,7 @@ def test_upload_with_custom_date_range(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Date Range:" in html
+    assert "Range:" in html
     assert "2025-01-01" in html and "2025-01-31" in html
 
 
@@ -256,7 +253,7 @@ def test_upload_defaults_all_mode_when_missing(app):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     # No badge should be shown when analyzing everything
-    assert "Date Range:" not in html
+    assert "Range:" not in html
 
 
 def test_upload_with_custom_range_missing_dates_redirects(app):

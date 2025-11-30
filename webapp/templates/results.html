@@ -1,142 +1,178 @@
 <div class="fade-in">
   <!-- Main Summary Card -->
-  <article>
-    <header>
-      <h2>Audit Summary</h2>
-    </header>
-    <div class="grid">
-      <div>
-        <p><small>Verdict</small></p>
-        <h3>{{ verdict }}</h3>
-      </div>
-      <div>
-        <p><small>Strategy PnL</small></p>
-        <h3>${{ "%.2f"|format(strategy_metrics.total_pnl) }}</h3>
-      </div>
-      <div>
-        <p><small>Strategy Win Rate</small></p>
-        <h3>{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
-      </div>
-      <div>
-        <p><small>Strategy Trades</small></p>
-        <h3>{{ strategy_metrics.num_trades }}</h3>
-      </div>
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-light py-3">
+      <h3 class="h5 mb-0 fw-bold text-secondary">Audit Summary</h3>
     </div>
-    {% if account_size_start and net_liquidity_now %}
-    <div class="grid">
-        <div>
-            <p><small>Account Growth</small></p>
-            <h3>{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
+    <div class="card-body">
+      <div class="row text-center g-4">
+        <div class="col-md-3">
+          <p class="text-muted small text-uppercase mb-1">Verdict</p>
+          <h3 class="fw-bold {% if verdict == 'Red flag' %}text-danger{% elif verdict == 'Amber' %}text-warning{% else %}text-success{% endif %}">
+            {{ verdict }}
+          </h3>
         </div>
-        {% if buying_power_utilized_percent is not none %}
-        <div>
-            <p><small>Buying Power Utilized</small></p>
-            <h3>{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
+        <div class="col-md-3">
+          <p class="text-muted small text-uppercase mb-1">Strategy PnL</p>
+          <h3 class="fw-bold {% if strategy_metrics.total_pnl < 0 %}text-danger{% else %}text-success{% endif %}">
+            ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
+          </h3>
         </div>
-        {% endif %}
+        <div class="col-md-3">
+          <p class="text-muted small text-uppercase mb-1">Win Rate</p>
+          <h3 class="fw-bold">{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
+        </div>
+        <div class="col-md-3">
+          <p class="text-muted small text-uppercase mb-1">Trades</p>
+          <h3 class="fw-bold">{{ strategy_metrics.num_trades }}</h3>
+        </div>
+      </div>
+
+      {% if account_size_start and net_liquidity_now %}
+      <hr class="my-4">
+      <div class="row text-center g-4">
+          <div class="col-md-6">
+              <p class="text-muted small text-uppercase mb-1">Account Growth</p>
+              <h3 class="fw-bold">{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
+          </div>
+          {% if buying_power_utilized_percent is not none %}
+          <div class="col-md-6">
+              <p class="text-muted small text-uppercase mb-1">Buying Power Utilized</p>
+              <h3 class="fw-bold">{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
+          </div>
+          {% endif %}
+      </div>
+      {% endif %}
+
+      {% if date_window %}
+      <div class="text-center mt-3">
+        <span class="badge bg-secondary">Range: {{ date_window.start or 'Beginning' }} &rarr; {{ date_window.end or 'End' }}</span>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
-    {% if date_window %}
-    <footer>
-      <small>Date Range: {{ date_window.start or 'Beginning' }} → {{ date_window.end or 'End' }}</small>
-    </footer>
-    {% endif %}
-  </article>
+  </div>
 
   <!-- Two-Column Layout for Symbol & Open Positions -->
-  <div class="grid">
-    <article>
-      <header>
-        <h5>Performance by Symbol</h5>
-      </header>
-      <figure>
-        <table role="grid">
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th>PnL</th>
-              <th>Win Rate</th>
-              <th>Trades</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for s in symbols %}
-            <tr>
-              <td><strong>{{ s.symbol }}</strong><br><small>{{ s.description }}</small></td>
-              <td>${{ "%.2f"|format(s.pnl) }}</td>
-              <td>{{ "%.0f"|format(s.win_rate * 100) }}%</td>
-              <td>{{ s.trades }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" style="text-align: center;"><small>No symbol data.</small></td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </figure>
-    </article>
-    <article>
-      <header>
-        <h5>Open Positions</h5>
-      </header>
-      <figure>
-        <table role="grid">
-          <thead>
-            <tr>
-              <th>Contract</th>
-              <th>Qty</th>
-              <th>Days Open</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in open_positions %}
-            <tr>
-              <td><strong>{{ p.symbol }}</strong><br><small>{{ p.contract }}</small></td>
-              <td>{{ p.qty_open }}</td>
-              <td>{{ "%.1f"|format(p.days_open) }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="3" style="text-align: center;"><small>No open positions.</small></td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </figure>
-    </article>
+  <div class="row g-4 mb-4">
+    <!-- Performance by Symbol -->
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white py-3">
+          <h5 class="mb-0 fw-bold">Performance by Symbol</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Symbol</th>
+                  <th class="text-end">PnL</th>
+                  <th class="text-end">Win Rate</th>
+                  <th class="text-end">Trades</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in symbols %}
+                <tr>
+                  <td>
+                    <div class="fw-bold">{{ s.symbol }}</div>
+                    <small class="text-muted">{{ s.description }}</small>
+                  </td>
+                  <td class="text-end {% if s.pnl < 0 %}text-danger{% else %}text-success{% endif %}">
+                    ${{ "%.2f"|format(s.pnl) }}
+                  </td>
+                  <td class="text-end">{{ "%.0f"|format(s.win_rate * 100) }}%</td>
+                  <td class="text-end">{{ s.trades }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center py-3 text-muted">No symbol data.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Open Positions -->
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white py-3">
+          <h5 class="mb-0 fw-bold">Open Positions</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Contract</th>
+                  <th class="text-end">Qty</th>
+                  <th class="text-end">Days Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in open_positions %}
+                <tr>
+                  <td>
+                    <div class="fw-bold">{{ p.symbol }}</div>
+                    <small class="text-muted">{{ p.contract }}</small>
+                  </td>
+                  <td class="text-end">{{ p.qty_open }}</td>
+                  <td class="text-end">{{ "%.1f"|format(p.days_open) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" class="text-center py-3 text-muted">No open positions.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Full-Width Strategy Table -->
-  <article>
-    <header>
-      <h5>Strategy Groups</h5>
-    </header>
-    <figure>
-      <table role="grid">
-        <thead>
-          <tr>
-            <th>Strategy</th>
-            <th>Symbol</th>
-            <th>PnL</th>
-            <th>Hold (Days)</th>
-            <th>θ / Day</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in strategy_groups %}
-          <tr>
-            <td>{{ s.strategy }}</td>
-            <td>{{ s.symbol }}</td>
-            <td>${{ "%.2f"|format(s.pnl) }}</td>
-            <td>{{ "%.1f"|format(s.hold_days) }}</td>
-            <td>${{ "%.2f"|format(s.theta_per_day) }}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="5" style="text-align: center;"><small>No strategies found.</small></td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </figure>
-  </article>
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3">
+      <h5 class="mb-0 fw-bold">Strategy Groups</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-striped mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Strategy</th>
+              <th>Symbol</th>
+              <th class="text-end">PnL</th>
+              <th class="text-end">Hold (Days)</th>
+              <th class="text-end">θ / Day</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in strategy_groups %}
+            <tr>
+              <td>{{ s.strategy }}</td>
+              <td>
+                  <span class="badge bg-light text-dark border">{{ s.symbol }}</span>
+              </td>
+              <td class="text-end {% if s.pnl < 0 %}text-danger{% else %}text-success{% endif %}">
+                ${{ "%.2f"|format(s.pnl) }}
+              </td>
+              <td class="text-end">{{ "%.1f"|format(s.hold_days) }}</td>
+              <td class="text-end">${{ "%.2f"|format(s.theta_per_day) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center py-3 text-muted">No strategies found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
   
-  <div style="text-align: center; margin-top: 2rem;">
-      <a href="/download/{{ token }}/report.xlsx" role="button" class="secondary">Download Full Report (XLSX)</a>
+  <div class="text-center my-5">
+      <a href="/download/{{ token }}/report.xlsx" class="btn btn-outline-primary btn-lg">
+        <i class="bi bi-file-earmark-excel me-2"></i>Download Full Report (XLSX)
+      </a>
   </div>
 </div>

@@ -4,87 +4,87 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Option Auditor</title>
-  <!-- Pico.css -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- HTMX -->
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
     /* Simple fade-in for HTMX swaps */
     .htmx-settling .fade-in { opacity: 0; }
     .fade-in { opacity: 1; transition: opacity 300ms ease-in-out; }
     
-    :root {
-      --pico-border-radius: 0.5rem;
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background-color: #f8f9fa;
     }
     
     main {
-      max-width: 960px;
-      margin: 0 auto;
+      flex: 1;
+    }
+
+    .footer {
+      background-color: #343a40;
+      color: #fff;
+      padding: 1rem 0;
+      margin-top: auto;
     }
   </style>
 </head>
 <body>
-  <nav class="container-fluid">
-    <ul>
-      <li><strong>Option Auditor</strong></li>
-    </ul>
-    <ul>
-      <li>
-        <details role="list" dir="rtl">
-          <summary aria-haspopup="listbox" role="link">Theme</summary>
-          <ul role="listbox">
-            <li><a href="#" data-theme-switcher="light">Light</a></li>
-            <li><a href="#" data-theme-switcher="dark">Dark</a></li>
-            <li><a href="#" data-theme-switcher="auto">Auto</a></li>
-          </ul>
-        </details>
-      </li>
-    </ul>
+  <!-- Header / Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/">
+        <i class="bi bi-graph-up-arrow me-2"></i>Option Auditor
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="/">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="https://github.com/yourrepo/option_auditor" target="_blank">GitHub</a>
+          </li>
+        </ul>
+      </div>
+    </div>
   </nav>
 
+  <!-- Main Content -->
   <main class="container">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="container">
-    <small>Powered by Option Auditor</small>
+  <!-- Footer -->
+  <footer class="footer text-center">
+    <div class="container">
+      <small>&copy; 2025 Option Auditor. All rights reserved.</small>
+    </div>
   </footer>
 
-  <script>
-    // Pico.css Theme Switcher
-    const themeSwitcher = {
-      _scheme: 'auto',
-      change: (scheme) => {
-        themeSwitcher._scheme = scheme;
-        document.documentElement.setAttribute('data-theme', scheme);
-        localStorage.setItem('theme', scheme);
-      },
-      init() {
-        const savedScheme = localStorage.getItem('theme');
-        if (savedScheme) {
-          themeSwitcher._scheme = savedScheme;
-        }
-        document.querySelectorAll('[data-theme-switcher]').forEach(el => {
-          el.addEventListener('click', (e) => {
-            e.preventDefault();
-            themeSwitcher.change(el.getAttribute('data-theme-switcher'));
-          });
-        });
-        themeSwitcher.change(savedScheme || 'auto');
-      }
-    };
-    themeSwitcher.init();
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    // HTMX progress indicator
+  <script>
+    // HTMX progress indicator handling
     document.body.addEventListener('htmx:beforeRequest', function(evt) {
-      const indicator = document.getElementById('loading-spinner');
-      if (indicator) {
-        indicator.setAttribute('aria-busy', 'true');
+      const btn = document.getElementById('analyze-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Analyzing...';
       }
     });
+
     document.body.addEventListener('htmx:afterRequest', function(evt) {
-      const indicator = document.getElementById('loading-spinner');
-      if (indicator) {
-        indicator.setAttribute('aria-busy', 'false');
+      const btn = document.getElementById('analyze-btn');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Analyze Trades';
       }
     });
   </script>

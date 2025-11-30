@@ -1,13 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
-<article>
-  <header>
-    <h2 class="error">An Error Occurred</h2>
-  </header>
-  <p>{{ message }}</p>
-  <footer>
-    <a href="/" role="button">Go Back</a>
-  </footer>
-</article>
+<div class="row justify-content-center min-vh-50 align-items-center">
+  <div class="col-md-6 text-center">
+    <div class="alert alert-danger shadow-sm border-0" role="alert">
+      <h4 class="alert-heading fw-bold mb-3">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>Error
+      </h4>
+      <p class="mb-0">{{ message }}</p>
+      <hr>
+      <a href="/" class="btn btn-outline-danger">Return Home</a>
+    </div>
+  </div>
+</div>
 {% endblock %}
