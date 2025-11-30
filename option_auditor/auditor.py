@@ -624,6 +624,29 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
     contract_groups, open_groups = _group_contracts_with_open(norm_df)
     strategies = _build_strategies(norm_df)
 
+    # --- Portfolio Correlation ---
+    correlation_matrix_df = None
+    correlation_json = None
+    if contract_groups:
+        daily_pnl_data = []
+        for group in contract_groups:
+            if group.exit_ts and group.symbol:
+                day = group.exit_ts.date()
+                daily_pnl_data.append({
+                    "date": day,
+                    "symbol": group.symbol,
+                    "pnl": group.pnl
+                })
+
+        if daily_pnl_data:
+            daily_df = pd.DataFrame(daily_pnl_data)
+            if not daily_df.empty:
+                pnl_pivot = daily_df.groupby(['date', 'symbol'])['pnl'].sum().unstack(level='symbol').fillna(0)
+                if len(pnl_pivot.columns) > 1:
+                    correlation_matrix_df = pnl_pivot.corr()
+                    # Convert to a format suitable for JSON output
+                    correlation_json = correlation_matrix_df.round(4).reset_index().to_dict(orient='records')
+
     # Calc Metrics
     # Contract-level metrics
     total_pnl_contracts = float(sum(g.pnl for g in contract_groups))
@@ -856,6 +879,8 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
                     symbols_df.to_excel(writer, sheet_name="Symbols", index=False)
                     strategies_df.to_excel(writer, sheet_name="Strategies", index=False)
                     open_df.to_excel(writer, sheet_name="Open Positions", index=False)
+                    if correlation_matrix_df is not None:
+                        correlation_matrix_df.to_excel(writer, sheet_name="Correlation")
             except Exception:
                 # If Excel export fails (likely missing engine like openpyxl),
                 # create a tiny placeholder so downloads work and tests pass.
@@ -893,4 +918,5 @@ def analyze_csv(csv_path: str, broker: str = "auto", account_size: Optional[floa
         "broker": chosen,
         "max_exposure": 0.0,
         "date_window": effective_window,
+        "correlation_matrix": correlation_json,
     }

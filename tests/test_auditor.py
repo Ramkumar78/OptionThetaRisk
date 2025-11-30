@@ -332,3 +332,36 @@ def test_date_range_filtering_in_analyzer(tmp_path):
     # Filter to second trade window
     res2 = analyze_csv(str(csv_path), broker="tasty", start_date="2025-01-10", end_date="2025-01-12", out_dir=None)
     assert res2["metrics"]["num_trades"] == 1
+
+
+def test_correlation_matrix_calculation(tmp_path):
+    # Trades across two symbols with both positive and negative correlation
+    df = make_tasty_df([
+        # Day 1: SPY win, QQQ win (positive correlation)
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
+        {"Time": "2025-01-01 12:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
+        {"Time": "2025-01-01 10:00", "Underlying Symbol": "QQQ", "Quantity": 1, "Action": "Sell to Open", "Price": 2.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 300, "Option Type": "Put"},
+        {"Time": "2025-01-01 12:00", "Underlying Symbol": "QQQ", "Quantity": 1, "Action": "Buy to Close", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 300, "Option Type": "Put"},
+        # Day 2: SPY win, QQQ loss (negative correlation)
+        {"Time": "2025-01-02 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 401, "Option Type": "Put"},
+        {"Time": "2025-01-02 12:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 401, "Option Type": "Put"},
+        {"Time": "2025-01-02 10:00", "Underlying Symbol": "QQQ", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 301, "Option Type": "Put"},
+        {"Time": "2025-01-02 12:00", "Underlying Symbol": "QQQ", "Quantity": 1, "Action": "Buy to Close", "Price": 1.5, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 301, "Option Type": "Put"},
+    ])
+    csv_path = write_csv(df, tmp_path / "corr.csv")
+    res = analyze_csv(str(csv_path), broker="tasty", out_dir=str(tmp_path))
+    
+    # Check JSON output
+    corr_matrix = res.get("correlation_matrix")
+    assert corr_matrix is not None
+    assert len(corr_matrix) == 2
+    
+    # Check Excel output
+    xlsx_path = tmp_path / "report.xlsx"
+    assert os.path.exists(xlsx_path)
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(str(xlsx_path))
+        assert "Correlation" in wb.sheetnames
+    except ImportError:
+        pytest.skip("openpyxl not installed")
