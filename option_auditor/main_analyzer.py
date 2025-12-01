@@ -64,7 +64,8 @@ def analyze_csv(csv_path: Optional[str] = None,
                 buying_power_available_now: Optional[float] = None,
                 out_dir: Optional[str] = "out", report_format: str = "all",
                 start_date: Optional[str] = None, end_date: Optional[str] = None,
-                manual_data: Optional[List[Dict[str, Any]]] = None) -> Dict:
+                manual_data: Optional[List[Dict[str, Any]]] = None,
+                global_fees: Optional[float] = None) -> Dict: # Added global_fees
     
     # 1. Load Data
     df = pd.DataFrame()
@@ -136,7 +137,13 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     # Use PnL (Gross) and Fees to calculate everything
     total_strategy_pnl_gross = sum(s.pnl for s in strategies)
-    total_strategy_fees = sum(s.fees for s in strategies)
+
+    # Fees: Sum strategy fees + global fees
+    strategy_sum_fees = sum(s.fees for s in strategies)
+    total_strategy_fees = strategy_sum_fees
+    if global_fees:
+        total_strategy_fees += float(global_fees)
+
     total_strategy_pnl_net = total_strategy_pnl_gross - total_strategy_fees
 
     # Fee Drag: Fees / Gross Profit (where Gross Profit = Net + Fees, or just our s.pnl)
@@ -152,28 +159,36 @@ def analyze_csv(csv_path: Optional[str] = None,
     # Stale Capital
     for s in strategies:
         hd = s.hold_days()
-        th = s.realized_theta() # This uses net_pnl / days in updated model
+        th = s.realized_theta() # This uses net_pnl / days (but s.net_pnl doesn't include global fees)
+        # Should we distribute global fees? No, keep it simple.
         if hd > 10.0 and th < 1.0:
             leakage_metrics["stale_capital"].append({
                 "strategy": s.strategy_name,
                 "symbol": s.symbol,
                 "hold_days": round(hd, 1),
                 "theta_per_day": round(th, 2),
-                "pnl": round(s.net_pnl, 2) # Show Net PnL here
+                "pnl": round(s.net_pnl, 2)
             })
 
     # Contract Metrics
-    total_pnl_contracts = float(sum(g.pnl for g in contract_groups))
-    wins_contracts = [g for g in contract_groups if g.pnl > 0]
+    # Contract groups also have individual fees.
+    # We should add global fees to the aggregate total.
+    total_pnl_contracts_gross = float(sum(g.pnl for g in contract_groups))
+    # We can't easily attribute global fees to specific contract groups without rules.
+    # So contract-level PnL sum might differ from "Total PnL" if we subtract global fees.
+    # Let's align "Total PnL" metric with Net PnL.
+
+    wins_contracts = [g for g in contract_groups if g.pnl > 0] # Gross logic for individual? or net?
+    # TradeGroup.net_pnl exists.
+    wins_contracts = [g for g in contract_groups if g.net_pnl > 0]
     win_rate_contracts = len(wins_contracts) / len(contract_groups) if contract_groups else 0.0
     avg_hold_contracts = np.mean([
         (g.exit_ts - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts and g.exit_ts else 0.0
         for g in contract_groups
     ]) if contract_groups else 0.0
 
-    # Strategy Metrics
-    wins = [s for s in strategies if s.net_pnl > 0] # Use Net for Win Rate logic?
-    # Historically finance uses Net PnL for verdict.
+    # Win rate logic remains on strategy level
+    wins = [s for s in strategies if s.net_pnl > 0]
     win_rate = len(wins) / len(strategies) if strategies else 0.0
     
     verdict = "Green flag"
@@ -213,7 +228,7 @@ def analyze_csv(csv_path: Optional[str] = None,
             "segments": [
                 {
                     "strategy_name": seg["strategy_name"],
-                    "pnl": seg["pnl"], # Note: segments might need updates to track net vs gross if detailed drilldown needed
+                    "pnl": seg["pnl"],
                     "entry_ts": seg["entry_ts"].isoformat() if seg["entry_ts"] else "",
                     "exit_ts": seg["exit_ts"].isoformat() if seg["exit_ts"] else ""
                 } for seg in s.segments
@@ -287,7 +302,7 @@ def analyze_csv(csv_path: Optional[str] = None,
     return {
         "metrics": {
             "num_trades": len(contract_groups), "win_rate": win_rate_contracts,
-            "total_pnl": total_strategy_pnl_net, # Changed to Net
+            "total_pnl": total_strategy_pnl_net,
             "total_fees": total_strategy_fees,
             "avg_hold_days": avg_hold_contracts,
         },

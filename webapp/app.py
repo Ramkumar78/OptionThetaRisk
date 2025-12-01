@@ -118,6 +118,7 @@ def create_app(testing: bool = False) -> Flask:
         account_size_start = _to_float("account_size_start")
         net_liquidity_now = _to_float("net_liquidity_now")
         buying_power_available_now = _to_float("buying_power_available_now")
+        global_fees = _to_float("global_fees") # New global fees field
 
         if had_error:
             return redirect(url_for("index"))
@@ -176,7 +177,8 @@ def create_app(testing: bool = False) -> Flask:
                 report_format="all",
                 start_date=start_date,
                 end_date=end_date,
-                manual_data=manual_data
+                manual_data=manual_data,
+                global_fees=global_fees
             )
 
             # If successful, check for report.xlsx and store using StorageProvider
