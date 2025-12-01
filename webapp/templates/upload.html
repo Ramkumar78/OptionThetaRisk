@@ -30,6 +30,44 @@
             <input type="hidden" id="input-method" name="input_method" value="csv">
             <input type="hidden" name="manual_trades" id="manual-trades-input">
 
+            <!-- Common Settings -->
+            <div class="mb-6 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="style" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trading Style</label>
+                    <select name="style" id="style" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors">
+                        <option value="income">Income (Selling Premium)</option>
+                        <option value="speculation">Growth / Speculation (Directional)</option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Adjusts the 'Verdict' thresholds.</p>
+                </div>
+                <div>
+                    <label for="date_mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range</label>
+                    <select name="date_mode" id="date_mode" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors" onchange="toggleCustomDates()">
+                        <option value="all">All Data</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="14d">Last 14 Days</option>
+                        <option value="1m">Last 1 Month</option>
+                        <option value="6m">Last 6 Months</option>
+                        <option value="1y">Last 1 Year</option>
+                        <option value="2y">Last 2 Years</option>
+                        <option value="ytd">Year to Date (YTD)</option>
+                        <option value="range">Custom Range</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Custom Date Range -->
+            <div id="custom-dates" class="hidden mb-6 grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600">
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+                    <input type="date" name="start_date" id="start_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
+                    <input type="date" name="end_date" id="end_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+            </div>
+
             <!-- CSV Section -->
             <div x-show="tab === 'csv'" class="space-y-6">
                 <div>
@@ -54,32 +92,6 @@
                             <option value="tasty">Tastytrade</option>
                             <option value="ibkr">Interactive Brokers</option>
                         </select>
-                    </div>
-                    <div>
-                        <label for="date_mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range</label>
-                        <select name="date_mode" id="date_mode" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors" onchange="toggleCustomDates()">
-                            <option value="all">All Data</option>
-                            <option value="7d">Last 7 Days</option>
-                            <option value="14d">Last 14 Days</option>
-                            <option value="1m">Last 1 Month</option>
-                            <option value="6m">Last 6 Months</option>
-                            <option value="1y">Last 1 Year</option>
-                            <option value="2y">Last 2 Years</option>
-                            <option value="ytd">Year to Date (YTD)</option>
-                            <option value="range">Custom Range</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Custom Date Range -->
-                <div id="custom-dates" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600">
-                    <div>
-                        <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
-                        <input type="date" name="start_date" id="start_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                    </div>
-                    <div>
-                        <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
-                        <input type="date" name="end_date" id="end_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                     </div>
                 </div>
             </div>

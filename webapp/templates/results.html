@@ -4,6 +4,37 @@
 
 {% block content %}
 <div class="fade-in">
+
+  <!-- Massive Verdict Card -->
+  <div class="mb-8 rounded-lg shadow-lg overflow-hidden transition-colors duration-200
+    {% if verdict_color == 'red' %}bg-red-50 border-l-8 border-red-500 text-red-900 dark:bg-red-900/20 dark:text-red-100 dark:border-red-500
+    {% elif verdict_color == 'yellow' %}bg-yellow-50 border-l-8 border-yellow-500 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-100 dark:border-yellow-500
+    {% else %}bg-green-50 border-l-8 border-green-500 text-green-900 dark:bg-green-900/20 dark:text-green-100 dark:border-green-500{% endif %}">
+    <div class="p-8 text-center">
+        <h2 class="text-4xl font-extrabold uppercase tracking-tight mb-2">{{ verdict }}</h2>
+        <p class="text-lg opacity-80">Based on your {{ style|default('selected')|title }} profile</p>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <!-- Portfolio Curve -->
+      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 transition-colors duration-200">
+           <div class="flex justify-between items-center mb-4">
+               <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200">Portfolio Performance</h3>
+               {% if strategy_metrics.max_drawdown > 0 %}
+               <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">Max DD: ${{ "%.2f"|format(strategy_metrics.max_drawdown) }}</span>
+               {% endif %}
+           </div>
+           <div class="h-64"><canvas id="portfolioChart"></canvas></div>
+      </div>
+      <!-- Monthly Income -->
+      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 transition-colors duration-200">
+           <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Monthly Income</h3>
+           <div class="h-64"><canvas id="incomeChart"></canvas></div>
+      </div>
+  </div>
+
   <!-- Leakage Report Section -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200 border-l-4 border-purple-500">
       <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
@@ -65,12 +96,6 @@
     <div class="p-6">
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Verdict</p>
-          <h3 class="text-2xl font-bold {% if verdict == 'Red flag' %}text-red-600 dark:text-red-400{% elif verdict == 'Amber' %}text-yellow-600 dark:text-yellow-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-            {{ verdict }}
-          </h3>
-        </div>
-        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Net PnL (After Fees)</p>
           <h3 class="text-2xl font-bold {% if strategy_metrics.total_pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
             ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
@@ -86,6 +111,10 @@
         <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Trades</p>
           <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ strategy_metrics.num_trades }}</h3>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Avg Hold</p>
+          <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.1f"|format(metrics.avg_hold_days) }}d</h3>
         </div>
       </div>
 
@@ -114,28 +143,13 @@
     </div>
   </div>
 
-  <!-- Theta Curve (Campaign PnL) Chart -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200">
-      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
-          <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Theta Curve (Campaign PnL)</h5>
-      </div>
-      <div class="p-6">
-          <div class="w-full h-64">
-              <canvas id="thetaCurveChart"></canvas>
-          </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
-              Shows cumulative PnL of individual campaigns (strategies + rolls). Dotted lines indicate rolls.
-          </p>
-      </div>
-  </div>
-
   <!-- Full-Width Strategy Table -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-8 transition-colors duration-200">
     <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
       <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Strategy Groups</h5>
     </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+    <div class="p-4 overflow-x-auto">
+      <table id="strategyTable" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Strategy</th>
@@ -160,15 +174,13 @@
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-500">{{ s.symbol }}</span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}" data-order="{{ s.pnl }}">
               ${{ "%.2f"|format(s.pnl) }}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">${{ "%.2f"|format(s.fees) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.1f"|format(s.hold_days) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">${{ "%.2f"|format(s.theta_per_day) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100" data-order="{{ s.fees }}">${{ "%.2f"|format(s.fees) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100" data-order="{{ s.hold_days }}">{{ "%.1f"|format(s.hold_days) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100" data-order="{{ s.theta_per_day }}">${{ "%.2f"|format(s.theta_per_day) }}</td>
           </tr>
-          {% else %}
-          <tr><td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No strategies found.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -181,71 +193,30 @@
       </a>
   </div>
 
-  <!-- Chart.js Logic -->
+  <!-- Chart.js and DataTables Logic -->
   <script>
     const isDark = document.documentElement.classList.contains('dark');
     const textColor = isDark ? '#e5e7eb' : '#374151';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
 
-    const campaigns = [
-        {% for s in strategy_groups %}
-          {% if s.segments|length > 0 %}
-          {
-            label: "{{ s.strategy }} ({{ s.symbol }})",
-            data: [
-                {% for seg in s.segments %}
-                   {% if seg.entry_ts and seg.exit_ts %}
-                   { x: "{{ seg.entry_ts }}", y: {{ seg.pnl }} },
-                   {% endif %}
-                {% endfor %}
-            ],
-            segments: [
-                {% for seg in s.segments %}
-                {
-                    entry: "{{ seg.entry_ts }}",
-                    exit: "{{ seg.exit_ts }}",
-                    pnl: {{ seg.pnl }}
-                },
-                {% endfor %}
-            ]
-          },
-          {% endif %}
-        {% endfor %}
-    ];
-
-    const rolledCampaigns = campaigns.filter(c => c.segments.length > 1).slice(0, 5);
-
-    const thetaDatasets = rolledCampaigns.map((c, i) => {
-        const dataPoints = [];
-        let cumulative = 0;
-
-        c.segments.forEach((seg, index) => {
-            dataPoints.push({ x: seg.entry, y: cumulative });
-            cumulative += seg.pnl;
-            dataPoints.push({ x: seg.exit, y: cumulative });
-        });
-
-        return {
-            label: c.label,
-            data: dataPoints,
-            borderColor: `hsl(${i * 60}, 70%, 50%)`,
-            fill: false,
-            tension: 0.1,
-            segment: {
-                borderDash: ctx => {
-                    if (ctx.p0DataIndex % 2 !== 0) {
-                        return [6, 6];
-                    }
-                    return undefined;
-                }
-            }
-        };
-    });
-
-    if (rolledCampaigns.length > 0) {
-        new Chart(document.getElementById('thetaCurveChart'), {
+    // Portfolio Curve Chart
+    const portfolioData = {{ portfolio_curve | tojson }};
+    if (portfolioData.length > 0) {
+        new Chart(document.getElementById('portfolioChart'), {
             type: 'line',
-            data: { datasets: thetaDatasets },
+            data: {
+                datasets: [{
+                    label: 'Cumulative Net PnL ($)',
+                    data: portfolioData,
+                    borderColor: 'rgb(37, 99, 235)', // Blue-600
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                }]
+            },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -268,9 +239,60 @@
             }
         });
     } else {
-        document.getElementById('thetaCurveChart').parentNode.innerHTML =
-            '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">No rolled campaigns detected to display.</div>';
+        document.getElementById('portfolioChart').parentNode.innerHTML =
+            '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">No data to display.</div>';
     }
+
+    // Monthly Income Chart
+    const incomeData = {{ monthly_income | tojson }};
+    if (incomeData.length > 0) {
+        new Chart(document.getElementById('incomeChart'), {
+            type: 'bar',
+            data: {
+                labels: incomeData.map(d => d.month),
+                datasets: [{
+                    label: 'Net Income ($)',
+                    data: incomeData.map(d => d.income),
+                    backgroundColor: incomeData.map(d => d.income >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'), // Green/Red
+                    borderColor: incomeData.map(d => d.income >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        grid: { color: gridColor },
+                        ticks: { color: textColor }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                }
+            }
+        });
+    } else {
+        document.getElementById('incomeChart').parentNode.innerHTML =
+            '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">No data to display.</div>';
+    }
+
+    // Initialize DataTables
+    const dataTable = new simpleDatatables.DataTable("#strategyTable", {
+        searchable: true,
+        fixedHeight: false, // Allow growth
+        perPage: 10,
+        labels: {
+            placeholder: "Search strategies...",
+            perPage: "{select} entries per page",
+            noRows: "No entries found",
+            info: "Showing {start} to {end} of {rows} entries",
+        },
+    });
   </script>
 </div>
 {% endblock %}

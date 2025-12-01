@@ -79,13 +79,14 @@ def test_verdict_logic(tmp_path):
         {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Buy to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
     ])
     csv_path1 = write_csv(df1, tmp_path / "green.csv")
-    res1 = analyze_csv(str(csv_path1))
-    assert res1['verdict'] == "Green flag"
+    res1 = analyze_csv(str(csv_path1), style="income")
+    assert res1['verdict'] == "Green Flag"
 
-    # Amber: Win rate < 50%, PnL > 0
+    # Amber case:
     # Trade 1: Sell 1.0, Buy 0.5. +50.
     # Trade 2: Sell 0.6, Buy 0.7. -10.
     # Trade 3: Sell 0.6, Buy 0.7. -10.
+    # Win rate: 1/3 = 33%. PnL: +30.
 
     df_amber = make_tasty_df([
         # Win (+50)
@@ -99,9 +100,15 @@ def test_verdict_logic(tmp_path):
         {"Time": "2025-01-06 10:00", "Underlying Symbol": "C", "Quantity": 1, "Action": "Buy to Close", "Price": 0.70, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 30, "Option Type": "Call"},
     ])
     csv_path_amber = write_csv(df_amber, tmp_path / "amber.csv")
-    res_amber = analyze_csv(str(csv_path_amber))
-    # Win rate: 1/3 = 33%. PnL: +30. Verdict: Amber.
-    assert res_amber['verdict'] == "Amber"
+
+    # In Income mode (default), < 60% win rate is Red Flag.
+    res_income = analyze_csv(str(csv_path_amber), style="income")
+    assert "Red Flag: Win Rate < 60%" in res_income['verdict']
+
+    # In Speculation mode, < 35% win rate is Amber (if PnL > 0).
+    # Win rate is 33.3%, so it should be Amber.
+    res_spec = analyze_csv(str(csv_path_amber), style="speculation")
+    assert "Amber: Low Win Rate" in res_spec['verdict']
 
     # Red flag: PnL < 0
     df2 = make_tasty_df([
@@ -109,8 +116,8 @@ def test_verdict_logic(tmp_path):
         {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
     ])
     csv_path2 = write_csv(df2, tmp_path / "red.csv")
-    res2 = analyze_csv(str(csv_path2))
-    assert res2['verdict'] == "Red flag"
+    res2 = analyze_csv(str(csv_path2), style="income")
+    assert "Red Flag: Negative Income" in res2['verdict']
 
 def test_normalize_tasty_fills_fallback_parser_edge_cases(tmp_path):
     parser = TastytradeFillsParser()

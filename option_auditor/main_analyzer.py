@@ -8,6 +8,67 @@ import numpy as np
 import os
 import yfinance as yf
 from datetime import datetime
+from collections import defaultdict
+
+def _calculate_drawdown(strategies: List[Any]) -> float:
+    """Returns Max Drawdown ($) based on closed equity curve."""
+    if not strategies:
+        return 0.0
+
+    sorted_strats = sorted(strategies, key=lambda s: s.exit_ts if s.exit_ts else pd.Timestamp.max)
+
+    cumulative = 0.0
+    peak = -float('inf') # Start with effectively no peak
+    max_dd = 0.0
+
+    # We want to track peak of the cumulative PnL
+    # If we start at 0.
+    peak = 0.0
+
+    for s in sorted_strats:
+        if s.exit_ts:
+            cumulative += s.net_pnl
+            if cumulative > peak:
+                peak = cumulative
+            dd = peak - cumulative
+            if dd > max_dd:
+                max_dd = dd
+
+    return max_dd
+
+def _calculate_monthly_income(strategies: List[Any]) -> List[Dict]:
+    """Aggregates Net PnL by Month-Year of exit."""
+    monthly_map = defaultdict(float)
+
+    for s in strategies:
+        if s.exit_ts:
+            key = s.exit_ts.strftime("%Y-%m")
+            monthly_map[key] += s.net_pnl
+
+    sorted_keys = sorted(monthly_map.keys())
+    return [{"month": k, "income": round(monthly_map[k], 2)} for k in sorted_keys]
+
+def _calculate_portfolio_curve(strategies: List[Any]) -> List[Dict]:
+    """Returns cumulative PnL time series."""
+    data_points = []
+    cumulative = 0.0
+
+    # Sort by exit date
+    sorted_strats = [s for s in strategies if s.exit_ts]
+    sorted_strats.sort(key=lambda s: s.exit_ts)
+
+    if not sorted_strats:
+        return []
+
+    # Initial point (optional, but good for chart)
+    first_ts = sorted_strats[0].exit_ts - pd.Timedelta(days=1)
+    data_points.append({"x": first_ts.isoformat(), "y": 0.0})
+
+    for s in sorted_strats:
+        cumulative += s.net_pnl
+        data_points.append({"x": s.exit_ts.isoformat(), "y": float(f"{cumulative:.2f}")})
+
+    return data_points
 
 def _detect_broker(df: pd.DataFrame) -> Optional[str]:
     cols = {c.strip(): True for c in df.columns}
@@ -65,7 +126,8 @@ def analyze_csv(csv_path: Optional[str] = None,
                 out_dir: Optional[str] = "out", report_format: str = "all",
                 start_date: Optional[str] = None, end_date: Optional[str] = None,
                 manual_data: Optional[List[Dict[str, Any]]] = None,
-                global_fees: Optional[float] = None) -> Dict: # Added global_fees
+                global_fees: Optional[float] = None,
+                style: str = "income") -> Dict:
     
     # 1. Load Data
     df = pd.DataFrame()
@@ -203,13 +265,41 @@ def analyze_csv(csv_path: Optional[str] = None,
     wins = [s for s in strategies if s.net_pnl > 0]
     win_rate = len(wins) / len(strategies) if strategies else 0.0
     
-    verdict = "Green flag"
-    if total_strategy_pnl_net < 0:
-        verdict = "Red flag"
-    elif win_rate < 0.3:
-        verdict = "Red flag"
-    elif win_rate < 0.5:
-        verdict = "Amber"
+    # Extended Metrics
+    max_drawdown = _calculate_drawdown(strategies)
+    monthly_income = _calculate_monthly_income(strategies)
+    portfolio_curve = _calculate_portfolio_curve(strategies)
+
+    verdict = "Green Flag"
+    verdict_color = "green"
+
+    # Verdict Logic based on Style
+    if style == "speculation":
+        # Speculation: High risk allowed, but needs positive PnL. Win rate can be lower (e.g. 40%).
+        if total_strategy_pnl_net < 0:
+            verdict = "Red Flag: Negative PnL"
+            verdict_color = "red"
+        elif win_rate < 0.35:
+            verdict = "Amber: Low Win Rate"
+            verdict_color = "yellow"
+        elif leakage_metrics["fee_drag"] > 15.0:
+            verdict = "Amber: High Fee Drag"
+            verdict_color = "yellow"
+    else:
+        # Income (Default): Needs high win rate (>70%), Low Fee Drag.
+        if total_strategy_pnl_net < 0:
+            verdict = "Red Flag: Negative Income"
+            verdict_color = "red"
+        elif win_rate < 0.60:
+            verdict = "Red Flag: Win Rate < 60%"
+            verdict_color = "red"
+        elif leakage_metrics["fee_drag"] > 10.0:
+            verdict = "Amber: Fee Drag > 10%"
+            verdict_color = "yellow"
+        elif max_drawdown > (total_strategy_pnl_gross * 0.5) and total_strategy_pnl_gross > 0:
+             # If Drawdown is more than 50% of total profit generated
+            verdict = "Amber: High Drawdown"
+            verdict_color = "yellow"
 
     # Symbol Breakdown
     sym_stats = {}
@@ -323,9 +413,11 @@ def analyze_csv(csv_path: Optional[str] = None,
             "win_rate": win_rate,
             "total_pnl": total_strategy_pnl_net,
             "total_gross_pnl": total_strategy_pnl_gross,
-            "total_fees": total_strategy_fees
+            "total_fees": total_strategy_fees,
+            "max_drawdown": max_drawdown
         },
         "verdict": verdict,
+        "verdict_color": verdict_color,
         "symbols": symbols_list,
         "strategy_groups": strategy_rows,
         "open_positions": open_rows,
@@ -335,5 +427,7 @@ def analyze_csv(csv_path: Optional[str] = None,
         "net_liquidity_now": net_liquidity_now,
         "buying_power_utilized_percent": buying_power_utilized_percent,
         "position_sizing": position_sizing,
-        "leakage_report": leakage_metrics
+        "leakage_report": leakage_metrics,
+        "monthly_income": monthly_income,
+        "portfolio_curve": portfolio_curve
     }

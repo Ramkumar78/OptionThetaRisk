@@ -119,14 +119,10 @@ def create_app(testing: bool = False) -> Flask:
         net_liquidity_now = _to_float("net_liquidity_now")
         buying_power_available_now = _to_float("buying_power_available_now")
 
+        # Style
+        style = request.form.get("style", "income")
+
         # In upload.html we renamed input to fee_per_trade for Manual Entry.
-        # But wait, if CSV upload, do we still accept global fees?
-        # User said "remove fees from the colum, instead place it below the file upload field... use this input field value... for analysing when user doesnt provide the .csv".
-        # This implies it's PRIMARILY for manual entry.
-        # But if user uploads CSV, maybe they want to add fees too?
-        # The prompt says "use that for analysing when user doesnt provide the .csv".
-        # So I will interpret `fee_per_trade` (or whatever the field is named) as specifically for manual entry.
-        # In upload.html I named it `fee_per_trade`.
 
         fee_per_trade = _to_float("fee_per_trade")
 
@@ -188,7 +184,8 @@ def create_app(testing: bool = False) -> Flask:
                 start_date=start_date,
                 end_date=end_date,
                 manual_data=manual_data,
-                global_fees=fee_per_trade # Passing fee_per_trade as global_fees argument, but analyzer logic will change
+                global_fees=fee_per_trade,
+                style=style
             )
 
             # If successful, check for report.xlsx and store using StorageProvider
@@ -213,6 +210,7 @@ def create_app(testing: bool = False) -> Flask:
         return render_template(
             "results.html",
             token=token,
+            style=style,
             **res
         )
 

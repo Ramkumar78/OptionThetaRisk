@@ -209,7 +209,6 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
             processed_ids.add(id(group))
 
             # Look ahead in the SAME symbol list
-            # Since groups are sorted by time, we can stop if time diff is too large.
             for j in range(i + 1, len(groups)):
                 candidate = groups[j]
                 if id(candidate) in processed_ids:
@@ -218,7 +217,6 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                 time_diff = (candidate.entry_ts - group.entry_ts).total_seconds() / 3600.0
 
                 # Heuristic: If > 3 hours, unlikely to be part of the same strategy opening structure.
-                # (Standard multi-leg like Iron Condor is usually simultaneous)
                 if time_diff > 3.0:
                     break
 
@@ -226,13 +224,6 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                 same_expiry = (candidate.expiry == group.expiry and time_diff < 2.0)
 
                 # 2. Roll (very short timeframe < 5min, can have different expiry)
-                # But typically rolls are Close A + Open B. Here we are grouping Open A + Open B?
-                # No, this loop forms the initial strategy from legs.
-                # A "Roll" usually involves closing a strategy and opening a new one.
-                # So we shouldn't merge them HERE. We merge them in the SECOND loop.
-                # HOWEVER, the original logic had `is_roll` check here. Why?
-                # Perhaps "rolling a leg" within a complex strategy execution?
-                # Let's keep it for compatibility but restrict time.
                 is_roll_execution = (time_diff < (5.0 / 60.0))
 
                 # 3. Calendar Spread (Same Right, Diff Expiry, < 1 min execution)
@@ -248,9 +239,6 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
     strategies.sort(key=lambda s: s.exit_ts if s.exit_ts is not None else pd.Timestamp.min)
 
     # Second Pass: Detect Rolls (Campaigns)
-    # Merges separate strategies into a campaign if they look like a roll.
-    # Logic: Exit of Strat A is close to Entry of Strat B (same symbol).
-
     merged_strategies = []
     processed_strat_ids = set()
 
@@ -259,65 +247,43 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
     for s in strategies:
         strategies_by_symbol[s.symbol].append(s)
 
-    # Sort each bucket by exit_ts (or entry_ts? Rolls link Exit A -> Entry B)
-    # Actually strategies list is already sorted by exit_ts.
-
-    # Iterate through strategies to build campaigns
-    # We iterate the main list to maintain global order, but lookups use the bucket.
-    # Actually, simpler to iterate buckets. Order of result matters?
-    # Usually we want result sorted by final exit.
-
-    # Let's iterate the main list.
     for strat in strategies:
         if strat.id in processed_strat_ids:
             continue
 
         # Start a campaign with this strategy
-        # We greedily find the next link in the chain
-        current_strat = strat
-        processed_strat_ids.add(current_strat.id)
+        campaign_head = strat
+        search_pointer = strat
+        processed_strat_ids.add(campaign_head.id)
 
         # Initialize first segment
-        if not current_strat.segments:
-            current_strat.segments.append({
-                "strategy_name": current_strat.strategy_name,
-                "pnl": current_strat.pnl,
-                "fees": current_strat.fees,
-                "entry_ts": current_strat.entry_ts,
-                "exit_ts": current_strat.exit_ts
+        if not campaign_head.segments:
+            campaign_head.segments.append({
+                "strategy_name": campaign_head.strategy_name,
+                "pnl": campaign_head.pnl,
+                "fees": campaign_head.fees,
+                "entry_ts": campaign_head.entry_ts,
+                "exit_ts": campaign_head.exit_ts
             })
 
         while True:
-            # Look for a successor in the same symbol bucket
-            # Successor must:
-            # 1. Be not processed
-            # 2. Entry time be close to Current Exit time (e.g. within 5 mins)
-            # 3. Be the "next" chronological one.
-
-            candidates = strategies_by_symbol[current_strat.symbol]
+            candidates = strategies_by_symbol[search_pointer.symbol]
             found_next = None
 
-            # Find candidates that start shortly after current exits
-            if current_strat.exit_ts:
-                exit_time = current_strat.exit_ts
-
-                # Optimization: candidates are sorted (if we assume strategy list order is close enough)
-                # But better to just scan relevant candidates.
-                # Since we want specifically "Next one", we search for smallest positive time gap.
-
+            if search_pointer.exit_ts:
+                exit_time = search_pointer.exit_ts
                 best_candidate = None
                 min_gap = float('inf')
 
                 for cand in candidates:
-                    if cand.id in processed_strat_ids or cand.id == current_strat.id:
+                    if cand.id in processed_strat_ids or cand.id == search_pointer.id:
                         continue
 
                     if cand.entry_ts:
                         diff_sec = (cand.entry_ts - exit_time).total_seconds()
                         diff_min = diff_sec / 60.0
 
-                        # Roll window: -1 min (overlap) to +15 mins
-                        # User specified logic was "0 <= diff_min <= 5". I'll stick to that but maybe slightly lenient.
+                        # Roll window: -2 min to +15 mins
                         if -2 <= diff_min <= 15:
                             if diff_min < min_gap:
                                 min_gap = diff_min
@@ -327,10 +293,7 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                     found_next = best_candidate
 
             if found_next:
-                # Merge found_next into current_strat (The Campaign)
                 next_strat = found_next
-
-                # Add segment
                 segment_info = {
                     "strategy_name": next_strat.strategy_name,
                     "pnl": next_strat.pnl,
@@ -338,52 +301,16 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                     "entry_ts": next_strat.entry_ts,
                     "exit_ts": next_strat.exit_ts
                 }
-                current_strat.segments.append(segment_info)
+                campaign_head.segments.append(segment_info)
 
-                # Update Campaign Totals
-                current_strat.pnl += next_strat.pnl
-                current_strat.fees += next_strat.fees
-                # Exit TS becomes the new one
-                current_strat.exit_ts = next_strat.exit_ts
-                current_strat.strategy_name = f"Rolled {current_strat.strategy_name}"
+                campaign_head.pnl += next_strat.pnl
+                campaign_head.fees += next_strat.fees
+                campaign_head.exit_ts = next_strat.exit_ts
+                campaign_head.strategy_name = f"Rolled {campaign_head.strategy_name}"
+                campaign_head.legs.extend(next_strat.legs)
 
-                # Add legs (so we can see full details if needed)
-                current_strat.legs.extend(next_strat.legs)
-
-                # Mark processed
                 processed_strat_ids.add(next_strat.id)
-
-                # Move pointer
-                current_strat = next_strat # Wait, current_strat object reference implies we are updating the ORIGINAL strat?
-                # The `current_strat` variable in the loop was initialized to `strat`.
-                # We are updating `strat` (the head of the chain).
-                # We need to update `strat`, not switch `current_strat` to `next_strat` and lose the head.
-                # So:
-                # We continue loop, looking for successor of `next_strat`.
-                # But we search based on `next_strat`'s exit time.
-                # So we update `current_strat` variable to `next_strat` for search purposes?
-                # BUT we are accumulating into the ORIGINAL `strat`.
-
-                # Correct logic:
-                # We update the search reference `search_ref` = next_strat
-                # But we accumulate into `strat`.
-                # And we must ensure `strategies_by_symbol` lookups are efficient.
-
-                # Let's fix the variable naming.
-                # We are accumulating into `strat`.
-                # We search for things after `latest_in_chain`.
-
-                current_strat = strat # Head
-                latest_in_chain = next_strat # The one we just found
-
-                # Update loop variable for next iteration
-                # We need to find something that follows `latest_in_chain`
-                # So we restart the loop searching relative to `latest_in_chain`.
-                # BUT `current_strat` in my code block above was used as the "base" to search from.
-                # So I need to update `current_strat` to `latest_in_chain` at end of loop?
-
-                # Yes.
-                current_strat = latest_in_chain
+                search_pointer = next_strat
             else:
                 break
 
