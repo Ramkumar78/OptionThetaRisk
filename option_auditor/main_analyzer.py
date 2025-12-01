@@ -49,7 +49,7 @@ def _calculate_monthly_income(strategies: List[Any]) -> List[Dict]:
     return [{"month": k, "income": round(monthly_map[k], 2)} for k in sorted_keys]
 
 def _calculate_portfolio_curve(strategies: List[Any]) -> List[Dict]:
-    """Returns cumulative PnL time series."""
+    """Returns cumulative PnL time series with daily trade details."""
     data_points = []
     cumulative = 0.0
 
@@ -62,11 +62,42 @@ def _calculate_portfolio_curve(strategies: List[Any]) -> List[Dict]:
 
     # Initial point (optional, but good for chart)
     first_ts = sorted_strats[0].exit_ts - pd.Timedelta(days=1)
-    data_points.append({"x": first_ts.isoformat(), "y": 0.0})
+    data_points.append({"x": first_ts.isoformat(), "y": 0.0, "trades": []})
 
+    # Group trades by date to avoid multiple points per day (which chart.js handles, but nicer to aggregate for tooltip)
+    daily_groups = defaultdict(list)
     for s in sorted_strats:
-        cumulative += s.net_pnl
-        data_points.append({"x": s.exit_ts.isoformat(), "y": float(f"{cumulative:.2f}")})
+        date_key = s.exit_ts.date() # Group by date
+        daily_groups[date_key].append(s)
+
+    sorted_dates = sorted(daily_groups.keys())
+
+    for d in sorted_dates:
+        strats_for_day = daily_groups[d]
+        daily_pnl = 0.0
+        daily_trades = []
+
+        # Identify top contributors (e.g., top 3 biggest moves)
+        strats_for_day.sort(key=lambda x: abs(x.net_pnl), reverse=True)
+
+        for s in strats_for_day:
+            daily_pnl += s.net_pnl
+            if len(daily_trades) < 5: # Limit to top 5 trades per day in tooltip
+                symbol = s.symbol
+                strat = s.strategy_name
+                amt = s.net_pnl
+                daily_trades.append(f"{symbol} {strat}: ${amt:.0f}")
+
+        if len(strats_for_day) > 5:
+            remaining = len(strats_for_day) - 5
+            daily_trades.append(f"...and {remaining} more")
+
+        cumulative += daily_pnl
+        data_points.append({
+            "x": d.isoformat(),
+            "y": float(f"{cumulative:.2f}"),
+            "trades": daily_trades
+        })
 
     return data_points
 

@@ -3,189 +3,215 @@
 {% block title %}Results - The Option Auditor{% endblock %}
 
 {% block content %}
-<div class="fade-in">
+<div class="fade-in space-y-6">
 
-  <!-- Massive Verdict Card -->
-  <div class="mb-8 rounded-lg shadow-lg overflow-hidden transition-colors duration-200
-    {% if verdict_color == 'red' %}bg-red-50 border-l-8 border-red-500 text-red-900 dark:bg-red-900/20 dark:text-red-100 dark:border-red-500
-    {% elif verdict_color == 'yellow' %}bg-yellow-50 border-l-8 border-yellow-500 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-100 dark:border-yellow-500
-    {% else %}bg-green-50 border-l-8 border-green-500 text-green-900 dark:bg-green-900/20 dark:text-green-100 dark:border-green-500{% endif %}">
+  <!-- 1. Verdict Banner -->
+  <!-- "The Harsh Truth": Needs to be visually striking. -->
+  <div class="rounded-xl shadow-lg overflow-hidden transition-all duration-300
+    {% if verdict_color == 'red' %}
+      bg-gradient-to-r from-red-50 to-red-100 border-l-8 border-red-600 text-red-900 dark:from-red-900/40 dark:to-red-900/20 dark:text-red-100 dark:border-red-500
+    {% elif verdict_color == 'yellow' %}
+      bg-gradient-to-r from-yellow-50 to-yellow-100 border-l-8 border-yellow-500 text-yellow-900 dark:from-yellow-900/40 dark:to-yellow-900/20 dark:text-yellow-100 dark:border-yellow-500
+    {% else %}
+      bg-gradient-to-r from-green-50 to-green-100 border-l-8 border-green-600 text-green-900 dark:from-green-900/40 dark:to-green-900/20 dark:text-green-100 dark:border-green-500
+    {% endif %}">
     <div class="p-8 text-center">
-        <h2 class="text-4xl font-extrabold uppercase tracking-tight mb-2">{{ verdict }}</h2>
-        <p class="text-lg opacity-80">Based on your {{ style|default('selected')|title }} profile</p>
+        <h2 class="text-5xl font-extrabold uppercase tracking-tight mb-2 drop-shadow-sm">{{ verdict }}</h2>
+        <p class="text-lg font-medium opacity-90">Assessment based on your <span class="underline decoration-2 underline-offset-2">{{ style|default('selected')|title }}</span> profile</p>
     </div>
   </div>
 
-  <!-- Charts Row -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <!-- 2. Key Metrics Cards (Visual Hierarchy: Top Level) -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+      <!-- Net PnL -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
+          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <i class="bi bi-cash-coin text-6xl {% if strategy_metrics.total_pnl < 0 %}text-red-500{% else %}text-green-500{% endif %}"></i>
+          </div>
+          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Net PnL</p>
+          <h3 class="text-3xl font-bold mt-2 {% if strategy_metrics.total_pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+            ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
+          </h3>
+          <p class="text-xs text-gray-400 mt-2">After ${{ "%.0f"|format(strategy_metrics.total_fees) }} in fees</p>
+      </div>
+
+      <!-- Win Rate -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
+          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <i class="bi bi-trophy text-6xl text-blue-500"></i>
+          </div>
+          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Win Rate</p>
+          <h3 class="text-3xl font-bold mt-2 text-gray-900 dark:text-gray-100">
+            {{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%
+          </h3>
+          <p class="text-xs text-gray-400 mt-2">{{ strategy_metrics.num_trades }} Trades</p>
+      </div>
+
+      <!-- Expectancy -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
+           <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <i class="bi bi-activity text-6xl text-purple-500"></i>
+          </div>
+          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Expectancy</p>
+          <h3 class="text-3xl font-bold mt-2 {% if strategy_metrics.expectancy < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+            ${{ "%.2f"|format(strategy_metrics.expectancy) }}
+          </h3>
+          <p class="text-xs text-gray-400 mt-2">Per Trade</p>
+      </div>
+
+      <!-- Account Growth (or Avg Hold if not avail) -->
+      {% if account_size_start and net_liquidity_now %}
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
+          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <i class="bi bi-graph-up text-6xl text-teal-500"></i>
+          </div>
+          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Growth</p>
+          <h3 class="text-3xl font-bold mt-2 text-gray-900 dark:text-gray-100">
+             {{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%
+          </h3>
+          <p class="text-xs text-gray-400 mt-2">Buying Power: {{ "%.0f"|format(buying_power_utilized_percent or 0) }}% Used</p>
+      </div>
+      {% else %}
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
+           <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <i class="bi bi-hourglass-split text-6xl text-orange-500"></i>
+          </div>
+          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avg Hold</p>
+          <h3 class="text-3xl font-bold mt-2 text-gray-900 dark:text-gray-100">
+            {{ "%.1f"|format(metrics.avg_hold_days) }}d
+          </h3>
+          <p class="text-xs text-gray-400 mt-2">Duration</p>
+      </div>
+      {% endif %}
+  </div>
+
+  <!-- 3. Charts Section -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- Portfolio Curve -->
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 transition-colors duration-200">
-           <div class="flex justify-between items-center mb-4">
-               <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200">Portfolio Performance</h3>
+      <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 transition-colors duration-200 border border-gray-100 dark:border-gray-700">
+           <div class="flex justify-between items-center mb-6">
+               <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">Equity Curve</h3>
                {% if strategy_metrics.max_drawdown > 0 %}
-               <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">Max DD: ${{ "%.2f"|format(strategy_metrics.max_drawdown) }}</span>
+               <span class="text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">
+                   Max DD: -${{ "%.2f"|format(strategy_metrics.max_drawdown) }}
+               </span>
                {% endif %}
            </div>
-           <div class="h-64"><canvas id="portfolioChart"></canvas></div>
+           <div class="h-72"><canvas id="portfolioChart"></canvas></div>
       </div>
       <!-- Monthly Income -->
-      <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 transition-colors duration-200">
-           <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Monthly Income</h3>
-           <div class="h-64"><canvas id="incomeChart"></canvas></div>
+      <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 transition-colors duration-200 border border-gray-100 dark:border-gray-700">
+           <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6">Monthly Income</h3>
+           <div class="h-72"><canvas id="incomeChart"></canvas></div>
       </div>
   </div>
 
-  <!-- Leakage Report Section -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200 border-l-4 border-purple-500">
-      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
-          <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200">The Leakage Report</h3>
-          <span class="text-xs font-semibold px-2 py-1 rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">Optimization</span>
+  <!-- 4. Leakage Report -->
+  <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700">
+      <div class="bg-gradient-to-r from-purple-50 to-white dark:from-gray-700 dark:to-gray-800 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <div class="flex items-center space-x-2">
+               <i class="bi bi-funnel text-purple-600 dark:text-purple-400"></i>
+               <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">Leakage & Efficiency</h3>
+          </div>
+          <span class="text-xs font-bold uppercase tracking-wide text-purple-600 dark:text-purple-400">Optimization Report</span>
       </div>
       <div class="p-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
               <!-- Metric A: Fee Drag -->
-              <div class="bg-gray-50 dark:bg-gray-700 p-5 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">Fee Drag %</h4>
-                  <div class="flex items-baseline">
-                      <span class="text-3xl font-bold {% if leakage_report.fee_drag > 10 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+              <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
+                  <h4 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Fee Drag %</h4>
+                  <div class="flex items-baseline mb-2">
+                      <span class="text-4xl font-extrabold {% if leakage_report.fee_drag > 10 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
                           {{ leakage_report.fee_drag }}%
                       </span>
                       <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">of Gross Profit</span>
                   </div>
-                  <p class="mt-2 text-sm {% if leakage_report.fee_drag > 10 %}text-red-600 dark:text-red-400 font-bold{% else %}text-green-600 dark:text-green-400{% endif %}">
+                  <div class="h-2 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden mb-3">
+                      <div class="h-full {% if leakage_report.fee_drag > 10 %}bg-red-500{% else %}bg-green-500{% endif %}" style="width: {{ [leakage_report.fee_drag, 100]|min }}%"></div>
+                  </div>
+                  <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
                       {{ leakage_report.fee_drag_verdict }}
                   </p>
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Goal: < 10%</p>
+                  <p class="text-xs text-gray-400 mt-1">Target: < 10%</p>
               </div>
 
               <!-- Metric B: Stale Capital -->
-              <div class="bg-gray-50 dark:bg-gray-700 p-5 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">Stale Capital</h4>
-                  <div class="flex items-baseline">
-                      <span class="text-3xl font-bold {% if leakage_report.stale_capital|length > 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+              <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
+                  <h4 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Stale Capital</h4>
+                  <div class="flex items-baseline mb-2">
+                      <span class="text-4xl font-extrabold {% if leakage_report.stale_capital|length > 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
                           {{ leakage_report.stale_capital|length }}
                       </span>
                       <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">Trades Identified</span>
                   </div>
-                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      Trades held > 10 days with realized Theta < $1/day.
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Positions held >10 days generating <$1 Theta/day.
                   </p>
                   {% if leakage_report.stale_capital %}
-                  <div class="mt-3 max-h-32 overflow-y-auto">
-                      <ul class="text-xs space-y-1">
-                          {% for item in leakage_report.stale_capital %}
-                          <li class="text-gray-700 dark:text-gray-300">
-                              <span class="font-bold">{{ item.symbol }}</span> {{ item.strategy }}: ${{ item.pnl }} ({{ item.hold_days }}d, ${{ item.theta_per_day }}/d)
-                          </li>
-                          {% endfor %}
-                      </ul>
+                  <div class="max-h-32 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                      {% for item in leakage_report.stale_capital %}
+                      <div class="flex justify-between items-center text-xs p-2 bg-white dark:bg-gray-800 rounded shadow-sm border border-gray-200 dark:border-gray-700">
+                          <div>
+                              <span class="font-bold text-gray-700 dark:text-gray-200">{{ item.symbol }}</span> <span class="text-gray-500">{{ item.strategy }}</span>
+                          </div>
+                          <div class="text-right">
+                              <span class="block font-mono text-red-500">{{ item.hold_days }}d</span>
+                              <span class="block font-mono text-gray-400">${{ item.theta_per_day }}/d</span>
+                          </div>
+                      </div>
+                      {% endfor %}
                   </div>
                   {% else %}
-                  <p class="mt-2 text-sm text-green-600 dark:text-green-400">No stale capital detected.</p>
+                  <div class="flex items-center text-green-600 dark:text-green-400 text-sm font-medium bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                      <i class="bi bi-check-circle-fill mr-2"></i> No stale capital detected.
+                  </div>
                   {% endif %}
               </div>
           </div>
       </div>
   </div>
 
-  <!-- Main Summary Card -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200">
-    <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
-      <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200">Audit Summary</h3>
+  <!-- 5. Strategy Table -->
+  <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700">
+    <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
+      <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Strategy Log</h5>
+      <span class="text-xs text-gray-400">{{ strategy_groups|length }} entries</span>
     </div>
-    <div class="p-6">
-      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Net PnL (After Fees)</p>
-          <h3 class="text-2xl font-bold {% if strategy_metrics.total_pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-            ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
-          </h3>
-          <p class="text-xs text-gray-400 mt-1">
-              Gross: ${{ "%.2f"|format(strategy_metrics.total_gross_pnl) }} | Fees: ${{ "%.2f"|format(strategy_metrics.total_fees) }}
-          </p>
-        </div>
-        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Win Rate</p>
-          <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
-        </div>
-        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Trades</p>
-          <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ strategy_metrics.num_trades }}</h3>
-        </div>
-        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Avg Hold</p>
-          <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.1f"|format(metrics.avg_hold_days) }}d</h3>
-        </div>
-        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Expectancy / Trade</p>
-          <h3 class="text-2xl font-bold {% if strategy_metrics.expectancy < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-            ${{ "%.2f"|format(strategy_metrics.expectancy) }}
-          </h3>
-        </div>
-      </div>
-
-      {% if account_size_start and net_liquidity_now %}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Account Growth</p>
-            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
-          </div>
-          {% if buying_power_utilized_percent is not none %}
-          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Buying Power Utilized</p>
-            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
-          </div>
-          {% endif %}
-      </div>
-      {% endif %}
-
-      {% if date_window %}
-      <div class="text-center mt-6">
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200">
-          Range: {{ date_window.start or 'Beginning' }} &rarr; {{ date_window.end or 'End' }}
-        </span>
-      </div>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Full-Width Strategy Table -->
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-8 transition-colors duration-200">
-    <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
-      <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Strategy Groups</h5>
-    </div>
-    <div class="p-4 overflow-x-auto">
-      <table id="strategyTable" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-        <thead class="bg-gray-50 dark:bg-gray-700">
+    <div class="p-0 overflow-x-auto">
+      <table id="strategyTable" class="w-full text-sm text-left">
+        <thead class="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Strategy</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Net PnL</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fees</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hold (Days)</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">θ / Day</th>
+            <th class="px-6 py-4 font-semibold tracking-wider">Strategy</th>
+            <th class="px-6 py-4 font-semibold tracking-wider">Symbol</th>
+            <th class="px-6 py-4 text-right font-semibold tracking-wider">Net PnL</th>
+            <th class="px-6 py-4 text-right font-semibold tracking-wider">Fees</th>
+            <th class="px-6 py-4 text-right font-semibold tracking-wider">Hold (Days)</th>
+            <th class="px-6 py-4 text-right font-semibold tracking-wider">Θ / Day</th>
           </tr>
         </thead>
-        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           {% for s in strategy_groups %}
-          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                <div class="font-medium">{{ s.strategy }}</div>
+          <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
+            <td class="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-gray-100">
+                <div class="font-bold">{{ s.strategy }}</div>
                 {% if s.segments|length > 1 %}
-                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Includes {{ s.segments|length }} rolls
+                <div class="inline-flex items-center mt-1 px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                    <i class="bi bi-arrow-repeat mr-1"></i> {{ s.segments|length }} rolls
                 </div>
                 {% endif %}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-500">{{ s.symbol }}</span>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-500">
+                    {{ s.symbol }}
+                </span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}" data-order="{{ s.pnl }}">
+            <td class="px-6 py-4 whitespace-nowrap text-right font-mono font-bold text-base {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}" data-order="{{ s.pnl }}">
               ${{ "%.2f"|format(s.pnl) }}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100" data-order="{{ s.fees }}">${{ "%.2f"|format(s.fees) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100" data-order="{{ s.hold_days }}">{{ "%.1f"|format(s.hold_days) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100" data-order="{{ s.theta_per_day }}">${{ "%.2f"|format(s.theta_per_day) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-gray-500 dark:text-gray-400" data-order="{{ s.fees }}">${{ "%.2f"|format(s.fees) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-gray-900 dark:text-gray-100" data-order="{{ s.hold_days }}">{{ "%.1f"|format(s.hold_days) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-gray-500 dark:text-gray-400" data-order="{{ s.theta_per_day }}">${{ "%.2f"|format(s.theta_per_day) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -193,17 +219,17 @@
     </div>
   </div>
   
-  <div class="text-center my-8">
-      <a href="/download/{{ token }}/report.xlsx" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors dark:bg-blue-900 dark:text-blue-100 dark:hover:bg-blue-800">
-        <i class="bi bi-file-earmark-excel me-2"></i>Download Full Report (XLSX)
+  <div class="text-center my-10 pb-10">
+      <a href="/download/{{ token }}/report.xlsx" class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-full shadow-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:-translate-y-1">
+        <i class="bi bi-download me-2"></i>Download Excel Report
       </a>
   </div>
 
   <!-- Chart.js and DataTables Logic -->
   <script>
     const isDark = document.documentElement.classList.contains('dark');
-    const textColor = isDark ? '#e5e7eb' : '#374151';
-    const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+    const textColor = isDark ? '#9ca3af' : '#4b5563'; // gray-400 / gray-600
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
 
     // Portfolio Curve Chart
     const portfolioData = {{ portfolio_curve | tojson }};
@@ -215,38 +241,71 @@
                     label: 'Cumulative Net PnL ($)',
                     data: portfolioData,
                     borderColor: 'rgb(37, 99, 235)', // Blue-600
-                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                    borderWidth: 2,
+                    backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                    borderWidth: 3,
                     fill: true,
-                    tension: 0.1,
+                    tension: 0.2,
                     pointRadius: 0,
-                    pointHoverRadius: 4
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: 'rgb(37, 99, 235)'
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                },
                 scales: {
                     x: {
                         type: 'time',
-                        time: { unit: 'day' },
-                        grid: { color: gridColor },
-                        ticks: { color: textColor }
+                        time: { unit: 'day', displayFormats: { day: 'MMM d' } },
+                        grid: { color: gridColor, drawBorder: false },
+                        ticks: { color: textColor, maxRotation: 0, autoSkip: true }
                     },
                     y: {
-                        grid: { color: gridColor },
-                        ticks: { color: textColor }
+                        grid: { color: gridColor, drawBorder: false },
+                        ticks: {
+                            color: textColor,
+                            callback: function(value) { return '$' + value; }
+                        }
                     }
                 },
                 plugins: {
-                    legend: { labels: { color: textColor } },
-                    tooltip: { mode: 'index', intersect: false }
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                        titleColor: isDark ? '#fff' : '#111827',
+                        bodyColor: isDark ? '#d1d5db' : '#4b5563',
+                        borderColor: isDark ? '#374151' : '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 12,
+                        cornerRadius: 8,
+                        titleFont: { size: 14, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return 'Cumulative: $' + context.parsed.y.toFixed(2);
+                            },
+                            afterBody: function(tooltipItems) {
+                                const index = tooltipItems[0].dataIndex;
+                                const item = portfolioData[index];
+                                if (item && item.trades && item.trades.length > 0) {
+                                    return '\nClosed Today:\n' + item.trades.join('\n');
+                                }
+                                return '';
+                            }
+                        }
+                    }
                 }
             }
         });
     } else {
         document.getElementById('portfolioChart').parentNode.innerHTML =
-            '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">No data to display.</div>';
+            '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 italic">No data to display.</div>';
     }
 
     // Monthly Income Chart
@@ -259,9 +318,9 @@
                 datasets: [{
                     label: 'Net Income ($)',
                     data: incomeData.map(d => d.income),
-                    backgroundColor: incomeData.map(d => d.income >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'), // Green/Red
-                    borderColor: incomeData.map(d => d.income >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)'),
-                    borderWidth: 1
+                    backgroundColor: incomeData.map(d => d.income >= 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)'), // Green-500/Red-500
+                    borderRadius: 4,
+                    hoverBackgroundColor: incomeData.map(d => d.income >= 0 ? 'rgba(16, 185, 129, 1)' : 'rgba(239, 68, 68, 1)'),
                 }]
             },
             options: {
@@ -269,8 +328,11 @@
                 maintainAspectRatio: false,
                 scales: {
                     y: {
-                        grid: { color: gridColor },
-                        ticks: { color: textColor }
+                        grid: { color: gridColor, drawBorder: false },
+                        ticks: {
+                             color: textColor,
+                             callback: function(value) { return '$' + value; }
+                        }
                     },
                     x: {
                         grid: { display: false },
@@ -279,24 +341,38 @@
                 },
                 plugins: {
                     legend: { display: false },
+                    tooltip: {
+                         backgroundColor: isDark ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                        titleColor: isDark ? '#fff' : '#111827',
+                        bodyColor: isDark ? '#d1d5db' : '#4b5563',
+                        borderColor: isDark ? '#374151' : '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                             label: function(context) {
+                                return 'Income: $' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
                 }
             }
         });
     } else {
         document.getElementById('incomeChart').parentNode.innerHTML =
-            '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">No data to display.</div>';
+            '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 italic">No data to display.</div>';
     }
 
     // Initialize DataTables
     const dataTable = new simpleDatatables.DataTable("#strategyTable", {
         searchable: true,
-        fixedHeight: false, // Allow growth
+        fixedHeight: false,
         perPage: 10,
         labels: {
             placeholder: "Search strategies...",
-            perPage: "{select} entries per page",
+            perPage: "{select}",
             noRows: "No entries found",
-            info: "Showing {start} to {end} of {rows} entries",
+            info: "{start}-{end} of {rows}",
         },
     });
   </script>
