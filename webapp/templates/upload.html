@@ -13,7 +13,7 @@
     <div class="bg-white dark:bg-gray-800 shadow-lg rounded-b-lg p-8 border border-t-0 border-gray-200 dark:border-gray-700 transition-colors duration-200">
 
         <!-- Tabs -->
-        <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6" x-data="{ tab: 'csv' }">
+        <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6" x-data="{ tab: 'csv' }" x-init="tab = localStorage.getItem('upload_tab') || 'csv'; $watch('tab', val => localStorage.setItem('upload_tab', val))">
             <button class="px-6 py-3 font-medium text-sm focus:outline-none transition-colors border-b-2"
                 :class="tab === 'csv' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
                 @click="tab = 'csv'; document.getElementById('input-method').value = 'csv'">
@@ -99,35 +99,84 @@
                                 <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Expiry</th>
                                 <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Strike</th>
                                 <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
-                                <th scope="col" class="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">X</th>
+                                <th scope="col" class="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700" id="manual-rows">
                             <template x-for="(row, index) in rows" :key="index">
                                 <tr>
-                                    <td class="px-1 py-1"><input type="date" x-model="row.date" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
-                                    <td class="px-1 py-1"><input type="text" x-model="row.symbol" placeholder="SPY" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded uppercase"></td>
-                                    <td class="px-1 py-1">
-                                        <select x-model="row.action" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
-                                            <option value="Buy Open">Buy Open</option>
-                                            <option value="Sell Open">Sell Open</option>
-                                            <option value="Buy Close">Buy Close</option>
-                                            <option value="Sell Close">Sell Close</option>
-                                        </select>
-                                    </td>
-                                    <td class="px-1 py-1"><input type="number" x-model="row.qty" min="1" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
-                                    <td class="px-1 py-1"><input type="number" x-model="row.price" step="0.01" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
-                                    <td class="px-1 py-1"><input type="number" x-model="row.fees" step="0.01" min="0" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
-                                    <td class="px-1 py-1"><input type="date" x-model="row.expiry" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
-                                    <td class="px-1 py-1"><input type="number" x-model="row.strike" step="0.5" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
-                                    <td class="px-1 py-1">
-                                        <select x-model="row.right" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
-                                            <option value="C">Call</option>
-                                            <option value="P">Put</option>
-                                        </select>
-                                    </td>
-                                    <td class="px-1 py-1 text-center">
-                                        <button type="button" @click="removeRow(index)" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
+                                    <!-- Edit Mode -->
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="date" x-model="row.date" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.date"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="text" x-model="row.symbol" placeholder="SPY" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded uppercase"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.symbol"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1">
+                                            <select x-model="row.action" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
+                                                <option value="Buy Open">Buy Open</option>
+                                                <option value="Sell Open">Sell Open</option>
+                                                <option value="Buy Close">Buy Close</option>
+                                                <option value="Sell Close">Sell Close</option>
+                                            </select>
+                                        </td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.action"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="number" x-model="row.qty" min="1" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.qty"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="number" x-model="row.price" step="0.01" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.price"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="number" x-model="row.fees" step="0.01" min="0" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.fees"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="date" x-model="row.expiry" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.expiry"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="number" x-model="row.strike" step="0.5" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.strike"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1">
+                                            <select x-model="row.right" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
+                                                <option value="C">Call</option>
+                                                <option value="P">Put</option>
+                                            </select>
+                                        </td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.right"></td></template>
+
+                                    <td class="px-1 py-1 text-center whitespace-nowrap">
+                                        <template x-if="row.editing">
+                                            <button type="button" @click="row.editing = false" class="text-green-600 hover:text-green-800 dark:text-green-400 mr-2" title="Save">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        </template>
+                                        <template x-if="!row.editing">
+                                            <button type="button" @click="row.editing = true" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 mr-2" title="Edit">
+                                                <i class="bi bi-pencil-fill"></i>
+                                            </button>
+                                        </template>
+                                        <button type="button" @click="removeRow(index)" class="text-red-500 hover:text-red-700 dark:text-red-400" title="Delete">
+                                            <i class="bi bi-dash-circle-fill"></i>
+                                        </button>
                                     </td>
                                 </tr>
                             </template>
@@ -135,9 +184,8 @@
                     </table>
                 </div>
                 <div class="flex justify-between items-center">
-                    <button type="button" @click="addRow()" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 font-medium flex items-center">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        Add Row (Max 20)
+                    <button type="button" @click="addRow()" class="text-sm text-white bg-green-600 hover:bg-green-700 px-3 py-2 rounded-md shadow flex items-center transition-colors">
+                        <i class="bi bi-plus-lg mr-1"></i> Add Row (Max 20)
                     </button>
                     <span class="text-xs text-gray-500 dark:text-gray-400" x-text="rows.length + '/20'"></span>
                 </div>
@@ -181,7 +229,7 @@
             </div>
 
             <!-- Submit -->
-            <button type="submit" @click="prepareSubmission()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+            <button type="submit" @click="prepareSubmission()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 mt-6">
                 Analyze Trades
             </button>
         </form>
@@ -204,34 +252,70 @@
     function manualEntryForm() {
         return {
             tab: 'csv',
-            rows: [
-                { date: new Date().toISOString().split('T')[0], symbol: 'SPY', action: 'Sell Open', qty: 1, price: 1.0, fees: 1.0, expiry: new Date(Date.now() + 30*86400000).toISOString().split('T')[0], strike: 400, right: 'P' }
-            ],
+            rows: [],
+
+            init() {
+                // Load saved rows from localStorage or default
+                const saved = localStorage.getItem('manual_rows');
+                if (saved) {
+                    try {
+                        this.rows = JSON.parse(saved);
+                        // Ensure all rows have editing state (default false on reload)
+                        this.rows.forEach(r => {
+                            if (typeof r.editing === 'undefined') r.editing = false;
+                        });
+                    } catch(e) { this.rows = []; }
+                }
+
+                // If empty, add default row
+                if (this.rows.length === 0) {
+                    this.rows.push(this.createRow(true));
+                }
+
+                // Watch for changes to save
+                this.$watch('rows', val => {
+                    localStorage.setItem('manual_rows', JSON.stringify(val));
+                });
+            },
+
+            createRow(isEditing = true) {
+                return {
+                    date: new Date().toISOString().split('T')[0],
+                    symbol: 'SPY',
+                    action: 'Sell Open',
+                    qty: 1,
+                    price: 1.0,
+                    fees: 1.0,
+                    expiry: new Date(Date.now() + 30*86400000).toISOString().split('T')[0],
+                    strike: 400,
+                    right: 'P',
+                    editing: isEditing
+                };
+            },
+
             addRow() {
                 if (this.rows.length < 20) {
-                    this.rows.push({ date: '', symbol: '', action: 'Buy Open', qty: 1, price: 0, fees: 0, expiry: '', strike: 0, right: 'C' });
+                    this.rows.push(this.createRow(true));
                 }
             },
+
             removeRow(index) {
-                if (this.rows.length > 1) {
+                if (this.rows.length > 0) {
                     this.rows.splice(index, 1);
                 }
+                // If all deleted, add one blank
+                if (this.rows.length === 0) {
+                    this.addRow();
+                }
             },
+
             prepareSubmission() {
                 if (this.tab === 'manual') {
                     document.getElementById('manual-trades-input').value = JSON.stringify(this.rows);
-                    // Clear file input to avoid confusion in backend if user switched tabs
                     document.getElementById('csv').value = '';
                 }
             }
         }
     }
-
-    // Add Alpine.js if not present in base template, or assume it is.
-    // Since base.html uses Tailwind via CDN, let's assume we can add Alpine via CDN if needed.
-    // But better to add it here just in case if base doesn't have it.
-    // However, I should check base.html first.
 </script>
-<!-- Alpine.js for interactivity -->
-<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 {% endblock %}
