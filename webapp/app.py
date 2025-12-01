@@ -65,7 +65,7 @@ def create_app(testing: bool = False) -> Flask:
         # Relaxed for Tailwind Play CDN which compiles in-browser
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.jsdelivr.net; "
             "img-src 'self' data:; "
@@ -118,7 +118,17 @@ def create_app(testing: bool = False) -> Flask:
         account_size_start = _to_float("account_size_start")
         net_liquidity_now = _to_float("net_liquidity_now")
         buying_power_available_now = _to_float("buying_power_available_now")
-        global_fees = _to_float("global_fees") # New global fees field
+
+        # In upload.html we renamed input to fee_per_trade for Manual Entry.
+        # But wait, if CSV upload, do we still accept global fees?
+        # User said "remove fees from the colum, instead place it below the file upload field... use this input field value... for analysing when user doesnt provide the .csv".
+        # This implies it's PRIMARILY for manual entry.
+        # But if user uploads CSV, maybe they want to add fees too?
+        # The prompt says "use that for analysing when user doesnt provide the .csv".
+        # So I will interpret `fee_per_trade` (or whatever the field is named) as specifically for manual entry.
+        # In upload.html I named it `fee_per_trade`.
+
+        fee_per_trade = _to_float("fee_per_trade")
 
         if had_error:
             return redirect(url_for("index"))
@@ -178,7 +188,7 @@ def create_app(testing: bool = False) -> Flask:
                 start_date=start_date,
                 end_date=end_date,
                 manual_data=manual_data,
-                global_fees=global_fees
+                global_fees=fee_per_trade # Passing fee_per_trade as global_fees argument, but analyzer logic will change
             )
 
             # If successful, check for report.xlsx and store using StorageProvider

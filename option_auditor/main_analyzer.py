@@ -104,6 +104,18 @@ def analyze_csv(csv_path: Optional[str] = None,
     except Exception as e:
         return {"error": str(e)}
 
+    # Apply fee_per_trade logic for manual entries
+    # If manual_data is present, global_fees is treated as 'Fee per Trade' and applied to each row.
+    if manual_data and global_fees is not None:
+        try:
+            fee_val = float(global_fees)
+            if not norm_df.empty:
+                norm_df["fees"] = fee_val
+            # Clear global_fees so it's not added again as a lump sum later
+            global_fees = None
+        except (ValueError, TypeError):
+            pass
+
     if norm_df.empty:
         return {"error": "No options trades found"}
 
