@@ -62,10 +62,10 @@ def create_app(testing: bool = False) -> Flask:
     @app.after_request
     def add_security_headers(response):
         # Basic Content-Security-Policy
-        # Allow default self, Bootstrap CDN (will replace), Tailwind CDN, HTMX, etc.
+        # Relaxed for Tailwind Play CDN which compiles in-browser
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.jsdelivr.net; "
             "img-src 'self' data:; "
