@@ -1,6 +1,6 @@
 import argparse
 from tabulate import tabulate
-from .auditor import analyze_csv
+from .main_analyzer import analyze_csv
 
 
 def main(argv=None):
