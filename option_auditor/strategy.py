@@ -307,10 +307,15 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
             if candidate.symbol == group.symbol:
                 # Group if Expiry matches (within 2 hours) OR Right matches (within 1 min) for Calendars
                 same_expiry = (candidate.expiry == group.expiry and time_diff < 2.0)
+
+                # Check for roll: Small time diff (< 5 min) allows different expiry
+                is_roll = (time_diff < (5.0 / 60.0))
+
                 # Calendar Spread: Same Right, Different Expiry, executed together (< 1 min)
+                # (Often covered by is_roll now, but keeping for clarity if needed)
                 calendar = (candidate.right == group.right and time_diff < (1.0 / 60.0))
 
-                if same_expiry or calendar:
+                if same_expiry or is_roll or calendar:
                     strat.add_leg_group(candidate)
                     processed_ids.add(id(candidate))
         strat.strategy_name = _classify_strategy(strat)
