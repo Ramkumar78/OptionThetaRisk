@@ -77,7 +77,11 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     else:
         return {"error": "Unsupported broker"}
 
-    norm_df = parser.parse(df)
+    try:
+        norm_df = parser.parse(df)
+    except Exception as e:
+        return {"error": str(e)}
+
     if norm_df.empty:
         return {"error": "No options trades found"}
 
@@ -160,6 +164,43 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     if net_liquidity_now is not None and buying_power_available_now is not None and net_liquidity_now > 0:
         buying_power_utilized_percent = (net_liquidity_now - buying_power_available_now) / net_liquidity_now * 100
 
+    # --- Position Sizing Analysis (Capital Allocation) ---
+    # Calculated using pandas
+    position_sizing = []
+    if open_groups and net_liquidity_now and net_liquidity_now > 0:
+        # Group by symbol
+        open_by_symbol = {}
+        for g in open_groups:
+            if g.symbol not in open_by_symbol:
+                open_by_symbol[g.symbol] = []
+            open_by_symbol[g.symbol].append(g)
+
+        for sym, groups in open_by_symbol.items():
+            # Estimate allocation based on entry cost (proceeds < 0 for debits)
+            # For credits, proceeds > 0, risk is undefined or margin-based.
+            # We use absolute net proceeds as a proxy for "capital involved" to show activity level,
+            # but for true sizing, we focus on Debit paid or Credit received as 'exposure'.
+            total_cost = 0.0
+            for g in groups:
+                # Sum of legs proceeds. Negative = Debit paid. Positive = Credit received.
+                # Usually sizing is about how much you paid (debit) or margin req (credit).
+                # Lacking margin data, we use Entry Cost for Longs, and Credit Received for Shorts as proxy.
+                entry_val = sum(l.proceeds for l in g.legs)
+                # If negative (Debit), it costs money. If positive (Credit), it adds cash but uses margin.
+                # We will just take the absolute value to represent "magnitude" of the position for visualization.
+                total_cost += abs(entry_val)
+
+            allocation_pct = (total_cost / net_liquidity_now) * 100
+            position_sizing.append({
+                "symbol": sym,
+                "allocation_amt": round(total_cost, 2),
+                "allocation_pct": round(allocation_pct, 2),
+                "description": _sym_desc(sym)
+            })
+
+        # Sort by allocation % descending
+        position_sizing.sort(key=lambda x: x["allocation_pct"], reverse=True)
+
     # Optional outputs
     if out_dir:
         try:
@@ -211,4 +252,5 @@ def analyze_csv(csv_path: str, broker: str = "auto",
         "account_size_start": account_size_start,
         "net_liquidity_now": net_liquidity_now,
         "buying_power_utilized_percent": buying_power_utilized_percent,
+        "position_sizing": position_sizing,
     }

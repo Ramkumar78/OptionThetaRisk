@@ -362,3 +362,16 @@ def test_download_nonexistent_file(app):
     # Test downloading a non-existent file kind
     resp_nonexistent = client.get(f"/download/{token}/nonexistent.file")
     assert resp_nonexistent.status_code == 404
+
+def test_homepage_links(app):
+    client = app.test_client()
+    resp = client.get("/")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+
+    # Check for the new GitHub URL
+    assert "https://github.com/Ramkumar78/OptionThetaRisk/blob/main/README.md" in html
+
+    # Check for the Contact email link
+    assert "mailto:shriram2222@gmail.com" in html
+    assert "Contact" in html

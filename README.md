@@ -75,3 +75,6 @@ against Python 3.9–3.12. It installs dependencies from `requirements.txt` and 
 #### Security notes
 - CSV uploads are read safely with Pandas and never executed as code.
 - Exported `trades.csv` is sanitized to help prevent CSV/Excel formula injection: any cell beginning with `=`, `+`, `-`, or `@` is prefixed with a quote so that spreadsheet apps do not evaluate it as a formula.
+
+#### Contact
+shriram2222@gmail.com
