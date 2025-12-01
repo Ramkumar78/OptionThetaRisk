@@ -77,7 +77,11 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     else:
         return {"error": "Unsupported broker"}
 
-    norm_df = parser.parse(df)
+    try:
+        norm_df = parser.parse(df)
+    except Exception as e:
+        return {"error": str(e)}
+
     if norm_df.empty:
         return {"error": "No options trades found"}
 
