@@ -6,23 +6,25 @@ from webapp.app import create_app
 
 @pytest.fixture()
 def app():
-    app = create_app()
+    app = create_app(testing=True)
     app.config.update({
-        "TESTING": True,
         "WTF_CSRF_ENABLED": False,
     })
 
-    # Clean up the reports folder before each test
-    report_folder = app.config["REPORT_FOLDER"]
-    if os.path.exists(report_folder):
-        shutil.rmtree(report_folder, ignore_errors=True)
-    os.makedirs(report_folder, exist_ok=True)
+    # Clean up the reports DB before each test
+    db_path = os.path.join(app.instance_path, "reports.db")
+    if os.path.exists(db_path):
+        os.remove(db_path)
+
+    # Initialize DB for testing
+    from webapp.storage import LocalStorage
+    storage = LocalStorage(db_path)
 
     yield app
 
     # Final cleanup after test
-    if os.path.exists(report_folder):
-        shutil.rmtree(report_folder, ignore_errors=True)
+    if os.path.exists(db_path):
+        os.remove(db_path)
 
 def test_theme_toggle_presence(app):
     """

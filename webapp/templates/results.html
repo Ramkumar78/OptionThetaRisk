@@ -1,80 +1,53 @@
 <div class="fade-in">
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
   <!-- Main Summary Card -->
-  <div class="card shadow-sm border-0 mb-4">
-    <div class="card-header bg-light py-3">
-      <h3 class="h5 mb-0 fw-bold text-secondary">Audit Summary</h3>
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200">
+    <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+      <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200">Audit Summary</h3>
     </div>
-    <div class="card-body">
-      <style>
-        .summary-card {
-          background-color: var(--bs-body-bg);
-          border: 1px solid var(--bs-border-color);
-          border-radius: 8px;
-          padding: 1rem;
-          height: 100%;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-          transition: transform 0.2s;
-        }
-        .summary-card:hover {
-          transform: translateY(-2px);
-        }
-      </style>
-      <div class="row text-center g-3">
-        <div class="col-md-3">
-          <div class="summary-card">
-            <p class="text-muted small text-uppercase mb-1">Verdict</p>
-            <h3 class="fw-bold {% if verdict == 'Red flag' %}text-danger{% elif verdict == 'Amber' %}text-warning{% else %}text-success{% endif %}">
-              {{ verdict }}
-            </h3>
-          </div>
+    <div class="p-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Verdict</p>
+          <h3 class="text-2xl font-bold {% if verdict == 'Red flag' %}text-red-600 dark:text-red-400{% elif verdict == 'Amber' %}text-yellow-600 dark:text-yellow-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+            {{ verdict }}
+          </h3>
         </div>
-        <div class="col-md-3">
-          <div class="summary-card">
-            <p class="text-muted small text-uppercase mb-1">Strategy PnL</p>
-            <h3 class="fw-bold {% if strategy_metrics.total_pnl < 0 %}text-danger{% else %}text-success{% endif %}">
-              ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
-            </h3>
-          </div>
+        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Strategy PnL</p>
+          <h3 class="text-2xl font-bold {% if strategy_metrics.total_pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+            ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
+          </h3>
         </div>
-        <div class="col-md-3">
-          <div class="summary-card">
-            <p class="text-muted small text-uppercase mb-1">Win Rate</p>
-            <h3 class="fw-bold">{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
-          </div>
+        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Win Rate</p>
+          <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
         </div>
-        <div class="col-md-3">
-          <div class="summary-card">
-            <p class="text-muted small text-uppercase mb-1">Trades</p>
-            <h3 class="fw-bold">{{ strategy_metrics.num_trades }}</h3>
-          </div>
+        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Trades</p>
+          <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ strategy_metrics.num_trades }}</h3>
         </div>
       </div>
 
       {% if account_size_start and net_liquidity_now %}
-      <div class="row text-center g-3 mt-1">
-          <div class="col-md-6">
-              <div class="summary-card">
-                <p class="text-muted small text-uppercase mb-1">Account Growth</p>
-                <h3 class="fw-bold">{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
-              </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Account Growth</p>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
           </div>
           {% if buying_power_utilized_percent is not none %}
-          <div class="col-md-6">
-              <div class="summary-card">
-                <p class="text-muted small text-uppercase mb-1">Buying Power Utilized</p>
-                <h3 class="fw-bold">{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
-              </div>
+          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Buying Power Utilized</p>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
           </div>
           {% endif %}
       </div>
       {% endif %}
 
       {% if date_window %}
-      <div class="text-center mt-3">
-        <span class="badge bg-secondary">Range: {{ date_window.start or 'Beginning' }} &rarr; {{ date_window.end or 'End' }}</span>
+      <div class="text-center mt-6">
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200">
+          Range: {{ date_window.start or 'Beginning' }} &rarr; {{ date_window.end or 'End' }}
+        </span>
       </div>
       {% endif %}
     </div>
@@ -82,25 +55,25 @@
 
   <!-- Position Sizing Analysis Charts -->
   {% if position_sizing or buying_power_utilized_percent %}
-  <div class="card shadow-sm border-0 mb-4">
-      <div class="card-header bg-white py-3">
-          <h5 class="mb-0 fw-bold">Position Sizing Analysis</h5>
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200">
+      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+          <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Position Sizing Analysis</h5>
       </div>
-      <div class="card-body">
-          <div class="row g-4 justify-content-center">
+      <div class="p-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 justify-center">
               {% if buying_power_utilized_percent is not none %}
-              <div class="col-md-6 col-lg-5">
-                  <h6 class="text-center text-muted mb-3">Buying Power Utilization</h6>
-                  <div style="height: 250px;">
+              <div class="flex flex-col items-center">
+                  <h6 class="text-center text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Buying Power Utilization</h6>
+                  <div class="w-full h-64">
                       <canvas id="bpChart"></canvas>
                   </div>
               </div>
               {% endif %}
 
               {% if position_sizing %}
-              <div class="col-md-6 col-lg-5">
-                  <h6 class="text-center text-muted mb-3">Capital Allocation by Symbol</h6>
-                  <div style="height: 250px;">
+              <div class="flex flex-col items-center">
+                  <h6 class="text-center text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Capital Allocation by Symbol</h6>
+                  <div class="w-full h-64">
                       <canvas id="allocationChart"></canvas>
                   </div>
               </div>
@@ -108,39 +81,37 @@
           </div>
 
           {% if position_sizing %}
-          <div class="row mt-4 justify-content-center">
-              <div class="col-lg-8">
-                  <table class="table table-sm table-hover align-middle">
-                      <thead class="table-light">
-                          <tr>
-                              <th>Symbol</th>
-                              <th class="text-end">Est. Capital</th>
-                              <th class="text-end">Allocation %</th>
-                              <th class="text-end" style="width: 100px;">Share</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {% for p in position_sizing %}
-                          <tr>
-                              <td>
-                                  <span class="fw-bold">{{ p.symbol }}</span>
-                                  <span class="text-muted small d-block">{{ p.description }}</span>
-                              </td>
-                              <td class="text-end">${{ "%.2f"|format(p.allocation_amt) }}</td>
-                              <td class="text-end">{{ "%.1f"|format(p.allocation_pct) }}%</td>
-                              <td class="text-end">
-                                  <div class="progress" style="height: 6px;">
-                                      <div class="progress-bar bg-primary" role="progressbar" style="width: {{ p.allocation_pct }}%" aria-valuenow="{{ p.allocation_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
-                                  </div>
-                              </td>
-                          </tr>
-                          {% endfor %}
-                      </tbody>
-                  </table>
-                  <p class="text-muted small text-center mt-2">
-                      * Allocation estimated using entry cost (Longs) or credit received (Shorts) relative to Net Liquidity.
-                  </p>
-              </div>
+          <div class="mt-8 overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead class="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
+                          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Est. Capital</th>
+                          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Allocation %</th>
+                          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-32">Share</th>
+                      </tr>
+                  </thead>
+                  <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {% for p in position_sizing %}
+                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                          <td class="px-6 py-4 whitespace-nowrap">
+                              <span class="block text-sm font-bold text-gray-900 dark:text-white">{{ p.symbol }}</span>
+                              <span class="block text-xs text-gray-500 dark:text-gray-400">{{ p.description }}</span>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">${{ "%.2f"|format(p.allocation_amt) }}</td>
+                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.1f"|format(p.allocation_pct) }}%</td>
+                          <td class="px-6 py-4 whitespace-nowrap text-right align-middle">
+                              <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                  <div class="bg-blue-600 h-2 rounded-full" style="width: {{ p.allocation_pct }}%"></div>
+                              </div>
+                          </td>
+                      </tr>
+                      {% endfor %}
+                  </tbody>
+              </table>
+              <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
+                  * Allocation estimated using entry cost (Longs) or credit received (Shorts) relative to Net Liquidity.
+              </p>
           </div>
           {% endif %}
       </div>
@@ -148,131 +119,125 @@
   {% endif %}
 
   <!-- Two-Column Layout for Symbol & Open Positions -->
-  <div class="row g-4 mb-4">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <!-- Performance by Symbol -->
-    <div class="col-lg-6">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white py-3">
-          <h5 class="mb-0 fw-bold">Performance by Symbol</h5>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover table-striped mb-0 align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Symbol</th>
-                  <th class="text-end">PnL</th>
-                  <th class="text-end">Win Rate</th>
-                  <th class="text-end">Trades</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for s in symbols %}
-                <tr>
-                  <td>
-                    <div class="fw-bold">{{ s.symbol }}</div>
-                    <small class="text-muted">{{ s.description }}</small>
-                  </td>
-                  <td class="text-end {% if s.pnl < 0 %}text-danger{% else %}text-success{% endif %}">
-                    ${{ "%.2f"|format(s.pnl) }}
-                  </td>
-                  <td class="text-end">{{ "%.0f"|format(s.win_rate * 100) }}%</td>
-                  <td class="text-end">{{ s.trades }}</td>
-                </tr>
-                {% else %}
-                <tr><td colspan="4" class="text-center py-3 text-muted">No symbol data.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden h-full flex flex-col transition-colors duration-200">
+      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+        <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Performance by Symbol</h5>
+      </div>
+      <div class="flex-grow overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">PnL</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Win Rate</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trades</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            {% for s in symbols %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm font-bold text-gray-900 dark:text-white">{{ s.symbol }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ s.description }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+                ${{ "%.2f"|format(s.pnl) }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.0f"|format(s.win_rate * 100) }}%</td>
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ s.trades }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No symbol data.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
 
     <!-- Open Positions -->
-    <div class="col-lg-6">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white py-3">
-          <h5 class="mb-0 fw-bold">Open Positions</h5>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover table-striped mb-0 align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Contract</th>
-                  <th class="text-end">Qty</th>
-                  <th class="text-end">Days Open</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for p in open_positions %}
-                <tr>
-                  <td>
-                    <div class="fw-bold">{{ p.symbol }}</div>
-                    <small class="text-muted">{{ p.contract }}</small>
-                  </td>
-                  <td class="text-end">{{ p.qty_open }}</td>
-                  <td class="text-end">{{ "%.1f"|format(p.days_open) }}</td>
-                </tr>
-                {% else %}
-                <tr><td colspan="3" class="text-center py-3 text-muted">No open positions.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden h-full flex flex-col transition-colors duration-200">
+      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+        <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Open Positions</h5>
       </div>
-    </div>
-  </div>
-
-  <!-- Full-Width Strategy Table -->
-  <div class="card shadow-sm border-0 mb-4">
-    <div class="card-header bg-white py-3">
-      <h5 class="mb-0 fw-bold">Strategy Groups</h5>
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover table-striped mb-0 align-middle">
-          <thead class="table-light">
+      <div class="flex-grow overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th>Strategy</th>
-              <th>Symbol</th>
-              <th class="text-end">PnL</th>
-              <th class="text-end">Hold (Days)</th>
-              <th class="text-end">θ / Day</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contract</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Qty</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Days Open</th>
             </tr>
           </thead>
-          <tbody>
-            {% for s in strategy_groups %}
-            <tr>
-              <td>{{ s.strategy }}</td>
-              <td>
-                  <span class="badge bg-light text-dark border">{{ s.symbol }}</span>
+          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            {% for p in open_positions %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm font-bold text-gray-900 dark:text-white">{{ p.symbol }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ p.contract }}</div>
               </td>
-              <td class="text-end {% if s.pnl < 0 %}text-danger{% else %}text-success{% endif %}">
-                ${{ "%.2f"|format(s.pnl) }}
-              </td>
-              <td class="text-end">{{ "%.1f"|format(s.hold_days) }}</td>
-              <td class="text-end">${{ "%.2f"|format(s.theta_per_day) }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ p.qty_open }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.1f"|format(p.days_open) }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="5" class="text-center py-3 text-muted">No strategies found.</td></tr>
+            <tr><td colspan="3" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No open positions.</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
   </div>
+
+  <!-- Full-Width Strategy Table -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-8 transition-colors duration-200">
+    <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+      <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Strategy Groups</h5>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Strategy</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">PnL</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hold (Days)</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">θ / Day</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          {% for s in strategy_groups %}
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ s.strategy }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-500">{{ s.symbol }}</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+              ${{ "%.2f"|format(s.pnl) }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.1f"|format(s.hold_days) }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">${{ "%.2f"|format(s.theta_per_day) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No strategies found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
   
-  <div class="text-center my-5">
-      <a href="/download/{{ token }}/report.xlsx" class="btn btn-outline-primary btn-lg">
+  <div class="text-center my-8">
+      <a href="/download/{{ token }}/report.xlsx" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors dark:bg-blue-900 dark:text-blue-100 dark:hover:bg-blue-800">
         <i class="bi bi-file-earmark-excel me-2"></i>Download Full Report (XLSX)
       </a>
   </div>
 
   <!-- Chart.js Logic -->
   <script>
+    // Chart colors for Dark Mode support could be dynamic, but fixed colors usually work fine.
+    // We can check document.documentElement.classList.contains('dark') if needed,
+    // but typically charts look okay with standard colors on both backgrounds if contrast is high.
+
     // BP Chart
     {% if buying_power_utilized_percent is not none %}
     new Chart(document.getElementById('bpChart'), {
@@ -289,7 +254,12 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'bottom' }
+          legend: {
+              position: 'bottom',
+              labels: {
+                  color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#374151'
+              }
+          }
         }
       }
     });
@@ -307,13 +277,20 @@
             '#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545',
             '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0'
           ],
+          borderColor: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+          borderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'bottom' }
+          legend: {
+              position: 'bottom',
+              labels: {
+                  color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#374151'
+              }
+          }
         }
       }
     });

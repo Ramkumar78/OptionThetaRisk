@@ -6,6 +6,7 @@ from typing import Optional, Dict, List, Tuple
 import pandas as pd
 import numpy as np
 import os
+import yfinance as yf
 from datetime import datetime
 
 def _detect_broker(df: pd.DataFrame) -> Optional[str]:
@@ -107,19 +108,47 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     # --- Portfolio Correlation ---
     correlation_matrix_df = None
     correlation_json = None
-    if contract_groups:
-        daily_pnl_data = []
-        for group in contract_groups:
-            if group.exit_ts and group.symbol:
-                day = group.exit_ts.date()
-                daily_pnl_data.append({"date": day, "symbol": group.symbol, "pnl": group.pnl})
-        if daily_pnl_data:
-            daily_df = pd.DataFrame(daily_pnl_data)
-            if not daily_df.empty:
-                pnl_pivot = daily_df.groupby(['date', 'symbol'])['pnl'].sum().unstack(level='symbol').fillna(0)
-                if len(pnl_pivot.columns) > 1:
-                    correlation_matrix_df = pnl_pivot.corr()
+
+    # Identify unique symbols traded
+    unique_symbols = sorted(list(set(g.symbol for g in contract_groups if g.symbol)))
+
+    # We need a start and end date for correlation data fetch
+    if unique_symbols:
+        min_date = norm_df['datetime'].min()
+        max_date = norm_df['datetime'].max()
+
+        # Buffer dates
+        start_fetch = (min_date - pd.Timedelta(days=30)).date()
+        end_fetch = (max_date + pd.Timedelta(days=1)).date()
+
+        # Only fetch if we have valid symbols and data range
+        if unique_symbols:
+            try:
+                # Fetch data for all symbols at once
+                # yfinance expects space-separated string
+                tickers_str = " ".join(unique_symbols)
+
+                # Download close data
+                # auto_adjust=True accounts for splits/dividends
+                history = yf.download(tickers_str, start=start_fetch, end=end_fetch, progress=False, auto_adjust=True)['Close']
+
+                if not history.empty:
+                    # If single symbol, history is Series. Convert to DataFrame
+                    if isinstance(history, pd.Series):
+                        history = history.to_frame(name=unique_symbols[0])
+
+                    # Calculate daily percent change
+                    daily_returns = history.pct_change()
+
+                    # Calculate correlation matrix
+                    correlation_matrix_df = daily_returns.corr()
+
+                    # Convert to JSON format (list of dicts for heatmap)
+                    # We want a format: [{'index': 'SPY', 'SPY': 1.0, 'QQQ': 0.8}, ...]
                     correlation_json = correlation_matrix_df.round(4).reset_index().to_dict(orient='records')
+            except Exception:
+                # Fallback or ignore if yfinance fails (no internet, bad tickers, etc)
+                pass
 
     # Calc Metrics
     total_pnl_contracts = float(sum(g.pnl for g in contract_groups))

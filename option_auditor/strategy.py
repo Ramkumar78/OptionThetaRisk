@@ -1,7 +1,8 @@
 from .models import StrategyGroup, TradeGroup, Leg
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 import pandas as pd
 import numpy as np
+from collections import defaultdict
 
 def _classify_strategy(strat: StrategyGroup) -> str:
     """
@@ -291,6 +292,11 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
     base_groups.sort(key=lambda x: x.entry_ts)
     processed_ids = set()
 
+    # Optimization: Bucket groups by symbol to reduce search space
+    groups_by_symbol = defaultdict(list)
+    for i, g in enumerate(base_groups):
+        groups_by_symbol[g.symbol].append((i, g))
+
     for i, group in enumerate(base_groups):
         if id(group) in processed_ids:
             continue
@@ -299,25 +305,56 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
         )
         strat.add_leg_group(group)
         processed_ids.add(id(group))
-        for j in range(i + 1, len(base_groups)):
-            candidate = base_groups[j]
+
+        # Only look for candidates with the SAME symbol
+        candidates = groups_by_symbol[group.symbol]
+
+        # We only need to check candidates that come *after* the current group index 'i'
+        # candidates is a list of (index, group_obj)
+        # Since base_groups is sorted by entry_ts, we can iterate efficiently.
+        # But for O(N) we shouldn't iterate all.
+        # The logic requires comparing time_diff.
+        # However, for strategies, we group if they are close in time (same expiry < 2h, or roll < 5m, or calendar < 1m).
+        # This implies we only need to look at groups that are chronologically close.
+        # Since base_groups is sorted by time, we can stop searching once time_diff is too large.
+        # But "too large" depends on the condition (2 hours max).
+
+        # Find the starting index in the candidates list that corresponds to > i
+        start_idx = 0
+        for idx_c, (orig_idx, _) in enumerate(candidates):
+            if orig_idx > i:
+                start_idx = idx_c
+                break
+        else:
+            start_idx = len(candidates) # No candidates after i
+
+        for _, candidate in candidates[start_idx:]:
             if id(candidate) in processed_ids:
                 continue
+
             time_diff = (candidate.entry_ts - group.entry_ts).total_seconds() / 3600
-            if candidate.symbol == group.symbol:
-                # Group if Expiry matches (within 2 hours) OR Right matches (within 1 min) for Calendars
-                same_expiry = (candidate.expiry == group.expiry and time_diff < 2.0)
 
-                # Check for roll: Small time diff (< 5 min) allows different expiry
-                is_roll = (time_diff < (5.0 / 60.0))
+            # If time diff exceeds the max relevant threshold (2 hours for same expiry),
+            # we can potentially stop early?
+            # Wait, 2 hours is for same expiry. Rolls check < 5 mins. Calendars < 1 min.
+            # So if time_diff > 2 hours, we can stop searching this symbol for THIS group strategy formation?
+            # Yes, because sorted by time.
+            if time_diff > 2.1:
+                break
 
-                # Calendar Spread: Same Right, Different Expiry, executed together (< 1 min)
-                # (Often covered by is_roll now, but keeping for clarity if needed)
-                calendar = (candidate.right == group.right and time_diff < (1.0 / 60.0))
+            # Group if Expiry matches (within 2 hours) OR Right matches (within 1 min) for Calendars
+            same_expiry = (candidate.expiry == group.expiry and time_diff < 2.0)
 
-                if same_expiry or is_roll or calendar:
-                    strat.add_leg_group(candidate)
-                    processed_ids.add(id(candidate))
+            # Check for roll: Small time diff (< 5 min) allows different expiry
+            is_roll = (time_diff < (5.0 / 60.0))
+
+            # Calendar Spread: Same Right, Different Expiry, executed together (< 1 min)
+            calendar = (candidate.right == group.right and time_diff < (1.0 / 60.0))
+
+            if same_expiry or is_roll or calendar:
+                strat.add_leg_group(candidate)
+                processed_ids.add(id(candidate))
+
         strat.strategy_name = _classify_strategy(strat)
         strategies.append(strat)
 
@@ -325,20 +362,62 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
     merged_strategies = []
     processed_strat_ids = set()
 
+    # Optimization for Rolling Logic
+    # Group strategies by symbol
+    strategies_by_symbol = defaultdict(list)
+    for i, s in enumerate(strategies):
+        strategies_by_symbol[s.symbol].append((i, s))
+
     for i, strat in enumerate(strategies):
         if strat.id in processed_strat_ids:
             continue
-        for j in range(i + 1, len(strategies)):
-            next_strat = strategies[j]
+
+        candidates = strategies_by_symbol[strat.symbol]
+
+        # Find start index > i
+        start_idx = 0
+        for idx_c, (orig_idx, _) in enumerate(candidates):
+            if orig_idx > i:
+                start_idx = idx_c
+                break
+        else:
+            start_idx = len(candidates)
+
+        for _, next_strat in candidates[start_idx:]:
             if next_strat.id in processed_strat_ids:
                 continue
-            if strat.symbol == next_strat.symbol and strat.exit_ts and next_strat.entry_ts:
-                time_diff_minutes = (next_strat.entry_ts - strat.exit_ts).total_seconds() / 60
-                if 0 <= time_diff_minutes <= 5:
+
+            if strat.exit_ts and next_strat.entry_ts:
+                # Calculate time diff
+                diff_sec = (next_strat.entry_ts - strat.exit_ts).total_seconds()
+                diff_min = diff_sec / 60
+
+                # We expect roll to happen shortly after exit.
+                # If next strategy started before current ended, diff_min < 0.
+                # If diff > 5 mins, break loop (sorted by time? Not necessarily perfectly sorted for roll logic if entry/exit overlap)
+                # Strategies are sorted by exit_ts. next_strat.entry_ts vs strat.exit_ts.
+                # next_strat exits LATER than strat (since i < j). But it could have entered anytime.
+                # Assuming Rolls happen sequentially: Close A, Open B.
+
+                if 0 <= diff_min <= 5:
                     strat.pnl += next_strat.pnl
                     strat.exit_ts = next_strat.exit_ts
                     strat.strategy_name = f"Rolled {strat.strategy_name}"
                     processed_strat_ids.add(next_strat.id)
+                    # Continue checking for more rolls in chain?
+                    # The original code only merged one level or loop continued?
+                    # "merged_strategies.append(strat)" happens at end.
+                    # The inner loop continues. So A -> B -> C roll chain is possible.
+                    # Because `strat` is modified in place (pnl, exit_ts), so subsequent iterations check against updated `strat`.
+
+                # Can we optimize stop condition?
+                # strategies sorted by exit_ts.
+                # next_strat has later exit_ts.
+                # But we care about next_strat.entry_ts.
+                # If next_strat enters way later, we can't assume ordered by entry_ts strictly.
+                # So we can't easily break early without careful check.
+                # But typically rolls are close.
+
         merged_strategies.append(strat)
 
     return merged_strategies

@@ -8,37 +8,30 @@ import threading
 import time
 from typing import Optional
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 
 from option_auditor import analyze_csv
 from datetime import datetime, timedelta
+from .storage import get_storage_provider
 
 # Cleanup interval in seconds
 CLEANUP_INTERVAL = 3600 # 1 hour
 # Max age of reports in seconds
 MAX_REPORT_AGE = 3600 # 1 hour
 
-def cleanup_old_reports(report_folder: str):
-    """Background thread to clean up old report directories."""
-    while True:
-        try:
-            if os.path.exists(report_folder):
-                now = time.time()
-                for token in os.listdir(report_folder):
-                    path = os.path.join(report_folder, token)
-                    # Check if it's a directory and older than MAX_REPORT_AGE
-                    if os.path.isdir(path):
-                        try:
-                            mtime = os.path.getmtime(path)
-                            if now - mtime > MAX_REPORT_AGE:
-                                shutil.rmtree(path, ignore_errors=True)
-                        except OSError:
-                            pass
-        except Exception:
-            pass
-        time.sleep(CLEANUP_INTERVAL)
+def cleanup_job(app):
+    """Background thread to clean up old reports."""
+    # We need an app context or storage provider reference
+    with app.app_context():
+        storage = get_storage_provider(app)
+        while True:
+            try:
+                storage.cleanup_old_reports(MAX_REPORT_AGE)
+            except Exception:
+                pass
+            time.sleep(CLEANUP_INTERVAL)
 
-def create_app() -> Flask:
+def create_app(testing: bool = False) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     # Ensure the instance folder exists
     try:
@@ -46,19 +39,17 @@ def create_app() -> Flask:
     except OSError:
         pass
 
+    app.config["TESTING"] = testing
+
     # Basic, non-secret key for session/flash in dev; override via env in prod
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
     # Limit uploads to 5 MB by default
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 5 * 1024 * 1024))
-    # Define a folder for storing reports
-    app.config["REPORT_FOLDER"] = os.path.join(app.instance_path, 'reports')
-    os.makedirs(app.config["REPORT_FOLDER"], exist_ok=True)
 
-    # Start cleanup thread
-    # Note: In production with multiple workers (e.g. Gunicorn), each worker will spawn a thread.
-    # Ideally this should be an external cron, but this is a simple self-contained fix.
-    if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        t = threading.Thread(target=cleanup_old_reports, args=(app.config["REPORT_FOLDER"],), daemon=True)
+    # Start cleanup thread only if not testing
+    # And only in main process (reloader protection)
+    if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
+        t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
 
     ALLOWED_EXTENSIONS = {".csv"}
@@ -70,8 +61,7 @@ def create_app() -> Flask:
     @app.after_request
     def add_security_headers(response):
         # Basic Content-Security-Policy
-        # Allow default self, Bootstrap CDN, HTMX, etc.
-        # This is restrictive but allows what we use.
+        # Allow default self, Bootstrap CDN (will replace), Tailwind CDN, HTMX, etc.
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
@@ -146,11 +136,12 @@ def create_app() -> Flask:
 
         # Generate a unique ID for this analysis request
         token = uuid.uuid4().hex
-        # Create a dedicated directory for this request's input and output
-        request_dir = os.path.join(app.config['REPORT_FOLDER'], token)
-        os.makedirs(request_dir, exist_ok=True)
         
-        csv_path = os.path.join(request_dir, "upload.csv")
+        # Create a temp directory for processing
+        temp_dir = os.path.join(app.instance_path, 'temp_' + token)
+        os.makedirs(temp_dir, exist_ok=True)
+
+        csv_path = os.path.join(temp_dir, "upload.csv")
         file.save(csv_path)
 
         try:
@@ -160,17 +151,29 @@ def create_app() -> Flask:
                 account_size_start=account_size_start,
                 net_liquidity_now=net_liquidity_now,
                 buying_power_available_now=buying_power_available_now,
-                out_dir=request_dir, # Save reports in the same request-specific folder
+                out_dir=temp_dir,
                 report_format="all",
                 start_date=start_date,
                 end_date=end_date,
             )
+
+            # If successful, check for report.xlsx and store using StorageProvider
+            report_path = os.path.join(temp_dir, "report.xlsx")
+            if os.path.exists(report_path):
+                with open(report_path, "rb") as f:
+                    file_data = f.read()
+
+                storage = get_storage_provider(app)
+                storage.save_report(token, "report.xlsx", file_data)
+
         except Exception as exc: # pragma: no cover
-            shutil.rmtree(request_dir, ignore_errors=True)
+            shutil.rmtree(temp_dir, ignore_errors=True)
             return render_template("error.html", message=f"Failed to analyze CSV: {exc}")
+        finally:
+            # Cleanup temp dir immediately
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         if "error" in res:
-            shutil.rmtree(request_dir, ignore_errors=True)
             return render_template("error.html", message=f"Failed to analyze CSV: {res['error']}")
 
         return render_template(
@@ -181,15 +184,16 @@ def create_app() -> Flask:
 
     @app.route("/download/<token>/<filename>")
     def download(token: str, filename: str):
-        # Securely serve files from the request-specific report directory
-        directory = os.path.join(app.config['REPORT_FOLDER'], token)
-        if not os.path.isdir(directory):
+        storage = get_storage_provider(app)
+        data = storage.get_report(token, filename)
+
+        if not data:
              return render_template("error.html", message="Download link expired or invalid."), 404
         
-        return send_from_directory(
-            directory,
-            filename,
-            as_attachment=True
+        return send_file(
+            io.BytesIO(data),
+            as_attachment=True,
+            download_name=filename
         )
 
     return app
