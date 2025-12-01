@@ -8,40 +8,65 @@
       <h3 class="h5 mb-0 fw-bold text-secondary">Audit Summary</h3>
     </div>
     <div class="card-body">
-      <div class="row text-center g-4">
+      <style>
+        .summary-card {
+          background-color: var(--bs-body-bg);
+          border: 1px solid var(--bs-border-color);
+          border-radius: 8px;
+          padding: 1rem;
+          height: 100%;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          transition: transform 0.2s;
+        }
+        .summary-card:hover {
+          transform: translateY(-2px);
+        }
+      </style>
+      <div class="row text-center g-3">
         <div class="col-md-3">
-          <p class="text-muted small text-uppercase mb-1">Verdict</p>
-          <h3 class="fw-bold {% if verdict == 'Red flag' %}text-danger{% elif verdict == 'Amber' %}text-warning{% else %}text-success{% endif %}">
-            {{ verdict }}
-          </h3>
+          <div class="summary-card">
+            <p class="text-muted small text-uppercase mb-1">Verdict</p>
+            <h3 class="fw-bold {% if verdict == 'Red flag' %}text-danger{% elif verdict == 'Amber' %}text-warning{% else %}text-success{% endif %}">
+              {{ verdict }}
+            </h3>
+          </div>
         </div>
         <div class="col-md-3">
-          <p class="text-muted small text-uppercase mb-1">Strategy PnL</p>
-          <h3 class="fw-bold {% if strategy_metrics.total_pnl < 0 %}text-danger{% else %}text-success{% endif %}">
-            ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
-          </h3>
+          <div class="summary-card">
+            <p class="text-muted small text-uppercase mb-1">Strategy PnL</p>
+            <h3 class="fw-bold {% if strategy_metrics.total_pnl < 0 %}text-danger{% else %}text-success{% endif %}">
+              ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
+            </h3>
+          </div>
         </div>
         <div class="col-md-3">
-          <p class="text-muted small text-uppercase mb-1">Win Rate</p>
-          <h3 class="fw-bold">{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
+          <div class="summary-card">
+            <p class="text-muted small text-uppercase mb-1">Win Rate</p>
+            <h3 class="fw-bold">{{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%</h3>
+          </div>
         </div>
         <div class="col-md-3">
-          <p class="text-muted small text-uppercase mb-1">Trades</p>
-          <h3 class="fw-bold">{{ strategy_metrics.num_trades }}</h3>
+          <div class="summary-card">
+            <p class="text-muted small text-uppercase mb-1">Trades</p>
+            <h3 class="fw-bold">{{ strategy_metrics.num_trades }}</h3>
+          </div>
         </div>
       </div>
 
       {% if account_size_start and net_liquidity_now %}
-      <hr class="my-4">
-      <div class="row text-center g-4">
+      <div class="row text-center g-3 mt-1">
           <div class="col-md-6">
-              <p class="text-muted small text-uppercase mb-1">Account Growth</p>
-              <h3 class="fw-bold">{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
+              <div class="summary-card">
+                <p class="text-muted small text-uppercase mb-1">Account Growth</p>
+                <h3 class="fw-bold">{{ "%.2f"|format((net_liquidity_now / account_size_start - 1) * 100) }}%</h3>
+              </div>
           </div>
           {% if buying_power_utilized_percent is not none %}
           <div class="col-md-6">
-              <p class="text-muted small text-uppercase mb-1">Buying Power Utilized</p>
-              <h3 class="fw-bold">{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
+              <div class="summary-card">
+                <p class="text-muted small text-uppercase mb-1">Buying Power Utilized</p>
+                <h3 class="fw-bold">{{ "%.1f"|format(buying_power_utilized_percent) }}%</h3>
+              </div>
           </div>
           {% endif %}
       </div>
