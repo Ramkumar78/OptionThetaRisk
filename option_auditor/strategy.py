@@ -187,16 +187,16 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
     base_groups = closed_groups if closed_groups else all_groups
     base_groups.sort(key=lambda x: x.entry_ts)
 
-    # Optimization: Bucket groups by symbol to strictly reduce N^2 complexity to Sum(Ki^2)
-    groups_by_symbol = defaultdict(list)
+    # Optimization: Bucket groups by symbol AND expiry to strictly reduce N^2 complexity
+    groups_by_bucket = defaultdict(list)
     for g in base_groups:
-        groups_by_symbol[g.symbol].append(g)
+        groups_by_bucket[(g.symbol, g.expiry)].append(g)
 
     strategies = []
     processed_ids = set()
 
-    # Iterate by symbol (O(N) total because we touch each group constant times across all symbols)
-    for symbol, groups in groups_by_symbol.items():
+    # Iterate by bucket
+    for (symbol, expiry), groups in groups_by_bucket.items():
         # groups are already sorted by time (because base_groups was sorted)
         for i, group in enumerate(groups):
             if id(group) in processed_ids:
