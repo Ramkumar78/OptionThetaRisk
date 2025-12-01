@@ -306,11 +306,13 @@ def test_upload_no_file(app):
     client = app.test_client()
     data = {
         "csv": (io.BytesIO(b""), ""),
+        # No manual_trades provided
     }
     resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Please choose a CSV file" in html
+    # Updated message including manual entry fallback
+    assert "Please choose a CSV file or enter trades manually" in html
 
 def test_upload_invalid_account_size(app):
     client = app.test_client()
@@ -333,7 +335,7 @@ def test_analysis_error(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Failed to analyze CSV" in html
+    assert "Failed to analyze" in html
 
 def test_download_endpoints(app):
     client = app.test_client()

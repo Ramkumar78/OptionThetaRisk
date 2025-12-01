@@ -1,135 +1,237 @@
 {% extends "base.html" %}
 
+{% block title %}Upload - The Option Auditor{% endblock %}
+
 {% block content %}
-<div class="flex justify-center">
-  <div class="w-full max-w-4xl">
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden transition-colors duration-200">
-      <div class="bg-blue-600 px-6 py-4">
-        <h2 class="text-xl font-bold text-white text-center">Upload Your Trades CSV</h2>
-      </div>
-      <div class="p-6">
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              {% set color_cls = 'bg-blue-100 text-blue-800' %}
-              {% if category == 'warning' %}
-                {% set color_cls = 'bg-yellow-100 text-yellow-800' %}
-              {% elif category == 'error' %}
-                {% set color_cls = 'bg-red-100 text-red-800' %}
-              {% endif %}
-              <div class="{{ color_cls }} px-4 py-3 rounded relative mb-4 flex items-center justify-between" role="alert">
-                <span>{{ message }}</span>
-                <button type="button" class="font-bold text-xl leading-none focus:outline-none" onclick="this.parentElement.style.display='none'">
-                  &times;
-                </button>
-              </div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-
-        <form hx-post="/analyze" hx-target="#results-container" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="space-y-6">
-
-          <div>
-            <label for="csv" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">CSV File</label>
-            <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 dark:text-gray-400 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400" type="file" name="csv" id="csv" required>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Supported brokers: Tastytrade, Interactive Brokers.</p>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label for="broker" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Broker</label>
-              <select class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm py-2 px-3" name="broker" id="broker">
-                <option value="auto" selected>Auto-detect</option>
-                <option value="tasty">Tastytrade</option>
-                <option value="ibkr">Interactive Brokers</option>
-              </select>
-            </div>
-            <div>
-              <label for="date_mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date Range</label>
-              <select class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm py-2 px-3" name="date_mode" id="date_mode">
-                <option value="all" selected>All Data</option>
-                <option value="ytd">Year to Date</option>
-                <option value="1y">Last 1 Year</option>
-                <option value="6m">Last 6 Months</option>
-                <option value="1m">Last 1 Month</option>
-                <option value="14d">Last 14 Days</option>
-                <option value="7d">Last 7 Days</option>
-                <option value="range">Custom Range</option>
-              </select>
-            </div>
-          </div>
-
-          <div id="custom-range-fields" class="grid grid-cols-1 md:grid-cols-2 gap-6" style="display: none;">
-            <div>
-              <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
-              <input type="date" class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm py-2 px-3" name="start_date" id="start_date">
-            </div>
-            <div>
-              <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
-              <input type="date" class="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm py-2 px-3" name="end_date" id="end_date">
-            </div>
-          </div>
-
-          <!-- Advanced Options using HTML5 Details/Summary as a simple accordion -->
-          <details class="group bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-            <summary class="flex items-center justify-between p-4 cursor-pointer focus:outline-none">
-              <span class="font-medium text-gray-700 dark:text-gray-200">Optional: Account Metrics</span>
-              <span class="transition group-open:rotate-180">
-                <svg fill="none" height="24" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
-              </span>
-            </summary>
-            <div class="px-4 pb-4 text-gray-500 dark:text-gray-300">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                <div>
-                  <label for="account_size_start" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account Size (Start)</label>
-                  <div class="relative rounded-md shadow-sm">
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                      <span class="text-gray-500 sm:text-sm">$</span>
-                    </div>
-                    <input type="number" name="account_size_start" id="account_size_start" class="block w-full rounded-md border-gray-300 dark:border-gray-600 pl-7 pr-3 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm py-2" placeholder="25000">
-                  </div>
-                </div>
-                <div>
-                  <label for="net_liquidity_now" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Net Liquidity (Now)</label>
-                  <div class="relative rounded-md shadow-sm">
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                      <span class="text-gray-500 sm:text-sm">$</span>
-                    </div>
-                    <input type="number" name="net_liquidity_now" id="net_liquidity_now" class="block w-full rounded-md border-gray-300 dark:border-gray-600 pl-7 pr-3 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm py-2" placeholder="26500">
-                  </div>
-                </div>
-                <div>
-                  <label for="buying_power_available_now" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buying Power (Now)</label>
-                  <div class="relative rounded-md shadow-sm">
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                      <span class="text-gray-500 sm:text-sm">$</span>
-                    </div>
-                    <input type="number" name="buying_power_available_now" id="buying_power_available_now" class="block w-full rounded-md border-gray-300 dark:border-gray-600 pl-7 pr-3 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm py-2" placeholder="22000">
-                  </div>
-                </div>
-              </div>
-            </div>
-          </details>
-
-          <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors" id="analyze-btn">
-            Analyze Trades
-          </button>
-        </form>
-      </div>
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="bg-blue-600 dark:bg-blue-800 rounded-t-lg p-6 shadow-lg mb-0">
+        <h2 class="text-2xl font-bold text-white text-center">Analyze Your Trades</h2>
+        <p class="text-blue-100 text-center mt-2 text-sm">Upload a broker CSV or enter trades manually</p>
     </div>
-  </div>
-</div>
 
-<div id="results-container" class="mt-8 mb-8 fade-in">
-  <!-- Results will be loaded here -->
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-b-lg p-8 border border-t-0 border-gray-200 dark:border-gray-700 transition-colors duration-200">
+
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6" x-data="{ tab: 'csv' }">
+            <button class="px-6 py-3 font-medium text-sm focus:outline-none transition-colors border-b-2"
+                :class="tab === 'csv' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                @click="tab = 'csv'; document.getElementById('input-method').value = 'csv'">
+                CSV Upload
+            </button>
+            <button class="px-6 py-3 font-medium text-sm focus:outline-none transition-colors border-b-2"
+                :class="tab === 'manual' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                @click="tab = 'manual'; document.getElementById('input-method').value = 'manual'">
+                Manual Entry
+            </button>
+        </div>
+
+        <form action="/analyze" method="post" enctype="multipart/form-data" id="analyze-form" x-data="manualEntryForm()">
+            <input type="hidden" id="input-method" name="input_method" value="csv">
+            <input type="hidden" name="manual_trades" id="manual-trades-input">
+
+            <!-- CSV Section -->
+            <div x-show="tab === 'csv'" class="space-y-6">
+                <div>
+                    <label for="csv" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">CSV File</label>
+                    <input type="file" name="csv" id="csv" accept=".csv"
+                        class="block w-full text-sm text-gray-500 dark:text-gray-400
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-md file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100
+                            dark:file:bg-gray-700 dark:file:text-gray-200
+                            border border-gray-300 dark:border-gray-600 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Supported brokers: Tastytrade, Interactive Brokers.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="broker" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Broker</label>
+                        <select name="broker" id="broker" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors">
+                            <option value="auto">Auto-detect</option>
+                            <option value="tasty">Tastytrade</option>
+                            <option value="ibkr">Interactive Brokers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="date_mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range</label>
+                        <select name="date_mode" id="date_mode" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors" onchange="toggleCustomDates()">
+                            <option value="all">All Data</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="14d">Last 14 Days</option>
+                            <option value="1m">Last 1 Month</option>
+                            <option value="6m">Last 6 Months</option>
+                            <option value="1y">Last 1 Year</option>
+                            <option value="2y">Last 2 Years</option>
+                            <option value="ytd">Year to Date (YTD)</option>
+                            <option value="range">Custom Range</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Custom Date Range -->
+                <div id="custom-dates" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600">
+                    <div>
+                        <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+                        <input type="date" name="start_date" id="start_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
+                        <input type="date" name="end_date" id="end_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Entry Section -->
+            <div x-show="tab === 'manual'" class="space-y-4">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Action</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Qty</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Price</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fees</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Expiry</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Strike</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                                <th scope="col" class="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">X</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700" id="manual-rows">
+                            <template x-for="(row, index) in rows" :key="index">
+                                <tr>
+                                    <td class="px-1 py-1"><input type="date" x-model="row.date" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    <td class="px-1 py-1"><input type="text" x-model="row.symbol" placeholder="SPY" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded uppercase"></td>
+                                    <td class="px-1 py-1">
+                                        <select x-model="row.action" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
+                                            <option value="Buy Open">Buy Open</option>
+                                            <option value="Sell Open">Sell Open</option>
+                                            <option value="Buy Close">Buy Close</option>
+                                            <option value="Sell Close">Sell Close</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-1 py-1"><input type="number" x-model="row.qty" min="1" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    <td class="px-1 py-1"><input type="number" x-model="row.price" step="0.01" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    <td class="px-1 py-1"><input type="number" x-model="row.fees" step="0.01" min="0" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    <td class="px-1 py-1"><input type="date" x-model="row.expiry" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    <td class="px-1 py-1"><input type="number" x-model="row.strike" step="0.5" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    <td class="px-1 py-1">
+                                        <select x-model="row.right" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
+                                            <option value="C">Call</option>
+                                            <option value="P">Put</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-1 py-1 text-center">
+                                        <button type="button" @click="removeRow(index)" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-between items-center">
+                    <button type="button" @click="addRow()" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 font-medium flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Add Row (Max 20)
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400" x-text="rows.length + '/20'"></span>
+                </div>
+            </div>
+
+            <!-- Optional Metrics (Collapsible) -->
+            <div x-data="{ open: false }" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/30">
+                <button type="button" @click="open = !open" class="flex justify-between w-full text-left text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none">
+                    <span>Optional: Account Metrics</span>
+                    <svg class="w-5 h-5 transform transition-transform" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div x-show="open" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4" style="display: none;">
+                    <div>
+                        <label for="account_size_start" class="block text-xs font-medium text-gray-500 dark:text-gray-400">Account Size (Start)</label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="account_size_start" id="account_size_start" step="0.01" class="pl-7 block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="net_liquidity_now" class="block text-xs font-medium text-gray-500 dark:text-gray-400">Net Liquidity (Now)</label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="net_liquidity_now" id="net_liquidity_now" step="0.01" class="pl-7 block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="buying_power_available_now" class="block text-xs font-medium text-gray-500 dark:text-gray-400">Buying Power (Now)</label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="buying_power_available_now" id="buying_power_available_now" step="0.01" class="pl-7 block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" @click="prepareSubmission()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                Analyze Trades
+            </button>
+        </form>
+    </div>
 </div>
 
 <script>
-  document.getElementById('date_mode').addEventListener('change', function() {
-    const isRange = this.value === 'range';
-    const rangeFields = document.getElementById('custom-range-fields');
-    rangeFields.style.display = isRange ? 'grid' : 'none';
-  });
+    function toggleCustomDates() {
+        const mode = document.getElementById('date_mode').value;
+        const customDiv = document.getElementById('custom-dates');
+        if (mode === 'range') {
+            customDiv.classList.remove('hidden');
+            customDiv.classList.add('grid');
+        } else {
+            customDiv.classList.add('hidden');
+            customDiv.classList.remove('grid');
+        }
+    }
+
+    function manualEntryForm() {
+        return {
+            tab: 'csv',
+            rows: [
+                { date: new Date().toISOString().split('T')[0], symbol: 'SPY', action: 'Sell Open', qty: 1, price: 1.0, fees: 1.0, expiry: new Date(Date.now() + 30*86400000).toISOString().split('T')[0], strike: 400, right: 'P' }
+            ],
+            addRow() {
+                if (this.rows.length < 20) {
+                    this.rows.push({ date: '', symbol: '', action: 'Buy Open', qty: 1, price: 0, fees: 0, expiry: '', strike: 0, right: 'C' });
+                }
+            },
+            removeRow(index) {
+                if (this.rows.length > 1) {
+                    this.rows.splice(index, 1);
+                }
+            },
+            prepareSubmission() {
+                if (this.tab === 'manual') {
+                    document.getElementById('manual-trades-input').value = JSON.stringify(this.rows);
+                    // Clear file input to avoid confusion in backend if user switched tabs
+                    document.getElementById('csv').value = '';
+                }
+            }
+        }
+    }
+
+    // Add Alpine.js if not present in base template, or assume it is.
+    // Since base.html uses Tailwind via CDN, let's assume we can add Alpine via CDN if needed.
+    // But better to add it here just in case if base doesn't have it.
+    // However, I should check base.html first.
 </script>
+<!-- Alpine.js for interactivity -->
+<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 {% endblock %}

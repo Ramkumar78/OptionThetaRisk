@@ -26,7 +26,7 @@ def test_detect_broker(tmp_path):
 def test_basic_analysis(tmp_path):
     # Sell 1 @ 1.0 (+$100). Fees 1.0.
     # Buy 1 @ 0.5 (-$50). Fees 1.0.
-    # Net PnL = 50. Total PnL = 50.
+    # Net PnL = 50 - 2 = 48.
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 1.0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Call"},
         {"Time": "2025-01-05 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 1.0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Call"}
@@ -35,7 +35,7 @@ def test_basic_analysis(tmp_path):
 
     res = analyze_csv(str(csv_path), broker="tasty")
     assert "error" not in res
-    assert res["metrics"]["total_pnl"] == 50.0 # Gross PnL
+    assert res["metrics"]["total_pnl"] == 48.0 # Net PnL
     assert len(res["strategy_groups"]) == 1
 
 def test_removed_correlation_matrix(tmp_path):
@@ -83,13 +83,6 @@ def test_verdict_logic(tmp_path):
     assert res1['verdict'] == "Green flag"
 
     # Amber: Win rate < 50%, PnL > 0
-    # Trade 1: Win (+50)
-    # Trade 2: Loss (-10)
-    # Trade 3: Loss (-10)
-    # Net PnL = +30. Win Rate = 1/3 = 33%.
-    # Wait, existing logic: < 30% is Red, < 50% is Amber.
-    # We must ensure Total PnL > 0 to avoid Red Flag override.
-
     # Trade 1: Sell 1.0, Buy 0.5. +50.
     # Trade 2: Sell 0.6, Buy 0.7. -10.
     # Trade 3: Sell 0.6, Buy 0.7. -10.

@@ -6,6 +6,7 @@ import shutil
 import uuid
 import threading
 import time
+import json
 from typing import Optional
 
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
@@ -85,6 +86,23 @@ def create_app(testing: bool = False) -> Flask:
         file = request.files.get("csv")
         broker = request.form.get("broker", "auto")
         
+        # Check if manual data was submitted
+        manual_data_json = request.form.get("manual_trades")
+        manual_data = None
+        if manual_data_json:
+            try:
+                manual_data = json.loads(manual_data_json)
+                if manual_data and isinstance(manual_data, list):
+                    # Filter out empty rows if any
+                    manual_data = [
+                        row for row in manual_data
+                        if row.get("date") and row.get("symbol") and row.get("action")
+                    ]
+                    if not manual_data:
+                        manual_data = None
+            except json.JSONDecodeError:
+                pass
+
         had_error = False
         def _to_float(name: str) -> Optional[float]:
             nonlocal had_error
@@ -104,11 +122,12 @@ def create_app(testing: bool = False) -> Flask:
         if had_error:
             return redirect(url_for("index"))
 
-        if not file or file.filename == "":
-            flash("Please choose a CSV file", "warning")
+        # If no CSV and no Manual Data, complain
+        if (not file or file.filename == "") and not manual_data:
+            flash("Please choose a CSV file or enter trades manually.", "warning")
             return redirect(url_for("index"))
 
-        if not _allowed_filename(file.filename):
+        if file and file.filename != "" and not _allowed_filename(file.filename):
             flash("Only .csv files are allowed", "warning")
             return redirect(url_for("index"))
 
@@ -141,12 +160,14 @@ def create_app(testing: bool = False) -> Flask:
         temp_dir = os.path.join(app.instance_path, 'temp_' + token)
         os.makedirs(temp_dir, exist_ok=True)
 
-        csv_path = os.path.join(temp_dir, "upload.csv")
-        file.save(csv_path)
+        csv_path = None
+        if file and file.filename != "":
+            csv_path = os.path.join(temp_dir, "upload.csv")
+            file.save(csv_path)
 
         try:
             res = analyze_csv(
-                csv_path,
+                csv_path=csv_path,
                 broker=broker,
                 account_size_start=account_size_start,
                 net_liquidity_now=net_liquidity_now,
@@ -155,6 +176,7 @@ def create_app(testing: bool = False) -> Flask:
                 report_format="all",
                 start_date=start_date,
                 end_date=end_date,
+                manual_data=manual_data
             )
 
             # If successful, check for report.xlsx and store using StorageProvider
@@ -168,13 +190,13 @@ def create_app(testing: bool = False) -> Flask:
 
         except Exception as exc: # pragma: no cover
             shutil.rmtree(temp_dir, ignore_errors=True)
-            return render_template("error.html", message=f"Failed to analyze CSV: {exc}")
+            return render_template("error.html", message=f"Failed to analyze data: {exc}")
         finally:
             # Cleanup temp dir immediately
             shutil.rmtree(temp_dir, ignore_errors=True)
 
         if "error" in res:
-            return render_template("error.html", message=f"Failed to analyze CSV: {res['error']}")
+            return render_template("error.html", message=f"Failed to analyze: {res['error']}")
 
         return render_template(
             "results.html",

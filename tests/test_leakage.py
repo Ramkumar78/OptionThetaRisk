@@ -36,8 +36,20 @@ def test_leakage_metrics_calculation(tmp_path):
     # Fees = $1 each leg. Total Fees = $2.
     # Gross Profit = Net PnL ($10) + Fees ($2) = $12.
     # Drag = 2 / 12 = 16.6% > 10%. VERDICT: High Drag.
-
-    # "Stale Capital": Held > 10d. PnL $10 / 11 days < $1/day.
+    # Wait, my logic above was: Trade 1: Sell Open @ 5.1. Trade 2: Buy Close @ 5.0.
+    # Proceeds (Gross PnL): -(-1)*5.1*100 + -(1)*5.0*100 = 510 - 500 = 10.
+    # This matches the calculation in `TradeGroup.pnl`.
+    # So `StrategyGroup.pnl` (Gross) = 10.
+    # Fees = 2.
+    # Net = 8.
+    # Drag = Fees / Gross * 100 = 2 / 10 * 100 = 20%.
+    # The failing test expected 16.6 ( Fees / (Net+Fees) where Net=10 ). But Net is 8.
+    # Or Fees / (Gross + Fees)? No, Drag is usually Fees / Gross Profit.
+    # If Gross Profit is $10 and I paid $2 fees, I keep $8.
+    # The drag on my trading edge ($10) is 20%.
+    # If I used Gross = Net + Fees = 10 + 2 = 12?
+    # No, `pnl` in `TradeGroup` is accumulated proceeds. That IS the trading PnL (Gross).
+    # So 20% is correct.
 
     data = [
         {
@@ -77,18 +89,13 @@ def test_leakage_metrics_calculation(tmp_path):
     report = result["leakage_report"]
 
     # Check Fee Drag
-    # Net PnL = (5.1 - 5.0)*100 = 10.
-    # Fees = 2.
-    # Gross PnL = 12.
-    # Drag = 2/12 = 16.67%
-    assert 16.6 < report["fee_drag"] < 16.7
+    # Drag = 20.0%
+    assert report["fee_drag"] == 20.0
     assert "High Drag" in report["fee_drag_verdict"]
 
     # Check Stale Capital
-    # Hold days ~ 11. PnL 10. Theta 0.9.
+    # Hold days ~ 11. Net PnL = 8. Theta = 8/11 = 0.72 < 1.0.
     stale = report["stale_capital"]
     assert len(stale) == 1
     assert stale[0]["symbol"] == "SPY"
-    # assert stale[0]["theta_per_day"] < 1.0 # Might be close due to float math
-    # 10 / 11 = 0.909...
     assert stale[0]["theta_per_day"] < 1.0

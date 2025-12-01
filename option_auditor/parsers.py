@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
-from typing import Optional
+from typing import Optional, List, Dict
 from datetime import datetime, timedelta
 import re
 from dateutil import parser as dtparser
@@ -159,3 +159,80 @@ class TastytradeFillsParser(TransactionParser):
                     "asset_type": "OPT"
                 })
         return pd.DataFrame(rows)
+
+class ManualInputParser(TransactionParser):
+    def parse(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Expected columns from manual input list-of-dicts:
+        # date, symbol, action, qty, price, fees, expiry, strike, right
+
+        required = ["date", "symbol", "action", "qty", "price", "fees", "expiry", "strike", "right"]
+        # Basic validation
+        for col in required:
+            if col not in df.columns:
+                # If dataframe is empty, we can just return empty
+                if df.empty:
+                    return pd.DataFrame()
+                # Otherwise, it might be an issue, but let's be lenient or fill NaN
+                df[col] = None
+
+        out = pd.DataFrame()
+        out["datetime"] = pd.to_datetime(df["date"], errors="coerce")
+        out["symbol"] = df["symbol"].astype(str)
+
+        # Action determines sign.
+        # "Buy Open", "Sell Close" -> usually we just need Buy vs Sell.
+        # But user input might be specific.
+        # Let's assume standard: Buy = positive cost (negative proceeds), Sell = negative cost (positive proceeds).
+        # Wait, Qty Sign: Long = +Qty, Short = -Qty.
+        # Action:
+        # Buy (Open/Close) -> +Qty? No.
+        # Buy to Open: +Qty (Long). Pays Debit.
+        # Sell to Close: -Qty (Close Long). Receives Credit.
+        # Sell to Open: -Qty (Short). Receives Credit.
+        # Buy to Close: +Qty (Close Short). Pays Debit.
+
+        # Actually, in our internal model:
+        # Long Position = Positive Qty.
+        # Short Position = Negative Qty.
+        # To OPEN Long: Buy (+Qty).
+        # To CLOSE Long: Sell (-Qty).
+        # To OPEN Short: Sell (-Qty).
+        # To CLOSE Short: Buy (+Qty).
+
+        # So "Buy" always adds Qty, "Sell" always subtracts Qty?
+        # TastyParser: `sign = np.where(action.str.startswith("sell"), -1.0, 1.0)`.
+        # This implies Sell = -1, Buy = +1.
+        # Proceeds: `-out["qty"] * price * 100.0`.
+        # If Sell (-1): Proceeds = -(-1)*P*100 = +100P. (Credit)
+        # If Buy (+1): Proceeds = -(1)*P*100 = -100P. (Debit)
+        # This matches standard accounting.
+
+        action = df["action"].astype(str).str.lower()
+        sign = np.where(action.str.contains("sell"), -1.0, 1.0)
+        qty_abs = pd.to_numeric(df["qty"], errors="coerce").fillna(0).abs()
+        out["qty"] = qty_abs * sign
+
+        price = pd.to_numeric(df["price"], errors="coerce").fillna(0.0)
+        out["proceeds"] = -out["qty"] * price * 100.0
+
+        out["fees"] = pd.to_numeric(df["fees"], errors="coerce").fillna(0.0)
+        out["expiry"] = pd.to_datetime(df["expiry"], errors="coerce")
+        out["strike"] = pd.to_numeric(df["strike"], errors="coerce").astype(float)
+
+        # Right: C or P
+        out["right"] = df["right"].astype(str).str.upper().str[0]
+        out["asset_type"] = "OPT"
+
+        def _fmt_contract(row):
+            exp = row["expiry"]
+            exp_s = exp.date().isoformat() if isinstance(exp, pd.Timestamp) and not pd.isna(exp) else ""
+            strike = float(row["strike"]) if pd.notna(row["strike"]) else 0.0
+            return f"{row['symbol']}:{exp_s}:{row['right']}:{round(strike,4)}"
+
+        out["contract_id"] = out.apply(_fmt_contract, axis=1)
+
+        # Filter out rows with invalid dates or symbols
+        out = out.dropna(subset=["datetime"])
+        out = out[out["symbol"] != "nan"]
+
+        return out

@@ -1,8 +1,8 @@
-from .parsers import TastytradeParser, TastytradeFillsParser
+from .parsers import TastytradeParser, TastytradeFillsParser, ManualInputParser
 from .strategy import build_strategies
 from .models import TradeGroup, Leg
 from .config import SYMBOL_DESCRIPTIONS
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, Dict, List, Tuple, Any, Union
 import pandas as pd
 import numpy as np
 import os
@@ -57,32 +57,47 @@ def _sym_desc(sym: str) -> str:
         return f"Options on {human}"
     return f"Options on {key}"
 
-def analyze_csv(csv_path: str, broker: str = "auto",
+def analyze_csv(csv_path: Optional[str] = None,
+                broker: str = "auto",
                 account_size_start: Optional[float] = None,
                 net_liquidity_now: Optional[float] = None,
                 buying_power_available_now: Optional[float] = None,
                 out_dir: Optional[str] = "out", report_format: str = "all",
-                start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict:
-    try:
-        df = pd.read_csv(csv_path)
-    except pd.errors.EmptyDataError:
-        return {"error": "CSV file is empty"}
-    except Exception as e:
-        return {"error": f"Failed to read CSV: {str(e)}"}
-
-    chosen_broker = broker
-    if broker == "auto" or broker is None:
-        chosen_broker = _detect_broker(df) or "tasty"
+                start_date: Optional[str] = None, end_date: Optional[str] = None,
+                manual_data: Optional[List[Dict[str, Any]]] = None) -> Dict:
     
+    # 1. Load Data
+    df = pd.DataFrame()
     parser = None
-    if chosen_broker == "tasty":
-        if "Description" in df.columns and "Symbol" in df.columns:
-            parser = TastytradeFillsParser()
-        else:
-            parser = TastytradeParser()
-    else:
-        return {"error": "Unsupported broker"}
+    chosen_broker = broker
 
+    if csv_path:
+        try:
+            df = pd.read_csv(csv_path)
+        except pd.errors.EmptyDataError:
+            return {"error": "CSV file is empty"}
+        except Exception as e:
+            return {"error": f"Failed to read CSV: {str(e)}"}
+
+        if broker == "auto" or broker is None:
+            chosen_broker = _detect_broker(df) or "tasty"
+
+        if chosen_broker == "tasty":
+            if "Description" in df.columns and "Symbol" in df.columns:
+                parser = TastytradeFillsParser()
+            else:
+                parser = TastytradeParser()
+        else:
+            return {"error": "Unsupported broker"}
+
+    elif manual_data:
+        df = pd.DataFrame(manual_data)
+        chosen_broker = "manual"
+        parser = ManualInputParser()
+    else:
+        return {"error": "No input data provided"}
+
+    # 2. Parse Data
     try:
         norm_df = parser.parse(df)
     except Exception as e:
@@ -91,6 +106,7 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     if norm_df.empty:
         return {"error": "No options trades found"}
 
+    # 3. Filter by Date Window
     effective_window = None
     if start_date or end_date:
         s = pd.to_datetime(start_date) if start_date else None
@@ -107,41 +123,46 @@ def analyze_csv(csv_path: str, broker: str = "auto",
             "end": (e - pd.Timedelta(days=0)).date().isoformat() if e is not None else None,
         }
 
+    # 4. Grouping & Strategy Logic
     contract_groups, open_groups = _group_contracts_with_open(norm_df)
     strategies = build_strategies(norm_df)
     
-    # --- The Leakage Report Metrics ---
+    # 5. Metrics Calculation
     leakage_metrics = {
         "fee_drag": 0.0,
         "fee_drag_verdict": "OK",
         "stale_capital": []
     }
 
-    total_strategy_pnl = sum(s.pnl for s in strategies)
+    # Use PnL (Gross) and Fees to calculate everything
+    total_strategy_pnl_gross = sum(s.pnl for s in strategies)
     total_strategy_fees = sum(s.fees for s in strategies)
+    total_strategy_pnl_net = total_strategy_pnl_gross - total_strategy_fees
 
-    gross_pnl = total_strategy_pnl + total_strategy_fees
-    if gross_pnl > 0:
-        fee_drag = (total_strategy_fees / gross_pnl) * 100
+    # Fee Drag: Fees / Gross Profit (where Gross Profit = Net + Fees, or just our s.pnl)
+    # If Gross PnL is positive
+    if total_strategy_pnl_gross > 0:
+        fee_drag = (total_strategy_fees / total_strategy_pnl_gross) * 100
         leakage_metrics["fee_drag"] = round(fee_drag, 2)
         if fee_drag > 10.0:
             leakage_metrics["fee_drag_verdict"] = "High Drag! Stop trading 1-wide spreads."
     else:
-        leakage_metrics["fee_drag"] = 0.0 # N/A or Infinite
+        leakage_metrics["fee_drag"] = 0.0
 
+    # Stale Capital
     for s in strategies:
         hd = s.hold_days()
-        th = s.realized_theta() # Net PnL / Days
+        th = s.realized_theta() # This uses net_pnl / days in updated model
         if hd > 10.0 and th < 1.0:
             leakage_metrics["stale_capital"].append({
                 "strategy": s.strategy_name,
                 "symbol": s.symbol,
                 "hold_days": round(hd, 1),
                 "theta_per_day": round(th, 2),
-                "pnl": round(s.pnl, 2)
+                "pnl": round(s.net_pnl, 2) # Show Net PnL here
             })
 
-    # Calc Metrics
+    # Contract Metrics
     total_pnl_contracts = float(sum(g.pnl for g in contract_groups))
     wins_contracts = [g for g in contract_groups if g.pnl > 0]
     win_rate_contracts = len(wins_contracts) / len(contract_groups) if contract_groups else 0.0
@@ -150,12 +171,13 @@ def analyze_csv(csv_path: str, broker: str = "auto",
         for g in contract_groups
     ]) if contract_groups else 0.0
 
-    total_pnl = sum(s.pnl for s in strategies)
-    wins = [s for s in strategies if s.pnl > 0]
+    # Strategy Metrics
+    wins = [s for s in strategies if s.net_pnl > 0] # Use Net for Win Rate logic?
+    # Historically finance uses Net PnL for verdict.
     win_rate = len(wins) / len(strategies) if strategies else 0.0
     
     verdict = "Green flag"
-    if total_pnl < 0:
+    if total_strategy_pnl_net < 0:
         verdict = "Red flag"
     elif win_rate < 0.3:
         verdict = "Red flag"
@@ -166,10 +188,10 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     sym_stats = {}
     for s in strategies:
         if s.symbol not in sym_stats:
-            sym_stats[s.symbol] = {'pnl': 0, 'trades': 0, 'wins': 0}
-        sym_stats[s.symbol]['pnl'] += s.pnl
+            sym_stats[s.symbol] = {'pnl': 0.0, 'trades': 0, 'wins': 0}
+        sym_stats[s.symbol]['pnl'] += s.net_pnl # Use Net
         sym_stats[s.symbol]['trades'] += 1
-        if s.pnl > 0: sym_stats[s.symbol]['wins'] += 1
+        if s.net_pnl > 0: sym_stats[s.symbol]['wins'] += 1
 
     symbols_list = sorted([
         {"symbol": k, "pnl": v['pnl'], "win_rate": v['wins'] / v['trades'], "trades": v['trades'], "description": _sym_desc(k)}
@@ -182,7 +204,8 @@ def analyze_csv(csv_path: str, broker: str = "auto",
             "symbol": s.symbol,
             "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "",
             "strategy": s.strategy_name,
-            "pnl": s.pnl,
+            "pnl": s.net_pnl, # Default to Net for UI clarity
+            "gross_pnl": s.pnl,
             "fees": s.fees,
             "hold_days": s.hold_days(),
             "theta_per_day": s.realized_theta(),
@@ -190,7 +213,7 @@ def analyze_csv(csv_path: str, broker: str = "auto",
             "segments": [
                 {
                     "strategy_name": seg["strategy_name"],
-                    "pnl": seg["pnl"],
+                    "pnl": seg["pnl"], # Note: segments might need updates to track net vs gross if detailed drilldown needed
                     "entry_ts": seg["entry_ts"].isoformat() if seg["entry_ts"] else "",
                     "exit_ts": seg["exit_ts"].isoformat() if seg["exit_ts"] else ""
                 } for seg in s.segments
@@ -242,7 +265,8 @@ def analyze_csv(csv_path: str, broker: str = "auto",
             summary_rows = [
                 {"Metric": "Strategy Trades", "Value": len(strategies)},
                 {"Metric": "Strategy Win Rate", "Value": win_rate},
-                {"Metric": "Strategy Total PnL", "Value": total_pnl},
+                {"Metric": "Strategy Total PnL (Net)", "Value": total_strategy_pnl_net},
+                {"Metric": "Strategy Total Fees", "Value": total_strategy_fees},
                 {"Metric": "Verdict", "Value": verdict},
                 {"Metric": "Fee Drag %", "Value": leakage_metrics["fee_drag"]},
             ]
@@ -263,9 +287,17 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     return {
         "metrics": {
             "num_trades": len(contract_groups), "win_rate": win_rate_contracts,
-            "total_pnl": total_pnl_contracts, "avg_hold_days": avg_hold_contracts,
+            "total_pnl": total_strategy_pnl_net, # Changed to Net
+            "total_fees": total_strategy_fees,
+            "avg_hold_days": avg_hold_contracts,
         },
-        "strategy_metrics": {"num_trades": len(strategies), "win_rate": win_rate, "total_pnl": total_pnl},
+        "strategy_metrics": {
+            "num_trades": len(strategies),
+            "win_rate": win_rate,
+            "total_pnl": total_strategy_pnl_net,
+            "total_gross_pnl": total_strategy_pnl_gross,
+            "total_fees": total_strategy_fees
+        },
         "verdict": verdict,
         "symbols": symbols_list,
         "strategy_groups": strategy_rows,

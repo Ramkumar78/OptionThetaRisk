@@ -1,5 +1,5 @@
 <div class="fade-in">
-  <!-- Leakage Report Section (New) -->
+  <!-- Leakage Report Section -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200 border-l-4 border-purple-500">
       <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
           <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200">The Leakage Report</h3>
@@ -66,10 +66,13 @@
           </h3>
         </div>
         <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
-          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Strategy PnL</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Net PnL (After Fees)</p>
           <h3 class="text-2xl font-bold {% if strategy_metrics.total_pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
             ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
           </h3>
+          <p class="text-xs text-gray-400 mt-1">
+              Gross: ${{ "%.2f"|format(strategy_metrics.total_gross_pnl) }} | Fees: ${{ "%.2f"|format(strategy_metrics.total_fees) }}
+          </p>
         </div>
         <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Win Rate</p>
@@ -102,9 +105,9 @@
           Range: {{ date_window.start or 'Beginning' }} &rarr; {{ date_window.end or 'End' }}
         </span>
       </div>
+      {% endif %}
     </div>
   </div>
-  {% endif %}
 
   <!-- Theta Curve (Campaign PnL) Chart -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200">
@@ -121,139 +124,6 @@
       </div>
   </div>
 
-  <!-- Position Sizing Analysis Charts -->
-  {% if position_sizing or buying_power_utilized_percent %}
-  <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6 transition-colors duration-200">
-      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
-          <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Position Sizing Analysis</h5>
-      </div>
-      <div class="p-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 justify-center">
-              {% if buying_power_utilized_percent is not none %}
-              <div class="flex flex-col items-center">
-                  <h6 class="text-center text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Buying Power Utilization</h6>
-                  <div class="w-full h-64">
-                      <canvas id="bpChart"></canvas>
-                  </div>
-              </div>
-              {% endif %}
-
-              {% if position_sizing %}
-              <div class="flex flex-col items-center">
-                  <h6 class="text-center text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Capital Allocation by Symbol</h6>
-                  <div class="w-full h-64">
-                      <canvas id="allocationChart"></canvas>
-                  </div>
-              </div>
-              {% endif %}
-          </div>
-
-          {% if position_sizing %}
-          <div class="mt-8 overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead class="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
-                          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Est. Capital</th>
-                          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Allocation %</th>
-                          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-32">Share</th>
-                      </tr>
-                  </thead>
-                  <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {% for p in position_sizing %}
-                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                          <td class="px-6 py-4 whitespace-nowrap">
-                              <span class="block text-sm font-bold text-gray-900 dark:text-white">{{ p.symbol }}</span>
-                              <span class="block text-xs text-gray-500 dark:text-gray-400">{{ p.description }}</span>
-                          </td>
-                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">${{ "%.2f"|format(p.allocation_amt) }}</td>
-                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.1f"|format(p.allocation_pct) }}%</td>
-                          <td class="px-6 py-4 whitespace-nowrap text-right align-middle">
-                              <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                  <div class="bg-blue-600 h-2 rounded-full" style="width: {{ p.allocation_pct }}%"></div>
-                              </div>
-                          </td>
-                      </tr>
-                      {% endfor %}
-                  </tbody>
-              </table>
-          </div>
-          {% endif %}
-      </div>
-  </div>
-  {% endif %}
-
-  <!-- Two-Column Layout for Symbol & Open Positions -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-    <!-- Performance by Symbol -->
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden h-full flex flex-col transition-colors duration-200">
-      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
-        <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Performance by Symbol</h5>
-      </div>
-      <div class="flex-grow overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">PnL</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Win Rate</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trades</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {% for s in symbols %}
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm font-bold text-gray-900 dark:text-white">{{ s.symbol }}</div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">{{ s.description }}</div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-                ${{ "%.2f"|format(s.pnl) }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.0f"|format(s.win_rate * 100) }}%</td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ s.trades }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No symbol data.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Open Positions -->
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden h-full flex flex-col transition-colors duration-200">
-      <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
-        <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Open Positions</h5>
-      </div>
-      <div class="flex-grow overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contract</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Qty</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Days Open</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {% for p in open_positions %}
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm font-bold text-gray-900 dark:text-white">{{ p.symbol }}</div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">{{ p.contract }}</div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ p.qty_open }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.1f"|format(p.days_open) }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="3" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No open positions.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   <!-- Full-Width Strategy Table -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-8 transition-colors duration-200">
     <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
@@ -265,7 +135,8 @@
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Strategy</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Campaign PnL</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Net PnL</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fees</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hold (Days)</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">θ / Day</th>
           </tr>
@@ -287,11 +158,12 @@
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
               ${{ "%.2f"|format(s.pnl) }}
             </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">${{ "%.2f"|format(s.fees) }}</td>
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">{{ "%.1f"|format(s.hold_days) }}</td>
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">${{ "%.2f"|format(s.theta_per_day) }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No strategies found.</td></tr>
+          <tr><td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No strategies found.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -306,19 +178,9 @@
 
   <!-- Chart.js Logic -->
   <script>
-    // Dark Mode helper
     const isDark = document.documentElement.classList.contains('dark');
     const textColor = isDark ? '#e5e7eb' : '#374151';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-
-    // 1. Theta Curve (Campaign PnL)
-    // We construct datasets for each strategy that has significant PnL or is a Campaign
-    // To avoid clutter, we might limit to top 5 or just plot all?
-    // User wants "Theta Curve chart" showing dotted lines for rolls.
-    // We'll prepare a Scatter/Line chart where each campaign is a dataset?
-    // Or one continuous line for Account PnL?
-    // "dotted line connecting the Exit of Trade A to the Entry of Trade B" implies specific campaigns.
-    // Let's create a dataset for each Campaign that has rolls.
 
     const campaigns = [
         {% for s in strategy_groups %}
@@ -328,19 +190,10 @@
             data: [
                 {% for seg in s.segments %}
                    {% if seg.entry_ts and seg.exit_ts %}
-                   { x: "{{ seg.entry_ts }}", y: {{ seg.pnl }} }, // This is segment PnL. Cumulative?
-                   // User wants "Theta Curve". Usually PnL over time.
-                   // If we just plot End PnL, it's a step function.
-                   // Let's assume linear PnL accrual for visualization or just endpoints?
-                   // "Dotted line connecting Exit A to Entry B".
-                   // We need absolute timestamps.
-                   // Let's plot Entry(0) -> Exit(PnL) for segment 1.
-                   // Then dotted line to Entry of segment 2 (PnL starts where seg 1 ended?)
-                   // "Campaign P&L" implies cumulative.
+                   { x: "{{ seg.entry_ts }}", y: {{ seg.pnl }} },
                    {% endif %}
                 {% endfor %}
             ],
-            // We need to process this in JS to make it cumulative and add gaps
             segments: [
                 {% for seg in s.segments %}
                 {
@@ -355,31 +208,16 @@
         {% endfor %}
     ];
 
-    // Filter only campaigns with rolls (segments > 1) to keep chart readable
-    const rolledCampaigns = campaigns.filter(c => c.segments.length > 1).slice(0, 5); // Limit to top 5 for clarity
+    const rolledCampaigns = campaigns.filter(c => c.segments.length > 1).slice(0, 5);
 
     const thetaDatasets = rolledCampaigns.map((c, i) => {
         const dataPoints = [];
         let cumulative = 0;
 
         c.segments.forEach((seg, index) => {
-            // Start of segment (at previous cumulative level)
             dataPoints.push({ x: seg.entry, y: cumulative });
-
-            // End of segment (add segment PnL)
             cumulative += seg.pnl;
             dataPoints.push({ x: seg.exit, y: cumulative });
-
-            // If there is a next segment, we have a gap (dotted line)
-            // Chart.js handles "spanGaps" or we can insert null for break?
-            // But we want a dotted line.
-            // We can use segment styling in Chart.js v3+ or just one continuous line with style change?
-            // Easiest: One line. The gap is the time between Exit A and Entry B.
-            // The line will be drawn automatically. We want it dotted?
-            // We can adjust segment styles if needed, but solid line is okay for MVP "connection".
-            // User specifically asked for dotted.
-            // We can insert a point at Entry B (same Y as Exit A).
-            // The line segment from Exit A to Entry B is the "Roll Gap".
         });
 
         return {
@@ -390,17 +228,10 @@
             tension: 0.1,
             segment: {
                 borderDash: ctx => {
-                    // Check if segment is a gap (Roll)
-                    // Simple heuristic: If dx is small (roll time), might be gap?
-                    // Actually, the points are ordered: EntryA, ExitA, EntryB, ExitB.
-                    // Index 0->1 is Trade. 1->2 is Roll Gap. 2->3 is Trade.
-                    // Even indices (0, 2, 4) start a trade. Odd indices (1, 3, 5) end a trade.
-                    // So segment between index 1 and 2 is the Roll Gap.
-                    // ctx.p0DataIndex is the start index of the segment.
                     if (ctx.p0DataIndex % 2 !== 0) {
-                        return [6, 6]; // Dotted for Gap
+                        return [6, 6];
                     }
-                    return undefined; // Solid for Trade
+                    return undefined;
                 }
             }
         };
@@ -432,63 +263,8 @@
             }
         });
     } else {
-        // Fallback text if no campaigns
         document.getElementById('thetaCurveChart').parentNode.innerHTML =
             '<div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">No rolled campaigns detected to display.</div>';
     }
-
-    // BP Chart
-    {% if buying_power_utilized_percent is not none %}
-    new Chart(document.getElementById('bpChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Utilized', 'Available'],
-        datasets: [{
-          data: [{{ buying_power_utilized_percent }}, {{ 100 - buying_power_utilized_percent }}],
-          backgroundColor: ['#ffc107', '#198754'],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-              position: 'bottom',
-              labels: { color: textColor }
-          }
-        }
-      }
-    });
-    {% endif %}
-
-    // Allocation Chart
-    {% if position_sizing %}
-    new Chart(document.getElementById('allocationChart'), {
-      type: 'pie',
-      data: {
-        labels: [{% for p in position_sizing %}"{{ p.symbol }}",{% endfor %}],
-        datasets: [{
-          data: [{% for p in position_sizing %}{{ p.allocation_amt }},{% endfor %}],
-          backgroundColor: [
-            '#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545',
-            '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0'
-          ],
-          borderColor: isDark ? '#1f2937' : '#ffffff',
-          borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-              position: 'bottom',
-              labels: { color: textColor }
-          }
-        }
-      }
-    });
-    {% endif %}
   </script>
 </div>
