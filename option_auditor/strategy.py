@@ -184,7 +184,64 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
             contract_map[cid].append(new_group)
             all_groups.append(new_group)
 
-    base_groups = closed_groups if closed_groups else all_groups
+    # --- Start of new Wheel Strategy detection logic ---
+    wheel_strategies = []
+    processed_groups = set()
+
+    # Find closed short puts and open long stocks
+    short_puts = [g for g in all_groups if g.right == "P" and g.is_closed and any(l.qty < 0 for l in g.legs)]
+    long_stocks = [g for g in all_groups if g.right is None and not g.is_closed and any(l.qty > 0 for l in g.legs)]
+
+    short_puts.sort(key=lambda g: g.exit_ts)
+    long_stocks.sort(key=lambda g: g.entry_ts)
+
+    for put_group in short_puts:
+        if id(put_group) in processed_groups:
+            continue
+
+        for stock_group in long_stocks:
+            if id(stock_group) in processed_groups:
+                continue
+
+            if put_group.symbol == stock_group.symbol:
+                if put_group.exit_ts and stock_group.entry_ts:
+                    time_diff_hours = (stock_group.entry_ts - put_group.exit_ts).total_seconds() / 3600
+                    if 0 <= time_diff_hours < 48:  # 2-day window for assignment
+                        # Assuming 1 contract = 100 shares.
+                        put_qty = sum(l.qty for l in put_group.legs if l.qty < 0)
+                        stock_qty = sum(l.qty for l in stock_group.legs if l.qty > 0)
+
+                        if abs(put_qty * 100) == stock_qty:
+                            strat = StrategyGroup(
+                                id=f"STRAT-WHEEL-{len(wheel_strategies)}",
+                                symbol=put_group.symbol,
+                                expiry=None,
+                                strategy_name="Wheel"
+                            )
+                            strat.add_leg_group(put_group)
+                            strat.add_leg_group(stock_group)
+
+                            # Adjust cost basis. The PNL of the put is the premium received.
+                            # We effectively reduce the cost of the stock.
+                            # The stock_group.pnl is negative (a cost).
+                            stock_group.pnl += put_group.pnl
+                            strat.pnl = stock_group.pnl
+                            strat.fees = stock_group.fees + put_group.fees
+                            
+                            # Mark the original put group as "absorbed" into the wheel
+                            put_group.pnl = 0 
+                            put_group.fees = 0
+
+                            wheel_strategies.append(strat)
+                            processed_groups.add(id(put_group))
+                            processed_groups.add(id(stock_group))
+                            break
+
+    # Filter out groups that are now part of a wheel
+    remaining_groups = [g for g in all_groups if id(g) not in processed_groups]
+    # --- End of new Wheel Strategy detection logic ---
+
+    base_groups = [g for g in remaining_groups if g.is_closed] if closed_groups else remaining_groups
     base_groups.sort(key=lambda x: x.entry_ts)
 
     # Optimization: Bucket groups by symbol AND expiry to strictly reduce N^2 complexity
@@ -236,6 +293,7 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
             strat.strategy_name = _classify_strategy(strat)
             strategies.append(strat)
 
+    strategies.extend(wheel_strategies)
     strategies.sort(key=lambda s: s.exit_ts if s.exit_ts is not None else pd.Timestamp.min)
 
     # Second Pass: Detect Rolls (Campaigns)
