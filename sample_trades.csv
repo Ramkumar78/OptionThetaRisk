@@ -1,0 +1,5 @@
+Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type
+2025-01-01 10:00,MSFT,1,Buy to Open,1.00,0.10,2025-02-21,500,Put
+2025-01-03 10:00,MSFT,1,Sell to Close,1.50,0.10,2025-02-21,500,Put
+2025-01-02 10:00,AAPL,1,Sell to Open,2.00,0.10,2025-02-21,200,Call
+2025-01-04 10:00,AAPL,1,Buy to Close,1.00,0.10,2025-02-21,200,Call

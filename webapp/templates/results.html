@@ -18,6 +18,13 @@
     <div class="p-8 text-center">
         <h2 class="text-5xl font-extrabold uppercase tracking-tight mb-2 drop-shadow-sm">{{ verdict }}</h2>
         <p class="text-lg font-medium opacity-90">Assessment based on your <span class="underline decoration-2 underline-offset-2">{{ style|default('selected')|title }}</span> profile</p>
+
+        {% if date_window %}
+        <div class="mt-4 inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium bg-white/50 dark:bg-black/20 text-gray-700 dark:text-gray-200 backdrop-blur-sm shadow-sm border border-white/20">
+            <i class="bi bi-calendar3 mr-2"></i>
+            Range: {{ date_window.start or 'Beginning' }} <span class="mx-2">&rarr;</span> {{ date_window.end or 'End' }}
+        </div>
+        {% endif %}
     </div>
   </div>
 

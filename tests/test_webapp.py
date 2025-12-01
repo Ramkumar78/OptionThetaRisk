@@ -73,11 +73,11 @@ def test_upload_and_results_page(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Audit Summary" in html
+    assert "Net PnL" in html
+    assert "Strategy Log" in html
     assert "Verdict" in html
-    assert "Account Growth" in html
-    assert "Buying Power Utilized" in html
-    assert "54.5%" in html # (11000 - 5000) / 11000
+    assert "Growth" in html
+    assert "Buying Power: 55% Used" in html # (11000 - 5000) / 11000 = 54.5% formatted as %.0f
 
 
 def test_rejects_large_upload(app):
