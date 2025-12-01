@@ -1,5 +1,0 @@
-Time,Action,Underlying Symbol,Description,Quantity,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type
-2023-01-01 10:00,SELL_TO_OPEN,SPY,Call,1,5.0,1.0,2023-01-20,400,CALL
-2023-01-10 10:00,BUY_TO_CLOSE,SPY,Call,1,4.0,1.0,2023-01-20,400,CALL
-2023-01-10 10:02,SELL_TO_OPEN,SPY,Call,1,6.0,1.0,2023-02-17,400,CALL
-2023-01-20 10:00,BUY_TO_CLOSE,SPY,Call,1,1.0,1.0,2023-02-17,400,CALL

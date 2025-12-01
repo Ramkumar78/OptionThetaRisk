@@ -63,7 +63,13 @@ def analyze_csv(csv_path: str, broker: str = "auto",
                 buying_power_available_now: Optional[float] = None,
                 out_dir: Optional[str] = "out", report_format: str = "all",
                 start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict:
-    df = pd.read_csv(csv_path)
+    try:
+        df = pd.read_csv(csv_path)
+    except pd.errors.EmptyDataError:
+        return {"error": "CSV file is empty"}
+    except Exception as e:
+        return {"error": f"Failed to read CSV: {str(e)}"}
+
     chosen_broker = broker
     if broker == "auto" or broker is None:
         chosen_broker = _detect_broker(df) or "tasty"
