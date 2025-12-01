@@ -242,10 +242,17 @@ def analyze_csv(csv_path: Optional[str] = None,
     strategies = build_strategies(norm_df)
     
     # 5. Metrics Calculation
+    total_strategy_pnl_gross = sum(s.pnl for s in strategies)
+    total_strategy_fees = sum(s.fees for s in strategies)
+    total_strategy_pnl_net = total_strategy_pnl_gross - total_strategy_fees
+
+    efficiency_ratio = total_strategy_pnl_net / total_strategy_fees if total_strategy_fees > 0 else 0
+
     leakage_metrics = {
         "fee_drag": 0.0,
         "fee_drag_verdict": "OK",
-        "stale_capital": []
+        "stale_capital": [],
+        "efficiency_ratio": efficiency_ratio
     }
 
     # Use PnL (Gross) and Fees to calculate everything
