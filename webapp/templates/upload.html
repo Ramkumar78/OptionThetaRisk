@@ -1,123 +1,341 @@
 {% extends "base.html" %}
 
+{% block title %}Upload - The Option Auditor{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-lg-8 col-md-10">
-    <div class="card shadow-sm border-0">
-      <div class="card-header bg-primary text-white py-3">
-        <h2 class="h4 mb-0 text-center">Upload Your Trades CSV</h2>
-      </div>
-      <div class="card-body p-4">
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-              </div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-
-        <form hx-post="/analyze" hx-target="#results-container" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="needs-validation">
-
-          <div class="mb-4">
-            <label for="csv" class="form-label fw-bold">CSV File</label>
-            <input class="form-control form-control-lg" type="file" name="csv" id="csv" required>
-            <div class="form-text">Supported brokers: Tastytrade, Interactive Brokers.</div>
-          </div>
-
-          <div class="row g-3 mb-4">
-            <div class="col-md-6">
-              <label for="broker" class="form-label fw-bold">Broker</label>
-              <select class="form-select" name="broker" id="broker">
-                <option value="auto" selected>Auto-detect</option>
-                <option value="tasty">Tastytrade</option>
-                <option value="ibkr">Interactive Brokers</option>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label for="date_mode" class="form-label fw-bold">Date Range</label>
-              <select class="form-select" name="date_mode" id="date_mode">
-                <option value="all" selected>All Data</option>
-                <option value="ytd">Year to Date</option>
-                <option value="1y">Last 1 Year</option>
-                <option value="6m">Last 6 Months</option>
-                <option value="1m">Last 1 Month</option>
-                <option value="14d">Last 14 Days</option>
-                <option value="7d">Last 7 Days</option>
-                <option value="range">Custom Range</option>
-              </select>
-            </div>
-          </div>
-
-          <div id="custom-range-fields" class="row g-3 mb-4" style="display: none;">
-            <div class="col-md-6">
-              <label for="start_date" class="form-label">Start Date</label>
-              <input type="date" class="form-control" name="start_date" id="start_date">
-            </div>
-            <div class="col-md-6">
-              <label for="end_date" class="form-label">End Date</label>
-              <input type="date" class="form-control" name="end_date" id="end_date">
-            </div>
-          </div>
-
-          <div class="accordion mb-4" id="advancedOptions">
-            <div class="accordion-item">
-              <h2 class="accordion-header">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#metricsCollapse" aria-expanded="false" aria-controls="metricsCollapse">
-                  Optional: Account Metrics
-                </button>
-              </h2>
-              <div id="metricsCollapse" class="accordion-collapse collapse" data-bs-parent="#advancedOptions">
-                <div class="accordion-body">
-                  <div class="row g-3">
-                    <div class="col-md-4">
-                      <label for="account_size_start" class="form-label">Account Size (Start)</label>
-                      <div class="input-group">
-                        <span class="input-group-text">$</span>
-                        <input type="number" class="form-control" name="account_size_start" id="account_size_start" placeholder="25000">
-                      </div>
-                    </div>
-                    <div class="col-md-4">
-                      <label for="net_liquidity_now" class="form-label">Net Liquidity (Now)</label>
-                      <div class="input-group">
-                        <span class="input-group-text">$</span>
-                        <input type="number" class="form-control" name="net_liquidity_now" id="net_liquidity_now" placeholder="26500">
-                      </div>
-                    </div>
-                    <div class="col-md-4">
-                      <label for="buying_power_available_now" class="form-label">Buying Power (Now)</label>
-                      <div class="input-group">
-                        <span class="input-group-text">$</span>
-                        <input type="number" class="form-control" name="buying_power_available_now" id="buying_power_available_now" placeholder="22000">
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-primary btn-lg" id="analyze-btn">Analyze Trades</button>
-          </div>
-        </form>
-      </div>
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="bg-blue-600 dark:bg-blue-800 rounded-t-lg p-6 shadow-lg mb-0">
+        <h2 class="text-2xl font-bold text-white text-center">Analyze Your Trades</h2>
+        <p class="text-blue-100 text-center mt-2 text-sm">Upload a broker CSV or enter trades manually</p>
     </div>
-  </div>
-</div>
 
-<div id="results-container" class="mt-5 mb-5 fade-in">
-  <!-- Results will be loaded here -->
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-b-lg p-8 border border-t-0 border-gray-200 dark:border-gray-700 transition-colors duration-200" x-data="manualEntryForm()">
+
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+            <button class="px-6 py-3 font-medium text-sm focus:outline-none transition-colors border-b-2"
+                :class="tab === 'csv' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                @click="tab = 'csv'; document.getElementById('input-method').value = 'csv'">
+                CSV Upload
+            </button>
+            <button class="px-6 py-3 font-medium text-sm focus:outline-none transition-colors border-b-2"
+                :class="tab === 'manual' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                @click="tab = 'manual'; document.getElementById('input-method').value = 'manual'">
+                Manual Entry
+            </button>
+        </div>
+
+        <form action="/analyze" method="post" enctype="multipart/form-data" id="analyze-form">
+            <input type="hidden" id="input-method" name="input_method" value="csv">
+            <input type="hidden" name="manual_trades" id="manual-trades-input">
+
+            <!-- Common Settings -->
+            <div class="mb-6 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="style" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trading Style</label>
+                    <select name="style" id="style" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors">
+                        <option value="income">Income (Selling Premium)</option>
+                        <option value="speculation">Growth / Speculation (Directional)</option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Adjusts the 'Verdict' thresholds.</p>
+                </div>
+                <div>
+                    <label for="date_mode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range</label>
+                    <select name="date_mode" id="date_mode" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors" onchange="toggleCustomDates()">
+                        <option value="all">All Data</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="14d">Last 14 Days</option>
+                        <option value="1m">Last 1 Month</option>
+                        <option value="6m">Last 6 Months</option>
+                        <option value="1y">Last 1 Year</option>
+                        <option value="2y">Last 2 Years</option>
+                        <option value="ytd">Year to Date (YTD)</option>
+                        <option value="range">Custom Range</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Custom Date Range -->
+            <div id="custom-dates" class="hidden mb-6 grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600">
+                <div>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+                    <input type="date" name="start_date" id="start_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
+                    <input type="date" name="end_date" id="end_date" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+            </div>
+
+            <!-- CSV Section -->
+            <div x-show="tab === 'csv'" class="space-y-6">
+                <div>
+                    <label for="csv" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">CSV File</label>
+                    <input type="file" name="csv" id="csv" accept=".csv"
+                        class="block w-full text-sm text-gray-500 dark:text-gray-400
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-md file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100
+                            dark:file:bg-gray-700 dark:file:text-gray-200
+                            border border-gray-300 dark:border-gray-600 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Supported brokers: Tastytrade, Interactive Brokers.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="broker" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Broker</label>
+                        <select name="broker" id="broker" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors">
+                            <option value="auto">Auto-detect</option>
+                            <option value="tasty">Tastytrade</option>
+                            <option value="ibkr">Interactive Brokers</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Entry Section -->
+            <div x-show="tab === 'manual'" class="space-y-4">
+                <!-- Global Fee per Trade Input -->
+                <div class="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <label for="fee_per_trade" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fee per Trade ($)</label>
+                    <div class="relative rounded-md shadow-sm max-w-xs">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span class="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <input type="number" name="fee_per_trade" id="fee_per_trade" step="0.01" min="0" placeholder="0.00"
+                            class="pl-7 block w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        This fee will be applied to <strong>each row</strong> entered below.
+                    </p>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Action</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Qty</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Price</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Expiry</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Strike</th>
+                                <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                                <th scope="col" class="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700" id="manual-rows">
+                            <template x-for="(row, index) in rows" :key="index">
+                                <tr>
+                                    <!-- Edit Mode -->
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="date" x-model="row.date" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.date"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="text" x-model="row.symbol" placeholder="SPY" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded uppercase"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.symbol"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1">
+                                            <select x-model="row.action" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
+                                                <option value="Buy Open">Buy Open</option>
+                                                <option value="Sell Open">Sell Open</option>
+                                                <option value="Buy Close">Buy Close</option>
+                                                <option value="Sell Close">Sell Close</option>
+                                            </select>
+                                        </td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.action"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="number" x-model="row.qty" min="1" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.qty"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="number" x-model="row.price" step="0.01" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.price"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="date" x-model="row.expiry" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.expiry"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1"><input type="number" x-model="row.strike" step="0.5" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded"></td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.strike"></td></template>
+
+                                    <template x-if="row.editing">
+                                        <td class="px-1 py-1">
+                                            <select x-model="row.right" class="w-full text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded">
+                                                <option value="C">Call</option>
+                                                <option value="P">Put</option>
+                                            </select>
+                                        </td>
+                                    </template>
+                                    <template x-if="!row.editing"><td class="px-1 py-1 text-xs text-gray-700 dark:text-gray-300" x-text="row.right"></td></template>
+
+                                    <td class="px-1 py-1 text-center whitespace-nowrap">
+                                        <template x-if="row.editing">
+                                            <button type="button" @click="row.editing = false" class="text-green-600 hover:text-green-800 dark:text-green-400 mr-2" title="Save">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        </template>
+                                        <template x-if="!row.editing">
+                                            <button type="button" @click="row.editing = true" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 mr-2" title="Edit">
+                                                <i class="bi bi-pencil-fill"></i>
+                                            </button>
+                                        </template>
+                                        <button type="button" @click="removeRow(index)" class="text-red-500 hover:text-red-700 dark:text-red-400" title="Delete">
+                                            <i class="bi bi-dash-circle-fill"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-between items-center">
+                    <button type="button" @click="addRow()" class="text-sm text-white bg-green-600 hover:bg-green-700 px-3 py-2 rounded-md shadow flex items-center transition-colors">
+                        <i class="bi bi-plus-lg mr-1"></i> Add Row (Max 20)
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400" x-text="rows.length + '/20'"></span>
+                </div>
+            </div>
+
+            <!-- Optional Metrics (Collapsible) -->
+            <div x-data="{ open: false }" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/30">
+                <button type="button" @click="open = !open" class="flex justify-between w-full text-left text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none">
+                    <span>Optional: Account Metrics</span>
+                    <svg class="w-5 h-5 transform transition-transform" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div x-show="open" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4" style="display: none;">
+                    <div>
+                        <label for="account_size_start" class="block text-xs font-medium text-gray-500 dark:text-gray-400">Account Size (Start)</label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="account_size_start" id="account_size_start" step="0.01" class="pl-7 block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="net_liquidity_now" class="block text-xs font-medium text-gray-500 dark:text-gray-400">Net Liquidity (Now)</label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="net_liquidity_now" id="net_liquidity_now" step="0.01" class="pl-7 block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="buying_power_available_now" class="block text-xs font-medium text-gray-500 dark:text-gray-400">Buying Power (Now)</label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="buying_power_available_now" id="buying_power_available_now" step="0.01" class="pl-7 block w-full sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" @click="prepareSubmission()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 mt-6">
+                Analyze Trades
+            </button>
+        </form>
+    </div>
 </div>
 
 <script>
-  document.getElementById('date_mode').addEventListener('change', function() {
-    const isRange = this.value === 'range';
-    const rangeFields = document.getElementById('custom-range-fields');
-    rangeFields.style.display = isRange ? 'flex' : 'none';
-  });
+    function toggleCustomDates() {
+        const mode = document.getElementById('date_mode').value;
+        const customDiv = document.getElementById('custom-dates');
+        if (mode === 'range') {
+            customDiv.classList.remove('hidden');
+            customDiv.classList.add('grid');
+        } else {
+            customDiv.classList.add('hidden');
+            customDiv.classList.remove('grid');
+        }
+    }
+
+    function manualEntryForm() {
+        return {
+            tab: 'csv',
+            rows: [],
+
+            init() {
+                // Restore tab
+                this.tab = localStorage.getItem('upload_tab') || 'csv';
+                this.$watch('tab', val => localStorage.setItem('upload_tab', val));
+
+                const saved = localStorage.getItem('manual_rows');
+                if (saved) {
+                    try {
+                        this.rows = JSON.parse(saved);
+                        this.rows.forEach(r => {
+                            if (typeof r.editing === 'undefined') r.editing = false;
+                        });
+                    } catch(e) { this.rows = []; }
+                }
+
+                if (this.rows.length === 0) {
+                    this.rows.push(this.createRow(true));
+                }
+
+                this.$watch('rows', val => {
+                    localStorage.setItem('manual_rows', JSON.stringify(val));
+                });
+            },
+
+            createRow(isEditing = true) {
+                return {
+                    date: new Date().toISOString().split('T')[0],
+                    symbol: 'SPY',
+                    action: 'Sell Open',
+                    qty: 1,
+                    price: 1.0,
+                    // fees removed from row structure
+                    expiry: new Date(Date.now() + 30*86400000).toISOString().split('T')[0],
+                    strike: 400,
+                    right: 'P',
+                    editing: isEditing
+                };
+            },
+
+            addRow() {
+                if (this.rows.length < 20) {
+                    this.rows.push(this.createRow(true));
+                }
+            },
+
+            removeRow(index) {
+                if (this.rows.length > 0) {
+                    this.rows.splice(index, 1);
+                }
+                if (this.rows.length === 0) {
+                    this.addRow();
+                }
+            },
+
+            prepareSubmission() {
+                if (this.tab === 'manual') {
+                    document.getElementById('manual-trades-input').value = JSON.stringify(this.rows);
+                    document.getElementById('csv').value = '';
+                }
+            }
+        }
+    }
 </script>
 {% endblock %}

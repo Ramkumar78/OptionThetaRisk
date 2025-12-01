@@ -1,11 +1,12 @@
 import io
 import os
 import shutil
+import time
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-
+import gc
 
 def make_csv_bytes():
     # Minimal tasty CSV content with headers used by _normalize_tasty
@@ -21,23 +22,43 @@ def make_csv_bytes():
 def app():
     from webapp.app import create_app
 
-    app = create_app()
+    app = create_app(testing=True)
     app.config.update({
-        "TESTING": True,
         "WTF_CSRF_ENABLED": False,
     })
 
-    # Clean up the reports folder before each test
-    report_folder = app.config["REPORT_FOLDER"]
-    if os.path.exists(report_folder):
-        shutil.rmtree(report_folder, ignore_errors=True)
-    os.makedirs(report_folder, exist_ok=True)
+    # Clean up the reports DB before each test
+    db_path = os.path.join(app.instance_path, "reports.db")
+
+    # Try to clean up existing DB with retries for Windows
+    for _ in range(3):
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            break
+        except PermissionError:
+            gc.collect() # Force close any lingering handles
+            time.sleep(0.1)
+
+    # Initialize DB for testing
+    from webapp.storage import LocalStorage
+    storage = LocalStorage(db_path)
 
     yield app
 
     # Final cleanup after test
-    if os.path.exists(report_folder):
-        shutil.rmtree(report_folder, ignore_errors=True)
+    # Ensure any connections are closed
+    storage.close()
+    del storage
+    gc.collect()
+
+    for _ in range(5):
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            break
+        except PermissionError:
+            time.sleep(0.1)
 
 
 def test_upload_and_results_page(app):
@@ -285,11 +306,13 @@ def test_upload_no_file(app):
     client = app.test_client()
     data = {
         "csv": (io.BytesIO(b""), ""),
+        # No manual_trades provided
     }
     resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Please choose a CSV file" in html
+    # Updated message including manual entry fallback
+    assert "Please choose a CSV file or enter trades manually" in html
 
 def test_upload_invalid_account_size(app):
     client = app.test_client()
@@ -312,7 +335,7 @@ def test_analysis_error(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Failed to analyze CSV" in html
+    assert "Failed to analyze" in html
 
 def test_download_endpoints(app):
     client = app.test_client()
