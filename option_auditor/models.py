@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import pandas as pd
 
 @dataclass
@@ -48,13 +48,18 @@ class StrategyGroup:
     expiry: Optional[pd.Timestamp]
     legs: List[TradeGroup] = field(default_factory=list)
     pnl: float = 0.0
+    fees: float = 0.0
     entry_ts: Optional[pd.Timestamp] = None
     exit_ts: Optional[pd.Timestamp] = None
     strategy_name: str = "Unclassified"
+    # Segments track the history of rolls/campaigns.
+    # Each segment is a dict with details: {strategy_name, pnl, entry_ts, exit_ts, fees}
+    segments: List[Dict[str, Any]] = field(default_factory=list)
 
     def add_leg_group(self, group: TradeGroup):
         self.legs.append(group)
         self.pnl += group.pnl
+        self.fees += group.fees
         if group.entry_ts:
             if self.entry_ts is None or group.entry_ts < self.entry_ts:
                 self.entry_ts = group.entry_ts
@@ -70,3 +75,10 @@ class StrategyGroup:
 
     def realized_theta(self) -> float:
         return self.pnl / self.hold_days()
+
+    def record_segment(self):
+        """Records the current state as a segment (e.g. before rolling)."""
+        # If segments is empty, this is the first segment (initial trade)
+        # However, usually we merge another strategy INTO this one.
+        # So we should probably capture the *other* strategy as a segment.
+        pass

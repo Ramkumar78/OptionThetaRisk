@@ -2,7 +2,7 @@ from .parsers import TastytradeParser, TastytradeFillsParser
 from .strategy import build_strategies
 from .models import TradeGroup, Leg
 from .config import SYMBOL_DESCRIPTIONS
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Any
 import pandas as pd
 import numpy as np
 import os
@@ -70,7 +70,6 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     
     parser = None
     if chosen_broker == "tasty":
-        # Auto-select parser based on columns even if broker is forced to "tasty"
         if "Description" in df.columns and "Symbol" in df.columns:
             parser = TastytradeFillsParser()
         else:
@@ -105,50 +104,54 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     contract_groups, open_groups = _group_contracts_with_open(norm_df)
     strategies = build_strategies(norm_df)
     
-    # --- Portfolio Correlation ---
-    correlation_matrix_df = None
-    correlation_json = None
+    # --- The Leakage Report Metrics ---
+    leakage_metrics = {
+        "fee_drag": 0.0,
+        "fee_drag_verdict": "OK",
+        "stale_capital": []
+    }
 
-    # Identify unique symbols traded
-    unique_symbols = sorted(list(set(g.symbol for g in contract_groups if g.symbol)))
+    total_strategy_pnl = sum(s.pnl for s in strategies)
+    total_strategy_fees = sum(s.fees for s in strategies)
 
-    # We need a start and end date for correlation data fetch
-    if unique_symbols:
-        min_date = norm_df['datetime'].min()
-        max_date = norm_df['datetime'].max()
+    # Metric A: Fee Drag %
+    # (Total Fees / Total Profit) * 100
+    # "Total Profit" usually means Gross Profit.
+    # Our s.pnl is Net PnL (Proceeds).
+    # Gross PnL = Net PnL + Fees.
+    # If Total PnL is negative, Fee Drag calc might be weird (negative drag?).
+    # Assuming user means Positive Profit strategies? Or Aggregate?
+    # "If > 10%, tell them to stop trading 1-wide spreads."
+    # This implies we look at the cost of doing business.
+    # Total Fees / (Total Profit if positive?).
+    # Let's use Sum(Fees) / Sum(Gross Profit of WINNING trades) or just Aggregate?
+    # Standard formula: Fees / Gross PnL.
+    # If Net PnL is $50, Fees $10 -> Gross was $60. Drag = 10/60 = 16%.
+    # If Net PnL is -$50, Fees $10 -> Gross was -$40.
+    # We'll calculate on Aggregate Gross Profit.
 
-        # Buffer dates
-        start_fetch = (min_date - pd.Timedelta(days=30)).date()
-        end_fetch = (max_date + pd.Timedelta(days=1)).date()
+    gross_pnl = total_strategy_pnl + total_strategy_fees
+    if gross_pnl > 0:
+        fee_drag = (total_strategy_fees / gross_pnl) * 100
+        leakage_metrics["fee_drag"] = round(fee_drag, 2)
+        if fee_drag > 10.0:
+            leakage_metrics["fee_drag_verdict"] = "High Drag! Stop trading 1-wide spreads."
+    else:
+        leakage_metrics["fee_drag"] = 0.0 # N/A or Infinite
 
-        # Only fetch if we have valid symbols and data range
-        if unique_symbols:
-            try:
-                # Fetch data for all symbols at once
-                # yfinance expects space-separated string
-                tickers_str = " ".join(unique_symbols)
-
-                # Download close data
-                # auto_adjust=True accounts for splits/dividends
-                history = yf.download(tickers_str, start=start_fetch, end=end_fetch, progress=False, auto_adjust=True)['Close']
-
-                if not history.empty:
-                    # If single symbol, history is Series. Convert to DataFrame
-                    if isinstance(history, pd.Series):
-                        history = history.to_frame(name=unique_symbols[0])
-
-                    # Calculate daily percent change
-                    daily_returns = history.pct_change()
-
-                    # Calculate correlation matrix
-                    correlation_matrix_df = daily_returns.corr()
-
-                    # Convert to JSON format (list of dicts for heatmap)
-                    # We want a format: [{'index': 'SPY', 'SPY': 1.0, 'QQQ': 0.8}, ...]
-                    correlation_json = correlation_matrix_df.round(4).reset_index().to_dict(orient='records')
-            except Exception:
-                # Fallback or ignore if yfinance fails (no internet, bad tickers, etc)
-                pass
+    # Metric B: Stale Capital
+    # Held > 10 days AND Realized Theta < $1/day (averaged)
+    for s in strategies:
+        hd = s.hold_days()
+        th = s.realized_theta() # Net PnL / Days
+        if hd > 10.0 and th < 1.0:
+            leakage_metrics["stale_capital"].append({
+                "strategy": s.strategy_name,
+                "symbol": s.symbol,
+                "hold_days": round(hd, 1),
+                "theta_per_day": round(th, 2),
+                "pnl": round(s.pnl, 2)
+            })
 
     # Calc Metrics
     total_pnl_contracts = float(sum(g.pnl for g in contract_groups))
@@ -185,7 +188,27 @@ def analyze_csv(csv_path: str, broker: str = "auto",
         for k, v in sym_stats.items()
     ], key=lambda x: x['pnl'], reverse=True)
 
-    strategy_rows = [{"symbol": s.symbol, "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "", "strategy": s.strategy_name, "pnl": s.pnl, "hold_days": s.hold_days(), "theta_per_day": s.realized_theta(), "description": _sym_desc(s.symbol)} for s in strategies]
+    strategy_rows = []
+    for s in strategies:
+        row = {
+            "symbol": s.symbol,
+            "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "",
+            "strategy": s.strategy_name,
+            "pnl": s.pnl,
+            "fees": s.fees,
+            "hold_days": s.hold_days(),
+            "theta_per_day": s.realized_theta(),
+            "description": _sym_desc(s.symbol),
+            "segments": [
+                {
+                    "strategy_name": seg["strategy_name"],
+                    "pnl": seg["pnl"],
+                    "entry_ts": seg["entry_ts"].isoformat() if seg["entry_ts"] else "",
+                    "exit_ts": seg["exit_ts"].isoformat() if seg["exit_ts"] else ""
+                } for seg in s.segments
+            ]
+        }
+        strategy_rows.append(row)
 
     open_rows = [{"symbol": g.symbol, "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "", "contract": f"{g.right or ''} {g.strike}", "qty_open": g.qty_net, "opened": g.entry_ts.isoformat() if g.entry_ts else "", "days_open": (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0, "description": _sym_desc(g.symbol)} for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min)]
 
@@ -193,11 +216,8 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     if net_liquidity_now is not None and buying_power_available_now is not None and net_liquidity_now > 0:
         buying_power_utilized_percent = (net_liquidity_now - buying_power_available_now) / net_liquidity_now * 100
 
-    # --- Position Sizing Analysis (Capital Allocation) ---
-    # Calculated using pandas
     position_sizing = []
     if open_groups and net_liquidity_now and net_liquidity_now > 0:
-        # Group by symbol
         open_by_symbol = {}
         for g in open_groups:
             if g.symbol not in open_by_symbol:
@@ -205,18 +225,9 @@ def analyze_csv(csv_path: str, broker: str = "auto",
             open_by_symbol[g.symbol].append(g)
 
         for sym, groups in open_by_symbol.items():
-            # Estimate allocation based on entry cost (proceeds < 0 for debits)
-            # For credits, proceeds > 0, risk is undefined or margin-based.
-            # We use absolute net proceeds as a proxy for "capital involved" to show activity level,
-            # but for true sizing, we focus on Debit paid or Credit received as 'exposure'.
             total_cost = 0.0
             for g in groups:
-                # Sum of legs proceeds. Negative = Debit paid. Positive = Credit received.
-                # Usually sizing is about how much you paid (debit) or margin req (credit).
-                # Lacking margin data, we use Entry Cost for Longs, and Credit Received for Shorts as proxy.
                 entry_val = sum(l.proceeds for l in g.legs)
-                # If negative (Debit), it costs money. If positive (Credit), it adds cash but uses margin.
-                # We will just take the absolute value to represent "magnitude" of the position for visualization.
                 total_cost += abs(entry_val)
 
             allocation_pct = (total_cost / net_liquidity_now) * 100
@@ -227,14 +238,11 @@ def analyze_csv(csv_path: str, broker: str = "auto",
                 "description": _sym_desc(sym)
             })
 
-        # Sort by allocation % descending
         position_sizing.sort(key=lambda x: x["allocation_pct"], reverse=True)
 
-    # Optional outputs
     if out_dir:
         try:
             os.makedirs(out_dir, exist_ok=True)
-            # trades.csv
             pd.DataFrame([{
                 "symbol": g.symbol, "contract_id": g.contract_id,
                 "entry_ts": g.entry_ts.isoformat() if g.entry_ts else "",
@@ -243,12 +251,12 @@ def analyze_csv(csv_path: str, broker: str = "auto",
                 lambda x: f"'{x}" if isinstance(x, str) and x.startswith(("=", "+", "-", "@")) else x
             ).to_csv(os.path.join(out_dir, "trades.csv"), index=False)
 
-            # report.xlsx
             summary_rows = [
                 {"Metric": "Strategy Trades", "Value": len(strategies)},
                 {"Metric": "Strategy Win Rate", "Value": win_rate},
                 {"Metric": "Strategy Total PnL", "Value": total_pnl},
                 {"Metric": "Verdict", "Value": verdict},
+                {"Metric": "Fee Drag %", "Value": leakage_metrics["fee_drag"]},
             ]
             if account_size_start is not None: summary_rows.append({"Metric": "Account Size (Start)", "Value": account_size_start})
             if net_liquidity_now is not None: summary_rows.append({"Metric": "Net Liquidity (Now)", "Value": net_liquidity_now})
@@ -260,8 +268,7 @@ def analyze_csv(csv_path: str, broker: str = "auto",
                 pd.DataFrame(symbols_list).to_excel(writer, sheet_name="Symbols", index=False)
                 pd.DataFrame(strategy_rows).to_excel(writer, sheet_name="Strategies", index=False)
                 pd.DataFrame(open_rows).to_excel(writer, sheet_name="Open Positions", index=False)
-                if correlation_matrix_df is not None:
-                    correlation_matrix_df.to_excel(writer, sheet_name="Correlation")
+                pd.DataFrame(leakage_metrics["stale_capital"]).to_excel(writer, sheet_name="Stale Capital", index=False)
         except Exception:
             pass
 
@@ -277,9 +284,9 @@ def analyze_csv(csv_path: str, broker: str = "auto",
         "open_positions": open_rows,
         "broker": chosen_broker,
         "date_window": effective_window,
-        "correlation_matrix": correlation_json,
         "account_size_start": account_size_start,
         "net_liquidity_now": net_liquidity_now,
         "buying_power_utilized_percent": buying_power_utilized_percent,
         "position_sizing": position_sizing,
+        "leakage_report": leakage_metrics
     }
