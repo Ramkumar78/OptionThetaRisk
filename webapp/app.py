@@ -123,8 +123,10 @@ def create_app(testing: bool = False) -> Flask:
         style = request.form.get("style", "income")
 
         # In upload.html we renamed input to fee_per_trade for Manual Entry.
-
         fee_per_trade = _to_float("fee_per_trade")
+
+        # New input for CSV fee per trade
+        csv_fee_per_trade = _to_float("csv_fee_per_trade")
 
         if had_error:
             return redirect(url_for("index"))
@@ -172,6 +174,15 @@ def create_app(testing: bool = False) -> Flask:
             csv_path = os.path.join(temp_dir, "upload.csv")
             file.save(csv_path)
 
+        # Determine global_fees based on mode
+        # If manual data is present, use fee_per_trade (which targets manual entry)
+        # If no manual data (CSV mode), use csv_fee_per_trade
+        final_global_fees = None
+        if manual_data:
+            final_global_fees = fee_per_trade
+        else:
+            final_global_fees = csv_fee_per_trade
+
         try:
             res = analyze_csv(
                 csv_path=csv_path,
@@ -184,7 +195,7 @@ def create_app(testing: bool = False) -> Flask:
                 start_date=start_date,
                 end_date=end_date,
                 manual_data=manual_data,
-                global_fees=fee_per_trade,
+                global_fees=final_global_fees,
                 style=style
             )
 

@@ -197,13 +197,21 @@ def analyze_csv(csv_path: Optional[str] = None,
     except Exception as e:
         return {"error": str(e)}
 
-    # Apply fee_per_trade logic for manual entries
-    # If manual_data is present, global_fees is treated as 'Fee per Trade' and applied to each row.
-    if manual_data and global_fees is not None:
+    # Apply global_fees logic (Fee per Trade)
+    # This applies to every row in the dataframe (leg/execution).
+    if global_fees is not None:
         try:
             fee_val = float(global_fees)
             if not norm_df.empty:
-                norm_df["fees"] = fee_val
+                if manual_data:
+                    # For manual data, we explicitly set the fee column (override)
+                    norm_df["fees"] = fee_val
+                else:
+                    # For CSV data, we ADD the fee per trade to existing fees.
+                    # This accounts for broker commissions + user specified fee (e.g. exchange fees or adjustments)
+                    # or serves as the fee if CSV has none.
+                    norm_df["fees"] = norm_df["fees"].fillna(0.0) + fee_val
+
             # Clear global_fees so it's not added again as a lump sum later
             global_fees = None
         except (ValueError, TypeError):
@@ -243,11 +251,18 @@ def analyze_csv(csv_path: Optional[str] = None,
     # Use PnL (Gross) and Fees to calculate everything
     total_strategy_pnl_gross = sum(s.pnl for s in strategies)
 
-    # Fees: Sum strategy fees + global fees
-    strategy_sum_fees = sum(s.fees for s in strategies)
-    total_strategy_fees = strategy_sum_fees
+    # Fees: Sum strategy fees (which now include any per-trade global fees applied above)
+    total_strategy_fees = sum(s.fees for s in strategies)
+
+    # Legacy check: if global_fees wasn't consumed (e.g. empty df), add it here?
+    # But if df is empty we return error earlier.
+    # If global_fees passed but exception occurred above?
+    # We'll just rely on total_strategy_fees.
     if global_fees:
-        total_strategy_fees += float(global_fees)
+         # This branch should technically be unreachable if logic above works,
+         # unless norm_df was empty but we didn't return error?
+         # But check "if norm_df.empty return error" is above.
+         pass
 
     total_strategy_pnl_net = total_strategy_pnl_gross - total_strategy_fees
 

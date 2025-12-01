@@ -28,8 +28,7 @@ def test_analyze_with_global_fees(tmp_path):
     assert res2["leakage_report"]["fee_drag"] == 20.0
 
 def test_analyze_csv_global_fees_behavior(tmp_path):
-    # For CSV uploads, global_fees should still behave as a lump sum addition if provided (though UI hides it mostly)
-    # We verify this to ensure we didn't break CSV logic.
+    # For CSV uploads, global_fees is now applied PER TRADE ROW as an ADDITION.
 
     # Create dummy CSV
     # Note: We use positive values for fees here to match expectation of total_fees calculation
@@ -44,9 +43,13 @@ def test_analyze_csv_global_fees_behavior(tmp_path):
     # Fees in CSV: 1.0 + 1.0 = 2.0.
 
     # Run with global_fees = 10.0
+    # New logic: This adds 10.0 to EACH row.
+    # Row 1: 1.0 (CSV) + 10.0 (Global) = 11.0
+    # Row 2: 1.0 (CSV) + 10.0 (Global) = 11.0
+    # Total Fees = 22.0
+
     res = analyze_csv(csv_path=str(csv_path), global_fees=10.0)
 
     assert res["strategy_metrics"]["total_gross_pnl"] == 100.0
-    # Total Fees = CSV Fees (2.0) + Global Lump Sum (10.0) = 12.0
-    assert res["strategy_metrics"]["total_fees"] == 12.0
-    assert res["strategy_metrics"]["total_pnl"] == 88.0
+    assert res["strategy_metrics"]["total_fees"] == 22.0
+    assert res["strategy_metrics"]["total_pnl"] == 78.0 # 100 - 22
