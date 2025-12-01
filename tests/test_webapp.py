@@ -1,11 +1,12 @@
 import io
 import os
 import shutil
+import time
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-
+import gc
 
 def make_csv_bytes():
     # Minimal tasty CSV content with headers used by _normalize_tasty
@@ -28,21 +29,36 @@ def app():
 
     # Clean up the reports DB before each test
     db_path = os.path.join(app.instance_path, "reports.db")
-    if os.path.exists(db_path):
-        os.remove(db_path)
 
-    # Initialize DB for testing (via storage provider)
-    # We rely on LocalStorage to create the table
-    # But get_storage_provider returns the provider based on ENV
-    # For testing, we assume LocalStorage unless mocked
+    # Try to clean up existing DB with retries for Windows
+    for _ in range(3):
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            break
+        except PermissionError:
+            gc.collect() # Force close any lingering handles
+            time.sleep(0.1)
+
+    # Initialize DB for testing
     from webapp.storage import LocalStorage
     storage = LocalStorage(db_path)
 
     yield app
 
     # Final cleanup after test
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    # Ensure any connections are closed
+    storage.close()
+    del storage
+    gc.collect()
+
+    for _ in range(5):
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            break
+        except PermissionError:
+            time.sleep(0.1)
 
 
 def test_upload_and_results_page(app):

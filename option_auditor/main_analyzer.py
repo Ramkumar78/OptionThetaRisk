@@ -114,22 +114,6 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     total_strategy_pnl = sum(s.pnl for s in strategies)
     total_strategy_fees = sum(s.fees for s in strategies)
 
-    # Metric A: Fee Drag %
-    # (Total Fees / Total Profit) * 100
-    # "Total Profit" usually means Gross Profit.
-    # Our s.pnl is Net PnL (Proceeds).
-    # Gross PnL = Net PnL + Fees.
-    # If Total PnL is negative, Fee Drag calc might be weird (negative drag?).
-    # Assuming user means Positive Profit strategies? Or Aggregate?
-    # "If > 10%, tell them to stop trading 1-wide spreads."
-    # This implies we look at the cost of doing business.
-    # Total Fees / (Total Profit if positive?).
-    # Let's use Sum(Fees) / Sum(Gross Profit of WINNING trades) or just Aggregate?
-    # Standard formula: Fees / Gross PnL.
-    # If Net PnL is $50, Fees $10 -> Gross was $60. Drag = 10/60 = 16%.
-    # If Net PnL is -$50, Fees $10 -> Gross was -$40.
-    # We'll calculate on Aggregate Gross Profit.
-
     gross_pnl = total_strategy_pnl + total_strategy_fees
     if gross_pnl > 0:
         fee_drag = (total_strategy_fees / gross_pnl) * 100
@@ -139,8 +123,6 @@ def analyze_csv(csv_path: str, broker: str = "auto",
     else:
         leakage_metrics["fee_drag"] = 0.0 # N/A or Infinite
 
-    # Metric B: Stale Capital
-    # Held > 10 days AND Realized Theta < $1/day (averaged)
     for s in strategies:
         hd = s.hold_days()
         th = s.realized_theta() # Net PnL / Days

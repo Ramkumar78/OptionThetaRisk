@@ -19,6 +19,11 @@ class StorageProvider(ABC):
     def cleanup_old_reports(self, max_age_seconds: int) -> None:
         pass
 
+    @abstractmethod
+    def close(self) -> None:
+        """Close any open connections."""
+        pass
+
 class LocalStorage(StorageProvider):
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -61,6 +66,12 @@ class LocalStorage(StorageProvider):
         except Exception:
             pass
 
+    def close(self) -> None:
+        # SQLite usage in this class uses `with sqlite3.connect(...)` which automatically closes.
+        # However, if there are lingering connections elsewhere (like in tests), we might need to handle them.
+        # But here, we don't keep `self.conn` open.
+        pass
+
 class S3Storage(StorageProvider):
     def __init__(self, bucket_name: str, region_name: str = None):
         self.bucket_name = bucket_name
@@ -85,25 +96,16 @@ class S3Storage(StorageProvider):
             return None
 
     def cleanup_old_reports(self, max_age_seconds: int) -> None:
-        # S3 cleanup is expensive to list all objects.
-        # Ideally, we should rely on S3 Lifecycle Policies.
-        # But for completeness, we implement a simple list-and-delete.
-        # Note: This might be slow if there are many objects.
         try:
             paginator = self.s3.get_paginator('list_objects_v2')
             cutoff = time.time() - max_age_seconds
-
-            # We iterate prefix "reports/"
             for page in paginator.paginate(Bucket=self.bucket_name, Prefix='reports/'):
                 if 'Contents' in page:
                     to_delete = []
                     for obj in page['Contents']:
-                        # LastModified is a datetime object with timezone info
                         if obj['LastModified'].timestamp() < cutoff:
                             to_delete.append({'Key': obj['Key']})
-
                     if to_delete:
-                        # Batch delete (max 1000 keys)
                         for i in range(0, len(to_delete), 1000):
                             batch = to_delete[i:i+1000]
                             self.s3.delete_objects(
@@ -112,6 +114,9 @@ class S3Storage(StorageProvider):
                             )
         except Exception:
             pass
+
+    def close(self) -> None:
+        pass
 
 def get_storage_provider(app) -> StorageProvider:
     if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME"):

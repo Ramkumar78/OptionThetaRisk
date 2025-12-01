@@ -2,6 +2,8 @@
 import os
 import shutil
 import pytest
+import time
+import gc
 from webapp.app import create_app
 
 @pytest.fixture()
@@ -13,8 +15,14 @@ def app():
 
     # Clean up the reports DB before each test
     db_path = os.path.join(app.instance_path, "reports.db")
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    for _ in range(3):
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            break
+        except PermissionError:
+            gc.collect()
+            time.sleep(0.1)
 
     # Initialize DB for testing
     from webapp.storage import LocalStorage
@@ -23,8 +31,17 @@ def app():
     yield app
 
     # Final cleanup after test
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    storage.close()
+    del storage
+    gc.collect()
+
+    for _ in range(5):
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            break
+        except PermissionError:
+            time.sleep(0.1)
 
 def test_theme_toggle_presence(app):
     """
