@@ -12,26 +12,39 @@ class TransactionParser(ABC):
         pass
 
     def _parse_tasty_datetime(self, val: str) -> Optional[pd.Timestamp]:
+        dt = None
+        now = datetime.now()
+
+        # Try dateutil first
         try:
-            return pd.Timestamp(dtparser.parse(str(val)))
+            dt = pd.Timestamp(dtparser.parse(str(val)))
         except:
             pass
-        try:
-            s = str(val).strip().lower().replace(",", "")
-            now = datetime.now()
-            is_pm = 'p' in s
-            s = s.replace('p', '').replace('a', '').replace('m', '')
-            parts = s.split()
-            date_part = parts[0]
-            time_part = parts[1]
-            dt = datetime.strptime(f"{now.year}/{date_part} {time_part}", "%Y/%m/%d %H:%M")
-            if is_pm and dt.hour != 12:
-                dt += timedelta(hours=12)
-            elif not is_pm and dt.hour == 12:
-                dt -= timedelta(hours=12)
-            return pd.Timestamp(dt)
-        except:
-            return None
+
+        # Fallback to custom parsing
+        if dt is None:
+            try:
+                s = str(val).strip().lower().replace(",", "")
+                is_pm = 'p' in s
+                s = s.replace('p', '').replace('a', '').replace('m', '')
+                parts = s.split()
+                date_part = parts[0]
+                time_part = parts[1]
+                dt_obj = datetime.strptime(f"{now.year}/{date_part} {time_part}", "%Y/%m/%d %H:%M")
+                if is_pm and dt_obj.hour != 12:
+                    dt_obj += timedelta(hours=12)
+                elif not is_pm and dt_obj.hour == 12:
+                    dt_obj -= timedelta(hours=12)
+                dt = pd.Timestamp(dt_obj)
+            except:
+                return None
+
+        # Year adjustment logic (for both paths)
+        if dt is not None:
+            if dt > pd.Timestamp(now + timedelta(days=2)):
+                dt = dt.replace(year=dt.year - 1)
+
+        return dt
 
 class TastytradeParser(TransactionParser):
     def parse(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -44,7 +57,9 @@ class TastytradeParser(TransactionParser):
         out["symbol"] = df["Underlying Symbol"].astype(str)
         action = df["Action"].astype(str).str.lower()
         qty_raw = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0).astype(float)
-        sign = np.where(action.str.startswith("sell"), -1.0, 1.0)
+        # Sell -> Short (-1.0). Exercise -> Close Long (-1.0).
+        # Buy/Assignment -> Open/Close Short (1.0).
+        sign = np.where(action.str.startswith("sell") | action.str.contains("exercise"), -1.0, 1.0)
         out["qty"] = qty_raw * sign
         price = pd.to_numeric(df["Price"], errors="coerce").fillna(0.0)
         out["proceeds"] = -out["qty"] * price * 100.0

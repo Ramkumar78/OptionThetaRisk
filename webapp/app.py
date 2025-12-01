@@ -44,8 +44,8 @@ def create_app(testing: bool = False) -> Flask:
 
     # Basic, non-secret key for session/flash in dev; override via env in prod
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
-    # Limit uploads to 5 MB by default
-    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 5 * 1024 * 1024))
+    # Limit uploads to 50 MB by default (Active traders have large histories)
+    app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
 
     # Start cleanup thread only if not testing
     # And only in main process (reloader protection)

@@ -263,8 +263,14 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     # Win rate logic remains on strategy level
     wins = [s for s in strategies if s.net_pnl > 0]
+    losses = [s for s in strategies if s.net_pnl <= 0]
     win_rate = len(wins) / len(strategies) if strategies else 0.0
     
+    avg_win = float(np.mean([s.net_pnl for s in wins])) if wins else 0.0
+    avg_loss = float(np.mean([s.net_pnl for s in losses])) if losses else 0.0
+
+    expectancy = (avg_win * win_rate) + (avg_loss * (1 - win_rate))
+
     # Extended Metrics
     max_drawdown = _calculate_drawdown(strategies)
     monthly_income = _calculate_monthly_income(strategies)
@@ -414,7 +420,8 @@ def analyze_csv(csv_path: Optional[str] = None,
             "total_pnl": total_strategy_pnl_net,
             "total_gross_pnl": total_strategy_pnl_gross,
             "total_fees": total_strategy_fees,
-            "max_drawdown": max_drawdown
+            "max_drawdown": max_drawdown,
+            "expectancy": expectancy
         },
         "verdict": verdict,
         "verdict_color": verdict_color,

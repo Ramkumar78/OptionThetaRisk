@@ -92,3 +92,22 @@ def test_parse_tasty_datetime_methods():
 
     assert res_am is not None
     assert res_am.hour == 0
+
+    # Test Future Date Year Adjustment
+    # If a parsed date (MM/DD) is in the future relative to now(), it implies it's from the previous year.
+    # E.g. If today is Feb 20, and CSV says "Mar 1", it's Mar 1 of last year.
+
+    future_dt = datetime.now() + timedelta(days=5)
+    # Remove leading zero from day/month if parser expects it?
+    # dateutil handles it. My custom logic splits by space.
+    # Custom logic format: "{now.year}/{date_part} {time_part}"
+    # date_part = "MM/DD".
+
+    future_str = future_dt.strftime("%m/%d %I:%M").lstrip("0").replace("/0", "/") + " " + ("p" if future_dt.hour >= 12 else "a")
+    # Actually just standard format is fine for dateutil too.
+
+    # Try forcing custom logic path if dateutil parses it as this year
+    # dateutil defaults to current year.
+
+    res_future = parser._parse_tasty_datetime(future_str)
+    assert res_future.year == datetime.now().year - 1

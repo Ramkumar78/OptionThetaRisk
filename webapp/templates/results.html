@@ -94,7 +94,7 @@
       <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200">Audit Summary</h3>
     </div>
     <div class="p-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Net PnL (After Fees)</p>
           <h3 class="text-2xl font-bold {% if strategy_metrics.total_pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
@@ -115,6 +115,12 @@
         <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
           <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Avg Hold</p>
           <h3 class="text-2xl font-bold text-gray-900 dark:text-white">{{ "%.1f"|format(metrics.avg_hold_days) }}d</h3>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm hover:-translate-y-1 transition-transform duration-200 border border-gray-200 dark:border-gray-600 text-center">
+          <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Expectancy / Trade</p>
+          <h3 class="text-2xl font-bold {% if strategy_metrics.expectancy < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
+            ${{ "%.2f"|format(strategy_metrics.expectancy) }}
+          </h3>
         </div>
       </div>
 
