@@ -54,13 +54,5 @@ def test_calendar_spread_grouping(tmp_path):
     assert len(strategies) == 1
 
     # Crucially, we expect the legs to be grouped within the strategy structure
-    # If it was "Rolled", the legs wouldn't be merged into the list (based on current implementation analysis)
-    # Let's verify via the 'strategy' object if we could access it, but here we have the dict output.
-    # The dict output doesn't show leg count directly.
-    # But we can check the strategy name. It should NOT be "Rolled..."
     print(f"Strategy Name: {strategies[0]['strategy']}")
-
-    # Current broken behavior: "Rolled Short Call"
-    # Expected fixed behavior: "Call Vertical (Debit)" or similar (until we add specific Calendar naming)
-    # Definitely NOT "Rolled"
     assert "Rolled" not in strategies[0]["strategy"]

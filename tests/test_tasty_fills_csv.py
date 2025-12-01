@@ -86,7 +86,8 @@ def test_edgecase_decimal_strike_and_exp_token(tmp_path):
     assert res["broker"] == "tasty"
     # Should classify as a Call Vertical (side depends on credit/debit)
     names = {s.get("strategy") for s in res.get("strategy_groups", [])}
-    assert any("Call Vertical" in (n or "") for n in names)
+    # With new classification, this is a "Bull Call Spread"
+    assert any("Bull Call Spread" in (n or "") for n in names)
 
 
 def test_edgecase_stock_legs_ignored(tmp_path):
@@ -111,7 +112,8 @@ def test_strategy_name_put_vertical_credit(tmp_path):
     path = _write(tmp_path, csv, name="put_vertical_credit.csv")
     res = analyze_csv(path, broker="auto", out_dir=None)
     names = {s.get("strategy") for s in res.get("strategy_groups", [])}
-    assert any("Put Vertical" in (n or "") and "Credit" in (n or "") for n in names)
+    # With new classification, this is a "Bull Put Spread" (which is a credit spread)
+    assert any("Bull Put Spread" in (n or "") for n in names)
 
 
 def test_strategy_name_present_in_groups(tmp_path):
