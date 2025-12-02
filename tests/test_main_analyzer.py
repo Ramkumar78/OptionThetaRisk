@@ -121,7 +121,7 @@ def test_verdict_logic():
     # Add 9 losing trades
     for i in range(9):
         rows2.append({"Time": f"2025-03-{i+1:02d} 10:00", "Underlying Symbol": "LOSS", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 10, "Option Type": "Call"})
-        rows2.append({"Time": f"2025-03-{i+1:02d} 14:00", "Underlying Symbol": "Sell to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 10, "Option Type": "Call"})
+        rows2.append({"Time": f"2025-03-{i+1:02d} 14:00", "Underlying Symbol": "LOSS", "Quantity": 1, "Action": "Sell to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 10, "Option Type": "Call"})
 
     df2 = make_tasty_df(rows2)
     csv_buffer = io.StringIO()
