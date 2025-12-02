@@ -156,6 +156,29 @@ def _sym_desc(sym: str) -> str:
         return f"Options on {human}"
     return f"Options on {key}"
 
+def _normalize_ticker(broker_symbol: str) -> str:
+    """Maps broker symbols to yfinance tickers."""
+    if not isinstance(broker_symbol, str):
+        return str(broker_symbol)
+    s = broker_symbol.upper().strip()
+
+    # Map common Indices
+    index_map = {
+        "SPX": "^SPX", "VIX": "^VIX", "DJX": "^DJI", "NDX": "^NDX", "RUT": "^RUT"
+    }
+    if s in index_map:
+        return index_map[s]
+
+    # Map Futures (Tastytrade uses /ES, Yahoo uses ES=F)
+    if s.startswith("/"):
+        return f"{s[1:]}=F"
+
+    # Map Classes (BRK/B -> BRK-B)
+    if "/" in s:
+        return s.replace("/", "-")
+
+    return s
+
 def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
     """
     Fetches live prices for a list of symbols using yfinance.
@@ -387,20 +410,36 @@ def analyze_csv(csv_path: Optional[str] = None,
         if s.exit_ts:
             last_trade_map[s.symbol] = (s.exit_ts, s.net_pnl)
     
-    # 5. Live Risk Analysis (New)
+    # 5. Live Risk Analysis
     live_prices = {}
     itm_risk_flag = False
     itm_risk_details = []
     itm_risk_amount = 0.0
+    missing_data_warning = []  # NEW: Track missing symbols
 
     if open_groups:
         try:
-            # Gather unique symbols from open groups
-            syms_to_fetch = list({g.symbol for g in open_groups if g.symbol})
-            live_prices = _fetch_live_prices(syms_to_fetch)
+            # 1. Identify symbols needed
+            raw_symbols = list({g.symbol for g in open_groups if g.symbol})
+
+            # 2. Create a map of Raw -> Normalized
+            sym_map = {raw: _normalize_ticker(raw) for raw in raw_symbols}
+
+            # 3. Fetch prices using NORMALIZED symbols
+            fetched_prices = _fetch_live_prices(list(sym_map.values()))
+
+            # 4. Map back to raw symbols for the risk check logic
+            for raw, norm in sym_map.items():
+                if norm in fetched_prices:
+                    live_prices[raw] = fetched_prices[norm]
+                else:
+                    missing_data_warning.append(raw) # Track failures
+
             itm_risk_flag, itm_risk_amount, itm_risk_details = _check_itm_risk(open_groups, live_prices)
-        except Exception:
-            # Don't let live price failure crash the report
+
+        except Exception as e:
+            # Log error if needed
+            print(f"Live price fetch failed: {e}")
             pass
 
     # 6. Metrics Calculation
@@ -495,6 +534,12 @@ def analyze_csv(csv_path: Optional[str] = None,
         verdict = "Red Flag: High Open Risk"
         verdict_color = "red"
         verdict_details = f"Warning: {len(itm_risk_details)} positions are deep ITM. Total Intrinsic Exposure: -${itm_risk_amount:,.2f}."
+
+    # NEW: Data Integrity Warning
+    elif missing_data_warning:
+        verdict = "Amber: Data Unavailable"
+        verdict_color = "yellow"
+        verdict_details = f"Could not fetch live prices for: {', '.join(missing_data_warning[:3])}. Risk not assessed."
 
     sym_stats = {}
     for s in strategies:
