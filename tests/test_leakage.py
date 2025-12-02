@@ -60,4 +60,4 @@ def test_leakage_metrics_calculation():
     stale = report["stale_capital"]
     assert len(stale) == 1
     assert stale[0]["symbol"] == "SPY"
-    assert stale[0]["theta_per_day"] < 1.0
+    assert stale[0]["average_daily_pnl"] < 1.0
