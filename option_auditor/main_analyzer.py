@@ -1,4 +1,4 @@
-from .parsers import TastytradeParser, TastytradeFillsParser, ManualInputParser
+from .parsers import TastytradeParser, TastytradeFillsParser, ManualInputParser, IBKRParser
 from .strategy import build_strategies
 from .models import TradeGroup, Leg
 from .config import SYMBOL_DESCRIPTIONS, VERDICT_MIN_TRADES
@@ -108,6 +108,12 @@ def _detect_broker(df: pd.DataFrame) -> Optional[str]:
         return "tasty"
     if "Description" in cols and "Symbol" in cols:
         return "tasty"
+    # IBKR Detection
+    if "ClientAccountID" in cols or "IBCommission" in cols:
+        return "ibkr"
+    # Generic IBKR Flex match
+    if "Comm/Fee" in cols and "T. Price" in cols:
+        return "ibkr"
     return None
 
 def _group_contracts_with_open(legs_df: pd.DataFrame) -> Tuple[List[TradeGroup], List[TradeGroup]]:
@@ -289,12 +295,17 @@ def analyze_csv(csv_path: Optional[str] = None,
 
         if broker == "auto" or broker is None:
             chosen_broker = _detect_broker(df) or "tasty"
+        else:
+            # Respect explicit choice if provided
+            chosen_broker = broker
 
         if chosen_broker == "tasty":
             if "Description" in df.columns and "Symbol" in df.columns:
                 parser = TastytradeFillsParser()
             else:
                 parser = TastytradeParser()
+        elif chosen_broker == "ibkr":
+            parser = IBKRParser()
         else:
             return {"error": "Unsupported broker"}
 
