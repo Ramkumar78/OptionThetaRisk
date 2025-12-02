@@ -6,13 +6,17 @@ def build():
     print("Building OptionAuditor executable...")
 
     # Define build options
+
+    # Platform-specific path separator
+    sep = os.pathsep
+
     options = [
         'webapp/app.py',  # Entry point
         '--name=OptionAuditor',
         '--onefile',
         '--noconsole',  # Hide console window (remove for debugging)
-        '--add-data=webapp/templates:webapp/templates',
-        '--add-data=webapp/static:webapp/static',
+        f'--add-data=webapp/templates{sep}webapp/templates',
+        f'--add-data=webapp/static{sep}webapp/static',
         '--hidden-import=pandas',
         '--hidden-import=numpy',
         '--hidden-import=yfinance',

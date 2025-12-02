@@ -56,6 +56,53 @@ python -m webapp.app
 ```
 Then open http://127.0.0.1:5000 in your browser.
 
+#### Running with Docker
+You can also run the web application using Docker, which simplifies setup by containerizing the environment.
+
+**Prerequisites:**
+- Docker installed on your machine.
+- (Optional) Docker Compose.
+
+**Using Docker Compose (Recommended):**
+1.  Run the application:
+    ```bash
+    docker-compose up --build
+    ```
+2.  Open http://127.0.0.1:5000 in your browser.
+
+**Using Docker manually:**
+1.  Build the image:
+    ```bash
+    docker build -t option-auditor .
+    ```
+2.  Run the container:
+    ```bash
+    docker run -p 5000:5000 option-auditor
+    ```
+
+**Persistence:**
+The application uses a SQLite database in the `instance/` directory to store report metadata. To persist this data across container restarts, mount a volume to `/app/instance`. The `docker-compose.yml` file is pre-configured to do this.
+
+#### Building an Executable
+You can build a standalone executable for your operating system (Windows or macOS).
+
+1.  Install the package with development dependencies (specifically `pyinstaller`):
+    ```bash
+    pip install -r requirements.txt
+    pip install pyinstaller
+    ```
+
+2.  Run the build script:
+    ```bash
+    python build_executable.py
+    ```
+
+3.  The executable will be located in the `dist/` directory.
+    -   **Windows**: `dist/OptionAuditor.exe`
+    -   **macOS**: `dist/OptionAuditor`
+
+*Note: You must build the executable on the target operating system (e.g., build on Windows to get a Windows .exe).*
+
 What you can do:
 - Upload your broker CSV (.csv only; default 5 MB limit).
 - Choose broker (Auto/Tastytrade/IBKR) and optional account size.
