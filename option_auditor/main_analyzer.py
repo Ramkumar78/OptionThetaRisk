@@ -579,43 +579,70 @@ def analyze_csv(csv_path: Optional[str] = None,
         strategy_rows.append(row)
 
     open_rows = []
-    for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min):
+
+    # Aggregation step: Combine open groups by contract_id
+    aggregated_open = {}
+    for g in open_groups:
+        cid = g.contract_id
+        if cid not in aggregated_open:
+            aggregated_open[cid] = {
+                "symbol": g.symbol,
+                "expiry": g.expiry,
+                "strike": g.strike,
+                "right": g.right,
+                "qty_net": 0.0,
+                "pnl": 0.0,
+                "entry_ts": g.entry_ts,
+                "contract_id": cid
+            }
+
+        agg = aggregated_open[cid]
+        agg["qty_net"] += g.qty_net
+        agg["pnl"] += g.pnl
+        # Keep earliest entry time for "Days Open"
+        if g.entry_ts and (agg["entry_ts"] is None or g.entry_ts < agg["entry_ts"]):
+            agg["entry_ts"] = g.entry_ts
+
+    sorted_aggs = sorted(aggregated_open.values(), key=lambda x: x["entry_ts"] or pd.Timestamp.min)
+
+    for agg in sorted_aggs:
+        qty = agg["qty_net"]
+        pnl = agg["pnl"]
+
         # Calculate Average Entry Price (Cost Basis)
         avg_price = 0.0
         breakeven = 0.0
-        if abs(g.qty_net) > 0:
-            avg_price = abs(g.pnl) / (abs(g.qty_net) * 100.0)
+        if abs(qty) > 0:
+            avg_price = abs(pnl) / (abs(qty) * 100.0)
 
             # Calculate Breakeven
-            if g.strike:
-                if g.right == 'P': # Put
-                    breakeven = g.strike - avg_price
-                elif g.right == 'C': # Call
-                    breakeven = g.strike + avg_price
+            if agg["strike"]:
+                if agg["right"] == 'P': # Put
+                    breakeven = agg["strike"] - avg_price
+                elif agg["right"] == 'C': # Call
+                    breakeven = agg["strike"] + avg_price
 
         row = {
-            "symbol": g.symbol,
-            "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "",
-            "contract": f"{g.right or ''} {g.strike}",
-            "qty_open": g.qty_net,
+            "symbol": agg["symbol"],
+            "expiry": agg["expiry"].date().isoformat() if agg["expiry"] and not pd.isna(agg["expiry"]) else "",
+            "contract": f"{agg['right'] or ''} {agg['strike']}",
+            "qty_open": qty,
             "avg_price": avg_price,
             "breakeven": breakeven,
-            "opened": g.entry_ts.isoformat() if g.entry_ts else "",
-            "days_open": (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0,
-            "description": _sym_desc(g.symbol)
+            "opened": agg["entry_ts"].isoformat() if agg["entry_ts"] else "",
+            "days_open": (pd.Timestamp(datetime.now()) - agg["entry_ts"]).total_seconds() / 86400.0 if agg["entry_ts"] else 0.0,
+            "description": _sym_desc(agg["symbol"])
         }
 
         # Add risk annotation if applicable
         if itm_risk_flag:
-            # Re-check this specific group for risk annotation
-            # (We could have stored this in _check_itm_risk but this is quick enough)
-            if g.symbol in live_prices and g.strike and g.qty_net < 0:
-                cp = live_prices[g.symbol]
+            if agg["symbol"] in live_prices and agg["strike"] and qty < 0:
+                cp = live_prices[agg["symbol"]]
                 is_risky_pos = False
-                if g.right == 'P' and cp < g.strike:
-                    if (g.strike - cp)/g.strike > 0.01: is_risky_pos = True
-                elif g.right == 'C' and cp > g.strike:
-                    if (cp - g.strike)/g.strike > 0.01: is_risky_pos = True
+                if agg["right"] == 'P' and cp < agg["strike"]:
+                    if (agg["strike"] - cp)/agg["strike"] > 0.01: is_risky_pos = True
+                elif agg["right"] == 'C' and cp > agg["strike"]:
+                    if (cp - agg["strike"])/agg["strike"] > 0.01: is_risky_pos = True
 
                 if is_risky_pos:
                     row["risk_alert"] = "ITM Risk"
