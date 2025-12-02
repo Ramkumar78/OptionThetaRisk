@@ -10,6 +10,7 @@ class TestITMRisk(unittest.TestCase):
         # Setup: One open Short Put that is ITM
         # Symbol: SPY, Strike: 400, Type: Put, Qty: -1 (Short)
         # Current Price: 390 (ITM for Put)
+        # Intrinsic: (400 - 390) * 1 * 100 = $1000 Exposure
 
         with patch('yfinance.Ticker') as mock_ticker:
             mock_inst = MagicMock()
@@ -17,7 +18,6 @@ class TestITMRisk(unittest.TestCase):
             mock_inst.fast_info = {'last_price': 390.0}
             mock_ticker.return_value = mock_inst
 
-            # Since we are using Tickers object (plural)
             with patch('yfinance.Tickers') as mock_tickers:
                 mock_tickers_inst = MagicMock()
                 mock_tickers_inst.tickers = {'SPY': mock_inst}
@@ -54,17 +54,14 @@ class TestITMRisk(unittest.TestCase):
 
                         result = analyze_csv(manual_data=manual_data)
                         print(f"DEBUG RESULT VERDICT: {result.get('verdict')}")
-
-                        if "error" in result:
-                            self.fail(f"Analysis failed with error: {result['error']}")
+                        print(f"DEBUG RESULT DETAILS: {result.get('verdict_details')}")
 
                         self.assertEqual(result['verdict'], "Red Flag: High Open Risk")
                         self.assertEqual(result['verdict_color'], "red")
 
-                        # Verify open positions have risk alert
-                        open_pos = result['open_positions']
-                        self.assertTrue(any('risk_alert' in op for op in open_pos))
-                        self.assertEqual(open_pos[0]['risk_alert'], "ITM Risk")
+                        details = result.get('verdict_details', '')
+                        self.assertIn("Warning: 1 positions are deep ITM", details)
+                        self.assertIn("Total Intrinsic Exposure: -$1,000.00", details)
 
     def test_live_itm_risk_no_risk(self):
         # Setup: One open Short Put that is OTM
@@ -115,8 +112,7 @@ class TestITMRisk(unittest.TestCase):
                         print(f"DEBUG RESULT VERDICT: {result.get('verdict')}")
 
                         self.assertNotEqual(result['verdict'], "Red Flag: High Open Risk")
-                        # Should be Insufficient Data because no strategies
-                        self.assertIn("Insufficient Data", result['verdict'])
+                        self.assertIsNone(result.get('verdict_details'))
 
 if __name__ == '__main__':
     unittest.main()

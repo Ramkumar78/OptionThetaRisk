@@ -213,12 +213,13 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
 
     return price_map
 
-def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> Tuple[bool, List[str]]:
+def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> Tuple[bool, float, List[str]]:
     """
     Checks open positions for ITM risk.
-    Returns (is_risky_flag, list_of_risk_descriptions).
+    Returns (is_risky_flag, total_itm_amount, list_of_risk_descriptions).
     """
     risky = False
+    total_itm_exposure = 0.0
     details = []
 
     for g in open_groups:
@@ -249,15 +250,18 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
 
         if is_itm:
             pct_itm = (diff / strike) if strike > 0 else 0
+            # Calculate intrinsic value exposure: diff * qty * 100
+            exposure = diff * abs(g.qty_net) * 100.0
+
             if pct_itm > 0.01: # > 1% ITM
                 risky = True
+                total_itm_exposure += exposure
                 type_str = "Put" if g.right == 'P' else "Call"
                 details.append(
-                    f"Risk: Short {type_str} {g.symbol} {strike} is ITM by {pct_itm:.1%} "
-                    f"(Price: {current_price:.2f})"
+                    f"Short {type_str} {g.symbol} {strike} ITM by {pct_itm:.1%} (-${exposure:,.0f})"
                 )
 
-    return risky, details
+    return risky, total_itm_exposure, details
 
 def analyze_csv(csv_path: Optional[str] = None,
                 broker: str = "auto",
@@ -376,13 +380,14 @@ def analyze_csv(csv_path: Optional[str] = None,
     live_prices = {}
     itm_risk_flag = False
     itm_risk_details = []
+    itm_risk_amount = 0.0
 
     if open_groups:
         try:
             # Gather unique symbols from open groups
             syms_to_fetch = list({g.symbol for g in open_groups if g.symbol})
             live_prices = _fetch_live_prices(syms_to_fetch)
-            itm_risk_flag, itm_risk_details = _check_itm_risk(open_groups, live_prices)
+            itm_risk_flag, itm_risk_amount, itm_risk_details = _check_itm_risk(open_groups, live_prices)
         except Exception:
             # Don't let live price failure crash the report
             pass
@@ -474,11 +479,11 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     # OVERRIDE: ITM Risk Detection
     # If high risk is detected in open positions, it supersedes all other verdicts.
+    verdict_details = None
     if itm_risk_flag:
         verdict = "Red Flag: High Open Risk"
         verdict_color = "red"
-        # We can append details to verdict or expose them elsewhere
-        # verdict += f" ({len(itm_risk_details)} positions)"
+        verdict_details = f"Warning: {len(itm_risk_details)} positions are deep ITM. Total Intrinsic Exposure: -${itm_risk_amount:,.2f}."
 
     sym_stats = {}
     for s in strategies:
@@ -616,6 +621,7 @@ def analyze_csv(csv_path: Optional[str] = None,
         },
         "verdict": verdict,
         "verdict_color": verdict_color,
+        "verdict_details": verdict_details,
         "symbols": symbols_list,
         "strategy_groups": strategy_rows,
         "open_positions": open_rows,

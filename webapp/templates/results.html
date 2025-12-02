@@ -17,7 +17,12 @@
     {% endif %}">
     <div class="p-8 text-center">
         <h2 class="text-5xl font-extrabold uppercase tracking-tight mb-2 drop-shadow-sm">{{ verdict }}</h2>
-        <p class="text-lg font-medium opacity-90">Assessment based on your <span class="underline decoration-2 underline-offset-2">{{ style|default('selected')|title }}</span> profile</p>
+
+        {% if verdict_details %}
+            <p class="text-xl font-bold mt-2 text-red-900 dark:text-red-100 bg-white/20 inline-block px-4 py-1 rounded">{{ verdict_details }}</p>
+        {% else %}
+            <p class="text-lg font-medium opacity-90">Assessment based on your <span class="underline decoration-2 underline-offset-2">{{ style|default('selected')|title }}</span> profile</p>
+        {% endif %}
 
         {% if date_window %}
         <div class="mt-4 inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium bg-white/50 dark:bg-black/20 text-gray-700 dark:text-gray-200 backdrop-blur-sm shadow-sm border border-white/20">
