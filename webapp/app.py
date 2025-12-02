@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import os
-import shutil
 import uuid
 import threading
 import time
@@ -22,7 +21,6 @@ MAX_REPORT_AGE = 3600 # 1 hour
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
-    # We need an app context or storage provider reference
     with app.app_context():
         storage = get_storage_provider(app)
         while True:
@@ -41,14 +39,9 @@ def create_app(testing: bool = False) -> Flask:
         pass
 
     app.config["TESTING"] = testing
-
-    # Basic, non-secret key for session/flash in dev; override via env in prod
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
-    # Limit uploads to 50 MB by default (Active traders have large histories)
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
 
-    # Start cleanup thread only if not testing
-    # And only in main process (reloader protection)
     if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
@@ -61,8 +54,6 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.after_request
     def add_security_headers(response):
-        # Basic Content-Security-Policy
-        # Relaxed for Tailwind Play CDN which compiles in-browser
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com; "
@@ -74,7 +65,7 @@ def create_app(testing: bool = False) -> Flask:
         return response
 
     @app.errorhandler(413)
-    def too_large(e):  # pragma: no cover
+    def too_large(e):
         return render_template("error.html", message="Upload too large. Max size is limited."), 413
 
     @app.route("/", methods=["GET"])
@@ -86,14 +77,12 @@ def create_app(testing: bool = False) -> Flask:
         file = request.files.get("csv")
         broker = request.form.get("broker", "auto")
         
-        # Check if manual data was submitted
         manual_data_json = request.form.get("manual_trades")
         manual_data = None
         if manual_data_json:
             try:
                 manual_data = json.loads(manual_data_json)
                 if manual_data and isinstance(manual_data, list):
-                    # Filter out empty rows if any
                     manual_data = [
                         row for row in manual_data
                         if row.get("date") and row.get("symbol") and row.get("action")
@@ -118,18 +107,13 @@ def create_app(testing: bool = False) -> Flask:
         account_size_start = _to_float("account_size_start")
         net_liquidity_now = _to_float("net_liquidity_now")
         buying_power_available_now = _to_float("buying_power_available_now")
-
-        # Style
         style = request.form.get("style", "income")
-
-        # In upload.html we renamed input to fee_per_trade for Manual Entry.
-
         fee_per_trade = _to_float("fee_per_trade")
+        csv_fee_per_trade = _to_float("csv_fee_per_trade")
 
         if had_error:
             return redirect(url_for("index"))
 
-        # If no CSV and no Manual Data, complain
         if (not file or file.filename == "") and not manual_data:
             flash("Please choose a CSV file or enter trades manually.", "warning")
             return redirect(url_for("index"))
@@ -138,12 +122,10 @@ def create_app(testing: bool = False) -> Flask:
             flash("Only .csv files are allowed", "warning")
             return redirect(url_for("index"))
 
-        # Read date-range selection
         date_mode = request.form.get("date_mode", "all")
         start_date = request.form.get("start_date", "").strip() or None
         end_date = request.form.get("end_date", "").strip() or None
 
-        # Convert presets to actual dates (inclusive).
         now = datetime.now()
         if date_mode in {"7d", "14d", "1m", "6m", "1y", "2y", "ytd"}:
             if date_mode == "7d": s_dt = now - timedelta(days=7)
@@ -152,7 +134,7 @@ def create_app(testing: bool = False) -> Flask:
             elif date_mode == "6m": s_dt = now - timedelta(days=182)
             elif date_mode == "1y": s_dt = now - timedelta(days=365)
             elif date_mode == "2y": s_dt = now - timedelta(days=730)
-            else: s_dt = datetime(now.year, 1, 1) # ytd
+            else: s_dt = datetime(now.year, 1, 1)
             start_date = s_dt.date().isoformat()
             end_date = now.date().isoformat()
         elif date_mode == "range":
@@ -160,17 +142,14 @@ def create_app(testing: bool = False) -> Flask:
                 flash("Please select both start and end dates or choose 'All data'", "warning")
                 return redirect(url_for("index"))
 
-        # Generate a unique ID for this analysis request
         token = uuid.uuid4().hex
         
-        # Create a temp directory for processing
-        temp_dir = os.path.join(app.instance_path, 'temp_' + token)
-        os.makedirs(temp_dir, exist_ok=True)
-
         csv_path = None
         if file and file.filename != "":
-            csv_path = os.path.join(temp_dir, "upload.csv")
-            file.save(csv_path)
+            # In-memory processing
+            csv_path = io.StringIO(file.read().decode('utf-8'))
+
+        final_global_fees = fee_per_trade if manual_data else csv_fee_per_trade
 
         try:
             res = analyze_csv(
@@ -179,30 +158,20 @@ def create_app(testing: bool = False) -> Flask:
                 account_size_start=account_size_start,
                 net_liquidity_now=net_liquidity_now,
                 buying_power_available_now=buying_power_available_now,
-                out_dir=temp_dir,
                 report_format="all",
                 start_date=start_date,
                 end_date=end_date,
                 manual_data=manual_data,
-                global_fees=fee_per_trade,
+                global_fees=final_global_fees,
                 style=style
             )
 
-            # If successful, check for report.xlsx and store using StorageProvider
-            report_path = os.path.join(temp_dir, "report.xlsx")
-            if os.path.exists(report_path):
-                with open(report_path, "rb") as f:
-                    file_data = f.read()
-
+            if res.get("excel_report"):
                 storage = get_storage_provider(app)
-                storage.save_report(token, "report.xlsx", file_data)
-
-        except Exception as exc: # pragma: no cover
-            shutil.rmtree(temp_dir, ignore_errors=True)
+                storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
+        
+        except Exception as exc:
             return render_template("error.html", message=f"Failed to analyze data: {exc}")
-        finally:
-            # Cleanup temp dir immediately
-            shutil.rmtree(temp_dir, ignore_errors=True)
 
         if "error" in res:
             return render_template("error.html", message=f"Failed to analyze: {res['error']}")
@@ -230,11 +199,9 @@ def create_app(testing: bool = False) -> Flask:
 
     return app
 
-
 app = create_app()
 
-if __name__ == "__main__":  # pragma: no cover
-    # Dev server
+if __name__ == "__main__":
     enable_https = os.environ.get("ENABLE_HTTPS", "0") == "1"
     if enable_https:
         app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True, ssl_context="adhoc")

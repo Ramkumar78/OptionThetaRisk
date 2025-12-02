@@ -6,6 +6,7 @@ from typing import Optional, Dict, List, Tuple, Any, Union
 import pandas as pd
 import numpy as np
 import os
+import io
 import yfinance as yf
 from datetime import datetime
 from collections import defaultdict
@@ -49,7 +50,7 @@ def _calculate_monthly_income(strategies: List[Any]) -> List[Dict]:
     return [{"month": k, "income": round(monthly_map[k], 2)} for k in sorted_keys]
 
 def _calculate_portfolio_curve(strategies: List[Any]) -> List[Dict]:
-    """Returns cumulative PnL time series."""
+    """Returns cumulative PnL time series with daily trade details."""
     data_points = []
     cumulative = 0.0
 
@@ -62,11 +63,42 @@ def _calculate_portfolio_curve(strategies: List[Any]) -> List[Dict]:
 
     # Initial point (optional, but good for chart)
     first_ts = sorted_strats[0].exit_ts - pd.Timedelta(days=1)
-    data_points.append({"x": first_ts.isoformat(), "y": 0.0})
+    data_points.append({"x": first_ts.isoformat(), "y": 0.0, "trades": []})
 
+    # Group trades by date to avoid multiple points per day (which chart.js handles, but nicer to aggregate for tooltip)
+    daily_groups = defaultdict(list)
     for s in sorted_strats:
-        cumulative += s.net_pnl
-        data_points.append({"x": s.exit_ts.isoformat(), "y": float(f"{cumulative:.2f}")})
+        date_key = s.exit_ts.date() # Group by date
+        daily_groups[date_key].append(s)
+
+    sorted_dates = sorted(daily_groups.keys())
+
+    for d in sorted_dates:
+        strats_for_day = daily_groups[d]
+        daily_pnl = 0.0
+        daily_trades = []
+
+        # Identify top contributors (e.g., top 3 biggest moves)
+        strats_for_day.sort(key=lambda x: abs(x.net_pnl), reverse=True)
+
+        for s in strats_for_day:
+            daily_pnl += s.net_pnl
+            if len(daily_trades) < 5: # Limit to top 5 trades per day in tooltip
+                symbol = s.symbol
+                strat = s.strategy_name
+                amt = s.net_pnl
+                daily_trades.append(f"{symbol} {strat}: ${amt:.0f}")
+
+        if len(strats_for_day) > 5:
+            remaining = len(strats_for_day) - 5
+            daily_trades.append(f"...and {remaining} more")
+
+        cumulative += daily_pnl
+        data_points.append({
+            "x": d.isoformat(),
+            "y": float(f"{cumulative:.2f}"),
+            "trades": daily_trades
+        })
 
     return data_points
 
@@ -123,7 +155,7 @@ def analyze_csv(csv_path: Optional[str] = None,
                 account_size_start: Optional[float] = None,
                 net_liquidity_now: Optional[float] = None,
                 buying_power_available_now: Optional[float] = None,
-                out_dir: Optional[str] = "out", report_format: str = "all",
+                out_dir: Optional[str] = None, report_format: str = "all",
                 start_date: Optional[str] = None, end_date: Optional[str] = None,
                 manual_data: Optional[List[Dict[str, Any]]] = None,
                 global_fees: Optional[float] = None,
@@ -166,14 +198,15 @@ def analyze_csv(csv_path: Optional[str] = None,
     except Exception as e:
         return {"error": str(e)}
 
-    # Apply fee_per_trade logic for manual entries
-    # If manual_data is present, global_fees is treated as 'Fee per Trade' and applied to each row.
-    if manual_data and global_fees is not None:
+    # Apply global_fees logic (Fee per Trade)
+    if global_fees is not None:
         try:
             fee_val = float(global_fees)
             if not norm_df.empty:
-                norm_df["fees"] = fee_val
-            # Clear global_fees so it's not added again as a lump sum later
+                if manual_data:
+                    norm_df["fees"] = fee_val
+                else:
+                    norm_df["fees"] = norm_df["fees"].fillna(0.0) + fee_val
             global_fees = None
         except (ValueError, TypeError):
             pass
@@ -203,25 +236,19 @@ def analyze_csv(csv_path: Optional[str] = None,
     strategies = build_strategies(norm_df)
     
     # 5. Metrics Calculation
+    total_strategy_pnl_gross = sum(s.pnl for s in strategies)
+    total_strategy_fees = sum(s.fees for s in strategies)
+    total_strategy_pnl_net = total_strategy_pnl_gross - total_strategy_fees
+
+    efficiency_ratio = total_strategy_pnl_net / total_strategy_fees if total_strategy_fees > 0 else 0
+
     leakage_metrics = {
         "fee_drag": 0.0,
         "fee_drag_verdict": "OK",
-        "stale_capital": []
+        "stale_capital": [],
+        "efficiency_ratio": efficiency_ratio
     }
 
-    # Use PnL (Gross) and Fees to calculate everything
-    total_strategy_pnl_gross = sum(s.pnl for s in strategies)
-
-    # Fees: Sum strategy fees + global fees
-    strategy_sum_fees = sum(s.fees for s in strategies)
-    total_strategy_fees = strategy_sum_fees
-    if global_fees:
-        total_strategy_fees += float(global_fees)
-
-    total_strategy_pnl_net = total_strategy_pnl_gross - total_strategy_fees
-
-    # Fee Drag: Fees / Gross Profit (where Gross Profit = Net + Fees, or just our s.pnl)
-    # If Gross PnL is positive
     if total_strategy_pnl_gross > 0:
         fee_drag = (total_strategy_fees / total_strategy_pnl_gross) * 100
         leakage_metrics["fee_drag"] = round(fee_drag, 2)
@@ -230,11 +257,9 @@ def analyze_csv(csv_path: Optional[str] = None,
     else:
         leakage_metrics["fee_drag"] = 0.0
 
-    # Stale Capital
     for s in strategies:
         hd = s.hold_days()
-        th = s.realized_theta() # This uses net_pnl / days (but s.net_pnl doesn't include global fees)
-        # Should we distribute global fees? No, keep it simple.
+        th = s.realized_theta()
         if hd > 10.0 and th < 1.0:
             leakage_metrics["stale_capital"].append({
                 "strategy": s.strategy_name,
@@ -244,16 +269,6 @@ def analyze_csv(csv_path: Optional[str] = None,
                 "pnl": round(s.net_pnl, 2)
             })
 
-    # Contract Metrics
-    # Contract groups also have individual fees.
-    # We should add global fees to the aggregate total.
-    total_pnl_contracts_gross = float(sum(g.pnl for g in contract_groups))
-    # We can't easily attribute global fees to specific contract groups without rules.
-    # So contract-level PnL sum might differ from "Total PnL" if we subtract global fees.
-    # Let's align "Total PnL" metric with Net PnL.
-
-    wins_contracts = [g for g in contract_groups if g.pnl > 0] # Gross logic for individual? or net?
-    # TradeGroup.net_pnl exists.
     wins_contracts = [g for g in contract_groups if g.net_pnl > 0]
     win_rate_contracts = len(wins_contracts) / len(contract_groups) if contract_groups else 0.0
     avg_hold_contracts = np.mean([
@@ -261,7 +276,6 @@ def analyze_csv(csv_path: Optional[str] = None,
         for g in contract_groups
     ]) if contract_groups else 0.0
 
-    # Win rate logic remains on strategy level
     wins = [s for s in strategies if s.net_pnl > 0]
     losses = [s for s in strategies if s.net_pnl <= 0]
     win_rate = len(wins) / len(strategies) if strategies else 0.0
@@ -271,7 +285,6 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     expectancy = (avg_win * win_rate) + (avg_loss * (1 - win_rate))
 
-    # Extended Metrics
     max_drawdown = _calculate_drawdown(strategies)
     monthly_income = _calculate_monthly_income(strategies)
     portfolio_curve = _calculate_portfolio_curve(strategies)
@@ -279,9 +292,7 @@ def analyze_csv(csv_path: Optional[str] = None,
     verdict = "Green Flag"
     verdict_color = "green"
 
-    # Verdict Logic based on Style
     if style == "speculation":
-        # Speculation: High risk allowed, but needs positive PnL. Win rate can be lower (e.g. 40%).
         if total_strategy_pnl_net < 0:
             verdict = "Red Flag: Negative PnL"
             verdict_color = "red"
@@ -292,7 +303,6 @@ def analyze_csv(csv_path: Optional[str] = None,
             verdict = "Amber: High Fee Drag"
             verdict_color = "yellow"
     else:
-        # Income (Default): Needs high win rate (>70%), Low Fee Drag.
         if total_strategy_pnl_net < 0:
             verdict = "Red Flag: Negative Income"
             verdict_color = "red"
@@ -303,16 +313,14 @@ def analyze_csv(csv_path: Optional[str] = None,
             verdict = "Amber: Fee Drag > 10%"
             verdict_color = "yellow"
         elif max_drawdown > (total_strategy_pnl_gross * 0.5) and total_strategy_pnl_gross > 0:
-             # If Drawdown is more than 50% of total profit generated
             verdict = "Amber: High Drawdown"
             verdict_color = "yellow"
 
-    # Symbol Breakdown
     sym_stats = {}
     for s in strategies:
         if s.symbol not in sym_stats:
             sym_stats[s.symbol] = {'pnl': 0.0, 'trades': 0, 'wins': 0}
-        sym_stats[s.symbol]['pnl'] += s.net_pnl # Use Net
+        sym_stats[s.symbol]['pnl'] += s.net_pnl
         sym_stats[s.symbol]['trades'] += 1
         if s.net_pnl > 0: sym_stats[s.symbol]['wins'] += 1
 
@@ -327,7 +335,7 @@ def analyze_csv(csv_path: Optional[str] = None,
             "symbol": s.symbol,
             "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "",
             "strategy": s.strategy_name,
-            "pnl": s.net_pnl, # Default to Net for UI clarity
+            "pnl": s.net_pnl,
             "gross_pnl": s.pnl,
             "fees": s.fees,
             "hold_days": s.hold_days(),
@@ -374,17 +382,10 @@ def analyze_csv(csv_path: Optional[str] = None,
 
         position_sizing.sort(key=lambda x: x["allocation_pct"], reverse=True)
 
-    if out_dir:
-        try:
-            os.makedirs(out_dir, exist_ok=True)
-            pd.DataFrame([{
-                "symbol": g.symbol, "contract_id": g.contract_id,
-                "entry_ts": g.entry_ts.isoformat() if g.entry_ts else "",
-                "exit_ts": g.exit_ts.isoformat() if g.exit_ts else "", "pnl": g.pnl,
-            } for g in contract_groups]).map(
-                lambda x: f"'{x}" if isinstance(x, str) and x.startswith(("=", "+", "-", "@")) else x
-            ).to_csv(os.path.join(out_dir, "trades.csv"), index=False)
-
+    excel_buffer = None
+    if report_format == "all" or report_format == "excel":
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
             summary_rows = [
                 {"Metric": "Strategy Trades", "Value": len(strategies)},
                 {"Metric": "Strategy Win Rate", "Value": win_rate},
@@ -397,15 +398,13 @@ def analyze_csv(csv_path: Optional[str] = None,
             if net_liquidity_now is not None: summary_rows.append({"Metric": "Net Liquidity (Now)", "Value": net_liquidity_now})
             if buying_power_utilized_percent is not None:
                 summary_rows.append({"Metric": "Buying Power Utilized", "Value": f"{buying_power_utilized_percent:.1f}%"})
-
-            with pd.ExcelWriter(os.path.join(out_dir, "report.xlsx"), engine="openpyxl") as writer:
-                pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
-                pd.DataFrame(symbols_list).to_excel(writer, sheet_name="Symbols", index=False)
-                pd.DataFrame(strategy_rows).to_excel(writer, sheet_name="Strategies", index=False)
-                pd.DataFrame(open_rows).to_excel(writer, sheet_name="Open Positions", index=False)
-                pd.DataFrame(leakage_metrics["stale_capital"]).to_excel(writer, sheet_name="Stale Capital", index=False)
-        except Exception:
-            pass
+            
+            pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+            pd.DataFrame(symbols_list).to_excel(writer, sheet_name="Symbols", index=False)
+            pd.DataFrame(strategy_rows).to_excel(writer, sheet_name="Strategies", index=False)
+            pd.DataFrame(open_rows).to_excel(writer, sheet_name="Open Positions", index=False)
+            pd.DataFrame(leakage_metrics["stale_capital"]).to_excel(writer, sheet_name="Stale Capital", index=False)
+        excel_buffer.seek(0)
 
     return {
         "metrics": {
@@ -436,5 +435,6 @@ def analyze_csv(csv_path: Optional[str] = None,
         "position_sizing": position_sizing,
         "leakage_report": leakage_metrics,
         "monthly_income": monthly_income,
-        "portfolio_curve": portfolio_curve
+        "portfolio_curve": portfolio_curve,
+        "excel_report": excel_buffer
     }
