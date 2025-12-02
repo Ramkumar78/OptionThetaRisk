@@ -234,6 +234,34 @@ def analyze_csv(csv_path: Optional[str] = None,
     # 4. Grouping & Strategy Logic
     contract_groups, open_groups = _group_contracts_with_open(norm_df)
     strategies = build_strategies(norm_df)
+
+    # 4b. Behavioral Analysis: Detect Revenge Trading
+    # Sort by entry time to ensure chronological checking
+    strategies.sort(key=lambda s: s.entry_ts if s.entry_ts else pd.Timestamp.min)
+
+    # Map to track the last exit time and result for each symbol
+    last_trade_map = {}
+
+    for s in strategies:
+        s.is_revenge = False  # Initialize flag
+
+        if s.symbol in last_trade_map:
+            last_exit, last_pnl = last_trade_map[s.symbol]
+
+            if s.entry_ts and last_exit:
+                # Calculate time gap in minutes
+                diff_mins = (s.entry_ts - last_exit).total_seconds() / 60.0
+
+                # CRITERIA:
+                # 1. Same Symbol (Already checked by map key)
+                # 2. Previous trade was a LOSS (last_pnl < 0)
+                # 3. Opened within 30 minutes of closing the loser
+                if last_pnl < 0 and 0 <= diff_mins <= 30:
+                    s.is_revenge = True
+
+        # Update map for the next iteration if this trade is closed
+        if s.exit_ts:
+            last_trade_map[s.symbol] = (s.exit_ts, s.net_pnl)
     
     # 5. Metrics Calculation
     total_strategy_pnl_gross = sum(s.pnl for s in strategies)
@@ -259,13 +287,13 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     for s in strategies:
         hd = s.hold_days()
-        th = s.realized_theta()
+        th = s.average_daily_pnl()
         if hd > 10.0 and th < 1.0:
             leakage_metrics["stale_capital"].append({
                 "strategy": s.strategy_name,
                 "symbol": s.symbol,
                 "hold_days": round(hd, 1),
-                "theta_per_day": round(th, 2),
+                "average_daily_pnl": round(th, 2),
                 "pnl": round(s.net_pnl, 2)
             })
 
@@ -343,7 +371,8 @@ def analyze_csv(csv_path: Optional[str] = None,
             "gross_pnl": s.pnl,
             "fees": s.fees,
             "hold_days": s.hold_days(),
-            "theta_per_day": s.realized_theta(),
+            "average_daily_pnl": s.average_daily_pnl(),
+            "is_revenge": getattr(s, "is_revenge", False),
             "description": _sym_desc(s.symbol),
             "segments": [
                 {

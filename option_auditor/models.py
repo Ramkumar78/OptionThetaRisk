@@ -81,12 +81,9 @@ class StrategyGroup:
     def net_pnl(self) -> float:
         return self.pnl - self.fees
 
-    def realized_theta(self) -> float:
-        # Theta on Net PnL? Usually we care about realized return per day.
-        # Let's use Net PnL for accurate "Leakage" calculation if requested?
-        # Previous implementation used self.pnl (Gross).
-        # "Stale Capital" checks if strategy generated <$1 of Theta per day.
-        # Typically performance metrics should be Net of fees.
+    def average_daily_pnl(self) -> float:
+        # Renamed from realized_theta as PnL/Day is not Theta.
+        # Calculates realized return per day based on Net PnL.
         return self.net_pnl / self.hold_days()
 
     def record_segment(self):

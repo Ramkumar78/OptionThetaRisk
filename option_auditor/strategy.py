@@ -286,7 +286,19 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                 # 3. Calendar Spread (Same Right, Diff Expiry, < 1 min execution)
                 calendar = (candidate.right == group.right and time_diff < (1.0 / 60.0))
 
-                if same_expiry or is_roll_execution or calendar:
+                # CHECK: If the current strategy is already fully closed BEFORE this candidate starts,
+                # do NOT merge them. They are likely sequential trades (e.g. Day Trading).
+                # We want to detect "Revenge Trading" which implies separate trades.
+                # Calculate if strat is closed relative to candidate.entry_ts
+                is_closed_before_next = False
+                if strat.exit_ts and candidate.entry_ts:
+                    if strat.exit_ts < candidate.entry_ts:
+                         # Ensure the net quantity is zero (closed)
+                         current_net_qty = sum(l.qty_net for l in strat.legs)
+                         if abs(current_net_qty) < 1e-9:
+                             is_closed_before_next = True
+
+                if (same_expiry or is_roll_execution or calendar) and not is_closed_before_next:
                     strat.add_leg_group(candidate)
                     processed_ids.add(id(candidate))
 
@@ -342,7 +354,13 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                         diff_min = diff_sec / 60.0
 
                         # Roll window: -2 min to +15 mins
-                        if -2 <= diff_min <= 15:
+                        # DYNAMIC WINDOW: If previous trade was a LOSS, tighten window to 1 min.
+                        # This prevents "Revenge Trades" (re-entry after loss) from being merged into rolls.
+                        roll_window_max = 15.0
+                        if search_pointer.net_pnl < 0:
+                            roll_window_max = 1.0
+
+                        if -2 <= diff_min <= roll_window_max:
                             if diff_min < min_gap:
                                 min_gap = diff_min
                                 best_candidate = cand
