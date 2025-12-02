@@ -1,7 +1,7 @@
 from .parsers import TastytradeParser, TastytradeFillsParser, ManualInputParser
 from .strategy import build_strategies
 from .models import TradeGroup, Leg
-from .config import SYMBOL_DESCRIPTIONS
+from .config import SYMBOL_DESCRIPTIONS, VERDICT_MIN_TRADES
 from typing import Optional, Dict, List, Tuple, Any, Union
 import pandas as pd
 import numpy as np
@@ -315,6 +315,10 @@ def analyze_csv(csv_path: Optional[str] = None,
         elif max_drawdown > (total_strategy_pnl_gross * 0.5) and total_strategy_pnl_gross > 0:
             verdict = "Amber: High Drawdown"
             verdict_color = "yellow"
+
+    if len(strategies) < VERDICT_MIN_TRADES:
+        verdict = f"Insufficient Data (Need {VERDICT_MIN_TRADES}+ Trades)"
+        verdict_color = "gray"
 
     sym_stats = {}
     for s in strategies:

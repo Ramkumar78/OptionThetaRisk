@@ -1,4 +1,8 @@
 from typing import Dict
+import os
+
+# Configuration for Verdicts
+VERDICT_MIN_TRADES = int(os.environ.get("VERDICT_MIN_TRADES", 10))
 
 SYMBOL_DESCRIPTIONS: Dict[str, str] = {
     # Broad market ETFs and indices
