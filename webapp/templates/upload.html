@@ -70,18 +70,31 @@
 
             <!-- CSV Section -->
             <div x-show="tab === 'csv'" class="space-y-6">
-                <div>
-                    <label for="csv" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">CSV File</label>
-                    <input type="file" name="csv" id="csv" accept=".csv"
-                        class="block w-full text-sm text-gray-500 dark:text-gray-400
-                            file:mr-4 file:py-2 file:px-4
-                            file:rounded-md file:border-0
-                            file:text-sm file:font-semibold
-                            file:bg-blue-50 file:text-blue-700
-                            hover:file:bg-blue-100
-                            dark:file:bg-gray-700 dark:file:text-gray-200
-                            border border-gray-300 dark:border-gray-600 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Supported brokers: Tastytrade, Interactive Brokers.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="csv" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">CSV File</label>
+                        <input type="file" name="csv" id="csv" accept=".csv"
+                            class="block w-full text-sm text-gray-500 dark:text-gray-400
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-md file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-blue-50 file:text-blue-700
+                                hover:file:bg-blue-100
+                                dark:file:bg-gray-700 dark:file:text-gray-200
+                                border border-gray-300 dark:border-gray-600 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Supported brokers: Tastytrade, Interactive Brokers.</p>
+                    </div>
+                    <div>
+                        <label for="csv_fee_per_trade" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fee per Trade ($)</label>
+                        <div class="relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" name="csv_fee_per_trade" id="csv_fee_per_trade" step="0.01" min="0" placeholder="0.00"
+                                class="pl-7 block w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 py-2.5">
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Applied to every trade in the CSV to calculate Fee Drag.</p>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

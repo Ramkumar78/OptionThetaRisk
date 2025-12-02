@@ -1,10 +1,19 @@
 import os
-import io
 import time
-import sqlite3
-import boto3
 from abc import ABC, abstractmethod
 from flask import current_app
+import boto3
+from sqlalchemy import create_engine, text, Column, String, LargeBinary, Float
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+Base = declarative_base()
+
+class Report(Base):
+    __tablename__ = 'reports'
+    token = Column(String, primary_key=True)
+    filename = Column(String, primary_key=True)
+    data = Column(LargeBinary)
+    created_at = Column(Float, default=time.time)
 
 class StorageProvider(ABC):
     @abstractmethod
@@ -24,53 +33,40 @@ class StorageProvider(ABC):
         """Close any open connections."""
         pass
 
-class LocalStorage(StorageProvider):
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-        self._init_db()
-
-    def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS reports (
-                    token TEXT,
-                    filename TEXT,
-                    data BLOB,
-                    created_at REAL,
-                    PRIMARY KEY (token, filename)
-                )
-            """)
+class PostgresStorage(StorageProvider):
+    def __init__(self, db_url: str):
+        self.engine = create_engine(db_url)
+        Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(bind=self.engine)
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO reports (token, filename, data, created_at) VALUES (?, ?, ?, ?)",
-                (token, filename, data, time.time())
-            )
+        session = self.Session()
+        try:
+            report = Report(token=token, filename=filename, data=data)
+            session.merge(report)
+            session.commit()
+        finally:
+            session.close()
 
     def get_report(self, token: str, filename: str) -> bytes:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT data FROM reports WHERE token = ? AND filename = ?", (token, filename)
-            )
-            row = cursor.fetchone()
-            if row:
-                return row[0]
-        return None
+        session = self.Session()
+        try:
+            report = session.query(Report).filter_by(token=token, filename=filename).first()
+            return report.data if report else None
+        finally:
+            session.close()
 
     def cleanup_old_reports(self, max_age_seconds: int) -> None:
-        cutoff = time.time() - max_age_seconds
+        session = self.Session()
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute("DELETE FROM reports WHERE created_at < ?", (cutoff,))
-        except Exception:
-            pass
+            cutoff = time.time() - max_age_seconds
+            session.query(Report).filter(Report.created_at < cutoff).delete()
+            session.commit()
+        finally:
+            session.close()
 
     def close(self) -> None:
-        # SQLite usage in this class uses `with sqlite3.connect(...)` which automatically closes.
-        # However, if there are lingering connections elsewhere (like in tests), we might need to handle them.
-        # But here, we don't keep `self.conn` open.
-        pass
+        self.engine.dispose()
 
 class S3Storage(StorageProvider):
     def __init__(self, bucket_name: str, region_name: str = None):
@@ -119,11 +115,15 @@ class S3Storage(StorageProvider):
         pass
 
 def get_storage_provider(app) -> StorageProvider:
-    if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME"):
+    if os.environ.get("DATABASE_URL"):
+        return PostgresStorage(os.environ.get("DATABASE_URL"))
+    elif os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME"):
         return S3Storage(
             bucket_name=os.environ.get("S3_BUCKET_NAME"),
             region_name=os.environ.get("AWS_REGION", "us-east-1")
         )
     else:
+        # Fallback to local SQLite for simplicity if no other provider is configured
         db_path = os.path.join(app.instance_path, "reports.db")
+        from .sqlite_storage import LocalStorage
         return LocalStorage(db_path)
