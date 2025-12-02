@@ -55,24 +55,39 @@ def test_no_options_trades():
     assert "error" in res
 
 def test_verdict_logic():
-    df1 = make_tasty_df([
+    # Case 1: Green Flag (need 10+ trades, all wins or mostly wins)
+    rows1 = [
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
         {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Buy to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
-    ])
+    ]
+    # Add 9 profitable trades
+    for i in range(9):
+        rows1.append({"Time": f"2025-03-{i+1:02d} 10:00", "Underlying Symbol": "PAD", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 10, "Option Type": "Call"})
+        rows1.append({"Time": f"2025-03-{i+1:02d} 14:00", "Underlying Symbol": "PAD", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 10, "Option Type": "Call"})
+
+    df1 = make_tasty_df(rows1)
     csv_buffer = io.StringIO()
     df1.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
     res1 = analyze_csv(csv_buffer, style="income")
     assert res1['verdict'] == "Green Flag"
 
-    df_amber = make_tasty_df([
+    # Case 2: Amber/Red Flag (Low Win Rate)
+    # Original: 1 win, 2 losses.
+    rows_amber = [
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
         {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Buy to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
         {"Time": "2025-01-03 10:00", "Underlying Symbol": "B", "Quantity": 1, "Action": "Sell to Open", "Price": 0.60, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 20, "Option Type": "Call"},
         {"Time": "2025-01-04 10:00", "Underlying Symbol": "B", "Quantity": 1, "Action": "Buy to Close", "Price": 0.70, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 20, "Option Type": "Call"},
         {"Time": "2025-01-05 10:00", "Underlying Symbol": "C", "Quantity": 1, "Action": "Sell to Open", "Price": 0.60, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 30, "Option Type": "Call"},
         {"Time": "2025-01-06 10:00", "Underlying Symbol": "C", "Quantity": 1, "Action": "Buy to Close", "Price": 0.70, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 30, "Option Type": "Call"},
-    ])
+    ]
+    # Add 7 losing trades
+    for i in range(7):
+        rows_amber.append({"Time": f"2025-03-{i+1:02d} 10:00", "Underlying Symbol": "LOSS", "Quantity": 1, "Action": "Sell to Open", "Price": 0.6, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 20, "Option Type": "Call"})
+        rows_amber.append({"Time": f"2025-03-{i+1:02d} 14:00", "Underlying Symbol": "LOSS", "Quantity": 1, "Action": "Buy to Close", "Price": 0.7, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 20, "Option Type": "Call"})
+
+    df_amber = make_tasty_df(rows_amber)
     csv_buffer = io.StringIO()
     df_amber.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
@@ -83,10 +98,17 @@ def test_verdict_logic():
     res_spec = analyze_csv(csv_buffer, style="speculation")
     assert "Amber: Low Win Rate" in res_spec['verdict']
 
-    df2 = make_tasty_df([
+    # Case 3: Negative Income
+    rows2 = [
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
         {"Time": "2025-01-02 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Close", "Price": 0.50, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
-    ])
+    ]
+    # Add 9 losing trades
+    for i in range(9):
+        rows2.append({"Time": f"2025-03-{i+1:02d} 10:00", "Underlying Symbol": "LOSS", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 10, "Option Type": "Call"})
+        rows2.append({"Time": f"2025-03-{i+1:02d} 14:00", "Underlying Symbol": "LOSS", "Quantity": 1, "Action": "Sell to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": f"2025-04-{i+1:02d}", "Strike Price": 10, "Option Type": "Call"})
+
+    df2 = make_tasty_df(rows2)
     csv_buffer = io.StringIO()
     df2.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)

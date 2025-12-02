@@ -316,6 +316,10 @@ def analyze_csv(csv_path: Optional[str] = None,
             verdict = "Amber: High Drawdown"
             verdict_color = "yellow"
 
+    if len(strategies) < 10:
+        verdict = "Insufficient Data (Need 10+ Trades)"
+        verdict_color = "gray"
+
     sym_stats = {}
     for s in strategies:
         if s.symbol not in sym_stats:
