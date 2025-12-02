@@ -89,28 +89,6 @@ class TestTickerNormalizationAndDataWarning(unittest.TestCase):
 
                 mock_group.return_value = ([], [tg])
 
-                # Mock strategies to avoid min trades check overriding our check?
-                # Actually, verdict logic priorities:
-                # 1. High Open Risk
-                # 2. Insufficient Data (if trades < MIN)
-                # 3. ...
-                # Wait, "Insufficient Data" overrides "Green Flag" but "High Open Risk" overrides everything.
-                # "Amber: Data Unavailable" should probably override "Insufficient Data" or be high priority?
-                # User instructions:
-                # if itm_risk_flag: ...
-                # elif missing_data_warning: ...
-
-                # So missing data warning is checked if NO ITM Risk found.
-                # But "Insufficient Data" check comes BEFORE ITM Risk check in the current code (lines 538-540 in original).
-                # The user instructions snippet shows it after ITM Risk logic but inside the override block?
-                # The snippet provided by user:
-                # # OVERRIDE: ITM Risk Detection
-                # verdict_details = None
-                # if itm_risk_flag: ...
-                # elif missing_data_warning: ...
-
-                # So if I implement it as requested, it will override "Insufficient Data" verdict ONLY IF I place it after the "Insufficient Data" check.
-
                 manual_data = [{
                     "date": "2024-01-01 10:00:00",
                     "symbol": "SPX",
@@ -130,15 +108,7 @@ class TestTickerNormalizationAndDataWarning(unittest.TestCase):
 
                     # Since we return a price for ^SPX, we expect NO missing data warning.
                     # And since it's OTM, no ITM risk.
-                    # So it should fall through to "Insufficient Data" because we have 0 closed strategies.
-
-                    # Wait, if we have insufficient data, does that take precedence over "Amber: Data Unavailable"?
-                    # The user snippet implies "Data Integrity Warning" is part of the OVERRIDE block.
-                    # The current code has "Insufficient Data" check (lines 538-540).
-                    # Then "OVERRIDE: ITM Risk Detection" (lines 542...).
-                    # So if I add the elif missing_data_warning there, it will override "Insufficient Data".
-
-                    # However, in this specific test case, data IS available. So we expect "Insufficient Data" or "Green Flag" (if we had trades).
+                    # It should fall through to "Insufficient Data" because we have 0 closed strategies.
                     self.assertTrue("Insufficient Data" in result['verdict'])
 
                     # Verify _fetch_live_prices was called with correct normalized symbol
