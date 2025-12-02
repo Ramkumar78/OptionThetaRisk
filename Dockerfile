@@ -24,5 +24,5 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 # Run the application using Gunicorn
-# Using 1 worker to avoid potential SQLite locking issues with the background cleanup thread
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "webapp.app:app"]
+# Use WEB_CONCURRENCY env var for workers, default to 1 for safety with SQLite
+CMD sh -c "gunicorn -w ${WEB_CONCURRENCY:-1} -b 0.0.0.0:${PORT:-5000} webapp.app:app"
