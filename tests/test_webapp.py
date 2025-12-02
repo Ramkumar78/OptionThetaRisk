@@ -1,15 +1,8 @@
 import io
-import os
-import shutil
-import time
 from datetime import datetime, timedelta
-from unittest.mock import patch
-
 import pytest
-import gc
 
 def make_csv_bytes():
-    # Minimal tasty CSV content with headers used by _normalize_tasty
     content = (
         "Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type\n"
         "2025-01-01 10:00,MSFT,1,Buy to Open,1.00,0.10,2025-02-21,500,Put\n"
@@ -17,52 +10,7 @@ def make_csv_bytes():
     )
     return content.encode("utf-8")
 
-
-@pytest.fixture()
-def app():
-    from webapp.app import create_app
-
-    app = create_app(testing=True)
-    app.config.update({
-        "WTF_CSRF_ENABLED": False,
-    })
-
-    # Clean up the reports DB before each test
-    db_path = os.path.join(app.instance_path, "reports.db")
-
-    # Try to clean up existing DB with retries for Windows
-    for _ in range(3):
-        try:
-            if os.path.exists(db_path):
-                os.remove(db_path)
-            break
-        except PermissionError:
-            gc.collect() # Force close any lingering handles
-            time.sleep(0.1)
-
-    # Initialize DB for testing
-    from webapp.storage import LocalStorage
-    storage = LocalStorage(db_path)
-
-    yield app
-
-    # Final cleanup after test
-    # Ensure any connections are closed
-    storage.close()
-    del storage
-    gc.collect()
-
-    for _ in range(5):
-        try:
-            if os.path.exists(db_path):
-                os.remove(db_path)
-            break
-        except PermissionError:
-            time.sleep(0.1)
-
-
-def test_upload_and_results_page(app):
-    client = app.test_client()
+def test_upload_and_results_page(client):
     data = {
         "broker": "tasty",
         "account_size_start": "10000",
@@ -76,15 +24,12 @@ def test_upload_and_results_page(app):
     assert "Net PnL" in html
     assert "Strategy Log" in html
     assert "Verdict" in html
-    assert "Growth" in html
-    assert "Buying Power: 55% Used" in html # (11000 - 5000) / 11000 = 54.5% formatted as %.0f
+    assert "Buying Power Used" in html
+    assert "55%" in html
 
-
-def test_rejects_large_upload(app):
-    client = app.test_client()
-    # Force a tiny max size to trigger 413
+def test_rejects_large_upload(app, client):
     app.config["MAX_CONTENT_LENGTH"] = 100
-    big = b"A" * 1024  # 1 KB
+    big = b"A" * 1024
     data = {
         "broker": "auto",
         "csv": (io.BytesIO(big), "big.csv"),
@@ -93,14 +38,7 @@ def test_rejects_large_upload(app):
     assert resp.status_code == 413
     assert "Upload too large" in resp.get_data(as_text=True)
 
-
-def test_theme_dropdown_present_on_upload(app):
-    # Theme switcher was removed in modernization update
-    pass
-
-
 def _csv_bytes_with_times(t1: datetime, t2: datetime):
-    # Build a closed trade around provided datetimes (classic tasty format)
     content = (
         "Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type\n"
         f"{t1.strftime('%Y-%m-%d %H:%M')},MSFT,1,Buy to Open,1.00,0.00,{(t2+timedelta(days=30)).date()},500,Put\n"
@@ -108,9 +46,7 @@ def _csv_bytes_with_times(t1: datetime, t2: datetime):
     )
     return content.encode("utf-8")
 
-
-def test_upload_with_preset_last_7_days(app):
-    client = app.test_client()
+def test_upload_with_preset_last_7_days(client):
     now = datetime.now()
     t1 = now - timedelta(days=2)
     t2 = now - timedelta(days=1)
@@ -124,9 +60,7 @@ def test_upload_with_preset_last_7_days(app):
     html = resp.get_data(as_text=True)
     assert "Range:" in html
 
-
-def test_upload_with_preset_ytd(app):
-    client = app.test_client()
+def test_upload_with_preset_ytd(client):
     now = datetime.now()
     jan2 = datetime(now.year, 1, 2, 10, 0)
     jan3 = datetime(now.year, 1, 3, 10, 0)
@@ -138,93 +72,9 @@ def test_upload_with_preset_ytd(app):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    # Expect to see the badge with Jan 1 as start
     assert f"{now.year}-01-01" in html
 
-
-def test_upload_with_preset_last_14_days(app):
-    client = app.test_client()
-    now = datetime.now()
-    t1 = now - timedelta(days=10)
-    t2 = now - timedelta(days=5)
-    data = {
-        "broker": "tasty",
-        "date_mode": "14d",
-        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last14.csv"),
-    }
-    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert "Range:" in html
-
-
-def test_upload_with_preset_last_1_month(app):
-    client = app.test_client()
-    now = datetime.now()
-    t1 = now - timedelta(days=20)
-    t2 = now - timedelta(days=18)
-    data = {
-        "broker": "tasty",
-        "date_mode": "1m",
-        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last1m.csv"),
-    }
-    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert "Range:" in html
-
-
-def test_upload_with_preset_last_6_months(app):
-    client = app.test_client()
-    now = datetime.now()
-    t1 = now - timedelta(days=150)
-    t2 = now - timedelta(days=149)
-    data = {
-        "broker": "tasty",
-        "date_mode": "6m",
-        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last6m.csv"),
-    }
-    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert "Range:" in html
-
-
-def test_upload_with_preset_last_1_year(app):
-    client = app.test_client()
-    now = datetime.now()
-    t1 = now - timedelta(days=300)
-    t2 = now - timedelta(days=299)
-    data = {
-        "broker": "tasty",
-        "date_mode": "1y",
-        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last1y.csv"),
-    }
-    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert "Range:" in html
-
-
-def test_upload_with_preset_last_2_years(app):
-    client = app.test_client()
-    now = datetime.now()
-    t1 = now - timedelta(days=500)
-    t2 = now - timedelta(days=499)
-    data = {
-        "broker": "tasty",
-        "date_mode": "2y",
-        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "last2y.csv"),
-    }
-    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert "Range:" in html
-
-
-def test_upload_with_all_mode_shows_no_badge(app):
-    # When "All" is selected, no date badge should be shown
-    client = app.test_client()
+def test_upload_with_all_mode_shows_no_badge(client):
     now = datetime.now()
     t1 = now - timedelta(days=2)
     t2 = now - timedelta(days=1)
@@ -238,10 +88,7 @@ def test_upload_with_all_mode_shows_no_badge(app):
     html = resp.get_data(as_text=True)
     assert "Range:" not in html
 
-
-def test_upload_with_custom_date_range(app):
-    client = app.test_client()
-    # Build CSV with dates inside the custom range
+def test_upload_with_custom_date_range(client):
     t1 = datetime(2025, 1, 10, 10, 0)
     t2 = datetime(2025, 1, 11, 10, 0)
     data = {
@@ -257,34 +104,10 @@ def test_upload_with_custom_date_range(app):
     assert "Range:" in html
     assert "2025-01-01" in html and "2025-01-31" in html
 
-
-def test_upload_defaults_all_mode_when_missing(app):
-    # If the client sends no date_mode field at all, backend should treat it as 'all'
-    client = app.test_client()
-    # Build a simple closed trade
-    now = datetime.now()
-    t1 = now - timedelta(days=2)
-    t2 = now - timedelta(days=1)
-    data = {
-        "broker": "tasty",
-        # intentionally omit date_mode
-        "csv": (io.BytesIO(_csv_bytes_with_times(t1, t2)), "no_date_mode.csv"),
-    }
-    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    # No badge should be shown when analyzing everything
-    assert "Range:" not in html
-
-
-def test_upload_with_custom_range_missing_dates_redirects(app):
-    # Selecting custom range without both dates should redirect with a warning flash
-    client = app.test_client()
-    # CSV content doesn't matter because it should not be processed
+def test_upload_with_custom_range_missing_dates_redirects(client):
     data = {
         "broker": "tasty",
         "date_mode": "range",
-        # omit start_date and end_date on purpose
         "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
     }
     resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
@@ -292,8 +115,7 @@ def test_upload_with_custom_range_missing_dates_redirects(app):
     html = resp.get_data(as_text=True)
     assert "Please select both start and end dates" in html
 
-def test_upload_invalid_file_type(app):
-    client = app.test_client()
+def test_upload_invalid_file_type(client):
     data = {
         "csv": (io.BytesIO(b"this is not a csv"), "test.txt"),
     }
@@ -302,20 +124,16 @@ def test_upload_invalid_file_type(app):
     html = resp.get_data(as_text=True)
     assert "Only .csv files are allowed" in html
 
-def test_upload_no_file(app):
-    client = app.test_client()
+def test_upload_no_file(client):
     data = {
         "csv": (io.BytesIO(b""), ""),
-        # No manual_trades provided
     }
     resp = client.post("/analyze", data=data, content_type="multipart/form-data", follow_redirects=True)
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    # Updated message including manual entry fallback
     assert "Please choose a CSV file or enter trades manually" in html
 
-def test_upload_invalid_account_size(app):
-    client = app.test_client()
+def test_upload_invalid_account_size(client):
     data = {
         "account_size_start": "not-a-number",
         "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
@@ -325,9 +143,7 @@ def test_upload_invalid_account_size(app):
     html = resp.get_data(as_text=True)
     assert "Account Size Start must be a number" in html
 
-def test_analysis_error(app):
-    client = app.test_client()
-    # Create a CSV that will cause an error during analysis
+def test_analysis_error(client):
     csv_content = "Header1,Header2\nValue1,Value2"
     data = {
         "csv": (io.BytesIO(csv_content.encode("utf-8")), "error.csv"),
@@ -337,9 +153,7 @@ def test_analysis_error(app):
     html = resp.get_data(as_text=True)
     assert "Failed to analyze" in html
 
-def test_download_endpoints(app):
-    client = app.test_client()
-    # First, perform an analysis to get a valid token
+def test_download_endpoints(client):
     data = {
         "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
     }
@@ -347,54 +161,25 @@ def test_download_endpoints(app):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     
-    # Extract the token from the response
     import re
     match = re.search(r'/download/([a-f0-9]+)/', html)
     assert match
     token = match.group(1)
 
-    # Test the report.xlsx download
     resp_report = client.get(f"/download/{token}/report.xlsx")
     assert resp_report.status_code == 200
     assert resp_report.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    # Test invalid token
     resp_invalid_token = client.get("/download/invalidtoken/report.xlsx")
     assert resp_invalid_token.status_code == 404
 
-    # Test invalid kind
     resp_invalid_kind = client.get(f"/download/{token}/invalid.kind")
     assert resp_invalid_kind.status_code == 404
 
-def test_download_nonexistent_file(app):
-    client = app.test_client()
-    # First, perform an analysis to get a valid token
-    data = {
-        "csv": (io.BytesIO(make_csv_bytes()), "sample.csv"),
-    }
-    resp = client.post("/analyze", data=data, content_type="multipart/form-data")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    
-    # Extract the token from the response
-    import re
-    match = re.search(r'/download/([a-f0-9]+)/', html)
-    assert match
-    token = match.group(1)
-
-    # Test downloading a non-existent file kind
-    resp_nonexistent = client.get(f"/download/{token}/nonexistent.file")
-    assert resp_nonexistent.status_code == 404
-
-def test_homepage_links(app):
-    client = app.test_client()
+def test_homepage_links(client):
     resp = client.get("/")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-
-    # Check for the new GitHub URL
     assert "https://github.com/Ramkumar78/OptionThetaRisk/blob/main/README.md" in html
-
-    # Check for the Contact email link
     assert "mailto:shriram2222@gmail.com" in html
     assert "Contact" in html

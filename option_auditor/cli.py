@@ -1,4 +1,5 @@
 import argparse
+import os
 from tabulate import tabulate
 from .main_analyzer import analyze_csv
 
@@ -17,13 +18,19 @@ def _format_pnl(pnl):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="The Option Auditor")
     parser.add_argument("--csv", required=True, help="Path to CSV")
+    parser.add_argument("--output", help="Path to save the report file")
     args = parser.parse_args(argv)
 
-    res = analyze_csv(csv_path=args.csv)
+    res = analyze_csv(csv_path=args.csv, report_format="excel" if args.output else "none")
 
     if "error" in res:
         print(f"Error: {res['error']}")
         return 1
+
+    if args.output and res.get("excel_report"):
+        with open(args.output, "wb") as f:
+            f.write(res["excel_report"].getvalue())
+        print(f"Report saved to {args.output}")
 
     m = res["metrics"]
     sm = res["strategy_metrics"]
