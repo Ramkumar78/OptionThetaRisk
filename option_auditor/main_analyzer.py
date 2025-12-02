@@ -580,11 +580,26 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     open_rows = []
     for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min):
+        # Calculate Average Entry Price (Cost Basis)
+        avg_price = 0.0
+        breakeven = 0.0
+        if abs(g.qty_net) > 0:
+            avg_price = abs(g.pnl) / (abs(g.qty_net) * 100.0)
+
+            # Calculate Breakeven
+            if g.strike:
+                if g.right == 'P': # Put
+                    breakeven = g.strike - avg_price
+                elif g.right == 'C': # Call
+                    breakeven = g.strike + avg_price
+
         row = {
             "symbol": g.symbol,
             "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "",
             "contract": f"{g.right or ''} {g.strike}",
             "qty_open": g.qty_net,
+            "avg_price": avg_price,
+            "breakeven": breakeven,
             "opened": g.entry_ts.isoformat() if g.entry_ts else "",
             "days_open": (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0,
             "description": _sym_desc(g.symbol)

@@ -133,6 +133,8 @@
             <th class="px-6 py-3 font-semibold">Symbol</th>
             <th class="px-6 py-3 font-semibold">Contract</th>
             <th class="px-6 py-3 text-right font-semibold">Qty</th>
+            <th class="px-6 py-3 text-right font-semibold">Avg Price</th>
+            <th class="px-6 py-3 text-right font-semibold">Breakeven</th>
             <th class="px-6 py-3 text-right font-semibold">Days Open</th>
             <th class="px-6 py-3 text-center font-semibold">Status</th>
           </tr>
@@ -144,6 +146,12 @@
             <td class="px-6 py-3 text-gray-500 dark:text-gray-400">{{ p.expiry }} {{ p.contract }}</td>
             <td class="px-6 py-3 text-right font-mono {% if p.qty_open < 0 %}text-red-600{% else %}text-blue-600{% endif %}">
                 {{ "%.0f"|format(p.qty_open) }}
+            </td>
+            <td class="px-6 py-3 text-right text-gray-900 dark:text-gray-100">
+                ${{ "%.2f"|format(p.avg_price) }}
+            </td>
+            <td class="px-6 py-3 text-right font-medium text-gray-700 dark:text-gray-300">
+                ${{ "%.2f"|format(p.breakeven) }}
             </td>
             <td class="px-6 py-3 text-right text-gray-500">{{ "%.1f"|format(p.days_open) }}</td>
             <td class="px-6 py-3 text-center">
