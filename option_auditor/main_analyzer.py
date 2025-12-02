@@ -150,6 +150,119 @@ def _sym_desc(sym: str) -> str:
         return f"Options on {human}"
     return f"Options on {key}"
 
+def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
+    """
+    Fetches live prices for a list of symbols using yfinance.
+    Returns a dictionary mapping symbol -> current_price.
+    """
+    if not symbols:
+        return {}
+
+    # Filter out empty or non-string symbols
+    valid_symbols = [s for s in symbols if isinstance(s, str) and s]
+    if not valid_symbols:
+        return {}
+
+    # Deduplicate
+    unique_symbols = list(set(valid_symbols))
+
+    price_map = {}
+
+    # Use Tickers for potentially bulk efficiency, though we might iterate to be safe
+    # yfinance Tickers object allows access to each ticker
+    try:
+        tickers = yf.Tickers(" ".join(unique_symbols))
+        for sym in unique_symbols:
+            try:
+                t = tickers.tickers[sym]
+                # Try fast_info first (new API), then info (slower, detailed), then history
+                price = None
+
+                # fast_info
+                if hasattr(t, "fast_info"):
+                    # fast_info keys: 'last_price', 'regular_market_price', etc.
+                    # 'last_price' is usually what we want
+                    val = t.fast_info.get("last_price")
+                    if val is not None and not pd.isna(val):
+                        price = float(val)
+
+                # Fallback to info
+                if price is None:
+                    info = t.info
+                    # Try various keys
+                    for k in ['currentPrice', 'regularMarketPrice', 'bid', 'ask']:
+                        val = info.get(k)
+                        if val is not None and not pd.isna(val):
+                            price = float(val)
+                            break
+
+                # Fallback to history (last close)
+                if price is None:
+                    hist = t.history(period="1d")
+                    if not hist.empty:
+                        price = float(hist["Close"].iloc[-1])
+
+                if price is not None:
+                    price_map[sym] = price
+            except Exception:
+                # Individual ticker failure should not fail batch
+                continue
+    except Exception:
+        # If bulk fails, try one by one? Or just return what we have.
+        pass
+
+    return price_map
+
+def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> Tuple[bool, float, List[str]]:
+    """
+    Checks open positions for ITM risk.
+    Returns (is_risky_flag, total_itm_amount, list_of_risk_descriptions).
+    """
+    risky = False
+    total_itm_exposure = 0.0
+    details = []
+
+    for g in open_groups:
+        if g.symbol not in prices:
+            continue
+
+        current_price = prices[g.symbol]
+        strike = g.strike
+        if not strike:
+            continue
+
+        # Only check Short positions (Net Qty < 0)
+        if g.qty_net >= 0:
+            continue
+
+        # Check ITM condition
+        is_itm = False
+        diff = 0.0
+
+        if g.right == 'P': # Short Put
+            if current_price < strike:
+                is_itm = True
+                diff = strike - current_price
+        elif g.right == 'C': # Short Call
+            if current_price > strike:
+                is_itm = True
+                diff = current_price - strike
+
+        if is_itm:
+            pct_itm = (diff / strike) if strike > 0 else 0
+            # Calculate intrinsic value exposure: diff * qty * 100
+            exposure = diff * abs(g.qty_net) * 100.0
+
+            if pct_itm > 0.01: # > 1% ITM
+                risky = True
+                total_itm_exposure += exposure
+                type_str = "Put" if g.right == 'P' else "Call"
+                details.append(
+                    f"Short {type_str} {g.symbol} {strike} ITM by {pct_itm:.1%} (-${exposure:,.0f})"
+                )
+
+    return risky, total_itm_exposure, details
+
 def analyze_csv(csv_path: Optional[str] = None,
                 broker: str = "auto",
                 account_size_start: Optional[float] = None,
@@ -263,7 +376,23 @@ def analyze_csv(csv_path: Optional[str] = None,
         if s.exit_ts:
             last_trade_map[s.symbol] = (s.exit_ts, s.net_pnl)
     
-    # 5. Metrics Calculation
+    # 5. Live Risk Analysis (New)
+    live_prices = {}
+    itm_risk_flag = False
+    itm_risk_details = []
+    itm_risk_amount = 0.0
+
+    if open_groups:
+        try:
+            # Gather unique symbols from open groups
+            syms_to_fetch = list({g.symbol for g in open_groups if g.symbol})
+            live_prices = _fetch_live_prices(syms_to_fetch)
+            itm_risk_flag, itm_risk_amount, itm_risk_details = _check_itm_risk(open_groups, live_prices)
+        except Exception:
+            # Don't let live price failure crash the report
+            pass
+
+    # 6. Metrics Calculation
     total_strategy_pnl_gross = sum(s.pnl for s in strategies)
     total_strategy_fees = sum(s.fees for s in strategies)
     total_strategy_pnl_net = total_strategy_pnl_gross - total_strategy_fees
@@ -348,6 +477,14 @@ def analyze_csv(csv_path: Optional[str] = None,
         verdict = f"Insufficient Data (Need {VERDICT_MIN_TRADES}+ Trades)"
         verdict_color = "gray"
 
+    # OVERRIDE: ITM Risk Detection
+    # If high risk is detected in open positions, it supersedes all other verdicts.
+    verdict_details = None
+    if itm_risk_flag:
+        verdict = "Red Flag: High Open Risk"
+        verdict_color = "red"
+        verdict_details = f"Warning: {len(itm_risk_details)} positions are deep ITM. Total Intrinsic Exposure: -${itm_risk_amount:,.2f}."
+
     sym_stats = {}
     for s in strategies:
         if s.symbol not in sym_stats:
@@ -385,7 +522,34 @@ def analyze_csv(csv_path: Optional[str] = None,
         }
         strategy_rows.append(row)
 
-    open_rows = [{"symbol": g.symbol, "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "", "contract": f"{g.right or ''} {g.strike}", "qty_open": g.qty_net, "opened": g.entry_ts.isoformat() if g.entry_ts else "", "days_open": (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0, "description": _sym_desc(g.symbol)} for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min)]
+    open_rows = []
+    for g in sorted(open_groups, key=lambda x: x.entry_ts or pd.Timestamp.min):
+        row = {
+            "symbol": g.symbol,
+            "expiry": g.expiry.date().isoformat() if g.expiry and not pd.isna(g.expiry) else "",
+            "contract": f"{g.right or ''} {g.strike}",
+            "qty_open": g.qty_net,
+            "opened": g.entry_ts.isoformat() if g.entry_ts else "",
+            "days_open": (pd.Timestamp(datetime.now()) - g.entry_ts).total_seconds() / 86400.0 if g.entry_ts else 0.0,
+            "description": _sym_desc(g.symbol)
+        }
+
+        # Add risk annotation if applicable
+        if itm_risk_flag:
+            # Re-check this specific group for risk annotation
+            # (We could have stored this in _check_itm_risk but this is quick enough)
+            if g.symbol in live_prices and g.strike and g.qty_net < 0:
+                cp = live_prices[g.symbol]
+                is_risky_pos = False
+                if g.right == 'P' and cp < g.strike:
+                    if (g.strike - cp)/g.strike > 0.01: is_risky_pos = True
+                elif g.right == 'C' and cp > g.strike:
+                    if (cp - g.strike)/g.strike > 0.01: is_risky_pos = True
+
+                if is_risky_pos:
+                    row["risk_alert"] = "ITM Risk"
+
+        open_rows.append(row)
 
     buying_power_utilized_percent = None
     if net_liquidity_now is not None and buying_power_available_now is not None and net_liquidity_now > 0:
@@ -457,6 +621,7 @@ def analyze_csv(csv_path: Optional[str] = None,
         },
         "verdict": verdict,
         "verdict_color": verdict_color,
+        "verdict_details": verdict_details,
         "symbols": symbols_list,
         "strategy_groups": strategy_rows,
         "open_positions": open_rows,
