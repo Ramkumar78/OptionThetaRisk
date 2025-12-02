@@ -19,9 +19,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="The Option Auditor")
     parser.add_argument("--csv", required=True, help="Path to CSV")
     parser.add_argument("--output", help="Path to save the report file")
+    parser.add_argument("--broker", help="Broker type: auto (default), tasty, ibkr", default="auto")
     args = parser.parse_args(argv)
 
-    res = analyze_csv(csv_path=args.csv, report_format="excel" if args.output else "none")
+    res = analyze_csv(csv_path=args.csv, broker=args.broker, report_format="excel" if args.output else "none")
 
     if "error" in res:
         print(f"Error: {res['error']}")

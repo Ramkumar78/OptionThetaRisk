@@ -251,3 +251,124 @@ class ManualInputParser(TransactionParser):
         out = out[out["symbol"] != "nan"]
 
         return out
+
+
+class IBKRParser(TransactionParser):
+    def parse(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Standard IBKR Flex Query columns (approximate)
+        # Expected: Symbol, DateTime (or Date/Time), Quantity, T. Price, Proceeds, Comm/Fee, Strike, Expiry, Put/Call
+
+        # Helper to find column by loose match
+        def find_col(candidates):
+            for cand in candidates:
+                for c in df.columns:
+                    if c.strip().lower() == cand.lower():
+                        return c
+            return None
+
+        sym_col = find_col(["Symbol", "UnderlyingSymbol"])
+        date_col = find_col(["DateTime", "Date/Time", "TradeDate"]) # TradeTime might be separate
+        qty_col = find_col(["Quantity", "Qty"])
+        price_col = find_col(["T. Price", "TradePrice", "Price"])
+        proceeds_col = find_col(["Proceeds", "Amount"])
+        fee_col = find_col(["Comm/Fee", "Commission", "IBCommission"])
+        strike_col = find_col(["Strike", "StrikePrice"])
+        expiry_col = find_col(["Expiry", "ExpirationDate", "Expiration"])
+        right_col = find_col(["Put/Call", "Right", "C/P"])
+
+        if not (sym_col and date_col and qty_col):
+             # Try fallback to less standard if needed, or raise
+             if not sym_col: raise KeyError("IBKR Parser: Missing Symbol column")
+             if not date_col: raise KeyError("IBKR Parser: Missing Date column")
+             if not qty_col: raise KeyError("IBKR Parser: Missing Quantity column")
+
+        out = pd.DataFrame()
+
+        # DateTime parsing
+        # IBKR often uses "YYYYMMDD;HHMMSS" or "YYYY-MM-DD;HH:MM:SS"
+        # We can try using dtparser but might need custom logic for ";"
+        def _parse_ib_dt(x):
+            try:
+                # Handle "20231025;103000"
+                if ";" in str(x):
+                    parts = str(x).split(";")
+                    d = parts[0].replace("-", "")
+                    t = parts[1].replace(":", "")
+                    return datetime.strptime(f"{d} {t}", "%Y%m%d %H%M%S")
+                return dtparser.parse(str(x))
+            except:
+                return pd.NaT
+
+        out["datetime"] = df[date_col].apply(_parse_ib_dt)
+
+        out["symbol"] = df[sym_col].astype(str)
+
+        # Quantity: IBKR uses Signed Quantity for trades (Buy > 0, Sell < 0)
+        # However, our internal model is: Long Position > 0, Short Position < 0.
+        # But this is *Transaction* quantity.
+        # Buy (+Qty) -> Increases Position (if Long) or Decreases Short.
+        # Sell (-Qty) -> Decreases Position (if Long) or Increases Short.
+        # This matches standard Signed Quantity.
+        out["qty"] = pd.to_numeric(df[qty_col], errors="coerce").fillna(0.0)
+
+        # Price
+        if price_col:
+            price = pd.to_numeric(df[price_col], errors="coerce").fillna(0.0)
+        else:
+            price = 0.0
+
+        # Proceeds
+        # IBKR usually provides explicit Proceeds column.
+        # If not, calculate: -Qty * Price * Multiplier (usually 100)
+        if proceeds_col:
+            out["proceeds"] = pd.to_numeric(df[proceeds_col], errors="coerce").fillna(0.0)
+        else:
+            # Fallback
+            out["proceeds"] = -out["qty"] * price * 100.0
+
+        # Fees
+        # IBKR Comm/Fee is usually negative (debit). Internal 'fees' should be positive.
+        if fee_col:
+            raw_fee = pd.to_numeric(df[fee_col], errors="coerce").fillna(0.0)
+            out["fees"] = raw_fee.abs() # Fees are cost, so just take magnitude
+        else:
+            out["fees"] = 0.0
+
+        # Option Details
+        if strike_col:
+            out["strike"] = pd.to_numeric(df[strike_col], errors="coerce").fillna(0.0)
+        else:
+            out["strike"] = 0.0
+
+        if expiry_col:
+            # IBKR date format is usually YYYYMMDD
+            # If it's read as numeric, convert to string first
+            out["expiry"] = pd.to_datetime(df[expiry_col].astype(str), errors="coerce")
+        else:
+            out["expiry"] = pd.NaT
+
+        if right_col:
+            out["right"] = df[right_col].astype(str).str.upper().str[0]
+        else:
+            out["right"] = ""
+
+        out["asset_type"] = "OPT"
+
+        def _fmt_contract(row):
+            exp = row["expiry"]
+            exp_s = exp.date().isoformat() if isinstance(exp, pd.Timestamp) and not pd.isna(exp) else ""
+            strike = float(row["strike"]) if pd.notna(row["strike"]) else 0.0
+            right = row["right"] if row["right"] in ['C', 'P'] else ""
+            return f"{row['symbol']}:{exp_s}:{right}:{round(strike,4)}"
+
+        out["contract_id"] = out.apply(_fmt_contract, axis=1)
+
+        # Filter out rows that are not options (missing strike/right/expiry)
+        # Or rows with 0 qty
+        out = out[out["qty"] != 0]
+
+        # Valid option check: must have expiry and right
+        valid_opt = (pd.notna(out["expiry"])) & (out["right"].isin(["C", "P"]))
+        out = out[valid_opt].copy()
+
+        return out
