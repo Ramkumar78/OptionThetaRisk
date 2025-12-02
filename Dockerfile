@@ -1,21 +1,28 @@
 # Use an official Python runtime as a parent image
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
+# Copy the requirements file into the container at /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Install any needed packages specified in requirements.txt
+# We also install gunicorn for a production-ready WSGI server
+RUN pip install --no-cache-dir -r requirements.txt gunicorn
+
+# Copy the current directory contents into the container at /app
 COPY . .
 
-# Make port 80 available to the world outside this container
-EXPOSE 80
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PORT=5000
+# Ensure output is sent directly to terminal (avoids buffering issues)
+ENV PYTHONUNBUFFERED=1
 
-# Define environment variable
-ENV FLASK_APP webapp/app.py
+# Expose the port the app runs on
+EXPOSE 5000
 
-# Run the application
-CMD ["flask", "run", "--host=0.0.0.0", "--port=80"]
+# Run the application using Gunicorn
+# Using 1 worker to avoid potential SQLite locking issues with the background cleanup thread
+CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "webapp.app:app"]

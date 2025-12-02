@@ -1,24 +1,14 @@
 version: '3.8'
+
 services:
   web:
     build: .
     ports:
-      - "8080:80"
+      - "5000:5000"
     volumes:
-      - .:/app
+      - ./instance:/app/instance
     environment:
-      - FLASK_ENV=development
-      - DATABASE_URL=postgresql://user:password@db:5432/option_auditor
-    depends_on:
-      - db
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=option_auditor
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-
-volumes:
-  postgres_data:
+      - PORT=5000
+      - SECRET_KEY=dev-secret-key-change-me
+      # Set to 1 to enable HTTPS if you have SSL setup, or handled by reverse proxy
+      - ENABLE_HTTPS=0
