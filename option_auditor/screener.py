@@ -42,31 +42,38 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
         yf_interval = "5m"
         resample_rule = "98min"
     elif time_frame == "196m":
-        yf_interval = "5m" # Or 15m/30m to save data? 5m is fine for 60d
+        yf_interval = "5m"
         resample_rule = "196min"
 
-    period = "1y" if yf_interval == "1d" else "59d" # 60d is max for 5m, use 59d to be safe
+    period = "1y" if yf_interval == "1d" else "59d"
+
+    # Batch download
+    try:
+        # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
+        # threads=True is default but explicit is good
+        # auto_adjust=True to suppress warning
+        all_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
+    except Exception as e:
+        # Fallback to empty if batch download fails completely
+        # print(f"Batch download failed: {e}")
+        return []
 
     for symbol in tickers:
         try:
-            # 2. Get Data
-            # Use progress=False to avoid cluttering stdout
-            df = yf.download(symbol, period=period, interval=yf_interval, progress=False)
+            # Extract dataframe for specific symbol
+            if symbol not in all_data.columns.levels[0]:
+                continue
+
+            df = all_data[symbol].copy()
+
+            # Clean NaNs (sometimes yf returns rows with all NaNs for holidays etc)
+            df = df.dropna(how='all')
 
             if df.empty:
                 continue
 
-            # Flatten multi-index columns if present (yfinance update)
-            if isinstance(df.columns, pd.MultiIndex):
-                try:
-                    df.columns = df.columns.get_level_values(0)
-                except Exception:
-                    pass
-
             # Resample if needed
             if resample_rule:
-                # Resample logic
-                # We need OHLC aggregation
                 agg_dict = {
                     'Open': 'first',
                     'High': 'max',
@@ -74,17 +81,12 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
                     'Close': 'last',
                     'Volume': 'sum'
                 }
-                # Handle missing columns safely
                 agg_dict = {k: v for k, v in agg_dict.items() if k in df.columns}
 
-                # Resample
                 df = df.resample(resample_rule).agg(agg_dict)
-                # Drop NaN rows created by resampling gaps (e.g. overnight)
                 df = df.dropna()
 
             # 3. Calculate Indicators
-            # RSI (14)
-            # Ensure we have enough data
             if len(df) < 50:
                 continue
 
@@ -93,48 +95,45 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
                 continue
             df['RSI'] = rsi_series
 
-            # SMA (50)
             sma_series = ta.sma(df['Close'], length=50)
             if sma_series is None:
                 continue
             df['SMA_50'] = sma_series
 
-            # ATR (14)
             atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            # ATR can be NaN at start
             current_atr = atr_series.iloc[-1] if atr_series is not None and not atr_series.empty else 0.0
 
-            # Get latest values
             current_price = float(df['Close'].iloc[-1])
             current_rsi = float(df['RSI'].iloc[-1])
             current_sma = float(df['SMA_50'].iloc[-1])
 
-            # Fetch PE Ratio (Fundamental Data)
-            # This requires a separate API call per ticker, which is slow.
-            # We wrap it in try-except and accept it might slow down the loop.
+            # Fetch PE Ratio - This still needs individual calls if not available in bulk
+            # But yf.Tickers(...).tickers[sym].info is cached? No.
+            # We skip PE ratio bulk optimization for now as it's not strictly price data.
+            # But we wrap it tightly.
             pe_ratio = "N/A"
+            # Optimization: Only fetch PE if we are actually going to display this row?
+            # No, user wants to see all candidates? The loop builds results list.
+            # If we want to optimize further, we could fetch PE asynchronously or skip if not 'green'.
+            # For now, keep it but catch errors.
             try:
-                # Only fetch if 1d timeframe to save time on intraday scans?
-                # User asked for it, so we fetch.
-                ticker_obj = yf.Ticker(symbol)
-                # .info triggers the request
-                info = ticker_obj.info
+                # To avoid slowing down the loop too much, maybe we rely on cached metadata if possible
+                # But we have to make a request.
+                # Let's just do it.
+                t = yf.Ticker(symbol)
+                # fast_info doesn't have trailingPE usually.
+                info = t.info
                 if info and 'trailingPE' in info and info['trailingPE'] is not None:
                     pe_ratio = f"{info['trailingPE']:.2f}"
             except Exception:
                 pass
 
             # 4. Apply Rules
-            # Rule 1: Bullish Trend (Price > 50 SMA)
             trend = "BULLISH" if current_price > current_sma else "BEARISH"
-
-            # Rule 2: The Dip (RSI between 30 and rsi_threshold)
-            # We want oversold but in an uptrend.
             signal = "WAIT"
             is_green = False
 
             if trend == "BULLISH":
-                # User asked for "RSI less than field".
                 if 30 <= current_rsi <= rsi_threshold:
                     signal = "🟢 GREEN LIGHT (Buy Dip)"
                     is_green = True
@@ -149,7 +148,7 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
                 "trend": trend,
                 "signal": signal,
                 "is_green": is_green,
-                "iv_rank": "N/A*", # Placeholder for now
+                "iv_rank": "N/A*",
                 "atr": current_atr,
                 "pe_ratio": pe_ratio
             })

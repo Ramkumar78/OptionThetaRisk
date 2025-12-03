@@ -26,4 +26,5 @@ EXPOSE 5000
 
 # Run the application using Gunicorn
 # Use WEB_CONCURRENCY env var for workers, default to 1 for safety with SQLite
-CMD sh -c "gunicorn -w ${WEB_CONCURRENCY:-1} -b 0.0.0.0:${PORT:-5000} webapp.app:app"
+# Increased timeout to 120s to prevent screener timeouts
+CMD sh -c "gunicorn -w ${WEB_CONCURRENCY:-1} --timeout 120 -b 0.0.0.0:${PORT:-5000} webapp.app:app"
