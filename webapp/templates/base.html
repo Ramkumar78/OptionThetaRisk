@@ -9,8 +9,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  <!-- HTMX -->
-  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <!-- Chart.js and Date Adapter -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
@@ -144,25 +142,6 @@
       }
     });
 
-    // HTMX progress indicator handling
-    document.body.addEventListener('htmx:beforeRequest', function(evt) {
-      const btn = document.getElementById('analyze-btn');
-      if (btn) {
-        btn.disabled = true;
-        // Spinner using Tailwind
-        btn.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Analyzing...';
-        btn.classList.add('opacity-75', 'cursor-not-allowed');
-      }
-    });
-
-    document.body.addEventListener('htmx:afterRequest', function(evt) {
-      const btn = document.getElementById('analyze-btn');
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = 'Analyze Trades';
-        btn.classList.remove('opacity-75', 'cursor-not-allowed');
-      }
-    });
   </script>
 </body>
 </html>

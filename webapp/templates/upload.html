@@ -330,11 +330,19 @@
                 const saved = localStorage.getItem('manual_rows');
                 if (saved) {
                     try {
+                        // Protect against corrupted/HTML data in localStorage which causes JSON.parse errors
+                        if (saved.trim().startsWith('<')) {
+                            throw new Error('Invalid JSON in localStorage');
+                        }
                         this.rows = JSON.parse(saved);
                         this.rows.forEach(r => {
                             if (typeof r.editing === 'undefined') r.editing = false;
                         });
-                    } catch(e) { this.rows = []; }
+                    } catch(e) {
+                        console.warn('Cleared corrupted manual_rows from localStorage', e);
+                        localStorage.removeItem('manual_rows');
+                        this.rows = [];
+                    }
                 }
 
                 if (this.rows.length === 0) {
