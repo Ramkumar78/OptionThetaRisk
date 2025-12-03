@@ -646,8 +646,12 @@ def analyze_csv(csv_path: Optional[str] = None,
                 elif agg["right"] == 'C': # Call
                     breakeven = agg["strike"] + avg_price
 
+        # NEW: Get Current Price for context
+        current_mark = live_prices.get(agg["symbol"])
+
         row = {
             "symbol": agg["symbol"],
+            "current_price": current_mark,
             "expiry": agg["expiry"].date().isoformat() if agg["expiry"] and not pd.isna(agg["expiry"]) else "",
             "contract": f"{agg['right'] or ''} {agg['strike']}",
             "qty_open": qty,
