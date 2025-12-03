@@ -244,94 +244,84 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
 
 def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> Tuple[bool, float, List[str]]:
     """
-    Checks open positions for ITM risk.
+    Checks Net Intrinsic Risk per symbol to handle Spreads and Covered Calls correctly.
     Returns (is_risky_flag, total_itm_amount, list_of_risk_descriptions).
     """
     risky = False
-    total_itm_exposure = 0.0
+    total_net_exposure = 0.0
     details = []
 
+    # 1. Group positions by Symbol
+    by_symbol = defaultdict(list)
     for g in open_groups:
-        if g.symbol not in prices:
-            continue
+        if g.symbol in prices:
+            by_symbol[g.symbol].append(g)
 
-        current_price = prices[g.symbol]
-        strike = g.strike
-        if not strike:
-            continue
+    # 2. Analyze Net Risk per Symbol
+    for symbol, groups in by_symbol.items():
+        current_price = prices[symbol]
+        net_intrinsic_val = 0.0
 
-        # Only check Short positions (Net Qty < 0)
-        if g.qty_net >= 0:
-            continue
+        # Calculate what the portfolio would be worth *intrinsically* right now
+        # (Ignoring extrinsic/time value, focusing on hard assignment risk)
+        for g in groups:
+            qty = g.qty_net
 
-        # Check ITM condition
-        is_itm = False
-        diff = 0.0
+            # Stock
+            if g.right not in ['C', 'P']:
+                # For stock, we consider the full liquidation value at current price.
+                # This naturally offsets any short calls (Covered Call).
+                net_intrinsic_val += current_price * qty
 
-        if g.right == 'P': # Short Put
-            if current_price < strike:
-                is_itm = True
-                diff = strike - current_price
-        elif g.right == 'C': # Short Call
-            if current_price > strike:
-                is_itm = True
-                diff = current_price - strike
+            # Options
+            elif g.strike:
+                intrinsic = 0.0
+                if g.right == 'C': # Call
+                    # Intrinsic = Max(0, Price - Strike)
+                    val = max(0.0, current_price - g.strike)
+                    # If Short (-1), we owe this value. If Long (+1), we own this value.
+                    intrinsic = val * qty * 100
+                elif g.right == 'P': # Put
+                    # Intrinsic = Max(0, Strike - Price)
+                    val = max(0.0, g.strike - current_price)
+                    intrinsic = val * qty * 100
 
-        # New Stock Risk Logic
-        elif g.right not in ['C', 'P'] and g.qty_net > 0: # Long Stock
-             # Calculate unrealized PnL
-             # We need cost basis.
-             # g.pnl is sum of proceeds (Net Cash Flow).
-             # For stock buy, proceeds are negative (cost).
-             # So Cost Basis = -g.pnl (assuming no partial sales)
-             # Current Value = current_price * g.qty_net
-             # But wait, g.pnl includes realized pnl if we sold some?
-             # TradeGroup tracks a position. If it is open, it has qty_net != 0.
-             # If we bought 100, sold 50. qty_net = 50.
-             # pnl = (-100*10) + (50*11) = -1000 + 550 = -450.
-             # Cost Basis for remaining 50?
-             # Avg Entry Price = Total Buy Cost / Total Buy Qty?
-             # TradeGroup logic accumulates legs.
-             # We can approximate average price from the net cash flow if simple.
-             # Better: Use Avg Price calculated in main analysis loop.
-             # But we are inside _check_itm_risk, we don't have that map yet.
-             # Let's recalculate average entry price from legs.
+                net_intrinsic_val += intrinsic
 
-             total_buy_qty = sum(l.qty for l in g.legs if l.qty > 0)
-             total_buy_cost = sum(-l.proceeds for l in g.legs if l.qty > 0)
+        # 3. Verdict on this Symbol
+        # If Net Intrinsic Value is significantly negative, it means the Long legs aren't covering the Short legs.
+        # Threshold: -$500 exposure
+        if net_intrinsic_val < -500:
+            risky = True
+            total_net_exposure += abs(net_intrinsic_val)
+            details.append(f"{symbol}: Net ITM Exposure -${abs(net_intrinsic_val):,.0f} (Net Risk)")
 
-             if total_buy_qty > 0:
-                 avg_price = total_buy_cost / total_buy_qty # Assuming multiplier 1
-                 unrealized = (current_price - avg_price) * g.qty_net
+        # 4. Secondary Check: Bag Holding Stock (The logic you already had)
+        for g in groups:
+             if g.right not in ['C', 'P'] and g.qty_net > 0:
+                 # Re-implement Bag Holding Logic
+                 total_buy_qty = sum(l.qty for l in g.legs if l.qty > 0)
+                 total_buy_cost = sum(-l.proceeds for l in g.legs if l.qty > 0)
 
-                 # Threshold for "Bag Holding" risk?
-                 # If down more than 10%? or absolute dollar amount?
-                 # User asked: if unrealized_pnl < -(some_threshold)
-                 # Let's say $500 or 5%?
-                 # Let's use 5% drawdown on the stock position.
+                 if total_buy_qty > 0:
+                     avg_price = total_buy_cost / total_buy_qty
+                     unrealized = (current_price - avg_price) * g.qty_net
 
-                 pct_down = (avg_price - current_price) / avg_price if avg_price > 0 else 0
-                 if pct_down > 0.05: # > 5% Down
-                      risky = True
-                      exposure = abs(unrealized)
-                      total_itm_exposure += exposure
-                      details.append(f"Bag Holding {g.symbol}: Down {pct_down:.1%} (-${exposure:,.2f})")
-             continue
+                     pct_down = (avg_price - current_price) / avg_price if avg_price > 0 else 0
+                     if pct_down > 0.05: # > 5% Down
+                         risky = True
+                         # Add to exposure if we haven't already counted this symbol as a "Net Risk"
+                         # (To avoid double counting if the stock drop is the reason net risk triggered)
+                         # However, Net Risk is about *Liquidation Value* being negative.
+                         # Bag Holding is about *Loss of Capital*.
+                         # They are different metrics.
+                         # But if we return a single "Total Intrinsic Exposure", we should probably sum them up.
+                         # Let's add it.
+                         exposure = abs(unrealized)
+                         total_net_exposure += exposure
+                         details.append(f"{symbol}: Bag Holding Stock Down {pct_down:.1%} (-${exposure:,.0f})")
 
-        if is_itm:
-            pct_itm = (diff / strike) if strike > 0 else 0
-            # Calculate intrinsic value exposure: diff * qty * 100
-            exposure = diff * abs(g.qty_net) * 100.0
-
-            if pct_itm > 0.01: # > 1% ITM
-                risky = True
-                total_itm_exposure += exposure
-                type_str = "Put" if g.right == 'P' else "Call"
-                details.append(
-                    f"Short {type_str} {g.symbol} {strike} ITM by {pct_itm:.1%} (-${exposure:,.0f})"
-                )
-
-    return risky, total_itm_exposure, details
+    return risky, total_net_exposure, details
 
 def analyze_csv(csv_path: Optional[str] = None,
                 broker: str = "auto",
