@@ -277,6 +277,47 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
                 is_itm = True
                 diff = current_price - strike
 
+        # New Stock Risk Logic
+        elif g.right not in ['C', 'P'] and g.qty_net > 0: # Long Stock
+             # Calculate unrealized PnL
+             # We need cost basis.
+             # g.pnl is sum of proceeds (Net Cash Flow).
+             # For stock buy, proceeds are negative (cost).
+             # So Cost Basis = -g.pnl (assuming no partial sales)
+             # Current Value = current_price * g.qty_net
+             # But wait, g.pnl includes realized pnl if we sold some?
+             # TradeGroup tracks a position. If it is open, it has qty_net != 0.
+             # If we bought 100, sold 50. qty_net = 50.
+             # pnl = (-100*10) + (50*11) = -1000 + 550 = -450.
+             # Cost Basis for remaining 50?
+             # Avg Entry Price = Total Buy Cost / Total Buy Qty?
+             # TradeGroup logic accumulates legs.
+             # We can approximate average price from the net cash flow if simple.
+             # Better: Use Avg Price calculated in main analysis loop.
+             # But we are inside _check_itm_risk, we don't have that map yet.
+             # Let's recalculate average entry price from legs.
+
+             total_buy_qty = sum(l.qty for l in g.legs if l.qty > 0)
+             total_buy_cost = sum(-l.proceeds for l in g.legs if l.qty > 0)
+
+             if total_buy_qty > 0:
+                 avg_price = total_buy_cost / total_buy_qty # Assuming multiplier 1
+                 unrealized = (current_price - avg_price) * g.qty_net
+
+                 # Threshold for "Bag Holding" risk?
+                 # If down more than 10%? or absolute dollar amount?
+                 # User asked: if unrealized_pnl < -(some_threshold)
+                 # Let's say $500 or 5%?
+                 # Let's use 5% drawdown on the stock position.
+
+                 pct_down = (avg_price - current_price) / avg_price if avg_price > 0 else 0
+                 if pct_down > 0.05: # > 5% Down
+                      risky = True
+                      exposure = abs(unrealized)
+                      total_itm_exposure += exposure
+                      details.append(f"Bag Holding {g.symbol}: Down {pct_down:.1%} (-${exposure:,.2f})")
+             continue
+
         if is_itm:
             pct_itm = (diff / strike) if strike > 0 else 0
             # Calculate intrinsic value exposure: diff * qty * 100
