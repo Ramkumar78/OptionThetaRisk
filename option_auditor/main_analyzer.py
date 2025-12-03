@@ -262,8 +262,7 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
         current_price = prices[symbol]
         net_intrinsic_val = 0.0
 
-        # Calculate what the portfolio would be worth *intrinsically* right now
-        # (Ignoring extrinsic/time value, focusing on hard assignment risk)
+        # Calculate Net Intrinsic Value (Liquidation Value of Options)
         for g in groups:
             qty = g.qty_net
 
@@ -279,7 +278,7 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
                 if g.right == 'C': # Call
                     # Intrinsic = Max(0, Price - Strike)
                     val = max(0.0, current_price - g.strike)
-                    # If Short (-1), we owe this value. If Long (+1), we own this value.
+                    # If Short (-qty), we owe this. If Long (+qty), we own this.
                     intrinsic = val * qty * 100
                 elif g.right == 'P': # Put
                     # Intrinsic = Max(0, Strike - Price)
@@ -289,37 +288,13 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
                 net_intrinsic_val += intrinsic
 
         # 3. Verdict on this Symbol
-        # If Net Intrinsic Value is significantly negative, it means the Long legs aren't covering the Short legs.
-        # Threshold: -$500 exposure
-        if net_intrinsic_val < -500:
+        # If Net Intrinsic Value is significantly negative (e.g. < -$500),
+        # it means the Long legs aren't covering the Short legs enough.
+        THRESHOLD = -500.0
+        if net_intrinsic_val < THRESHOLD:
             risky = True
             total_net_exposure += abs(net_intrinsic_val)
-            details.append(f"{symbol}: Net ITM Exposure -${abs(net_intrinsic_val):,.0f} (Net Risk)")
-
-        # 4. Secondary Check: Bag Holding Stock (The logic you already had)
-        for g in groups:
-             if g.right not in ['C', 'P'] and g.qty_net > 0:
-                 # Re-implement Bag Holding Logic
-                 total_buy_qty = sum(l.qty for l in g.legs if l.qty > 0)
-                 total_buy_cost = sum(-l.proceeds for l in g.legs if l.qty > 0)
-
-                 if total_buy_qty > 0:
-                     avg_price = total_buy_cost / total_buy_qty
-                     unrealized = (current_price - avg_price) * g.qty_net
-
-                     pct_down = (avg_price - current_price) / avg_price if avg_price > 0 else 0
-                     if pct_down > 0.05: # > 5% Down
-                         risky = True
-                         # Add to exposure if we haven't already counted this symbol as a "Net Risk"
-                         # (To avoid double counting if the stock drop is the reason net risk triggered)
-                         # However, Net Risk is about *Liquidation Value* being negative.
-                         # Bag Holding is about *Loss of Capital*.
-                         # They are different metrics.
-                         # But if we return a single "Total Intrinsic Exposure", we should probably sum them up.
-                         # Let's add it.
-                         exposure = abs(unrealized)
-                         total_net_exposure += exposure
-                         details.append(f"{symbol}: Bag Holding Stock Down {pct_down:.1%} (-${exposure:,.0f})")
+            details.append(f"{symbol}: Net ITM Exposure -${abs(net_intrinsic_val):,.0f} (Hedges accounted)")
 
     return risky, total_net_exposure, details
 
@@ -666,7 +641,12 @@ def analyze_csv(csv_path: Optional[str] = None,
         }
 
         # Add risk annotation if applicable
-        if itm_risk_flag:
+        # Extract risky symbols from details
+        risky_symbols = set()
+        if itm_risk_details:
+             risky_symbols = {d.split(":")[0] for d in itm_risk_details}
+
+        if itm_risk_flag and agg["symbol"] in risky_symbols:
             if agg["symbol"] in live_prices and agg["strike"] and qty < 0:
                 cp = live_prices[agg["symbol"]]
                 is_risky_pos = False
