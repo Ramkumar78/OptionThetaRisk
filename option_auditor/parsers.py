@@ -61,18 +61,41 @@ class TastytradeParser(TransactionParser):
         # Buy/Assignment -> Open/Close Short (1.0).
         sign = np.where(action.str.startswith("sell") | action.str.contains("exercise"), -1.0, 1.0)
         out["qty"] = qty_raw * sign
+
+        # Determine Asset Type
+        # If Option Type is missing or not C/P, treat as STOCK
+        # Also check Strike and Expiration Date
+        opt_type = df["Option Type"].astype(str).str.upper().str.strip()
+        out["right"] = opt_type.str[0] # 'C', 'P', 'N' (for nan), or empty
+
+        # Helper to identify stock rows: Option Type is NaN or empty
+        is_stock = (df["Option Type"].isna()) | (df["Option Type"].astype(str).str.strip() == "") | (df["Option Type"].astype(str).str.lower() == "nan")
+        out["asset_type"] = np.where(is_stock, "STOCK", "OPT")
+
+        # Clean up 'right' for stock
+        out.loc[out["asset_type"] == "STOCK", "right"] = ""
+
+        # Price & Proceeds
         price = pd.to_numeric(df["Price"], errors="coerce").fillna(0.0)
-        out["proceeds"] = -out["qty"] * price * 100.0
+
+        # Multiplier: 100 for OPT, 1 for STOCK
+        multiplier = np.where(out["asset_type"] == "STOCK", 1.0, 100.0)
+        out["proceeds"] = -out["qty"] * price * multiplier
+
         out["fees"] = pd.to_numeric(df["Commissions and Fees"], errors="coerce").fillna(0.0)
         out["expiry"] = pd.to_datetime(df["Expiration Date"], errors="coerce")
         out["strike"] = pd.to_numeric(df["Strike Price"], errors="coerce").astype(float)
-        out["right"] = df["Option Type"].astype(str).str.upper().str[0]
-        out["asset_type"] = "OPT"
+
         def _fmt_contract(row):
+            if row["asset_type"] == "STOCK":
+                # Unique ID for stock: SYMBOL:::0.0
+                return f"{row['symbol']}:::0.0"
+
             exp = row["expiry"]
             exp_s = exp.date().isoformat() if isinstance(exp, pd.Timestamp) and not pd.isna(exp) else ""
             strike = float(row["strike"]) if pd.notna(row["strike"]) else 0.0
             return f"{row['symbol']}:{exp_s}:{row['right']}:{round(strike,4)}"
+
         out["contract_id"] = out.apply(_fmt_contract, axis=1)
         return out
 
@@ -94,14 +117,24 @@ class TastytradeFillsParser(TransactionParser):
             price_raw = str(row.get("Price", "")).lower().replace(",", "")
             is_credit = "cr" in price_raw
             try:
-                total_money = float(re.findall(r"[\d\.]+", price_raw)[0]) * 100.0
+                raw_val = float(re.findall(r"[\d\.]+", price_raw)[0])
+                # For this parser, we need to know if it is stock or option to multiply by 100
+                # But this parser parses "fills" text which is usually options format.
+                # If the description matches the option regex, it uses 100.
+                total_money = raw_val * 100.0
                 if not is_credit:
                     total_money = -total_money
             except:
                 total_money = 0.0
+
             ts = self._parse_tasty_datetime(row.get("Time"))
             total_legs_qty = 0
             parsed_legs = []
+
+            # Stock logic could be needed here too if fills include stock
+            # But the regex is specific to options.
+            # If line doesn't match regex, it might be stock?
+
             for line in lines:
                 line = line.strip()
                 match = desc_pattern.search(line)
@@ -123,9 +156,16 @@ class TastytradeFillsParser(TransactionParser):
                     parsed_legs.append({
                         "symbol": row.get("Symbol"), "datetime": ts, "qty": qty,
                         "strike": float(d['strike']), "right": d['right'][0].upper(),
-                        "expiry": expiry, "raw_desc": line
+                        "expiry": expiry, "raw_desc": line, "asset_type": "OPT"
                     })
                 else:
+                    # Fallback or Stock?
+                    # "Bought 100 AAPL @ 150.00"
+                    # If we see "Bought X SYMBOL @" or similar.
+                    # Current fallback logic tries to parse as option too.
+                    # For now, keeping legacy behavior unless stock is explicitly requested for FillsParser too.
+                    # The prompt focused on TastytradeParser and IBKRParser.
+
                     toks = line.replace(",", " ").split()
                     if len(toks) >= 6:
                         try:
@@ -160,8 +200,9 @@ class TastytradeFillsParser(TransactionParser):
                         parsed_legs.append({
                             "symbol": row.get("Symbol"), "datetime": ts, "qty": q,
                             "strike": float(strike_val), "right": right_val,
-                            "expiry": expiry, "raw_desc": line
+                            "expiry": expiry, "raw_desc": line, "asset_type": "OPT"
                         })
+
             for leg in parsed_legs:
                 ratio = abs(leg['qty']) / total_legs_qty if total_legs_qty > 0 else 0
                 leg_proceeds = total_money * ratio
@@ -184,43 +225,13 @@ class ManualInputParser(TransactionParser):
         # Basic validation
         for col in required:
             if col not in df.columns:
-                # If dataframe is empty, we can just return empty
                 if df.empty:
                     return pd.DataFrame()
-                # Otherwise, it might be an issue, but let's be lenient or fill NaN
                 df[col] = None
 
         out = pd.DataFrame()
         out["datetime"] = pd.to_datetime(df["date"], errors="coerce")
         out["symbol"] = df["symbol"].astype(str)
-
-        # Action determines sign.
-        # "Buy Open", "Sell Close" -> usually we just need Buy vs Sell.
-        # But user input might be specific.
-        # Let's assume standard: Buy = positive cost (negative proceeds), Sell = negative cost (positive proceeds).
-        # Wait, Qty Sign: Long = +Qty, Short = -Qty.
-        # Action:
-        # Buy (Open/Close) -> +Qty? No.
-        # Buy to Open: +Qty (Long). Pays Debit.
-        # Sell to Close: -Qty (Close Long). Receives Credit.
-        # Sell to Open: -Qty (Short). Receives Credit.
-        # Buy to Close: +Qty (Close Short). Pays Debit.
-
-        # Actually, in our internal model:
-        # Long Position = Positive Qty.
-        # Short Position = Negative Qty.
-        # To OPEN Long: Buy (+Qty).
-        # To CLOSE Long: Sell (-Qty).
-        # To OPEN Short: Sell (-Qty).
-        # To CLOSE Short: Buy (+Qty).
-
-        # So "Buy" always adds Qty, "Sell" always subtracts Qty?
-        # TastyParser: `sign = np.where(action.str.startswith("sell"), -1.0, 1.0)`.
-        # This implies Sell = -1, Buy = +1.
-        # Proceeds: `-out["qty"] * price * 100.0`.
-        # If Sell (-1): Proceeds = -(-1)*P*100 = +100P. (Credit)
-        # If Buy (+1): Proceeds = -(1)*P*100 = -100P. (Debit)
-        # This matches standard accounting.
 
         action = df["action"].astype(str).str.lower()
         sign = np.where(action.str.contains("sell"), -1.0, 1.0)
@@ -228,17 +239,28 @@ class ManualInputParser(TransactionParser):
         out["qty"] = qty_abs * sign
 
         price = pd.to_numeric(df["price"], errors="coerce").fillna(0.0)
-        out["proceeds"] = -out["qty"] * price * 100.0
+
+        # Determine Asset Type based on Right/Strike/Expiry presence
+        # If right is missing or not C/P, assume stock?
+        # Manual input UI usually forces these fields for options.
+        # Let's check 'right'.
+        out["right"] = df["right"].astype(str).str.upper().str[0]
+        is_opt = out["right"].isin(['C', 'P'])
+        out["asset_type"] = np.where(is_opt, "OPT", "STOCK")
+
+        # Reset right for stock
+        out.loc[~is_opt, "right"] = ""
+
+        multiplier = np.where(out["asset_type"] == "STOCK", 1.0, 100.0)
+        out["proceeds"] = -out["qty"] * price * multiplier
 
         out["fees"] = pd.to_numeric(df["fees"], errors="coerce").fillna(0.0)
         out["expiry"] = pd.to_datetime(df["expiry"], errors="coerce")
         out["strike"] = pd.to_numeric(df["strike"], errors="coerce").astype(float)
 
-        # Right: C or P
-        out["right"] = df["right"].astype(str).str.upper().str[0]
-        out["asset_type"] = "OPT"
-
         def _fmt_contract(row):
+            if row["asset_type"] == "STOCK":
+                return f"{row['symbol']}:::0.0"
             exp = row["expiry"]
             exp_s = exp.date().isoformat() if isinstance(exp, pd.Timestamp) and not pd.isna(exp) else ""
             strike = float(row["strike"]) if pd.notna(row["strike"]) else 0.0
@@ -246,7 +268,6 @@ class ManualInputParser(TransactionParser):
 
         out["contract_id"] = out.apply(_fmt_contract, axis=1)
 
-        # Filter out rows with invalid dates or symbols
         out = out.dropna(subset=["datetime"])
         out = out[out["symbol"] != "nan"]
 
@@ -255,9 +276,6 @@ class ManualInputParser(TransactionParser):
 
 class IBKRParser(TransactionParser):
     def parse(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Standard IBKR Flex Query columns (approximate)
-        # Expected: Symbol, DateTime (or Date/Time), Quantity, T. Price, Proceeds, Comm/Fee, Strike, Expiry, Put/Call
-
         # Helper to find column by loose match
         def find_col(candidates):
             for cand in candidates:
@@ -267,7 +285,7 @@ class IBKRParser(TransactionParser):
             return None
 
         sym_col = find_col(["Symbol", "UnderlyingSymbol"])
-        date_col = find_col(["DateTime", "Date/Time", "TradeDate"]) # TradeTime might be separate
+        date_col = find_col(["DateTime", "Date/Time", "TradeDate"])
         qty_col = find_col(["Quantity", "Qty"])
         price_col = find_col(["T. Price", "TradePrice", "Price"])
         proceeds_col = find_col(["Proceeds", "Amount"])
@@ -275,21 +293,18 @@ class IBKRParser(TransactionParser):
         strike_col = find_col(["Strike", "StrikePrice"])
         expiry_col = find_col(["Expiry", "ExpirationDate", "Expiration"])
         right_col = find_col(["Put/Call", "Right", "C/P"])
+        # Asset class column might be available
+        asset_col = find_col(["AssetClass", "Asset Class"])
 
         if not (sym_col and date_col and qty_col):
-             # Try fallback to less standard if needed, or raise
              if not sym_col: raise KeyError("IBKR Parser: Missing Symbol column")
              if not date_col: raise KeyError("IBKR Parser: Missing Date column")
              if not qty_col: raise KeyError("IBKR Parser: Missing Quantity column")
 
         out = pd.DataFrame()
 
-        # DateTime parsing
-        # IBKR often uses "YYYYMMDD;HHMMSS" or "YYYY-MM-DD;HH:MM:SS"
-        # We can try using dtparser but might need custom logic for ";"
         def _parse_ib_dt(x):
             try:
-                # Handle "20231025;103000"
                 if ";" in str(x):
                     parts = str(x).split(";")
                     d = parts[0].replace("-", "")
@@ -300,61 +315,59 @@ class IBKRParser(TransactionParser):
                 return pd.NaT
 
         out["datetime"] = df[date_col].apply(_parse_ib_dt)
-
         out["symbol"] = df[sym_col].astype(str)
-
-        # Quantity: IBKR uses Signed Quantity for trades (Buy > 0, Sell < 0)
-        # However, our internal model is: Long Position > 0, Short Position < 0.
-        # But this is *Transaction* quantity.
-        # Buy (+Qty) -> Increases Position (if Long) or Decreases Short.
-        # Sell (-Qty) -> Decreases Position (if Long) or Increases Short.
-        # This matches standard Signed Quantity.
         out["qty"] = pd.to_numeric(df[qty_col], errors="coerce").fillna(0.0)
 
-        # Price
         if price_col:
             price = pd.to_numeric(df[price_col], errors="coerce").fillna(0.0)
         else:
             price = 0.0
 
-        # Proceeds
-        # IBKR usually provides explicit Proceeds column.
-        # If not, calculate: -Qty * Price * Multiplier (usually 100)
+        if right_col:
+            # str[0] on empty string produces NaN, which casts column to float. FillNa("") ensures object/string dtype.
+            out["right"] = df[right_col].astype(str).str.upper().str[0].fillna("")
+        else:
+            out["right"] = ""
+
+        # Determine Asset Type
+        if asset_col:
+            # If explicit column exists, use it
+            raw_asset = df[asset_col].astype(str).str.upper()
+            out["asset_type"] = np.where(raw_asset.isin(["STK", "EQUITY", "STOCK"]), "STOCK", "OPT")
+        else:
+            # Infer from right/strike/expiry
+            # If right is C/P, it's OPT. Otherwise STOCK (if not empty row)
+            out["asset_type"] = np.where(out["right"].isin(["C", "P"]), "OPT", "STOCK")
+
+        # Ensure 'right' is empty for STOCK
+        out.loc[out["asset_type"] == "STOCK", "right"] = ""
+
         if proceeds_col:
             out["proceeds"] = pd.to_numeric(df[proceeds_col], errors="coerce").fillna(0.0)
         else:
             # Fallback
-            out["proceeds"] = -out["qty"] * price * 100.0
+            multiplier = np.where(out["asset_type"] == "STOCK", 1.0, 100.0)
+            out["proceeds"] = -out["qty"] * price * multiplier
 
-        # Fees
-        # IBKR Comm/Fee is usually negative (debit). Internal 'fees' should be positive.
         if fee_col:
             raw_fee = pd.to_numeric(df[fee_col], errors="coerce").fillna(0.0)
-            out["fees"] = raw_fee.abs() # Fees are cost, so just take magnitude
+            out["fees"] = raw_fee.abs()
         else:
             out["fees"] = 0.0
 
-        # Option Details
         if strike_col:
             out["strike"] = pd.to_numeric(df[strike_col], errors="coerce").fillna(0.0)
         else:
             out["strike"] = 0.0
 
         if expiry_col:
-            # IBKR date format is usually YYYYMMDD
-            # If it's read as numeric, convert to string first
             out["expiry"] = pd.to_datetime(df[expiry_col].astype(str), errors="coerce")
         else:
             out["expiry"] = pd.NaT
 
-        if right_col:
-            out["right"] = df[right_col].astype(str).str.upper().str[0]
-        else:
-            out["right"] = ""
-
-        out["asset_type"] = "OPT"
-
         def _fmt_contract(row):
+            if row["asset_type"] == "STOCK":
+                 return f"{row['symbol']}:::0.0"
             exp = row["expiry"]
             exp_s = exp.date().isoformat() if isinstance(exp, pd.Timestamp) and not pd.isna(exp) else ""
             strike = float(row["strike"]) if pd.notna(row["strike"]) else 0.0
@@ -363,12 +376,16 @@ class IBKRParser(TransactionParser):
 
         out["contract_id"] = out.apply(_fmt_contract, axis=1)
 
-        # Filter out rows that are not options (missing strike/right/expiry)
-        # Or rows with 0 qty
+        # Filter out rows with 0 qty
         out = out[out["qty"] != 0]
 
-        # Valid option check: must have expiry and right
-        valid_opt = (pd.notna(out["expiry"])) & (out["right"].isin(["C", "P"]))
-        out = out[valid_opt].copy()
+        # Valid rows: Must be OPT or STOCK.
+        # If OPT, must have expiry and right.
+        # If STOCK, just need symbol (which is checked above).
+
+        is_valid_opt = (out["asset_type"] == "OPT") & (pd.notna(out["expiry"])) & (out["right"].isin(["C", "P"]))
+        is_valid_stock = (out["asset_type"] == "STOCK")
+
+        out = out[is_valid_opt | is_valid_stock].copy()
 
         return out
