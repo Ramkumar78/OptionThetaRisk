@@ -327,7 +327,8 @@
                 this.tab = localStorage.getItem('upload_tab') || 'csv';
                 this.$watch('tab', val => localStorage.setItem('upload_tab', val));
 
-                const saved = localStorage.getItem('manual_rows');
+                // Use v2 key to avoid old corrupted data
+                const saved = localStorage.getItem('manual_rows_v2');
                 if (saved) {
                     try {
                         // Protect against corrupted/HTML data in localStorage which causes JSON.parse errors
@@ -339,8 +340,8 @@
                             if (typeof r.editing === 'undefined') r.editing = false;
                         });
                     } catch(e) {
-                        console.warn('Cleared corrupted manual_rows from localStorage', e);
-                        localStorage.removeItem('manual_rows');
+                        console.warn('Cleared corrupted manual_rows_v2 from localStorage', e);
+                        localStorage.removeItem('manual_rows_v2');
                         this.rows = [];
                     }
                 }
@@ -350,7 +351,7 @@
                 }
 
                 this.$watch('rows', val => {
-                    localStorage.setItem('manual_rows', JSON.stringify(val));
+                    localStorage.setItem('manual_rows_v2', JSON.stringify(val));
                 });
             },
 
