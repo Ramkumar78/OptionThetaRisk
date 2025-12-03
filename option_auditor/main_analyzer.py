@@ -262,36 +262,37 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
         current_price = prices[symbol]
         net_intrinsic_val = 0.0
 
-        # Calculate Net Intrinsic Value (Liquidation Value of Options)
+        # Calculate the Net Liquidation Value of options if expired NOW
         for g in groups:
             qty = g.qty_net
 
             # Stock (Treat as asset/liability at full market value)
+            # Retained to ensure Covered Calls are handled correctly despite not being in the user snippet
             if not g.strike or g.right not in ['C', 'P']:
                 net_intrinsic_val += current_price * qty
-            # Options
-            else:
+                continue
+
+            if g.strike and g.right:
                 intrinsic = 0.0
                 if g.right == 'C': # Call
-                    # Intrinsic = Max(0, Price - Strike)
+                    # Value = Max(0, Price - Strike)
                     val = max(0.0, current_price - g.strike)
-                    # If Short (-qty), we owe this. If Long (+qty), we own this.
                     intrinsic = val * qty * 100
                 elif g.right == 'P': # Put
-                    # Intrinsic = Max(0, Strike - Price)
+                    # Value = Max(0, Strike - Price)
                     val = max(0.0, g.strike - current_price)
                     intrinsic = val * qty * 100
 
+                # Add to net total (Longs add value, Shorts subtract value)
                 net_intrinsic_val += intrinsic
 
         # 3. Verdict on this Symbol
-        # If Net Intrinsic Value is significantly negative (e.g. < -$500),
-        # it means the Long legs aren't covering the Short legs enough.
-        THRESHOLD = -500.0
-        if net_intrinsic_val < THRESHOLD:
+        # If the Net Intrinsic Value is significantly negative (e.g. < -$500),
+        # it means the Short legs are ITM and NOT fully covered by Long legs.
+        if net_intrinsic_val < -500:
             risky = True
             total_net_exposure += abs(net_intrinsic_val)
-            details.append(f"{symbol}: Net ITM Exposure -${abs(net_intrinsic_val):,.0f} (Hedges accounted)")
+            details.append(f"{symbol}: Net ITM Exposure -${abs(net_intrinsic_val):,.0f} (Unhedged)")
 
     return risky, total_net_exposure, details
 
