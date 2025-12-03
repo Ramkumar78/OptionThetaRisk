@@ -9,7 +9,8 @@ COPY requirements.txt .
 
 # Install any needed packages specified in requirements.txt
 # We also install gunicorn for a production-ready WSGI server
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+# Use --pre to allow installation of pre-release versions (required for pandas_ta)
+RUN pip install --no-cache-dir --pre -r requirements.txt gunicorn
 
 # Copy the current directory contents into the container at /app
 COPY . .
