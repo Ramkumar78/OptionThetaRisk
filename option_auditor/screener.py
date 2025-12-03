@@ -1,6 +1,5 @@
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 from datetime import datetime, timedelta
 
 def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0) -> list:
@@ -15,6 +14,11 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0) 
     Returns:
         List of dictionaries containing ticker details.
     """
+    try:
+        import pandas_ta as ta
+    except ImportError as e:
+        raise ImportError("The 'pandas_ta' library is required for the screener. Please install it with 'pip install pandas_ta'.") from e
+
     tickers = [
         "SPY", "QQQ", "IWM", "TLT", "GLD", "SLV", "XLE", "XLV", "XLF", "FXI", "EEM", # ETFs
         "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "AMD", "TSLA", "META", # Tech
