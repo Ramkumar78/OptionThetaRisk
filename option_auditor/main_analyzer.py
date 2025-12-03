@@ -266,14 +266,11 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
         for g in groups:
             qty = g.qty_net
 
-            # Stock
-            if g.right not in ['C', 'P']:
-                # For stock, we consider the full liquidation value at current price.
-                # This naturally offsets any short calls (Covered Call).
+            # Stock (Treat as asset/liability at full market value)
+            if not g.strike or g.right not in ['C', 'P']:
                 net_intrinsic_val += current_price * qty
-
             # Options
-            elif g.strike:
+            else:
                 intrinsic = 0.0
                 if g.right == 'C': # Call
                     # Intrinsic = Max(0, Price - Strike)
