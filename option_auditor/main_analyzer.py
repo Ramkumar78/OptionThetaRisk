@@ -296,6 +296,22 @@ def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> 
 
     return risky, total_net_exposure, details
 
+def _format_legs(strat) -> str:
+    """Extracts a concise string of strikes involved in the strategy."""
+    # Collect unique contract descriptions (e.g. "400P", "150C")
+    items = set()
+    for leg in strat.legs:
+        if leg.strike is not None and leg.right:
+            # Formatting: 400.0 -> 400 if whole number
+            s_val = f"{leg.strike:.0f}" if leg.strike % 1 == 0 else f"{leg.strike}"
+            items.add(f"{s_val}{leg.right}")
+        elif leg.right is None: # Stock
+            items.add("Stock")
+
+    # Sort for consistency (e.g. puts ascending, calls ascending)
+    # Simple alpha sort is good enough for V1 "390P, 400P"
+    return "/".join(sorted(list(items)))
+
 def analyze_csv(csv_path: Optional[str] = None,
                 broker: str = "auto",
                 account_size_start: Optional[float] = None,
@@ -560,10 +576,14 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     strategy_rows = []
     for s in strategies:
+        # Generate the description (NEW)
+        legs_desc = _format_legs(s)
+
         row = {
             "symbol": s.symbol,
             "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "",
             "strategy": s.strategy_name,
+            "legs_desc": legs_desc,
             "pnl": s.net_pnl,
             "gross_pnl": s.pnl,
             "fees": s.fees,

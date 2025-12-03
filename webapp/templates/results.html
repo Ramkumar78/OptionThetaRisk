@@ -283,13 +283,18 @@
           {% for s in strategy_groups %}
           <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
             <td class="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-gray-100">
-                <div class="flex items-center">
-                    <span class="font-bold">{{ s.strategy }}</span>
-                    {% if s.is_revenge %}
-                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 border border-red-200 dark:border-red-800" title="Opened <30m after a loss">
-                        <i class="bi bi-fire mr-1"></i> Tilt?
+                <div class="flex flex-col">
+                    <div class="flex items-center">
+                        <span class="font-bold">{{ s.strategy }}</span>
+                        {% if s.is_revenge %}
+                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 border border-red-200 dark:border-red-800" title="Opened <30m after a loss">
+                            <i class="bi bi-fire mr-1"></i> Tilt?
+                        </span>
+                        {% endif %}
+                    </div>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                        {{ s.legs_desc }}
                     </span>
-                    {% endif %}
                 </div>
                 {% if s.segments|length > 1 %}
                 <div class="inline-flex items-center mt-1 px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
