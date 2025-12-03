@@ -8,9 +8,10 @@ import time
 import json
 from typing import Optional
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify
 
-from option_auditor import analyze_csv, screener
+from option_auditor import analyze_csv
+from option_auditor.scanner import run_screener
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
 
@@ -74,23 +75,15 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route("/screen", methods=["POST"])
     def screen():
-        iv_rank = 30.0
         try:
-            iv_rank = float(request.form.get("iv_rank", 30))
-        except ValueError:
-            pass
+            data = request.json
+            iv_rank_threshold = data.get("iv_rank", 30)
+            rsi_threshold = data.get("rsi", 50)
 
-        rsi_threshold = 50.0
-        try:
-            rsi_threshold = float(request.form.get("rsi_threshold", 50))
-        except ValueError:
-            pass
-
-        try:
-            results = screener.screen_market(iv_rank, rsi_threshold)
-            return render_template("screener_results.html", results=results, iv_rank_threshold=iv_rank, rsi_threshold=rsi_threshold)
+            results = run_screener(iv_rank_threshold, rsi_threshold)
+            return jsonify({"results": results})
         except Exception as e:
-            return render_template("error.html", message=f"Screener failed: {e}")
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/analyze", methods=["POST"])
     def analyze():
