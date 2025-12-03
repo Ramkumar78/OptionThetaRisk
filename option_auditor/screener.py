@@ -2,14 +2,14 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
-def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0) -> list:
+def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
     """
     Screens the market for stocks with Bullish Trend and RSI < rsi_threshold.
-    Note: IV Rank check is skipped as it's hard to get free via yfinance.
 
     Args:
         iv_rank_threshold: Minimum IV Rank (currently unused/manual check).
         rsi_threshold: Maximum RSI value for "Green Light".
+        time_frame: Time frame for analysis ("1d", "49m", "98m", "196m").
 
     Returns:
         List of dictionaries containing ticker details.
@@ -31,27 +31,56 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0) 
 
     results = []
 
+    # Map time_frame to yfinance interval and resample rule
+    yf_interval = "1d"
+    resample_rule = None
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+    elif time_frame == "196m":
+        yf_interval = "5m" # Or 15m/30m to save data? 5m is fine for 60d
+        resample_rule = "196min"
+
+    period = "1y" if yf_interval == "1d" else "59d" # 60d is max for 5m, use 59d to be safe
+
     for symbol in tickers:
         try:
-            # 2. Get Data (1 Year of Daily Data)
+            # 2. Get Data
             # Use progress=False to avoid cluttering stdout
-            df = yf.download(symbol, period="1y", interval="1d", progress=False)
+            df = yf.download(symbol, period=period, interval=yf_interval, progress=False)
 
             if df.empty:
                 continue
 
             # Flatten multi-index columns if present (yfinance update)
             if isinstance(df.columns, pd.MultiIndex):
-                # We expect columns like ('Close', 'AAPL') or just 'Close'
-                # If multi-index, we need to handle it.
-                # yfinance>=0.2 usually returns multiindex if multiple tickers,
-                # but single ticker might also be multiindex depending on version or params.
-                # Here we download one by one, so usually it is single level or (Price, Ticker).
-                # Let's try to standardize.
                 try:
                     df.columns = df.columns.get_level_values(0)
                 except Exception:
                     pass
+
+            # Resample if needed
+            if resample_rule:
+                # Resample logic
+                # We need OHLC aggregation
+                agg_dict = {
+                    'Open': 'first',
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last',
+                    'Volume': 'sum'
+                }
+                # Handle missing columns safely
+                agg_dict = {k: v for k, v in agg_dict.items() if k in df.columns}
+
+                # Resample
+                df = df.resample(resample_rule).agg(agg_dict)
+                # Drop NaN rows created by resampling gaps (e.g. overnight)
+                df = df.dropna()
 
             # 3. Calculate Indicators
             # RSI (14)
@@ -70,10 +99,30 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0) 
                 continue
             df['SMA_50'] = sma_series
 
+            # ATR (14)
+            atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            # ATR can be NaN at start
+            current_atr = atr_series.iloc[-1] if atr_series is not None and not atr_series.empty else 0.0
+
             # Get latest values
             current_price = float(df['Close'].iloc[-1])
             current_rsi = float(df['RSI'].iloc[-1])
             current_sma = float(df['SMA_50'].iloc[-1])
+
+            # Fetch PE Ratio (Fundamental Data)
+            # This requires a separate API call per ticker, which is slow.
+            # We wrap it in try-except and accept it might slow down the loop.
+            pe_ratio = "N/A"
+            try:
+                # Only fetch if 1d timeframe to save time on intraday scans?
+                # User asked for it, so we fetch.
+                ticker_obj = yf.Ticker(symbol)
+                # .info triggers the request
+                info = ticker_obj.info
+                if info and 'trailingPE' in info and info['trailingPE'] is not None:
+                    pe_ratio = f"{info['trailingPE']:.2f}"
+            except Exception:
+                pass
 
             # 4. Apply Rules
             # Rule 1: Bullish Trend (Price > 50 SMA)
@@ -86,8 +135,6 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0) 
 
             if trend == "BULLISH":
                 # User asked for "RSI less than field".
-                # The original script had `30 <= current_rsi <= 50`.
-                # If user sets rsi_threshold, we use `30 <= current_rsi <= rsi_threshold`.
                 if 30 <= current_rsi <= rsi_threshold:
                     signal = "🟢 GREEN LIGHT (Buy Dip)"
                     is_green = True
@@ -101,7 +148,10 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0) 
                 "sma_50": current_sma,
                 "trend": trend,
                 "signal": signal,
-                "is_green": is_green
+                "is_green": is_green,
+                "iv_rank": "N/A*", # Placeholder for now
+                "atr": current_atr,
+                "pe_ratio": pe_ratio
             })
 
         except Exception as e:

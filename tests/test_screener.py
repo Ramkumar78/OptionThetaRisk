@@ -18,15 +18,19 @@ def test_screen_market_logic():
     with patch('yfinance.download') as mock_download:
         dates = pd.date_range(end=pd.Timestamp.now(), periods=100)
         data = {
-            'Close': [100.0] * 99 + [110.0]  # Price goes up
+            'Open': [100.0] * 100,
+            'High': [100.0] * 100,
+            'Low': [100.0] * 100,
+            'Close': [100.0] * 99 + [110.0],  # Price goes up
+            'Volume': [100] * 100
         }
         df = pd.DataFrame(data, index=dates)
 
         # Setup mocking correctly.
-        # Since screen_market does 'import pandas_ta as ta', we must mock it in sys.modules.
         mock_ta = MagicMock()
         mock_ta.rsi.return_value = pd.Series([40.0] * 100, index=dates)
         mock_ta.sma.return_value = pd.Series([100.0] * 100, index=dates)
+        mock_ta.atr.return_value = pd.Series([2.0] * 100, index=dates)
 
         with patch.dict(sys.modules, {'pandas_ta': mock_ta}):
             def side_effect(symbol, **kwargs):
@@ -48,12 +52,19 @@ def test_screen_market_bearish():
     """Test that bearish trend yields WAIT signal."""
     with patch('yfinance.download') as mock_download:
         dates = pd.date_range(end=pd.Timestamp.now(), periods=100)
-        data = {'Close': [100.0] * 100}
+        data = {
+            'Open': [100.0] * 100,
+            'High': [100.0] * 100,
+            'Low': [100.0] * 100,
+            'Close': [100.0] * 100,
+            'Volume': [100] * 100
+        }
         df = pd.DataFrame(data, index=dates)
 
         mock_ta = MagicMock()
         mock_ta.rsi.return_value = pd.Series([40.0] * 100, index=dates)
         mock_ta.sma.return_value = pd.Series([110.0] * 100, index=dates)
+        mock_ta.atr.return_value = pd.Series([2.0] * 100, index=dates)
 
         with patch.dict(sys.modules, {'pandas_ta': mock_ta}):
             def side_effect(symbol, **kwargs):

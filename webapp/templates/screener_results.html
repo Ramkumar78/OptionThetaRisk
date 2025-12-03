@@ -8,7 +8,11 @@
     <div class="bg-blue-600 dark:bg-blue-800 rounded-t-lg p-6 shadow-lg mb-0 flex justify-between items-center">
         <div>
             <h2 class="text-2xl font-bold text-white">Market Screener Results</h2>
-            <p class="text-blue-100 mt-2 text-sm">Candidates matching Bullish Trend (Price > 50 SMA) and RSI < {{ rsi_threshold }}</p>
+            <div class="flex items-center text-blue-100 mt-2 text-sm">
+                <span class="mr-4">Bullish Trend (Price > 50 SMA)</span>
+                <span class="mr-4">RSI < {{ rsi_threshold }}</span>
+                <span class="px-2 py-0.5 bg-blue-700 rounded text-xs">TF: {{ time_frame }}</span>
+            </div>
         </div>
         <a href="/" class="text-white hover:text-blue-100 font-medium text-sm bg-blue-700 dark:bg-blue-900 px-4 py-2 rounded-lg transition-colors">
             <i class="bi bi-arrow-left mr-1"></i> Back to Screener
@@ -24,6 +28,9 @@
                     <tr>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ticker</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Price</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ATR</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">P/E</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IV Rank</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">RSI (14)</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trend</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Signal</th>
@@ -37,6 +44,15 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                             ${{ "%.2f"|format(row.price) }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ "%.2f"|format(row.atr) }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ row.pe_ratio }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300" title="Check your broker for live IV Rank">
+                            {{ row.iv_rank }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                             {{ "%.2f"|format(row.rsi) }}
@@ -82,4 +98,18 @@
 
     </div>
 </div>
+
+<script>
+    // Initialize simple-datatables
+    document.addEventListener("DOMContentLoaded", function() {
+        const table = document.getElementById("screener-table");
+        if (table) {
+            new simpleDatatables.DataTable(table, {
+                searchable: true,
+                fixedHeight: false,
+                perPage: 25
+            });
+        }
+    });
+</script>
 {% endblock %}

@@ -86,9 +86,11 @@ def create_app(testing: bool = False) -> Flask:
         except ValueError:
             pass
 
+        time_frame = request.form.get("time_frame", "1d")
+
         try:
-            results = screener.screen_market(iv_rank, rsi_threshold)
-            return render_template("screener_results.html", results=results, iv_rank_threshold=iv_rank, rsi_threshold=rsi_threshold)
+            results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
+            return render_template("screener_results.html", results=results, iv_rank_threshold=iv_rank, rsi_threshold=rsi_threshold, time_frame=time_frame)
         except Exception as e:
             return render_template("error.html", message=f"Screener failed: {e}")
 

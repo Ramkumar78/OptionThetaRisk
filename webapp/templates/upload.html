@@ -3,14 +3,14 @@
 {% block title %}Upload - The Option Auditor{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
+<div class="max-w-4xl mx-auto" x-data="manualEntryForm()">
     <!-- Header -->
     <div class="bg-blue-600 dark:bg-blue-800 rounded-t-lg p-6 shadow-lg mb-0">
         <h2 class="text-2xl font-bold text-white text-center">Analyze Your Trades</h2>
         <p class="text-blue-100 text-center mt-2 text-sm">Upload a broker CSV or enter trades manually</p>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-b-lg p-8 border border-t-0 border-gray-200 dark:border-gray-700 transition-colors duration-200" x-data="manualEntryForm()">
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-b-lg p-8 border border-t-0 border-gray-200 dark:border-gray-700 transition-colors duration-200">
 
         <!-- Tabs -->
         <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6">
@@ -273,7 +273,8 @@
             </button>
         </form>
 
-        <!-- Screener Form -->
+        <!-- Screener Form - MOVED OUTSIDE x-data scope was unnecessary, but let's make sure it's cleanly separated in DOM logic -->
+        <!-- Actually, moving x-data to the wrapper div is cleaner -->
         <div x-show="tab === 'screener'" class="space-y-6">
             <form action="/screen" method="post" id="screener-form">
                 <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
@@ -296,7 +297,38 @@
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Target oversold conditions (RSI < X) in an uptrend.</p>
                     </div>
                 </div>
-                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 mt-6">
+
+                <div class="mt-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Time Frame</label>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <input type="radio" name="time_frame" id="tf_49m" value="49m" class="peer hidden">
+                            <label for="tf_49m" class="block w-full p-2 text-center text-sm border rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 dark:text-gray-300 dark:border-gray-600 transition-colors">
+                                49m
+                            </label>
+                        </div>
+                        <div>
+                            <input type="radio" name="time_frame" id="tf_98m" value="98m" class="peer hidden">
+                            <label for="tf_98m" class="block w-full p-2 text-center text-sm border rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 dark:text-gray-300 dark:border-gray-600 transition-colors">
+                                98m
+                            </label>
+                        </div>
+                        <div>
+                            <input type="radio" name="time_frame" id="tf_196m" value="196m" class="peer hidden">
+                            <label for="tf_196m" class="block w-full p-2 text-center text-sm border rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 dark:text-gray-300 dark:border-gray-600 transition-colors">
+                                196m
+                            </label>
+                        </div>
+                        <div>
+                            <input type="radio" name="time_frame" id="tf_1d" value="1d" checked class="peer hidden">
+                            <label for="tf_1d" class="block w-full p-2 text-center text-sm border rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 dark:text-gray-300 dark:border-gray-600 transition-colors">
+                                1 Day
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" onclick="this.form.submit()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 mt-6">
                     Screen Market
                 </button>
             </form>
