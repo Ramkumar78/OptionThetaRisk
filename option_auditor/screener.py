@@ -49,7 +49,10 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
         resample_rule = "196min"
         is_intraday = True
 
-    period = "1y" if yf_interval == "1d" else "59d"
+    # Intraday period reduced to '1mo' (approx 20 trading days) to avoid yfinance limits/bugs with '59d'
+    # 20 days * 6.5 hours = 130 hours.
+    # For 49m bars (approx 1 hour), we get ~130 bars. Enough for SMA(50) and RSI(14).
+    period = "1y" if yf_interval == "1d" else "1mo"
 
     # Hybrid Approach: Batch for Daily, Sequential for Intraday (due to yfinance bugs with batch intraday)
     all_data = None
