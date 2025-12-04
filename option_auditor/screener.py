@@ -34,43 +34,59 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
     resample_rule = None
+    is_intraday = False
 
     if time_frame == "49m":
         yf_interval = "5m"
         resample_rule = "49min"
+        is_intraday = True
     elif time_frame == "98m":
         yf_interval = "5m"
         resample_rule = "98min"
+        is_intraday = True
     elif time_frame == "196m":
         yf_interval = "5m"
         resample_rule = "196min"
+        is_intraday = True
 
     period = "1y" if yf_interval == "1d" else "59d"
 
-    # Batch download
-    try:
-        # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
-        # threads=True is default but explicit is good
-        # auto_adjust=True to suppress warning
-        all_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
-    except Exception as e:
-        # Fallback to empty if batch download fails completely
-        # print(f"Batch download failed: {e}")
-        return []
+    # Hybrid Approach: Batch for Daily, Sequential for Intraday (due to yfinance bugs with batch intraday)
+    all_data = None
+
+    if not is_intraday:
+        try:
+            # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
+            # auto_adjust=True to suppress warning
+            all_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
+        except Exception:
+            # Fallback to sequential if batch fails
+            all_data = None
 
     for symbol in tickers:
         try:
-            # Extract dataframe for specific symbol
-            if symbol not in all_data.columns.levels[0]:
-                continue
+            df = pd.DataFrame()
 
-            df = all_data[symbol].copy()
+            # Fetch Data
+            if all_data is not None and symbol in all_data.columns.levels[0]:
+                # Extract from batch
+                df = all_data[symbol].copy()
+            else:
+                # Sequential fetch (Intraday or Batch Fallback)
+                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=True)
 
-            # Clean NaNs (sometimes yf returns rows with all NaNs for holidays etc)
+            # Clean NaNs
             df = df.dropna(how='all')
 
             if df.empty:
                 continue
+
+            # Flatten multi-index columns if present (yfinance update)
+            if isinstance(df.columns, pd.MultiIndex):
+                try:
+                    df.columns = df.columns.get_level_values(0)
+                except Exception:
+                    pass
 
             # Resample if needed
             if resample_rule:
@@ -107,21 +123,10 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
             current_rsi = float(df['RSI'].iloc[-1])
             current_sma = float(df['SMA_50'].iloc[-1])
 
-            # Fetch PE Ratio - This still needs individual calls if not available in bulk
-            # But yf.Tickers(...).tickers[sym].info is cached? No.
-            # We skip PE ratio bulk optimization for now as it's not strictly price data.
-            # But we wrap it tightly.
+            # Fetch PE Ratio
             pe_ratio = "N/A"
-            # Optimization: Only fetch PE if we are actually going to display this row?
-            # No, user wants to see all candidates? The loop builds results list.
-            # If we want to optimize further, we could fetch PE asynchronously or skip if not 'green'.
-            # For now, keep it but catch errors.
             try:
-                # To avoid slowing down the loop too much, maybe we rely on cached metadata if possible
-                # But we have to make a request.
-                # Let's just do it.
                 t = yf.Ticker(symbol)
-                # fast_info doesn't have trailingPE usually.
                 info = t.info
                 if info and 'trailingPE' in info and info['trailingPE'] is not None:
                     pe_ratio = f"{info['trailingPE']:.2f}"
