@@ -3,32 +3,14 @@ import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
+def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str) -> list:
     """
-    Screens the market for stocks with Bullish Trend and RSI < rsi_threshold.
-
-    Args:
-        iv_rank_threshold: Minimum IV Rank (currently unused/manual check).
-        rsi_threshold: Maximum RSI value for "Green Light".
-        time_frame: Time frame for analysis ("1d", "49m", "98m", "196m").
-
-    Returns:
-        List of dictionaries containing ticker details.
+    Internal helper to screen a list of tickers.
     """
     try:
         import pandas_ta as ta
     except ImportError as e:
         raise ImportError("The 'pandas_ta' library is required for the screener. Please install it with 'pip install pandas_ta'.") from e
-
-    tickers = [
-        "SPY", "QQQ", "IWM", "TLT", "GLD", "SLV", "XLE", "XLV", "XLF", "FXI", "EEM", # ETFs
-        "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "AMD", "TSLA", "META", # Tech
-        "JPM", "BAC", "C", "WFC", # Banks
-        "KO", "PEP", "MCD", "SBUX", # Consumer
-        "XOM", "CVX", "KMI", # Energy
-        "PFE", "MRK", "JNJ", # Pharma
-        "SOFI", "PLTR", "UBER", "F", "T" # Retail Favs
-    ]
 
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
@@ -173,8 +155,6 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
     results = []
 
     # Use ThreadPoolExecutor for parallel processing
-    # If batch data exists, this is fast (in-memory processing).
-    # If sequential fallback, this parallelizes the network IO.
     with ThreadPoolExecutor(max_workers=10) as executor:
         future_to_symbol = {executor.submit(process_symbol, sym): sym for sym in tickers}
         for future in as_completed(future_to_symbol):
@@ -186,3 +166,25 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
                 pass
 
     return results
+
+def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
+    """
+    Screens the market for stocks with Bullish Trend and RSI < rsi_threshold.
+    """
+    tickers = [
+        "SPY", "QQQ", "IWM", "TLT", "GLD", "SLV", "XLE", "XLV", "XLF", "FXI", "EEM", # ETFs
+        "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "AMD", "TSLA", "META", # Tech
+        "JPM", "BAC", "C", "WFC", # Banks
+        "KO", "PEP", "MCD", "SBUX", # Consumer
+        "XOM", "CVX", "KMI", # Energy
+        "PFE", "MRK", "JNJ", # Pharma
+        "SOFI", "PLTR", "UBER", "F", "T" # Retail Favs
+    ]
+    return _screen_tickers(tickers, iv_rank_threshold, rsi_threshold, time_frame)
+
+def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
+    """
+    Screens specific sectorial indices.
+    """
+    sectors = ["XLC", "XLY", "XLP", "XLE", "XLF", "XLV", "XLI", "XLK", "XLB", "XLRE", "XLU"]
+    return _screen_tickers(sectors, iv_rank_threshold, rsi_threshold, time_frame)

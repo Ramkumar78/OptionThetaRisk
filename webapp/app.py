@@ -90,7 +90,8 @@ def create_app(testing: bool = False) -> Flask:
 
         try:
             results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
-            return render_template("screener_results.html", results=results, iv_rank_threshold=iv_rank, rsi_threshold=rsi_threshold, time_frame=time_frame)
+            sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
+            return render_template("screener_results.html", results=results, sector_results=sector_results, iv_rank_threshold=iv_rank, rsi_threshold=rsi_threshold, time_frame=time_frame)
         except Exception as e:
             return render_template("error.html", message=f"Screener failed: {e}")
 
