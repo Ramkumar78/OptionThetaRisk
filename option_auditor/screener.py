@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
     """
@@ -29,8 +30,6 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
         "SOFI", "PLTR", "UBER", "F", "T" # Retail Favs
     ]
 
-    results = []
-
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
     resample_rule = None
@@ -49,41 +48,39 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
         resample_rule = "196min"
         is_intraday = True
 
-    # Intraday period reduced to '1mo' (approx 20 trading days) to avoid yfinance limits/bugs with '59d'
-    # 20 days * 6.5 hours = 130 hours.
-    # For 49m bars (approx 1 hour), we get ~130 bars. Enough for SMA(50) and RSI(14).
     period = "1y" if yf_interval == "1d" else "1mo"
 
-    # Hybrid Approach: Batch for Daily, Sequential for Intraday (due to yfinance bugs with batch intraday)
-    all_data = None
+    # Batch download result container
+    batch_data = None
 
+    # If daily, try batch download first
     if not is_intraday:
         try:
             # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
             # auto_adjust=True to suppress warning
-            all_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
+            batch_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
         except Exception:
-            # Fallback to sequential if batch fails
-            all_data = None
+            batch_data = None
 
-    for symbol in tickers:
+    def process_symbol(symbol):
         try:
             df = pd.DataFrame()
 
             # Fetch Data
-            if all_data is not None and symbol in all_data.columns.levels[0]:
-                # Extract from batch
-                df = all_data[symbol].copy()
+            # If batch data exists and has this symbol, use it
+            if batch_data is not None and symbol in batch_data.columns.levels[0]:
+                df = batch_data[symbol].copy()
             else:
                 # Sequential fetch (Intraday or Batch Fallback)
-                # auto_adjust=False for intraday to prevent KeyError(Timestamp) bug in yfinance
-                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=False)
+                # auto_adjust=False for intraday to prevent KeyError(Timestamp) bug
+                # Use dedicated thread for this call via executor
+                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
 
             # Clean NaNs
             df = df.dropna(how='all')
 
             if df.empty:
-                continue
+                return None
 
             # Flatten multi-index columns if present (yfinance update)
             if isinstance(df.columns, pd.MultiIndex):
@@ -108,16 +105,16 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
 
             # 3. Calculate Indicators
             if len(df) < 50:
-                continue
+                return None
 
             rsi_series = ta.rsi(df['Close'], length=14)
             if rsi_series is None:
-                continue
+                return None
             df['RSI'] = rsi_series
 
             sma_series = ta.sma(df['Close'], length=50)
             if sma_series is None:
-                continue
+                return None
             df['SMA_50'] = sma_series
 
             atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
@@ -127,7 +124,7 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
             current_rsi = float(df['RSI'].iloc[-1])
             current_sma = float(df['SMA_50'].iloc[-1])
 
-            # Fetch PE Ratio
+            # Fetch PE Ratio (Separate blocking call if not cached, risky inside thread but better than sequential)
             pe_ratio = "N/A"
             try:
                 t = yf.Ticker(symbol)
@@ -141,22 +138,6 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
             trend = "BULLISH" if current_price > current_sma else "BEARISH"
             signal = "WAIT"
             is_green = False
-
-            # Note: The logic here is independent of Trend for Oversold signal
-            # as per typical "Oversold" definition, but the user requested "if it is? instead of just wait".
-            # The previous logic was:
-            # if trend == "BULLISH":
-            #    if 30 <= rsi <= threshold: GREEN
-            #    elif rsi > 70: OVERBOUGHT
-            #    elif rsi < 30: OVERSOLD (added)
-            # This implies OVERSOLD is only flagged if Trend is BULLISH.
-            # Usually Oversold in Bearish trend is "catch a falling knife".
-            # If the user wants to see "OVERSOLD" regardless of trend, I should move it out.
-            # But the "Green Light" context implies trading with the trend.
-            # Let's keep it inside BULLISH for now unless the user meant "Even if bearish?".
-            # User said "similary can you say oversold as well if it is? instead of just wait".
-            # "Wait" was the default for Bearish OR Bullish-but-neutral-RSI.
-            # Let's handle both.
 
             if trend == "BULLISH":
                 if 30 <= current_rsi <= rsi_threshold:
@@ -173,7 +154,7 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
                 elif current_rsi > 70:
                     signal = "🔴 OVERBOUGHT (Bearish)"
 
-            results.append({
+            return {
                 "ticker": symbol,
                 "price": current_price,
                 "rsi": current_rsi,
@@ -184,10 +165,24 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
                 "iv_rank": "N/A*",
                 "atr": current_atr,
                 "pe_ratio": pe_ratio
-            })
+            }
 
-        except Exception as e:
-            # print(f"Error processing {symbol}: {e}")
-            pass
+        except Exception:
+            return None
+
+    results = []
+
+    # Use ThreadPoolExecutor for parallel processing
+    # If batch data exists, this is fast (in-memory processing).
+    # If sequential fallback, this parallelizes the network IO.
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_symbol = {executor.submit(process_symbol, sym): sym for sym in tickers}
+        for future in as_completed(future_to_symbol):
+            try:
+                data = future.result()
+                if data:
+                    results.append(data)
+            except Exception:
+                pass
 
     return results
