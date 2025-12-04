@@ -73,7 +73,8 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
                 df = all_data[symbol].copy()
             else:
                 # Sequential fetch (Intraday or Batch Fallback)
-                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=True)
+                # auto_adjust=False for intraday to prevent KeyError(Timestamp) bug in yfinance
+                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=False)
 
             # Clean NaNs
             df = df.dropna(how='all')
