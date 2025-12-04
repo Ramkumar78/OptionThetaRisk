@@ -142,12 +142,36 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
             signal = "WAIT"
             is_green = False
 
+            # Note: The logic here is independent of Trend for Oversold signal
+            # as per typical "Oversold" definition, but the user requested "if it is? instead of just wait".
+            # The previous logic was:
+            # if trend == "BULLISH":
+            #    if 30 <= rsi <= threshold: GREEN
+            #    elif rsi > 70: OVERBOUGHT
+            #    elif rsi < 30: OVERSOLD (added)
+            # This implies OVERSOLD is only flagged if Trend is BULLISH.
+            # Usually Oversold in Bearish trend is "catch a falling knife".
+            # If the user wants to see "OVERSOLD" regardless of trend, I should move it out.
+            # But the "Green Light" context implies trading with the trend.
+            # Let's keep it inside BULLISH for now unless the user meant "Even if bearish?".
+            # User said "similary can you say oversold as well if it is? instead of just wait".
+            # "Wait" was the default for Bearish OR Bullish-but-neutral-RSI.
+            # Let's handle both.
+
             if trend == "BULLISH":
                 if 30 <= current_rsi <= rsi_threshold:
                     signal = "🟢 GREEN LIGHT (Buy Dip)"
                     is_green = True
                 elif current_rsi > 70:
                     signal = "🔴 OVERBOUGHT"
+                elif current_rsi < 30:
+                    signal = "🔵 OVERSOLD"
+            else:
+                # Bearish Trend
+                if current_rsi < 30:
+                    signal = "🔵 OVERSOLD (Bearish)"
+                elif current_rsi > 70:
+                    signal = "🔴 OVERBOUGHT (Bearish)"
 
             results.append({
                 "ticker": symbol,
