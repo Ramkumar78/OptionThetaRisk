@@ -683,6 +683,15 @@ def analyze_csv(csv_path: Optional[str] = None,
         # NEW: Get Current Price for context
         current_mark = live_prices.get(agg["symbol"])
 
+        # Calculate DTE
+        dte = None
+        if agg["expiry"] and not pd.isna(agg["expiry"]):
+            # Calculate difference in days between Expiry and Now
+            delta = agg["expiry"] - pd.Timestamp.now()
+            dte = delta.days
+            # If expired today or in past, set to 0 or negative
+            if dte < 0: dte = 0
+
         row = {
             "symbol": agg["symbol"],
             "current_price": current_mark,
@@ -691,6 +700,7 @@ def analyze_csv(csv_path: Optional[str] = None,
             "qty_open": qty,
             "avg_price": avg_price,
             "breakeven": breakeven,
+            "dte": dte,
             "opened": agg["entry_ts"].isoformat() if agg["entry_ts"] else "",
             "days_open": (pd.Timestamp(datetime.now()) - agg["entry_ts"]).total_seconds() / 86400.0 if agg["entry_ts"] else 0.0,
             "description": _sym_desc(agg["symbol"])
@@ -713,6 +723,13 @@ def analyze_csv(csv_path: Optional[str] = None,
 
                 if is_risky_pos:
                     row["risk_alert"] = "ITM Risk"
+
+        # Gamma/Expiration Risk Check (If not already flagged as ITM)
+        if "risk_alert" not in row and dte is not None:
+            if dte <= 0:
+                row["risk_alert"] = "Expiring Today"
+            elif dte <= 3:
+                row["risk_alert"] = "Gamma Risk (<3d)"
 
         open_rows.append(row)
 
