@@ -10,7 +10,7 @@ from typing import Optional
 
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 
-from option_auditor import analyze_csv
+from option_auditor import analyze_csv, screener
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
 
@@ -71,6 +71,28 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/", methods=["GET"])
     def index():
         return render_template("upload.html")
+
+    @app.route("/screen", methods=["POST"])
+    def screen():
+        iv_rank = 30.0
+        try:
+            iv_rank = float(request.form.get("iv_rank", 30))
+        except ValueError:
+            pass
+
+        rsi_threshold = 50.0
+        try:
+            rsi_threshold = float(request.form.get("rsi_threshold", 50))
+        except ValueError:
+            pass
+
+        time_frame = request.form.get("time_frame", "1d")
+
+        try:
+            results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
+            return render_template("screener_results.html", results=results, iv_rank_threshold=iv_rank, rsi_threshold=rsi_threshold, time_frame=time_frame)
+        except Exception as e:
+            return render_template("error.html", message=f"Screener failed: {e}")
 
     @app.route("/analyze", methods=["POST"])
     def analyze():

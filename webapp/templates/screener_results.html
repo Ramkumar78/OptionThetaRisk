@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Screener Results - The Option Auditor{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="bg-blue-600 dark:bg-blue-800 rounded-t-lg p-6 shadow-lg mb-0 flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold text-white">Market Screener Results</h2>
+            <div class="flex items-center text-blue-100 mt-2 text-sm">
+                <span class="mr-4">Bullish Trend (Price > 50 SMA)</span>
+                <span class="mr-4">RSI < {{ rsi_threshold }}</span>
+                <span class="px-2 py-0.5 bg-blue-700 rounded text-xs">TF: {{ time_frame }}</span>
+            </div>
+        </div>
+        <a href="/" class="text-white hover:text-blue-100 font-medium text-sm bg-blue-700 dark:bg-blue-900 px-4 py-2 rounded-lg transition-colors">
+            <i class="bi bi-arrow-left mr-1"></i> Back to Screener
+        </a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-b-lg p-8 border border-t-0 border-gray-200 dark:border-gray-700">
+
+        {% if results %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" id="screener-table">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ticker</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Price</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ATR</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">P/E</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IV Rank</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">RSI (14)</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trend</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Signal</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for row in results %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {{ row.ticker }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            ${{ "%.2f"|format(row.price) }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ "%.2f"|format(row.atr) }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ row.pe_ratio }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300" title="Check your broker for live IV Rank">
+                            {{ row.iv_rank }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {{ "%.2f"|format(row.rsi) }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                            {% if row.trend == 'BULLISH' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                {{ row.trend }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            {% if "GREEN" in row.signal %}
+                                <span class="text-green-600 dark:text-green-400 font-bold">{{ row.signal }}</span>
+                            {% elif "OVERBOUGHT" in row.signal %}
+                                <span class="text-red-600 dark:text-red-400 font-bold">{{ row.signal }}</span>
+                            {% else %}
+                                <span>{{ row.signal }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-8">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">✅ CANDIDATES TO CHECK ON TASTYTRADE (Check IV Rank > {{ iv_rank_threshold }})</h3>
+            <div class="p-4 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
+                <p class="text-green-800 dark:text-green-200 font-mono">
+                    {% set candidates = [] %}
+                    {% for row in results %}
+                        {% if row.is_green %}
+                            {% set _ = candidates.append(row.ticker) %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ candidates|join(', ') if candidates else 'No candidates found.' }}
+                </p>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-center text-gray-500 dark:text-gray-400 py-8">No results generated.</p>
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+    // Initialize simple-datatables
+    document.addEventListener("DOMContentLoaded", function() {
+        const table = document.getElementById("screener-table");
+        if (table) {
+            new simpleDatatables.DataTable(table, {
+                searchable: true,
+                fixedHeight: false,
+                perPage: 25
+            });
+        }
+    });
+</script>
+{% endblock %}

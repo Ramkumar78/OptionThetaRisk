@@ -183,6 +183,7 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
     """
     Fetches live prices for a list of symbols using yfinance.
     Returns a dictionary mapping symbol -> current_price.
+    Optimized to use batch downloading to prevent timeouts.
     """
     if not symbols:
         return {}
@@ -194,51 +195,84 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
 
     # Deduplicate
     unique_symbols = list(set(valid_symbols))
-
     price_map = {}
 
-    # Use Tickers for potentially bulk efficiency, though we might iterate to be safe
-    # yfinance Tickers object allows access to each ticker
     try:
-        tickers = yf.Tickers(" ".join(unique_symbols))
-        for sym in unique_symbols:
-            try:
-                t = tickers.tickers[sym]
-                # Try fast_info first (new API), then info (slower, detailed), then history
-                price = None
+        # Batch download "Last Price" (Close) for all tickers
+        # period="1d" gives us the most recent day's data
+        # group_by='ticker' ensures we can handle multiple tickers cleanly
+        # threads=True for parallel fetching
+        # auto_adjust=True to suppress warnings and get adjusted close
+        # timeout=20 to ensure we don't hang forever
 
-                # fast_info
+        # Note: yf.download returns a MultiIndex DataFrame if multiple tickers are passed
+        # Columns: (Price, Ticker) or (Ticker, Price) if group_by='ticker'
+
+        # If only 1 symbol, it returns a simple DataFrame
+        # We handle both cases.
+
+        if len(unique_symbols) == 1:
+            sym = unique_symbols[0]
+            df = yf.download(sym, period="1d", progress=False, auto_adjust=True)
+            if not df.empty:
+                # Handle potential MultiIndex return from yfinance even for single ticker
+                close_val = df["Close"].iloc[-1]
+                if isinstance(close_val, pd.Series):
+                    price = float(close_val.iloc[0])
+                else:
+                    price = float(close_val)
+                price_map[sym] = price
+        else:
+            # Batch
+            tickers_str = " ".join(unique_symbols)
+            df = yf.download(tickers_str, period="1d", group_by='ticker', threads=True, progress=False, auto_adjust=True)
+
+            for sym in unique_symbols:
+                try:
+                    # Check if symbol is in columns
+                    if sym in df.columns.levels[0]:
+                        sym_df = df[sym]
+                        # Drop NaNs to find valid data
+                        sym_df = sym_df.dropna(how='all')
+                        if not sym_df.empty:
+                            # Get last close
+                            close_val = sym_df["Close"].iloc[-1]
+                            if isinstance(close_val, pd.Series):
+                                price = float(close_val.iloc[0])
+                            else:
+                                price = float(close_val)
+                            price_map[sym] = price
+                except Exception:
+                    pass
+
+    except Exception as e:
+        print(f"Batch price fetch failed: {e}")
+        # Fallback to individual fetch if batch explodes (unlikely but safe)
+        pass
+
+    # Fallback for missing symbols (e.g. if batch failed for specific ones or delisted)
+    # We only try individual fetch for symbols NOT found in batch
+    missing = [s for s in unique_symbols if s not in price_map]
+
+    # Limit fallback attempts to avoid timeout if there are many missing
+    # e.g. max 5 individual retries
+    if missing:
+        for sym in missing[:5]:
+            try:
+                t = yf.Ticker(sym)
+                # Try fast_info
                 if hasattr(t, "fast_info"):
-                    # fast_info keys: 'last_price', 'regular_market_price', etc.
-                    # 'last_price' is usually what we want
                     val = t.fast_info.get("last_price")
                     if val is not None and not pd.isna(val):
-                        price = float(val)
+                        price_map[sym] = float(val)
+                        continue
 
-                # Fallback to info
-                if price is None:
-                    info = t.info
-                    # Try various keys
-                    for k in ['currentPrice', 'regularMarketPrice', 'bid', 'ask']:
-                        val = info.get(k)
-                        if val is not None and not pd.isna(val):
-                            price = float(val)
-                            break
-
-                # Fallback to history (last close)
-                if price is None:
-                    hist = t.history(period="1d")
-                    if not hist.empty:
-                        price = float(hist["Close"].iloc[-1])
-
-                if price is not None:
-                    price_map[sym] = price
+                # Try history as last resort
+                hist = t.history(period="1d")
+                if not hist.empty:
+                    price_map[sym] = float(hist["Close"].iloc[-1])
             except Exception:
-                # Individual ticker failure should not fail batch
-                continue
-    except Exception:
-        # If bulk fails, try one by one? Or just return what we have.
-        pass
+                pass
 
     return price_map
 
@@ -646,8 +680,12 @@ def analyze_csv(csv_path: Optional[str] = None,
                 elif agg["right"] == 'C': # Call
                     breakeven = agg["strike"] + avg_price
 
+        # NEW: Get Current Price for context
+        current_mark = live_prices.get(agg["symbol"])
+
         row = {
             "symbol": agg["symbol"],
+            "current_price": current_mark,
             "expiry": agg["expiry"].date().isoformat() if agg["expiry"] and not pd.isna(agg["expiry"]) else "",
             "contract": f"{agg['right'] or ''} {agg['strike']}",
             "qty_open": qty,
