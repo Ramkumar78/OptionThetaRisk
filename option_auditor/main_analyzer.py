@@ -215,7 +215,12 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
             sym = unique_symbols[0]
             df = yf.download(sym, period="1d", progress=False, auto_adjust=True)
             if not df.empty:
-                price = float(df["Close"].iloc[-1])
+                # Handle potential MultiIndex return from yfinance even for single ticker
+                close_val = df["Close"].iloc[-1]
+                if isinstance(close_val, pd.Series):
+                    price = float(close_val.iloc[0])
+                else:
+                    price = float(close_val)
                 price_map[sym] = price
         else:
             # Batch
@@ -231,7 +236,11 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
                         sym_df = sym_df.dropna(how='all')
                         if not sym_df.empty:
                             # Get last close
-                            price = float(sym_df["Close"].iloc[-1])
+                            close_val = sym_df["Close"].iloc[-1]
+                            if isinstance(close_val, pd.Series):
+                                price = float(close_val.iloc[0])
+                            else:
+                                price = float(close_val)
                             price_map[sym] = price
                 except Exception:
                     pass
