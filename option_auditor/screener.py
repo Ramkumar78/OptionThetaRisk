@@ -29,10 +29,319 @@ SECTOR_COMPONENTS = {
     "XLB": ["LIN", "NEM", "SHW", "ECL", "FCX", "APD", "NUE", "MLM", "VMC", "CTVA"],
     "XLRE": ["PLD", "AMT", "EQIX", "WELL", "PSA", "SPG", "DLR", "O", "CCI", "CBRE"],
     "XLU": ["NEE", "SO", "DUK", "CEG", "AEP", "SRE", "VST", "PEG", "ED", "D"],
+    "WATCH": [
+        "PLTR", "SOFI", "MSTR", "COIN", "INTC", "MU", "QCOM", "AMAT", "TXN", "ARM",
+        "SMCI", "DELL", "HPQ", "PANW", "SNOW", "NOW", "SHOP", "PYPL", "SQ", "HOOD",
+        "DKNG", "RBLX", "SNAP", "PINS", "CVNA", "AFRM", "UPST", "AI", "MARA", "RIOT",
+        "CLSK", "F", "GM", "RIVN", "LCID", "TSM", "BABA", "PDD", "NIO", "JD",
+        "SPOT", "ABNB", "DASH", "CCL", "AAL", "PFE", "CVS", "GILD", "OXY", "LULU"
+    ]
 }
+
+SECTOR_NAMES["WATCH"] = "High Interest / Growth"
 
 TICKER_NAMES = {
     "ECL": "Ecolab Inc.",
+    "PLTR": "Palantir Technologies Inc.",
+    "SOFI": "SoFi Technologies, Inc.",
+    "MSTR": "MicroStrategy Incorporated",
+    "COIN": "Coinbase Global, Inc.",
+    "INTC": "Intel Corporation",
+    "MU": "Micron Technology, Inc.",
+    "QCOM": "Qualcomm Incorporated",
+    "AMAT": "Applied Materials, Inc.",
+    "TXN": "Texas Instruments Incorporated",
+    "ARM": "Arm Holdings plc",
+    "SMCI": "Super Micro Computer, Inc.",
+    "DELL": "Dell Technologies Inc.",
+    "HPQ": "HP Inc.",
+    "PANW": "Palo Alto Networks, Inc.",
+    "SNOW": "Snowflake Inc.",
+    "NOW": "ServiceNow, Inc.",
+    "SHOP": "Shopify Inc.",
+    "PYPL": "PayPal Holdings, Inc.",
+    "SQ": "Block, Inc.",
+    "HOOD": "Robinhood Markets, Inc.",
+    "DKNG": "DraftKings Inc.",
+    "RBLX": "Roblox Corporation",
+    "SNAP": "Snap Inc.",
+    "PINS": "Pinterest, Inc.",
+    "CVNA": "Carvana Co.",
+    "AFRM": "Affirm Holdings, Inc.",
+    "UPST": "Upstart Holdings, Inc.",
+    "AI": "C3.ai, Inc.",
+    "MARA": "Marathon Digital Holdings, Inc.",
+    "RIOT": "Riot Platforms, Inc.",
+    "CLSK": "CleanSpark, Inc.",
+    "F": "Ford Motor Company",
+    "GM": "General Motors Company",
+    "RIVN": "Rivian Automotive, Inc.",
+    "LCID": "Lucid Group, Inc.",
+    "TSM": "Taiwan Semiconductor Manufacturing",
+    "BABA": "Alibaba Group Holding Limited",
+    "PDD": "PDD Holdings Inc.",
+    "NIO": "NIO Inc.",
+    "JD": "JD.com, Inc.",
+    "SPOT": "Spotify Technology S.A.",
+    "ABNB": "Airbnb, Inc.",
+    "DASH": "DoorDash, Inc.",
+    "CCL": "Carnival Corporation & plc",
+    "AAL": "American Airlines Group Inc.",
+    "PFE": "Pfizer Inc.",
+    "CVS": "CVS Health Corporation",
+    "GILD": "Gilead Sciences, Inc.",
+    "OXY": "Occidental Petroleum Corporation",
+    "LULU": "Lululemon Athletica Inc.",
+    "AZN": "AstraZeneca PLC",
+    "SHEL": "Shell plc",
+    "HSBA": "HSBC Holdings plc",
+    "ULVR": "Unilever PLC",
+    "BP": "BP p.l.c.",
+    "RIO": "Rio Tinto Group",
+    "REL": "RELX PLC",
+    "GSK": "GSK plc",
+    "DGE": "Diageo plc",
+    "LSEG": "London Stock Exchange Group plc",
+    "BATS": "British American Tobacco p.l.c.",
+    "GLEN": "Glencore plc",
+    "BA": "BAE Systems plc",
+    "CNA": "Centrica plc",
+    "NG": "National Grid plc",
+    "LLOY": "Lloyds Banking Group plc",
+    "RR": "Rolls-Royce Holdings plc",
+    "BARC": "Barclays PLC",
+    "CPG": "Compass Group PLC",
+    "NWG": "NatWest Group plc",
+    "RKT": "Reckitt Benckiser Group plc",
+    "VOD": "Vodafone Group Plc",
+    "AAL": "Anglo American plc",
+    "SGE": "Sage Group plc",
+    "HLN": "Haleon plc",
+    "EXR": "Exor N.V.",
+    "TSCO": "Tesco PLC",
+    "SSE": "SSE plc",
+    "MNG": "M&G plc",
+    "ADM": "Admiral Group plc",
+    "III": "3i Group plc",
+    "ANTO": "Antofagasta plc",
+    "SPX": "Spirax-Sarco Engineering plc",
+    "STAN": "Standard Chartered PLC",
+    "IMB": "Imperial Brands PLC",
+    "WTB": "Whitbread PLC",
+    "SVT": "Severn Trent Plc",
+    "AUTO": "Auto Trader Group plc",
+    "SN": "Smith & Nephew plc",
+    "CRDA": "Croda International Plc",
+    "WPP": "WPP plc",
+    "SMIN": "Smiths Group plc",
+    "DCC": "DCC plc",
+    "AV": "Aviva plc",
+    "LGEN": "Legal & General Group Plc",
+    "KGF": "Kingfisher plc",
+    "SBRY": "J Sainsbury plc",
+    "MKS": "Marks and Spencer Group plc",
+    "LAND": "Land Securities Group PLC",
+    "PSON": "Pearson plc",
+    "JD": "JD Sports Fashion plc",
+    "IAG": "International Consolidated Airlines Group S.A.",
+    "EZJ": "easyJet plc",
+    "TUI": "TUI AG",
+    "AML": "Aston Martin Lagonda Global Holdings plc",
+    "IDS": "International Distributions Services plc",
+    "DLG": "Direct Line Insurance Group plc",
+    "ITM": "ITM Power Plc",
+    "CINE": "Cineworld Group plc",
+    "PFC": "Petrofac Limited",
+    "FRES": "Fresnillo plc",
+    "KAP": "Kazatomprom",
+    "BOO": "boohoo group plc",
+    "ASOS": "ASOS Plc",
+    "HBR": "Harbour Energy plc",
+    "ENOG": "Energean plc",
+    "TLW": "Tullow Oil plc",
+    "CWR": "Ceres Power Holdings plc",
+    "GNC": "Greencore Group plc",
+    "THG": "THG plc",
+    "DARK": "Darktrace plc",
+    "CURY": "Currys plc",
+    "DOM": "Domino's Pizza Group plc",
+    "WKB": "Warhammer (Games Workshop Group PLC)",
+    "SFOR": "S4 Capital plc",
+    "QINET": "QinetiQ Group plc",
+    "GREG": "Greggs plc",
+    "PETS": "Pets at Home Group Plc",
+    "VMUK": "Virgin Money UK PLC",
+    "MRO": "Melrose Industries PLC",
+    "INVP": "Investec plc",
+    "OCDO": "Ocado Group plc",
+    "IGG": "IG Group Holdings plc",
+    "CMC": "CMC Markets plc",
+    "PLUS": "Plus500 Ltd",
+    "EMG": "Man Group plc",
+    "HWDN": "Howden Joinery Group Plc",
+    "COST": "Costain Group PLC",
+    "BEZ": "Beazley plc",
+    "SGRO": "Segro Plc",
+    "BDEV": "Barratt Developments plc",
+    "PSN": "Persimmon Plc",
+    "TW": "Taylor Wimpey plc",
+    "RDW": "Redrow plc",
+    "VISTRY": "Vistry Group PLC",
+    "BYG": "Big Yellow Group PLC",
+    "SAFE": "Safestore Holdings plc",
+    "UTG": "Unite Group plc",
+    "BBOX": "Tritax Big Box REIT plc",
+    "GRG": "Greggs plc",
+    "ASML": "ASML Holding N.V.",
+    "MC": "LVMH Moët Hennessy - Louis Vuitton, SE",
+    "SAP": "SAP SE",
+    "RMS": "Hermès International",
+    "TTE": "TotalEnergies SE",
+    "SIE": "Siemens AG",
+    "CDI": "Christian Dior SE",
+    "AIR": "Airbus SE",
+    "SAN": "Banco Santander, S.A.",
+    "IBE": "Iberdrola, S.A.",
+    "OR": "L'Oréal S.A.",
+    "ALV": "Allianz SE",
+    "SU": "Schneider Electric S.E.",
+    "EL": "EssilorLuxottica",
+    "AI": "Air Liquide S.A.",
+    "BNP": "BNP Paribas S.A.",
+    "DTE": "Deutsche Telekom AG",
+    "ENEL": "Enel S.p.A.",
+    "DG": "Vinci S.A.",
+    "BBVA": "Banco Bilbao Vizcaya Argentaria, S.A.",
+    "CS": "AXA S.A.",
+    "BAS": "BASF SE",
+    "ADS": "adidas AG",
+    "MUV2": "Münchener Rückversicherungs-Gesellschaft",
+    "IFX": "Infineon Technologies AG",
+    "SAF": "Safran S.A.",
+    "ENI": "Eni S.p.A.",
+    "INGA": "ING Groep N.V.",
+    "ISP": "Intesa Sanpaolo S.p.A.",
+    "KER": "Kering S.A.",
+    "STLA": "Stellantis N.V.",
+    "AD": "Koninklijke Ahold Delhaize N.V.",
+    "VOW3": "Volkswagen AG",
+    "BMW": "Bayerische Motoren Werke AG",
+    "MBG": "Mercedes-Benz Group AG",
+    "BAYN": "Bayer AG",
+    "DB1": "Deutsche Börse AG",
+    "BN": "Danone S.A.",
+    "RI": "Pernod Ricard S.A.",
+    "CRH": "CRH plc",
+    "G": "Assicurazioni Generali S.p.A.",
+    "PHIA": "Koninklijke Philips N.V.",
+    "AH": "Koninklijke Ahold Delhaize N.V.",
+    "NOKIA": "Nokia Oyj",
+    "VIV": "Vivendi SE",
+    "ORANGE": "Orange S.A.",
+    "KNEBV": "Kone Oyj",
+    "UMG": "Universal Music Group N.V.",
+    "HEIA": "Heineken N.V.",
+    "ABI": "Anheuser-Busch InBev SA/NV",
+    "RELIANCE": "Reliance Industries Limited",
+    "TCS": "Tata Consultancy Services Limited",
+    "HDFCBANK": "HDFC Bank Limited",
+    "BHARTIARTL": "Bharti Airtel Limited",
+    "ICICIBANK": "ICICI Bank Limited",
+    "INFY": "Infosys Limited",
+    "HINDUNILVR": "Hindustan Unilever Limited",
+    "SBIN": "State Bank of India",
+    "ITC": "ITC Limited",
+    "LTIM": "LTIMindtree Limited",
+    "LT": "Larsen & Toubro Limited",
+    "HCLTECH": "HCL Technologies Limited",
+    "BAJFINANCE": "Bajaj Finance Limited",
+    "AXISBANK": "Axis Bank Limited",
+    "MARUTI": "Maruti Suzuki India Limited",
+    "ULTRACEMCO": "UltraTech Cement Limited",
+    "SUNPHARMA": "Sun Pharmaceutical Industries Limited",
+    "M&M": "Mahindra & Mahindra Limited",
+    "TITAN": "Titan Company Limited",
+    "KOTAKBANK": "Kotak Mahindra Bank Limited",
+    "ADANIENT": "Adani Enterprises Limited",
+    "TATAMOTORS": "Tata Motors Limited",
+    "NTPC": "NTPC Limited",
+    "TATASTEEL": "Tata Steel Limited",
+    "POWERGRID": "Power Grid Corporation of India Limited",
+    "ASIANPAINT": "Asian Paints Limited",
+    "JSWSTEEL": "JSW Steel Limited",
+    "BAJAJFINSV": "Bajaj Finserv Limited",
+    "NESTLEIND": "Nestlé India Limited",
+    "GRASIM": "Grasim Industries Limited",
+    "ONGC": "Oil and Natural Gas Corporation Limited",
+    "TECHM": "Tech Mahindra Limited",
+    "HINDALCO": "Hindalco Industries Limited",
+    "ADANIPORTS": "Adani Ports and Special Economic Zone Limited",
+    "CIPLA": "Cipla Limited",
+    "WIPRO": "Wipro Limited",
+    "SBILIFE": "SBI Life Insurance Company Limited",
+    "DRREDDY": "Dr. Reddy's Laboratories Limited",
+    "BRITANNIA": "Britannia Industries Limited",
+    "TATACONSUM": "Tata Consumer Products Limited",
+    "COALINDIA": "Coal India Limited",
+    "APOLLOHOSP": "Apollo Hospitals Enterprise Limited",
+    "EICHERMOT": "Eicher Motors Limited",
+    "INDUSINDBK": "IndusInd Bank Limited",
+    "DIVISLAB": "Divi's Laboratories Limited",
+    "BAJAJ-AUTO": "Bajaj Auto Limited",
+    "HDFCLIFE": "HDFC Life Insurance Company Limited",
+    "HEROMOTOCO": "Hero MotoCorp Limited",
+    "BEL": "Bharat Electronics Limited",
+    "SHRIRAMFIN": "Shriram Finance Limited",
+    "LICI": "Life Insurance Corporation of India",
+    "HAL": "Hindustan Aeronautics Limited",
+    "ADANIPOWER": "Adani Power Limited",
+    "DMART": "Avenue Supermarts Limited",
+    "VBL": "Varun Beverages Limited",
+    "JIOFIN": "Jio Financial Services Limited",
+    "SIEMENS": "Siemens Limited",
+    "TRENT": "Trent Limited",
+    "ZOMATO": "Zomato Limited",
+    "ADANIGREEN": "Adani Green Energy Limited",
+    "IOC": "Indian Oil Corporation Limited",
+    "DLF": "DLF Limited",
+    "VEDL": "Vedanta Limited",
+    "BANKBARODA": "Bank of Baroda",
+    "GAIL": "GAIL (India) Limited",
+    "AMBUJACEM": "Ambuja Cements Limited",
+    "CHOLAFIN": "Cholamandalam Investment and Finance Company Limited",
+    "HAVELLS": "Havells India Limited",
+    "ABB": "ABB India Limited",
+    "PIDILITIND": "Pidilite Industries Limited",
+    "GODREJCP": "Godrej Consumer Products Limited",
+    "DABUR": "Dabur India Limited",
+    "SHREECEM": "Shree Cement Limited",
+    "PNB": "Punjab National Bank",
+    "BPCL": "Bharat Petroleum Corporation Limited",
+    "SBICARD": "SBI Cards and Payment Services Limited",
+    "SRF": "SRF Limited",
+    "MOTHERSON": "Samvardhana Motherson International Limited",
+    "ICICIPRULI": "ICICI Prudential Life Insurance Company Limited",
+    "MARICO": "Marico Limited",
+    "BERGEPAINT": "Berger Paints India Limited",
+    "ICICIGI": "ICICI Lombard General Insurance Company Limited",
+    "TVSMOTOR": "TVS Motor Company Limited",
+    "NAUKRI": "Info Edge (India) Limited",
+    "LODHA": "Macrotech Developers Limited",
+    "BOSCHLTD": "Bosch Limited",
+    "INDIGO": "InterGlobe Aviation Limited",
+    "CANBK": "Canara Bank",
+    "UNITDSPR": "United Spirits Limited",
+    "TORNTPHARM": "Torrent Pharmaceuticals Limited",
+    "PIIND": "PI Industries Limited",
+    "UPL": "UPL Limited",
+    "JINDALSTEL": "Jindal Steel & Power Limited",
+    "ALKEM": "Alkem Laboratories Limited",
+    "ZYDUSLIFE": "Zydus Lifesciences Limited",
+    "COLPAL": "Colgate-Palmolive (India) Limited",
+    "BAJAJHLDNG": "Bajaj Holdings & Investment Limited",
+    "TATAPOWER": "The Tata Power Company Limited",
+    "IRCTC": "Indian Railway Catering and Tourism Corporation Limited",
+    "MUTHOOTFIN": "Muthoot Finance Limited",
     "LLY": "Eli Lilly and Company",
     "SPG": "Simon Property Group, Inc.",
     "CVX": "Chevron Corporation",
@@ -434,4 +743,393 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
             r['name'] = SECTOR_NAMES[code]
             r['company_name'] = SECTOR_NAMES[code]
 
+    return results
+
+def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval, resample_rule, is_intraday):
+    """Helper to prepare DataFrame for a single ticker."""
+    import pandas as pd
+    import yfinance as yf
+
+    df = pd.DataFrame()
+
+    # Extract from batch if available
+    if data_source is not None:
+        if isinstance(data_source.columns, pd.MultiIndex):
+            try:
+                 # Check Level 1 (standard) or Level 0 (group_by='ticker')
+                if ticker in data_source.columns.get_level_values(1):
+                    df = data_source.xs(ticker, axis=1, level=1).copy()
+                elif ticker in data_source.columns.get_level_values(0):
+                    df = data_source.xs(ticker, axis=1, level=0).copy()
+            except Exception:
+                pass
+        else:
+             df = data_source.copy()
+
+    # If empty, sequential fetch
+    if df.empty:
+         try:
+            df = yf.download(ticker, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
+         except Exception:
+            pass
+
+    # Clean NaNs
+    df = df.dropna(how='all')
+    if df.empty:
+        return None
+
+    # Flatten if needed
+    if isinstance(df.columns, pd.MultiIndex):
+        try:
+            df.columns = df.columns.get_level_values(0)
+        except Exception:
+            pass
+
+    # Resample if needed
+    if resample_rule:
+        agg_dict = {'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}
+        agg_dict = {k: v for k, v in agg_dict.items() if k in df.columns}
+        try:
+            df = df.resample(resample_rule).agg(agg_dict)
+            df = df.dropna()
+        except Exception:
+            pass
+
+    return df
+
+UK_EURO_TICKERS = [
+    # Top 50 FTSE (UK)
+    "AZN.L", "SHEL.L", "HSBA.L", "ULVR.L", "BP.L", "RIO.L", "REL.L", "GSK.L", "DGE.L", "LSEG.L", "BATS.L", "GLEN.L", "BA.L", "CNA.L", "NG.L", "LLOY.L", "RR.L", "BARC.L", "CPG.L", "NWG.L", "RKT.L", "VOD.L", "AAL.L", "SGE.L", "HLN.L", "EXR.L", "TSCO.L", "SSE.L", "MNG.L", "ADM.L", "III.L", "ANTO.L", "SPX.L", "STAN.L", "IMB.L", "WTB.L", "SVT.L", "AUTO.L", "SN.L", "CRDA.L", "WPP.L", "SMIN.L", "DCC.L", "AV.L", "LGEN.L", "KGF.L", "SBRY.L", "MKS.L", "LAND.L", "PSON.L",
+    # Liquid UK Mid-Caps
+    "JD.L", "IAG.L", "EZJ.L", "AML.L", "IDS.L", "DLG.L", "ITM.L", "QQ.L", "GRG.L", "VTY.L", "BTRW.L", "BOO.L", "ASOS.L", "HBR.L", "ENOG.L", "TLW.L", "CWR.L", "GNC.L", "THG.L", "CURY.L", "DOM.L", "SFOR.L", "PETS.L", "MRO.L", "INVP.L", "OCDO.L", "IGG.L", "CMC.L", "PLUS.L", "EMG.L", "HWDN.L", "COST.L", "BEZ.L", "SGRO.L", "PSN.L", "TW.L", "BYG.L", "SAFE.L", "UTG.L", "BBOX.L", "MANG.L", "TPK.L", "HIK.L", "SRO.L", "FRES.L", "KAP.L", "WKP.L", "JMAT.L", "RS1.L", "PNN.L",
+    # Top 50 Euro
+    "ASML.AS", "MC.PA", "SAP.DE", "RMS.PA", "TTE.PA", "SIE.DE", "CDI.PA", "AIR.PA", "SAN.MC", "IBE.MC", "OR.PA", "ALV.DE", "SU.PA", "EL.PA", "AI.PA", "BNP.PA", "DTE.DE", "ENEL.MI", "DG.PA", "BBVA.MC", "CS.PA", "BAS.DE", "ADS.DE", "MUV2.DE", "IFX.DE", "SAF.PA", "ENI.MI", "INGA.AS", "ISP.MI", "KER.PA", "STLAP.PA", "AD.AS", "VOW3.DE", "BMW.DE", "MBG.DE", "BAYN.DE", "DB1.DE", "BN.PA", "RI.PA", "CRH.L", "G.MI", "PHIA.AS", "HEIA.AS", "NOKIA.HE", "VIV.PA", "ORA.PA", "KNEBV.HE", "UMG.AS", "HO.PA", "ABI.BR"
+]
+
+def get_uk_euro_tickers():
+    """Returns normalized UK/Euro tickers list."""
+    return list(set(UK_EURO_TICKERS))
+
+INDIAN_TICKERS = [
+    # Nifty 50
+    "RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK", "INFY", "HINDUNILVR", "SBIN", "ITC", "LTIM", "LT", "HCLTECH", "BAJFINANCE", "AXISBANK", "MARUTI", "ULTRACEMCO", "SUNPHARMA", "M&M", "TITAN", "KOTAKBANK", "ADANIENT", "TATAMOTORS", "NTPC", "TATASTEEL", "POWERGRID", "ASIANPAINT", "JSWSTEEL", "BAJAJFINSV", "NESTLEIND", "GRASIM", "ONGC", "TECHM", "HINDALCO", "ADANIPORTS", "CIPLA", "WIPRO", "SBILIFE", "DRREDDY", "BRITANNIA", "TATACONSUM", "COALINDIA", "APOLLOHOSP", "EICHERMOT", "INDUSINDBK", "DIVISLAB", "BAJAJ-AUTO", "HDFCLIFE", "HEROMOTOCO", "BEL", "SHRIRAMFIN",
+    # Nifty Next 50
+    "LICI", "HAL", "ADANIPOWER", "DMART", "VBL", "JIOFIN", "SIEMENS", "TRENT", "ZOMATO", "ADANIGREEN", "IOC", "DLF", "VEDL", "BANKBARODA", "GAIL", "AMBUJACEM", "CHOLAFIN", "HAVELLS", "ABB", "PIDILITIND", "GODREJCP", "DABUR", "SHREECEM", "PNB", "BPCL", "SBICARD", "SRF", "MOTHERSON", "ICICIPRULI", "MARICO", "BERGEPAINT", "ICICIGI", "TVSMOTOR", "NAUKRI", "LODHA", "BOSCHLTD", "INDIGO", "CANBK", "UNITDSPR", "TORNTPHARM", "PIIND", "UPL", "JINDALSTEL", "ALKEM", "ZYDUSLIFE", "COLPAL", "BAJAJHLDNG", "TATAPOWER", "IRCTC", "MUTHOOTFIN"
+]
+
+def get_indian_tickers():
+    """Returns normalized Indian tickers list."""
+    # Append .NS for NSE
+    return [t + ".NS" for t in INDIAN_TICKERS]
+
+def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
+    """
+    Screens for Turtle Trading Setups (20-Day Breakouts).
+    Supports multiple timeframes.
+    """
+    import yfinance as yf
+    import pandas_ta as ta
+    import pandas as pd
+
+    if ticker_list is None:
+        ticker_list = [
+            "SPY", "QQQ", "IWM", "GLD", "SLV", "USO", "TLT", # ETFs
+            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN", # Tech
+            "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS" # Blue Chips
+        ]
+        if "WATCH" in SECTOR_COMPONENTS:
+             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
+
+    # Additional names for ETFs not in TICKER_NAMES
+    ETF_NAMES = {
+        "SPY": "SPDR S&P 500 ETF Trust",
+        "QQQ": "Invesco QQQ Trust",
+        "IWM": "iShares Russell 2000 ETF",
+        "GLD": "SPDR Gold Shares",
+        "SLV": "iShares Silver Trust",
+        "USO": "United States Oil Fund, LP",
+        "TLT": "iShares 20+ Year Treasury Bond ETF",
+    }
+
+    # Timeframe logic
+    yf_interval = "1d"
+    resample_rule = None
+    is_intraday = False
+    period = "3mo"
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "196m":
+        yf_interval = "5m"
+        resample_rule = "196min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y"
+
+    results = []
+
+    # Bulk download if not intraday
+    data = None
+    if not is_intraday:
+        try:
+            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
+        except Exception:
+            pass
+
+    for ticker in ticker_list:
+        try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+
+            if df is None or len(df) < 21:
+                continue
+
+            # --- TURTLE CALCULATIONS ---
+            # 1. Donchian Channels (20-day High/Low)
+            df['20_High'] = df['High'].rolling(window=20).max().shift(1)
+            df['20_Low'] = df['Low'].rolling(window=20).min().shift(1)
+
+            # 2. ATR (Volatility 'N')
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
+
+            curr_close = float(df['Close'].iloc[-1])
+
+            if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
+                continue
+
+            prev_high = float(df['20_High'].iloc[-1])
+            prev_low = float(df['20_Low'].iloc[-1])
+            atr = float(df['ATR'].iloc[-1])
+
+            signal = "WAIT"
+            buy_price = 0.0
+            stop_loss = 0.0
+            target = 0.0
+
+            dist_to_breakout_high = (curr_close - prev_high) / prev_high
+
+            # Buy Breakout
+            if curr_close > prev_high:
+                signal = "🚀 BREAKOUT (BUY)"
+                buy_price = curr_close
+                stop_loss = buy_price - (2 * atr)
+                target = buy_price + (4 * atr)
+
+            # Sell Breakout (Short)
+            elif curr_close < prev_low:
+                signal = "📉 BREAKDOWN (SELL)"
+                buy_price = curr_close
+                stop_loss = buy_price + (2 * atr) # Stop above entry for short
+                target = buy_price - (4 * atr)    # Target below entry
+
+            # Near High
+            elif -0.02 <= dist_to_breakout_high <= 0:
+                signal = "👀 WATCH (Near High)"
+                buy_price = prev_high
+                stop_loss = prev_high - (2 * atr)
+                target = prev_high + (4 * atr)
+
+            if signal != "WAIT":
+                # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
+                base_ticker = ticker.split('.')[0]
+                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
+                results.append({
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "price": curr_close,
+                    "signal": signal,
+                    "breakout_level": prev_high if "SELL" not in signal else prev_low,
+                    "stop_loss": stop_loss,
+                    "target": target,
+                    "atr": atr,
+                    "risk_per_share": abs(buy_price - stop_loss)
+                })
+
+        except Exception:
+            continue
+
+    return results
+
+def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
+    """
+    Screens for 5/13 and 5/21 EMA Crossovers (Momentum Breakouts).
+    """
+    try:
+        import pandas_ta as ta
+    except ImportError:
+        return []
+
+    import yfinance as yf
+    import pandas as pd
+
+    if ticker_list is None:
+        # Default liquid list + Crypto proxies usually traded with this system
+        ticker_list = [
+            "SPY", "QQQ", "IWM", "GLD", "SLV", "BITO", "COIN", "MSTR", # Crypto-adj
+            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN",
+            "NFLX", "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS"
+        ]
+        if "WATCH" in SECTOR_COMPONENTS:
+             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
+
+    # Additional names for ETFs not in TICKER_NAMES
+    ETF_NAMES = {
+        "SPY": "SPDR S&P 500 ETF Trust",
+        "QQQ": "Invesco QQQ Trust",
+        "IWM": "iShares Russell 2000 ETF",
+        "GLD": "SPDR Gold Shares",
+        "SLV": "iShares Silver Trust",
+        "USO": "United States Oil Fund, LP",
+        "TLT": "iShares 20+ Year Treasury Bond ETF",
+        "BITO": "ProShares Bitcoin Strategy ETF",
+    }
+
+    # Timeframe logic
+    yf_interval = "1d"
+    resample_rule = None
+    is_intraday = False
+    period = "3mo"
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "196m":
+        yf_interval = "5m"
+        resample_rule = "196min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y"
+
+    results = []
+
+    # Bulk download if not intraday
+    data = None
+    if not is_intraday:
+        try:
+            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
+        except Exception:
+            pass
+
+    for ticker in ticker_list:
+        try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+
+            if df is None or len(df) < 22: # Need 21 for EMA 21
+                continue
+
+            # --- EMA CALCULATIONS ---
+            df['EMA_5'] = ta.ema(df['Close'], length=5)
+            df['EMA_13'] = ta.ema(df['Close'], length=13)
+            df['EMA_21'] = ta.ema(df['Close'], length=21)
+
+            # Current & Previous values
+            curr_5 = df['EMA_5'].iloc[-1]
+            curr_13 = df['EMA_13'].iloc[-1]
+            curr_21 = df['EMA_21'].iloc[-1]
+
+            prev_5 = df['EMA_5'].iloc[-2]
+            prev_13 = df['EMA_13'].iloc[-2]
+            prev_21 = df['EMA_21'].iloc[-2]
+
+            curr_close = float(df['Close'].iloc[-1])
+
+            signal = "WAIT"
+            status_color = "gray"
+            stop_loss = 0.0
+            ema_slow = curr_13 # Default to 13
+
+            # Logic 5/13:
+            # 1. Fresh Breakout (Crossed TODAY)
+            if curr_5 > curr_13 and prev_5 <= prev_13:
+                signal = "🚀 FRESH 5/13 BREAKOUT"
+                status_color = "green"
+                ema_slow = curr_13
+                stop_loss = curr_13 * 0.99
+
+            # Logic 5/21:
+            elif curr_5 > curr_21 and prev_5 <= prev_21:
+                signal = "🚀 FRESH 5/21 BREAKOUT"
+                status_color = "green"
+                ema_slow = curr_21
+                stop_loss = curr_21 * 0.99
+
+            # 2. Trending (Held for >1 day)
+            elif curr_5 > curr_13:
+                # Check how far extended?
+                dist = (curr_close - curr_13) / curr_13
+                if dist < 0.01: # Price is pulling back to 13 EMA (Buy Support)
+                    signal = "✅ 5/13 TREND (Buy Support)"
+                    status_color = "blue"
+                else:
+                    signal = "📈 5/13 TRENDING"
+                    status_color = "blue"
+                ema_slow = curr_13
+                stop_loss = curr_13 * 0.99
+
+            elif curr_5 > curr_21:
+                 signal = "📈 5/21 TRENDING"
+                 status_color = "blue"
+                 ema_slow = curr_21
+                 stop_loss = curr_21 * 0.99
+
+            # 3. Bearish Cross (Sell)
+            if curr_5 < curr_13 and prev_5 >= prev_13:
+                signal = "❌ 5/13 DUMP (Sell Signal)"
+                status_color = "red"
+                ema_slow = curr_13
+                stop_loss = curr_13 * 1.01 # Stop above
+
+            elif curr_5 < curr_21 and prev_5 >= prev_21:
+                signal = "❌ 5/21 DUMP (Sell Signal)"
+                status_color = "red"
+                ema_slow = curr_21
+                stop_loss = curr_21 * 1.01
+
+            if signal != "WAIT":
+                # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
+                base_ticker = ticker.split('.')[0]
+                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
+                results.append({
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "price": curr_close,
+                    "signal": signal,
+                    "color": status_color,
+                    "ema_5": curr_5,
+                    "ema_13": curr_13,
+                    "ema_21": curr_21,
+                    # Stop Loss usually strictly below the slow EMA line
+                    "stop_loss": stop_loss,
+                    "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100
+                })
+
+        except Exception:
+            continue
+
+    # Sort by "Freshness" (Breakouts first)
+    results.sort(key=lambda x: 0 if "FRESH" in x['signal'] else 1)
     return results

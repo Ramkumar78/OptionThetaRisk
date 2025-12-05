@@ -95,6 +95,40 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return render_template("error.html", message=f"Screener failed: {e}")
 
+    @app.route("/screen/turtle", methods=["GET"])
+    def screen_turtle():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            region = request.args.get("region", "us")
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+
+            results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
+            return render_template("turtle_results.html", results=results)
+        except Exception as e:
+            return render_template("error.html", message=f"Turtle Screener failed: {e}")
+
+    @app.route("/screen/ema", methods=["GET"])
+    def screen_ema():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            region = request.args.get("region", "us")
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+
+            results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
+            return render_template("ema_results.html", results=results)
+        except Exception as e:
+            return render_template("error.html", message=f"EMA Screener failed: {e}")
+
     @app.route("/analyze", methods=["POST"])
     def analyze():
         file = request.files.get("csv")
