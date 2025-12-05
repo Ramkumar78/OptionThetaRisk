@@ -29,7 +29,16 @@ SECTOR_COMPONENTS = {
     "XLB": ["LIN", "NEM", "SHW", "ECL", "FCX", "APD", "NUE", "MLM", "VMC", "CTVA"],
     "XLRE": ["PLD", "AMT", "EQIX", "WELL", "PSA", "SPG", "DLR", "O", "CCI", "CBRE"],
     "XLU": ["NEE", "SO", "DUK", "CEG", "AEP", "SRE", "VST", "PEG", "ED", "D"],
+    "WATCH": [
+        "PLTR", "SOFI", "MSTR", "COIN", "INTC", "MU", "QCOM", "AMAT", "TXN", "ARM",
+        "SMCI", "DELL", "HPQ", "PANW", "SNOW", "NOW", "SHOP", "PYPL", "SQ", "HOOD",
+        "DKNG", "RBLX", "SNAP", "PINS", "CVNA", "AFRM", "UPST", "AI", "MARA", "RIOT",
+        "CLSK", "F", "GM", "RIVN", "LCID", "TSM", "BABA", "PDD", "NIO", "JD",
+        "SPOT", "ABNB", "DASH", "CCL", "AAL", "PFE", "CVS", "GILD", "OXY", "LULU"
+    ]
 }
+
+SECTOR_NAMES["WATCH"] = "High Interest / Growth"
 
 TICKER_NAMES = {
     "ECL": "Ecolab Inc.",
@@ -451,6 +460,10 @@ def screen_turtle_setups(ticker_list: list = None) -> list:
             "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN", # Tech
             "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS" # Blue Chips
         ]
+
+        # Add Watchlist tickers
+        if "WATCH" in SECTOR_COMPONENTS:
+             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
 
     # Additional names for ETFs not in TICKER_NAMES
     ETF_NAMES = {
