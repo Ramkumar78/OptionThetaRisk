@@ -40,34 +40,19 @@
                 <input type="hidden" id="input-method" name="input_method" value="csv">
                 <input type="hidden" name="manual_trades" id="manual-trades-input">
 
-                <div x-show="tab === 'csv'" class="space-y-8" style="display: none;">
-
+                <!-- CSV Upload Section -->
+                <div x-show="tab === 'csv'" class="space-y-8">
                     <div class="flex items-center justify-center w-full">
-                        <label for="csv" class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-2xl cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900 hover:bg-gray-100 dark:border-gray-700 dark:hover:border-gray-500 transition-all group">
+                        <label for="csv" class="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-2xl cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900 hover:bg-gray-100 dark:border-gray-700 dark:hover:border-gray-500 transition-all group">
                             <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                                <div class="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-full mb-4 group-hover:scale-110 transition-transform">
-                                    <i class="bi bi-cloud-arrow-up text-3xl text-primary-600 dark:text-primary-400"></i>
+                                <div class="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                                    <i class="bi bi-cloud-arrow-up text-2xl text-primary-600 dark:text-primary-400"></i>
                                 </div>
-                                <p class="mb-2 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold text-gray-900 dark:text-gray-100">Click to upload</span> or drag and drop</p>
+                                <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold text-gray-900 dark:text-gray-100">Click to upload</span> or drag and drop</p>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Tastytrade or IBKR CSV files</p>
                             </div>
                             <input id="csv" name="csv" type="file" accept=".csv" class="hidden" />
                         </label>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="relative">
-                            <select name="style" id="style_csv" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
-                                <option value="income">Income (Selling Premium)</option>
-                                <option value="speculation">Growth (Directional)</option>
-                            </select>
-                            <label for="style_csv" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Strategy Type</label>
-                        </div>
-
-                        <div class="relative">
-                            <input type="number" name="csv_fee_per_trade" id="csv_fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
-                            <label for="csv_fee_per_trade" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Est. Fee per Trade ($)</label>
-                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -79,31 +64,14 @@
                             </select>
                             <label for="broker" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Broker Format</label>
                         </div>
-                        <div class="relative" x-data="{ mode: 'all' }">
-                            <select name="date_mode" id="date_mode" x-model="mode" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
-                                <option value="all">All Data</option>
-                                <option value="custom">Custom Range</option>
-                            </select>
-                             <label for="date_mode" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Analysis Period</label>
-
-                             <div x-show="mode === 'custom'" class="absolute top-14 left-0 w-full grid grid-cols-2 gap-2 bg-white dark:bg-gray-900 p-2 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                                <div>
-                                    <label class="block text-xs text-gray-500">Start</label>
-                                    <input type="date" name="start_date" class="w-full text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
-                                </div>
-                                <div>
-                                     <label class="block text-xs text-gray-500">End</label>
-                                    <input type="date" name="end_date" class="w-full text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
-                                </div>
-                             </div>
+                        <div class="relative">
+                            <input type="number" name="csv_fee_per_trade" id="csv_fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <label for="csv_fee_per_trade" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Est. Fee per Trade ($)</label>
                         </div>
                     </div>
-
-                    <button type="submit" @click="prepareSubmission()" class="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-bold rounded-xl text-sm px-5 py-4 text-center dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800 transition-all shadow-lg hover:shadow-primary-500/30">
-                        Run Analysis <i class="bi bi-arrow-right ml-2"></i>
-                    </button>
                 </div>
 
+                <!-- Manual Entry Section -->
                 <div x-show="tab === 'manual'" class="space-y-6" style="display: none;">
                     <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
                         <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
@@ -148,12 +116,79 @@
                             </tbody>
                         </table>
                     </div>
-                     <button type="button" @click="addRow()" class="text-primary-600 hover:text-primary-800 text-sm font-semibold flex items-center mt-3">
-                        <i class="bi bi-plus-circle-fill mr-2"></i> Add another trade
-                    </button>
 
-                    <button type="submit" @click="prepareSubmission()" class="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-bold rounded-xl text-sm px-5 py-4 text-center shadow-lg transition-all mt-6">
-                        Analyze Manual Trades
+                    <div class="flex items-center justify-between">
+                         <button type="button" @click="addRow()" class="text-primary-600 hover:text-primary-800 text-sm font-semibold flex items-center">
+                            <i class="bi bi-plus-circle-fill mr-2"></i> Add another trade
+                        </button>
+                        <!-- Manual Fee Input -->
+                        <div class="relative w-48">
+                             <input type="number" name="fee_per_trade" id="fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <label for="fee_per_trade" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Fee per Trade ($)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shared Analysis Settings -->
+                <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800">
+                    <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Analysis Settings</h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="relative">
+                            <select name="style" id="style_csv" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
+                                <option value="income">Income (Selling Premium)</option>
+                                <option value="speculation">Growth (Directional)</option>
+                            </select>
+                            <label for="style_csv" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Strategy Type</label>
+                        </div>
+
+                        <div class="relative" x-data="{ mode: 'all' }">
+                            <select name="date_mode" id="date_mode" x-model="mode" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
+                                <option value="all">All Data</option>
+                                <option value="7d">Last 7 Days</option>
+                                <option value="14d">Last 14 Days</option>
+                                <option value="1m">Last 30 Days</option>
+                                <option value="6m">Last 6 Months</option>
+                                <option value="ytd">Year to Date</option>
+                                <option value="1y">Last Year</option>
+                                <option value="2y">Last 2 Years</option>
+                                <option value="range">Custom Range</option>
+                            </select>
+                             <label for="date_mode" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Analysis Period</label>
+
+                             <div x-show="mode === 'range'" class="absolute top-14 left-0 w-full grid grid-cols-2 gap-2 bg-white dark:bg-gray-900 p-2 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                                <div>
+                                    <label class="block text-xs text-gray-500">Start</label>
+                                    <input type="date" name="start_date" class="w-full text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
+                                </div>
+                                <div>
+                                     <label class="block text-xs text-gray-500">End</label>
+                                    <input type="date" name="end_date" class="w-full text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
+                                </div>
+                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Account Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="relative">
+                            <input type="number" name="account_size_start" id="account_size_start" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <label for="account_size_start" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Starting Capital</label>
+                        </div>
+                        <div class="relative">
+                            <input type="number" name="net_liquidity_now" id="net_liquidity_now" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <label for="net_liquidity_now" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Net Liquidity (Now)</label>
+                        </div>
+                         <div class="relative">
+                            <input type="number" name="buying_power_available_now" id="buying_power_available_now" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <label for="buying_power_available_now" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Buying Power (Now)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                     <button type="submit" @click="prepareSubmission()" class="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-bold rounded-xl text-sm px-5 py-4 text-center dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800 transition-all shadow-lg hover:shadow-primary-500/30">
+                        Run Analysis <i class="bi bi-arrow-right ml-2"></i>
                     </button>
                 </div>
             </form>
