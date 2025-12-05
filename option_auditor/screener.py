@@ -158,25 +158,38 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     resample_rule = None
     is_intraday = False
 
+    # Default period
+    period = "1y"
+
     if time_frame == "49m":
         yf_interval = "5m"
         resample_rule = "49min"
         is_intraday = True
+        period = "1mo"
     elif time_frame == "98m":
         yf_interval = "5m"
         resample_rule = "98min"
         is_intraday = True
+        period = "1mo"
     elif time_frame == "196m":
         yf_interval = "5m"
         resample_rule = "196min"
         is_intraday = True
-
-    period = "1y" if yf_interval == "1d" else "1mo"
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y" # Need more history for SMA50 on weekly
+        is_intraday = False
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y" # Need more history for SMA50 on monthly
+        is_intraday = False
 
     # Batch download result container
     batch_data = None
 
-    # If daily, try batch download first
+    # If daily, try batch download first (avoid for new multi-year/weekly intervals to be safe, or just allow it)
+    # yfinance batch download is usually fine for daily/weekly.
     if not is_intraday and tickers:
         try:
             # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
@@ -212,19 +225,14 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 except Exception:
                     pass
 
-            # Calculate % Change before resampling (to get daily/weekly even if intraday resampled)
-            # Actually, if we download 1mo of intraday data, we can still approximate 1d change
+            # Calculate % Change before resampling
             pct_change_1d = None
             pct_change_1w = None
 
             try:
                 if is_intraday:
                     # Logic for Intraday Data
-                    # 1D Change: (Last Price - Open of Today) / Open of Today (Approx)
-                    # Or better: (Last Price - Last Price of Previous Day)
-                    # We can find the previous day by looking at unique dates in index
                     unique_dates = sorted(list(set(df.index.date)))
-                    current_date = unique_dates[-1]
 
                     if len(unique_dates) > 1:
                         # Find the last bar of the previous trading day
@@ -245,18 +253,32 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                              curr_close = float(df['Close'].iloc[-1])
                              pct_change_1w = ((curr_close - week_close) / week_close) * 100
                 else:
-                    # Logic for Daily Data
-                    # 1D Change
+                    # Logic for Daily/Weekly/Monthly Data
+                    # 1D Change: Last bar vs Previous bar
                     if len(df) >= 2:
                         prev_close = float(df['Close'].iloc[-2])
                         curr_close = float(df['Close'].iloc[-1])
                         pct_change_1d = ((curr_close - prev_close) / prev_close) * 100
 
-                    # 1W Change (5 trading days)
-                    if len(df) >= 6:
-                        week_close = float(df['Close'].iloc[-6])
-                        curr_close = float(df['Close'].iloc[-1])
-                        pct_change_1w = ((curr_close - week_close) / week_close) * 100
+                    # 1W Change: Look back 5 bars if daily, else relative
+                    if yf_interval == "1d":
+                        if len(df) >= 6:
+                            week_close = float(df['Close'].iloc[-6])
+                            curr_close = float(df['Close'].iloc[-1])
+                            pct_change_1w = ((curr_close - week_close) / week_close) * 100
+                    elif yf_interval == "1wk":
+                         # For weekly, pct_change_1d is essentially 1W change
+                         # pct_change_1w (meaning a longer lookback) could be 1 month?
+                         # Let's keep logic simple: 1W change for weekly IS the 1D change
+                         # But to fill the UI column "1W %", we might copy it?
+                         # Let's leave pct_change_1w as None or try 4 weeks back?
+                         if len(df) >= 5:
+                             month_close = float(df['Close'].iloc[-5])
+                             curr_close = float(df['Close'].iloc[-1])
+                             pct_change_1w = ((curr_close - month_close) / month_close) * 100
+                    elif yf_interval == "1mo":
+                        # For monthly, pct_change_1d is 1 Month change
+                        pass
             except Exception:
                 pass
 
@@ -275,7 +297,9 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 df = df.dropna()
 
             # 3. Calculate Indicators
+            # Check length for SMA 50
             if len(df) < 50:
+                # Can't calculate SMA 50
                 return None
 
             rsi_series = ta.rsi(df['Close'], length=14)
@@ -372,21 +396,12 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
     for t_list in SECTOR_COMPONENTS.values():
         all_tickers.extend(t_list)
 
-    # Also add some retail favorites not in the lists if we want to keep them?
-    # The prompt explicitly said "include all of the below tickers" and "can you group the stocks by sectors now?".
-    # This implies REPLACING the old list with this structured list.
-    # The previous list had SPY, QQQ etc. which are not in these sectors.
-    # I will stick to the user request sectors. If they want ETFs back they can ask.
-
     flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame)
 
     # Index results by ticker for easy lookup
     result_map = {r['ticker']: r for r in flat_results}
 
     grouped_results = {}
-
-    # Process in order of SECTOR_NAMES keys to maintain some order if python dicts were ordered (they are now)
-    # But SECTOR_COMPONENTS keys match SECTOR_NAMES keys.
 
     for sector_code, sector_name in SECTOR_NAMES.items():
         if sector_code not in SECTOR_COMPONENTS:
@@ -397,8 +412,6 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
 
         sector_rows = []
         for t in components:
-            # Handle potential symbol differences (BRK.B vs BRK-B) just in case
-            # Currently SECTOR_COMPONENTS has BRK-B. yfinance returns BRK-B.
             if t in result_map:
                 sector_rows.append(result_map[t])
 
@@ -419,7 +432,6 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
         code = r['ticker']
         if code in SECTOR_NAMES:
             r['name'] = SECTOR_NAMES[code]
-            # Also set company_name to sector name for consistency if needed, though 'name' is used in template
             r['company_name'] = SECTOR_NAMES[code]
 
     return results

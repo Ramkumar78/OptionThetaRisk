@@ -1,103 +1,98 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en" class="h-full antialiased">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Option Auditor</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
-  <!-- Tailwind CSS (Local) -->
+
   <script src="{{ url_for('static', filename='vendor/js/tailwindcss.js') }}"></script>
-  <!-- Flowbite CSS (Local) -->
   <link href="{{ url_for('static', filename='vendor/css/flowbite.min.css') }}" rel="stylesheet" />
-  <!-- Bootstrap Icons (Local) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/bootstrap-icons.css') }}">
-  <!-- Chart.js and Date Adapter (Local) -->
+
   <script src="{{ url_for('static', filename='vendor/js/chart.min.js') }}"></script>
   <script src="{{ url_for('static', filename='vendor/js/chartjs-adapter-date-fns.bundle.min.js') }}"></script>
-  <!-- DataTables (Simple) (Local) -->
-  <link href="{{ url_for('static', filename='vendor/css/simple-datatables.css') }}" rel="stylesheet" type="text/css">
-  <script src="{{ url_for('static', filename='vendor/js/simple-datatables.min.js') }}" type="text/javascript"></script>
-  <!-- Flowbite JS (Local) -->
+  <link href="{{ url_for('static', filename='vendor/css/simple-datatables.css') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='vendor/js/simple-datatables.min.js') }}"></script>
+
   <script src="{{ url_for('static', filename='vendor/js/flowbite.min.js') }}"></script>
-  <!-- Alpine.js (Local) -->
   <script src="{{ url_for('static', filename='vendor/js/alpine.min.js') }}" defer></script>
+
   <script>
-    // Configure Tailwind theme (v3 style) with Flowbite colors (primary blue)
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
+          fontFamily: {
+             sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          },
           colors: {
-            primary: {"50":"#eff6ff","100":"#dbeafe","200":"#bfdbfe","300":"#93c5fd","400":"#60a5fa","500":"#3b82f6","600":"#2563eb","700":"#1d4ed8","800":"#1e40af","900":"#1e3a8a","950":"#172554"}
+            // Modern Slate Foundation
+            gray: {"50":"#f8fafc","100":"#f1f5f9","200":"#e2e8f0","300":"#cbd5e1","400":"#94a3b8","500":"#64748b","600":"#475569","700":"#334155","800":"#1e293b","900":"#0f172a","950":"#020617"},
+            // Fintech Indigo Primary
+            primary: {"50":"#eef2ff","100":"#e0e7ff","200":"#c7d2fe","300":"#a5b4fc","400":"#818cf8","500":"#6366f1","600":"#4f46e5","700":"#4338ca","800":"#3730a3","900":"#312e81","950":"#1e1b4b"},
+            // Profit Emerald
+            success: {"500": "#10b981", "600": "#059669"},
+            // Loss Rose
+            danger: {"500": "#f43f5e", "600": "#e11d48"}
           }
         }
       }
     }
   </script>
   <style>
-    /* Simple fade-in for HTMX swaps */
-    .htmx-settling .fade-in { opacity: 0; }
-    .fade-in { opacity: 1; transition: opacity 300ms ease-in-out; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    .fade-in { animation: fadeIn 0.4s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Custom Scrollbar for Tables */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; }
   </style>
   <script>
-    // Apply theme immediately to prevent flash
-    (function() {
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      if (savedTheme === 'dark') {
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
         document.documentElement.classList.add('dark');
-      } else {
+    } else {
         document.documentElement.classList.remove('dark');
-      }
-    })();
+    }
   </script>
 </head>
-<body class="flex flex-col min-h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+<body class="flex flex-col min-h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans selection:bg-primary-100 dark:selection:bg-primary-900">
 
-  <!-- Flowbite Navbar -->
-  <nav class="bg-white border-gray-200 dark:bg-gray-900 shadow-sm mb-8">
+  <nav class="fixed w-full z-20 top-0 start-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
     <div class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
-      <a href="/" class="flex items-center space-x-3 rtl:space-x-reverse">
-          <img src="{{ url_for('static', filename='img/logo.png') }}" class="h-8 rounded" alt="Option Auditor Logo" />
-          <span class="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">Option Auditor</span>
+      <a href="/" class="flex items-center space-x-3 rtl:space-x-reverse group">
+          <div class="p-1.5 bg-primary-600 rounded-lg shadow-lg shadow-primary-500/30 group-hover:scale-105 transition-transform">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" class="h-6 w-6 brightness-0 invert" alt="Logo" />
+          </div>
+          <span class="self-center text-xl font-bold tracking-tight text-gray-900 dark:text-white">Option<span class="text-primary-600 dark:text-primary-400">Auditor</span></span>
       </a>
-      <div class="flex md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
-          <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 mr-2">
-              <i class="bi bi-sun-fill" id="theme-icon"></i>
-          </button>
 
-          <button data-collapse-toggle="navbar-cta" type="button" class="inline-flex items-center p-2 w-10 h-10 justify-center text-sm text-gray-500 rounded-lg md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600" aria-controls="navbar-cta" aria-expanded="false">
-              <span class="sr-only">Open main menu</span>
-              <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 17 14">
-                  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h15M1 7h15M1 13h15"/>
-              </svg>
+      <div class="flex md:order-2 space-x-3">
+          <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-full text-sm p-2.5 transition-all">
+              <i class="bi bi-sun-fill hidden dark:inline"></i>
+              <i class="bi bi-moon-stars-fill inline dark:hidden"></i>
           </button>
-      </div>
-      <div class="items-center justify-between hidden w-full md:flex md:w-auto md:order-1" id="navbar-cta">
-        <ul class="flex flex-col font-medium p-4 md:p-0 mt-4 border border-gray-100 rounded-lg bg-gray-50 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 md:bg-white dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
-          <li>
-            <a href="/" class="block py-2 px-3 md:p-0 text-white bg-blue-700 rounded md:bg-transparent md:text-blue-700 md:dark:text-blue-500" aria-current="page">Home</a>
-          </li>
-          <li>
-            <a href="https://github.com/Ramkumar78/OptionThetaRisk/blob/main/README.md" target="_blank" class="block py-2 px-3 md:p-0 text-gray-900 rounded hover:bg-gray-100 md:hover:bg-transparent md:hover:text-blue-700 md:dark:hover:text-blue-500 dark:text-white dark:hover:bg-gray-700 dark:hover:text-white md:dark:hover:bg-transparent dark:border-gray-700">GitHub</a>
-          </li>
-        </ul>
       </div>
     </div>
   </nav>
 
-  <!-- Flash Messages -->
-  <div class="container mx-auto px-4 mb-4">
+  <div class="h-20"></div>
+
+  <div class="container mx-auto px-4 mt-4 max-w-5xl">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="space-y-2">
+        <div class="space-y-2 fade-in">
           {% for category, message in messages %}
-            <div class="p-4 rounded-md shadow-sm
-              {% if category == 'success' %}bg-green-100 text-green-700 border border-green-200 dark:bg-green-900 dark:text-green-100 dark:border-green-800
-              {% elif category == 'error' %}bg-red-100 text-red-700 border border-red-200 dark:bg-red-900 dark:text-red-100 dark:border-red-800
-              {% elif category == 'warning' %}bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100 dark:border-yellow-800
-              {% else %}bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-800{% endif %}"
-              role="alert">
-              {{ message }}
+             <div class="flex items-center p-4 mb-4 text-sm rounded-lg border shadow-sm
+              {% if category == 'success' %}text-green-800 border-green-200 bg-green-50 dark:bg-gray-800 dark:text-green-400 dark:border-green-800
+              {% elif category == 'error' %}text-red-800 border-red-200 bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:border-red-800
+              {% else %}text-blue-800 border-blue-200 bg-blue-50 dark:bg-gray-800 dark:text-blue-400 dark:border-blue-800{% endif %}" role="alert">
+              <i class="bi {% if category=='success' %}bi-check-circle{% elif category=='error' %}bi-exclamation-octagon{% else %}bi-info-circle{% endif %} mr-2 text-lg"></i>
+              <span class="font-medium">{{ message }}</span>
             </div>
           {% endfor %}
         </div>
@@ -105,52 +100,94 @@
     {% endwith %}
   </div>
 
-  <!-- Main Content -->
-  <main class="container mx-auto px-4 flex-grow">
+  <main class="container mx-auto px-4 flex-grow py-6 max-w-7xl">
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Footer -->
-  <footer class="bg-gray-800 text-white text-center py-6 mt-auto">
-    <div class="container mx-auto px-4">
-      <small>&copy; 2025 Option Auditor. All rights reserved.</small>
-      <span class="mx-2">|</span>
-      <small><a href="mailto:shriram2222@gmail.com" class="text-white hover:text-gray-300 transition-colors">Contact</a></small>
+  <footer class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 mt-auto">
+    <div class="w-full mx-auto max-w-screen-xl p-6 md:flex md:items-center md:justify-between">
+      <span class="text-sm text-gray-500 sm:text-center dark:text-gray-400">© 2025 <a href="/" class="hover:underline">Option Auditor</a>.</span>
+      <ul class="flex flex-wrap items-center mt-3 text-sm font-medium text-gray-500 dark:text-gray-400 sm:mt-0">
+        <li><a href="https://github.com/Ramkumar78/OptionThetaRisk" class="hover:text-primary-600 transition-colors">GitHub</a></li>
+      </ul>
     </div>
   </footer>
 
   <script>
-    // Theme Toggle Logic
+    // Improved Theme Logic
     const themeToggleBtn = document.getElementById('theme-toggle');
-    const themeIcon = document.getElementById('theme-icon');
-
-    function updateIcon(isDark) {
-      if (isDark) {
-        themeIcon.classList.remove('bi-sun-fill');
-        themeIcon.classList.add('bi-moon-fill');
-      } else {
-        themeIcon.classList.remove('bi-moon-fill');
-        themeIcon.classList.add('bi-sun-fill');
-      }
-    }
-
-    // Set initial icon
-    const isDarkInitial = document.documentElement.classList.contains('dark');
-    updateIcon(isDarkInitial);
-
     themeToggleBtn.addEventListener('click', () => {
-      let isDark = document.documentElement.classList.contains('dark');
-      if (isDark) {
-        document.documentElement.classList.remove('dark');
-        localStorage.setItem('theme', 'light');
-        updateIcon(false);
-      } else {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
-        updateIcon(true);
-      }
+        document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
     });
 
+    // Toast Notification System
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+
+        // Icon based on type
+        let icon = 'bi-check-circle-fill';
+        let colorClass = 'text-green-500 bg-green-100 dark:bg-green-800 dark:text-green-200';
+
+        if (type === 'error') {
+            icon = 'bi-x-circle-fill';
+            colorClass = 'text-red-500 bg-red-100 dark:bg-red-800 dark:text-red-200';
+        } else if (type === 'info') {
+            icon = 'bi-info-circle-fill';
+            colorClass = 'text-blue-500 bg-blue-100 dark:bg-blue-800 dark:text-blue-200';
+        }
+
+        toast.className = `flex items-center w-full max-w-xs p-4 mb-4 text-gray-500 bg-white rounded-lg shadow dark:text-gray-400 dark:bg-gray-800 transform transition-all duration-300 translate-y-2 opacity-0`;
+        toast.innerHTML = `
+            <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 ${colorClass} rounded-lg">
+                <i class="bi ${icon} text-sm"></i>
+            </div>
+            <div class="ms-3 text-sm font-normal">${message}</div>
+            <button type="button" class="ms-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex items-center justify-center h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700" onclick="this.parentElement.remove()">
+                <i class="bi bi-x"></i>
+            </button>
+        `;
+
+        container.appendChild(toast);
+
+        // Animate in
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-y-2', 'opacity-0');
+        });
+
+        // Remove after 3s
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-2');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    function copyToClipboard(text) {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(`Copied ${text}`);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                showToast('Failed to copy', 'error');
+            });
+        } else {
+            // Fallback
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast(`Copied ${text}`);
+            } catch (err) {
+                showToast('Failed to copy', 'error');
+            }
+            document.body.removeChild(textArea);
+        }
+    }
   </script>
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col items-end space-y-2"></div>
 </body>
 </html>
