@@ -92,61 +92,6 @@ TICKER_NAMES = {
     "GILD": "Gilead Sciences, Inc.",
     "OXY": "Occidental Petroleum Corporation",
     "LULU": "Lululemon Athletica Inc.",
-}
-
-UK_EURO_TICKERS = [
-    # Top 50 FTSE (UK)
-    "AZN", "SHEL", "HSBA", "ULVR", "BP.", "RIO", "REL", "GSK", "DGE", "LSEG", "BATS", "GLEN", "BA.", "CNA", "NG.", "LLOY", "RR.", "BARC", "CPG", "NWG", "RKT", "VOD", "AAL", "SGE", "HLN", "EXR", "TSCO", "SSE", "MNG", "ADM", "III", "ANTO", "SPX", "STAN", "IMB", "WTB", "SVT", "AUTO", "SN.", "CRDA", "WPP", "SMIN", "DCC", "AV.", "LGEN", "KGF", "SBRY", "MKS", "LAND", "PSON",
-    # Liquid UK
-    "JD.", "IAG", "EZJ", "TUI", "AML", "IDS", "DLG", "ITM", "CINE", "PFC", "FRES", "KAP", "BOO", "ASOS", "HBR", "ENOG", "TLW", "CWR", "GNC", "THG", "DARK", "CURY", "DOM", "WKB", "SFOR", "QINET", "GREG", "PETS", "VMUK", "MRO", "INVP", "OCDO", "IGG", "CMC", "PLUS", "EMG", "HWDN", "COST", "BEZ", "SGRO", "BDEV", "PSN", "TW.", "RDW", "VISTRY", "BYG", "SAFE", "UTG", "BBOX", "GRG",
-    # Top 50 Euro
-    "ASML", "MC", "SAP", "RMS", "TTE", "SIE", "CDI", "AIR", "SAN", "IBE", "OR", "ALV", "SU", "EL", "AI", "BNP", "DTE", "ENEL", "DG", "BBVA", "CS", "BAS", "ADS", "MUV2", "IFX", "SAF", "ENI", "INGA", "ISP", "KER", "STLA", "AD", "VOW3", "BMW", "MBG", "BAYN", "DB1", "BN", "RI", "CRH", "G", "PHIA", "AH", "NOKIA", "VIV", "ORANGE", "KNEBV", "UMG", "HEIA", "ABI"
-]
-
-INDIAN_TICKERS = [
-    # Nifty 50
-    "RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK", "INFY", "HINDUNILVR", "SBIN", "ITC", "LTIM", "LT", "HCLTECH", "BAJFINANCE", "AXISBANK", "MARUTI", "ULTRACEMCO", "SUNPHARMA", "M&M", "TITAN", "KOTAKBANK", "ADANIENT", "TATAMOTORS", "NTPC", "TATASTEEL", "POWERGRID", "ASIANPAINT", "JSWSTEEL", "BAJAJFINSV", "NESTLEIND", "GRASIM", "ONGC", "TECHM", "HINDALCO", "ADANIPORTS", "CIPLA", "WIPRO", "SBILIFE", "DRREDDY", "BRITANNIA", "TATACONSUM", "COALINDIA", "APOLLOHOSP", "EICHERMOT", "INDUSINDBK", "DIVISLAB", "BAJAJ-AUTO", "HDFCLIFE", "HEROMOTOCO", "BEL", "SHRIRAMFIN",
-    # Nifty Next 50
-    "LICI", "HAL", "ADANIPOWER", "DMART", "VBL", "JIOFIN", "SIEMENS", "TRENT", "ZOMATO", "ADANIGREEN", "IOC", "DLF", "VEDL", "BANKBARODA", "GAIL", "AMBUJACEM", "CHOLAFIN", "HAVELLS", "ABB", "PIDILITIND", "GODREJCP", "DABUR", "SHREECEM", "PNB", "BPCL", "SBICARD", "SRF", "MOTHERSON", "ICICIPRULI", "MARICO", "BERGEPAINT", "ICICIGI", "TVSMOTOR", "NAUKRI", "LODHA", "BOSCHLTD", "INDIGO", "CANBK", "UNITDSPR", "TORNTPHARM", "PIIND", "UPL", "JINDALSTEL", "ALKEM", "ZYDUSLIFE", "COLPAL", "BAJAJHLDNG", "TATAPOWER", "IRCTC", "MUTHOOTFIN"
-]
-
-def get_uk_euro_tickers():
-    """Returns normalized UK/Euro tickers list."""
-    tickers = []
-
-    # Process the raw list
-    for t in UK_EURO_TICKERS:
-        # Heuristic for UK tickers:
-        # If user input has dot at end (e.g. "BP."), replace with .L
-        if t.endswith("."):
-            tickers.append(t[:-1] + ".L")
-        else:
-            # Check against known UK list (without dots)
-            # Reconstruct sets for logic (using known UK tickers from the list)
-            uk_set = {
-                "AZN", "SHEL", "HSBA", "ULVR", "BP.", "RIO", "REL", "GSK", "DGE", "LSEG", "BATS", "GLEN", "BA.", "CNA", "NG.", "LLOY", "RR.", "BARC", "CPG", "NWG", "RKT", "VOD", "AAL", "SGE", "HLN", "EXR", "TSCO", "SSE", "MNG", "ADM", "III", "ANTO", "SPX", "STAN", "IMB", "WTB", "SVT", "AUTO", "SN.", "CRDA", "WPP", "SMIN", "DCC", "AV.", "LGEN", "KGF", "SBRY", "MKS", "LAND", "PSON",
-                "JD.", "IAG", "EZJ", "TUI", "AML", "IDS", "DLG", "ITM", "CINE", "PFC", "FRES", "KAP", "BOO", "ASOS", "HBR", "ENOG", "TLW", "CWR", "GNC", "THG", "DARK", "CURY", "DOM", "WKB", "SFOR", "QINET", "GREG", "PETS", "VMUK", "MRO", "INVP", "OCDO", "IGG", "CMC", "PLUS", "EMG", "HWDN", "COST", "BEZ", "SGRO", "BDEV", "PSN", "TW.", "RDW", "VISTRY", "BYG", "SAFE", "UTG", "BBOX", "GRG"
-            }
-
-            # Simple check: if it's in the UK set (or has a dot version in UK set)
-            if t in uk_set or (t + ".") in uk_set:
-                 # It's UK but doesn't have the dot in the raw string here?
-                 # Actually the raw string is exactly what is in the list.
-                 # "AZN" is in the list. So append .L
-                 tickers.append(t + ".L")
-            else:
-                # Assume Euro or US-listed Euro
-                tickers.append(t)
-
-    return list(set(tickers))
-
-def get_indian_tickers():
-    """Returns normalized Indian tickers list."""
-    # Append .NS for NSE
-    return [t + ".NS" for t in INDIAN_TICKERS]
-
-TICKER_NAMES = {
-    "ECL": "Ecolab Inc.",
     "AZN": "AstraZeneca PLC",
     "SHEL": "Shell plc",
     "HSBA": "HSBC Holdings plc",
@@ -851,6 +796,31 @@ def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interva
             pass
 
     return df
+
+UK_EURO_TICKERS = [
+    # Top 50 FTSE (UK)
+    "AZN.L", "SHEL.L", "HSBA.L", "ULVR.L", "BP.L", "RIO.L", "REL.L", "GSK.L", "DGE.L", "LSEG.L", "BATS.L", "GLEN.L", "BA.L", "CNA.L", "NG.L", "LLOY.L", "RR.L", "BARC.L", "CPG.L", "NWG.L", "RKT.L", "VOD.L", "AAL.L", "SGE.L", "HLN.L", "EXR.L", "TSCO.L", "SSE.L", "MNG.L", "ADM.L", "III.L", "ANTO.L", "SPX.L", "STAN.L", "IMB.L", "WTB.L", "SVT.L", "AUTO.L", "SN.L", "CRDA.L", "WPP.L", "SMIN.L", "DCC.L", "AV.L", "LGEN.L", "KGF.L", "SBRY.L", "MKS.L", "LAND.L", "PSON.L",
+    # Liquid UK Mid-Caps
+    "JD.L", "IAG.L", "EZJ.L", "AML.L", "IDS.L", "DLG.L", "ITM.L", "QQ.L", "GRG.L", "VTY.L", "BTRW.L", "BOO.L", "ASOS.L", "HBR.L", "ENOG.L", "TLW.L", "CWR.L", "GNC.L", "THG.L", "CURY.L", "DOM.L", "SFOR.L", "PETS.L", "MRO.L", "INVP.L", "OCDO.L", "IGG.L", "CMC.L", "PLUS.L", "EMG.L", "HWDN.L", "COST.L", "BEZ.L", "SGRO.L", "PSN.L", "TW.L", "BYG.L", "SAFE.L", "UTG.L", "BBOX.L", "MANG.L", "TPK.L", "HIK.L", "SRO.L", "FRES.L", "KAP.L", "WKP.L", "JMAT.L", "RS1.L", "PNN.L",
+    # Top 50 Euro
+    "ASML.AS", "MC.PA", "SAP.DE", "RMS.PA", "TTE.PA", "SIE.DE", "CDI.PA", "AIR.PA", "SAN.MC", "IBE.MC", "OR.PA", "ALV.DE", "SU.PA", "EL.PA", "AI.PA", "BNP.PA", "DTE.DE", "ENEL.MI", "DG.PA", "BBVA.MC", "CS.PA", "BAS.DE", "ADS.DE", "MUV2.DE", "IFX.DE", "SAF.PA", "ENI.MI", "INGA.AS", "ISP.MI", "KER.PA", "STLAP.PA", "AD.AS", "VOW3.DE", "BMW.DE", "MBG.DE", "BAYN.DE", "DB1.DE", "BN.PA", "RI.PA", "CRH.L", "G.MI", "PHIA.AS", "HEIA.AS", "NOKIA.HE", "VIV.PA", "ORA.PA", "KNEBV.HE", "UMG.AS", "HO.PA", "ABI.BR"
+]
+
+def get_uk_euro_tickers():
+    """Returns normalized UK/Euro tickers list."""
+    return list(set(UK_EURO_TICKERS))
+
+INDIAN_TICKERS = [
+    # Nifty 50
+    "RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK", "INFY", "HINDUNILVR", "SBIN", "ITC", "LTIM", "LT", "HCLTECH", "BAJFINANCE", "AXISBANK", "MARUTI", "ULTRACEMCO", "SUNPHARMA", "M&M", "TITAN", "KOTAKBANK", "ADANIENT", "TATAMOTORS", "NTPC", "TATASTEEL", "POWERGRID", "ASIANPAINT", "JSWSTEEL", "BAJAJFINSV", "NESTLEIND", "GRASIM", "ONGC", "TECHM", "HINDALCO", "ADANIPORTS", "CIPLA", "WIPRO", "SBILIFE", "DRREDDY", "BRITANNIA", "TATACONSUM", "COALINDIA", "APOLLOHOSP", "EICHERMOT", "INDUSINDBK", "DIVISLAB", "BAJAJ-AUTO", "HDFCLIFE", "HEROMOTOCO", "BEL", "SHRIRAMFIN",
+    # Nifty Next 50
+    "LICI", "HAL", "ADANIPOWER", "DMART", "VBL", "JIOFIN", "SIEMENS", "TRENT", "ZOMATO", "ADANIGREEN", "IOC", "DLF", "VEDL", "BANKBARODA", "GAIL", "AMBUJACEM", "CHOLAFIN", "HAVELLS", "ABB", "PIDILITIND", "GODREJCP", "DABUR", "SHREECEM", "PNB", "BPCL", "SBICARD", "SRF", "MOTHERSON", "ICICIPRULI", "MARICO", "BERGEPAINT", "ICICIGI", "TVSMOTOR", "NAUKRI", "LODHA", "BOSCHLTD", "INDIGO", "CANBK", "UNITDSPR", "TORNTPHARM", "PIIND", "UPL", "JINDALSTEL", "ALKEM", "ZYDUSLIFE", "COLPAL", "BAJAJHLDNG", "TATAPOWER", "IRCTC", "MUTHOOTFIN"
+]
+
+def get_indian_tickers():
+    """Returns normalized Indian tickers list."""
+    # Append .NS for NSE
+    return [t + ".NS" for t in INDIAN_TICKERS]
 
 def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
     """

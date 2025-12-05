@@ -446,7 +446,7 @@
             rows: [],
 
             init() {
-                this.tab = localStorage.getItem('upload_tab') || 'csv';
+                this.tab = localStorage.getItem('upload_tab') || 'screener';
                 this.$watch('tab', val => localStorage.setItem('upload_tab', val));
 
                 const saved = localStorage.getItem('manual_rows_v3');
