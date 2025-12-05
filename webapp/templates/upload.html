@@ -57,7 +57,7 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="relative">
-                            <select name="style" id="style_csv" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent rounded-lg border-1 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
+                            <select name="style" id="style_csv" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
                                 <option value="income">Income (Selling Premium)</option>
                                 <option value="speculation">Growth (Directional)</option>
                             </select>
@@ -65,8 +65,37 @@
                         </div>
 
                         <div class="relative">
-                            <input type="number" name="csv_fee_per_trade" id="csv_fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-transparent rounded-lg border-1 border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <input type="number" name="csv_fee_per_trade" id="csv_fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
                             <label for="csv_fee_per_trade" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Est. Fee per Trade ($)</label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="relative">
+                            <select name="broker" id="broker" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
+                                <option value="auto" selected>Auto-Detect Broker</option>
+                                <option value="tasty">Tastytrade</option>
+                                <option value="ibkr">Interactive Brokers</option>
+                            </select>
+                            <label for="broker" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Broker Format</label>
+                        </div>
+                        <div class="relative" x-data="{ mode: 'all' }">
+                            <select name="date_mode" id="date_mode" x-model="mode" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
+                                <option value="all">All Data</option>
+                                <option value="custom">Custom Range</option>
+                            </select>
+                             <label for="date_mode" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Analysis Period</label>
+
+                             <div x-show="mode === 'custom'" class="absolute top-14 left-0 w-full grid grid-cols-2 gap-2 bg-white dark:bg-gray-900 p-2 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                                <div>
+                                    <label class="block text-xs text-gray-500">Start</label>
+                                    <input type="date" name="start_date" class="w-full text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
+                                </div>
+                                <div>
+                                     <label class="block text-xs text-gray-500">End</label>
+                                    <input type="date" name="end_date" class="w-full text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
+                                </div>
+                             </div>
                         </div>
                     </div>
 
@@ -123,7 +152,7 @@
                         <i class="bi bi-plus-circle-fill mr-2"></i> Add another trade
                     </button>
 
-                    <button type="button" @click="prepareSubmission()" class="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-bold rounded-xl text-sm px-5 py-4 text-center shadow-lg transition-all mt-6">
+                    <button type="submit" @click="prepareSubmission()" class="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-bold rounded-xl text-sm px-5 py-4 text-center shadow-lg transition-all mt-6">
                         Analyze Manual Trades
                     </button>
                 </div>
@@ -134,8 +163,35 @@
                      <div class="p-4 mb-4 text-sm text-primary-800 rounded-lg bg-primary-50 dark:bg-gray-800 dark:text-primary-400 border border-primary-100 dark:border-primary-900" role="alert">
                         <span class="font-medium">Scanner Active:</span> Finding liquid stocks with RSI < 50 in an uptrend.
                     </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="relative">
+                            <input type="number" name="iv_rank" id="iv_rank" value="30" step="0.1" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <label for="iv_rank" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">IV Rank (Min)</label>
+                            <p class="mt-1 text-xs text-gray-400">Filter candidates (Note: IV Rank requires manual check).</p>
+                        </div>
+
+                        <div class="relative">
+                            <input type="number" name="rsi" id="rsi" value="50" step="1" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-primary-600 peer" placeholder=" " />
+                            <label for="rsi" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">RSI Less Than</label>
+                            <p class="mt-1 text-xs text-gray-400">Target oversold conditions (RSI < X) in an uptrend.</p>
+                        </div>
+                    </div>
+
+                    <div class="relative">
+                        <select name="time_frame" id="time_frame" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-primary-500 focus:outline-none focus:ring-0 focus:border-primary-600 peer">
+                            <option value="49m">49m (Intraday)</option>
+                            <option value="98m">98m (Intraday)</option>
+                            <option value="196m">196m (Intraday)</option>
+                            <option value="1d" selected>1 Day</option>
+                            <option value="1wk">1 Week</option>
+                            <option value="1mo">1 Month</option>
+                        </select>
+                        <label for="time_frame" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-primary-600 peer-focus:dark:text-primary-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Time Frame</label>
+                    </div>
+
                     <button type="button" onclick="this.form.submit()" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl text-sm px-5 py-4 shadow-lg transition-all">
-                        Scan Market
+                        Screen Market
                     </button>
                 </form>
             </div>
