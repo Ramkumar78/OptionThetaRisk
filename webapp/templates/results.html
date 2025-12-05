@@ -1,358 +1,215 @@
 {% extends "base.html" %}
-
-{% block title %}Results - The Option Auditor{% endblock %}
+{% block title %}Results - Option Auditor{% endblock %}
 
 {% block content %}
-<div class="fade-in space-y-6">
+<div class="fade-in space-y-8">
 
-  <!-- 1. Verdict Banner -->
-  <!-- "The Harsh Truth": Needs to be visually striking. -->
-  <div class="rounded-xl shadow-lg overflow-hidden transition-all duration-300
-    {% if verdict_color == 'red' %}
-      bg-gradient-to-r from-red-50 to-red-100 border-l-8 border-red-600 text-red-900 dark:from-red-900/40 dark:to-red-900/20 dark:text-red-100 dark:border-red-500
-    {% elif verdict_color == 'yellow' %}
-      bg-gradient-to-r from-yellow-50 to-yellow-100 border-l-8 border-yellow-500 text-yellow-900 dark:from-yellow-900/40 dark:to-yellow-900/20 dark:text-yellow-100 dark:border-yellow-500
-    {% else %}
-      bg-gradient-to-r from-green-50 to-green-100 border-l-8 border-green-600 text-green-900 dark:from-green-900/40 dark:to-green-900/20 dark:text-green-100 dark:border-green-500
-    {% endif %}">
-    <div class="p-8 text-center">
-        <h2 class="text-5xl font-extrabold uppercase tracking-tight mb-2 drop-shadow-sm">{{ verdict }}</h2>
+  <div class="relative overflow-hidden rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-8">
+      <div class="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 rounded-full blur-3xl opacity-20
+          {% if verdict_color == 'red' %}bg-red-500{% elif verdict_color == 'yellow' %}bg-yellow-500{% else %}bg-emerald-500{% endif %}"></div>
 
-        {% if verdict_details %}
-            <p class="text-xl font-bold mt-2 text-red-900 dark:text-red-100 bg-white/20 inline-block px-4 py-1 rounded">{{ verdict_details }}</p>
-        {% else %}
-            <p class="text-lg font-medium opacity-90">Assessment based on your <span class="underline decoration-2 underline-offset-2">{{ style|default('selected')|title }}</span> profile</p>
-        {% endif %}
+      <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div>
+              <p class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Strategy Audit Verdict</p>
+              <h2 class="text-5xl font-extrabold tracking-tight
+                 {% if verdict_color == 'red' %}text-red-600 dark:text-red-500{% elif verdict_color == 'yellow' %}text-yellow-600 dark:text-yellow-500{% else %}text-emerald-600 dark:text-emerald-500{% endif %}">
+                 {{ verdict }}
+              </h2>
+              {% if verdict_details %}
+                  <div class="mt-3 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
+                      <i class="bi bi-info-circle-fill mr-2 opacity-75"></i> {{ verdict_details }}
+                  </div>
+              {% endif %}
+          </div>
 
-        {% if date_window %}
-        <div class="mt-4 inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium bg-white/50 dark:bg-black/20 text-gray-700 dark:text-gray-200 backdrop-blur-sm shadow-sm border border-white/20">
-            <i class="bi bi-calendar3 mr-2"></i>
-            Range: {{ date_window.start or 'Beginning' }} <span class="mx-2">&rarr;</span> {{ date_window.end or 'End' }}
-        </div>
-        {% endif %}
-    </div>
+          <div class="flex flex-col items-end">
+               {% if date_window %}
+                <div class="text-right">
+                    <span class="block text-xs text-gray-400 uppercase">Analysis Period</span>
+                    <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ date_window.start }} — {{ date_window.end }}</span>
+                </div>
+                {% endif %}
+                <div class="mt-4">
+                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-300">
+                        {{ style|default('Standard')|title }} Profile
+                     </span>
+                </div>
+          </div>
+      </div>
   </div>
 
-  <!-- 2. Key Metrics Cards (Visual Hierarchy: Top Level) -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-      <!-- Net PnL -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
-          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <i class="bi bi-cash-coin text-6xl {% if strategy_metrics.total_pnl < 0 %}text-red-500{% else %}text-green-500{% endif %}"></i>
+      <div class="relative group bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all">
+          <div class="flex justify-between items-start">
+              <div>
+                  <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Net PnL</p>
+                  <h3 class="text-3xl font-bold mt-2 tracking-tight {% if strategy_metrics.total_pnl < 0 %}text-red-500{% else %}text-emerald-500{% endif %}">
+                    ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
+                  </h3>
+              </div>
+              <div class="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:text-primary-500 transition-colors">
+                  <i class="bi bi-wallet2 text-xl"></i>
+              </div>
           </div>
-          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Net PnL</p>
-          <h3 class="text-3xl font-bold mt-2 {% if strategy_metrics.total_pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-            ${{ "%.2f"|format(strategy_metrics.total_pnl) }}
-          </h3>
-          <p class="text-xs text-gray-400 mt-2">After ${{ "%.0f"|format(strategy_metrics.total_fees) }} in fees</p>
+          <p class="mt-4 text-xs text-gray-400 font-mono">Fees Paid: ${{ "%.0f"|format(strategy_metrics.total_fees) }}</p>
       </div>
 
-      <!-- Win Rate -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
-          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <i class="bi bi-trophy text-6xl text-blue-500"></i>
+      <div class="relative group bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all">
+          <div class="flex justify-between items-start">
+              <div>
+                  <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Win Rate</p>
+                  <h3 class="text-3xl font-bold mt-2 tracking-tight text-gray-900 dark:text-white">
+                    {{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%
+                  </h3>
+              </div>
+              <div class="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:text-blue-500 transition-colors">
+                  <i class="bi bi-crosshair text-xl"></i>
+              </div>
           </div>
-          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Win Rate</p>
-          <h3 class="text-3xl font-bold mt-2 text-gray-900 dark:text-gray-100">
-            {{ "%.1f"|format(strategy_metrics.win_rate * 100) }}%
-          </h3>
-          <p class="text-xs text-gray-400 mt-2">{{ strategy_metrics.num_trades }} Trades</p>
+
+          <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mt-4">
+            <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ strategy_metrics.win_rate * 100 }}%"></div>
+          </div>
       </div>
 
-      <!-- Expectancy -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group">
-           <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <i class="bi bi-activity text-6xl text-purple-500"></i>
+      <div class="relative group bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all">
+           <div class="flex justify-between items-start">
+              <div>
+                  <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Expectancy / Trade</p>
+                  <h3 class="text-3xl font-bold mt-2 tracking-tight {% if strategy_metrics.expectancy < 0 %}text-red-500{% else %}text-emerald-500{% endif %}">
+                    ${{ "%.2f"|format(strategy_metrics.expectancy) }}
+                  </h3>
+              </div>
+              <div class="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:text-purple-500 transition-colors">
+                  <i class="bi bi-graph-up-arrow text-xl"></i>
+              </div>
           </div>
-          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Expectancy</p>
-          <h3 class="text-3xl font-bold mt-2 {% if strategy_metrics.expectancy < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-            ${{ "%.2f"|format(strategy_metrics.expectancy) }}
-          </h3>
-          <p class="text-xs text-gray-400 mt-2">Per Trade</p>
       </div>
 
-      <!-- Buying Power Card -->
       {% set bp_usage = buying_power_utilized_percent or 0 %}
-      <div class="
-        bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border
-        hover:shadow-lg transition-all duration-300 relative overflow-hidden group
-        {% if bp_usage > 75 %}
-          border-red-500 border-2
-        {% elif bp_usage > 50 %}
-          border-yellow-500 border-2
-        {% else %}
-          border-gray-100 dark:border-gray-700
-        {% endif %}
-      ">
-          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <i class="bi bi-battery-charging text-6xl 
-                {% if bp_usage > 75 %} text-red-500
-                {% elif bp_usage > 50 %} text-yellow-500
-                {% else %} text-green-500
-                {% endif %}
-              "></i>
+      <div class="relative group bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all">
+           <div class="flex justify-between items-start">
+              <div>
+                  <p class="text-sm font-medium text-gray-500 dark:text-gray-400">BP Usage</p>
+                  <h3 class="text-3xl font-bold mt-2 tracking-tight {% if bp_usage > 75 %}text-red-500{% else %}text-gray-900 dark:text-white{% endif %}">
+                     {{ "%.0f"|format(bp_usage) }}%
+                  </h3>
+              </div>
+              <div class="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:text-yellow-500 transition-colors">
+                  <i class="bi bi-battery-half text-xl"></i>
+              </div>
           </div>
-          <p class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Buying Power Used</p>
-          <h3 class="text-3xl font-bold mt-2 
-            {% if bp_usage > 75 %} text-red-600 dark:text-red-400
-            {% elif bp_usage > 50 %} text-yellow-600 dark:text-yellow-400
-            {% else %} text-gray-900 dark:text-gray-100
-            {% endif %}
-          ">
-             {{ "%.0f"|format(bp_usage) }}%
-          </h3>
-          <p class="text-xs text-gray-400 mt-2">
-            {% if bp_usage > 75 %}
-              High Usage: Monitor Closely
-            {% elif bp_usage > 50 %}
-              Moderate Usage
-            {% else %}
-              Safe Utilization
-            {% endif %}
-          </p>
+          <p class="mt-4 text-xs text-gray-400">Target: &lt; 50%</p>
       </div>
   </div>
 
-  <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 mb-6">
-    <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
-      <div class="flex items-center space-x-2">
-          <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Open Positions</h5>
-          {% if verdict_color == 'red' and 'Open Risk' in verdict %}
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200">
-                <i class="bi bi-exclamation-triangle-fill mr-1"></i> Action Required
-            </span>
-          {% endif %}
-      </div>
-      <span class="text-xs text-gray-400">{{ open_positions|length }} active</span>
-    </div>
-    <div class="p-0 overflow-x-auto">
-      <table class="w-full text-sm text-left">
-        <thead class="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-          <tr>
-            <th class="px-6 py-3 font-semibold">Symbol</th>
-            <th class="px-6 py-3 text-right font-semibold">Current</th>
-            <th class="px-6 py-3 font-semibold">Contract</th>
-            <th class="px-6 py-3 text-right font-semibold">Qty</th>
-            <th class="px-6 py-3 text-right font-semibold">Avg Price</th>
-            <th class="px-6 py-3 text-right font-semibold">Breakeven</th>
-            <th class="px-6 py-3 text-right font-semibold">DTE</th>
-            <th class="px-6 py-3 text-right font-semibold">Days Open</th>
-            <th class="px-6 py-3 text-center font-semibold">Status</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-          {% for p in open_positions %}
-          <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <td class="px-6 py-3 font-medium text-gray-900 dark:text-gray-100">{{ p.symbol }}</td>
-            <td class="px-6 py-3 text-right text-gray-900 dark:text-gray-100">
-                {% if p.current_price %}
-                    <span class="font-bold">${{ "%.2f"|format(p.current_price) }}</span>
-                {% else %}
-                    <span class="text-gray-400">-</span>
-                {% endif %}
-            </td>
-            <td class="px-6 py-3 text-gray-500 dark:text-gray-400">{{ p.expiry }} {{ p.contract }}</td>
-            <td class="px-6 py-3 text-right font-mono {% if p.qty_open < 0 %}text-red-600{% else %}text-blue-600{% endif %}">
-                {{ "%.0f"|format(p.qty_open) }}
-            </td>
-            <td class="px-6 py-3 text-right text-gray-900 dark:text-gray-100">
-                ${{ "%.2f"|format(p.avg_price) }}
-            </td>
-            <td class="px-6 py-3 text-right font-medium text-gray-700 dark:text-gray-300">
-                ${{ "%.2f"|format(p.breakeven) }}
-            </td>
-            <td class="px-6 py-3 text-right font-mono font-bold">
-                {% if p.dte is not none %}
-                    {% if p.dte <= 3 %}
-                        <span class="text-red-600">{{ p.dte }}d</span>
-                    {% elif p.dte <= 7 %}
-                        <span class="text-yellow-600">{{ p.dte }}d</span>
-                    {% else %}
-                        <span class="text-gray-700 dark:text-gray-300">{{ p.dte }}d</span>
-                    {% endif %}
-                {% else %}
-                    -
-                {% endif %}
-            </td>
-            <td class="px-6 py-3 text-right text-gray-500">{{ "%.1f"|format(p.days_open) }}</td>
-            <td class="px-6 py-3 text-center">
-                {% if p.risk_alert %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 animate-pulse">
-                        {{ p.risk_alert }}
-                    </span>
-                {% else %}
-                    <span class="text-xs text-gray-400 dark:text-gray-500">Active</span>
-                {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-          {% if not open_positions %}
-          <tr>
-              <td colspan="5" class="px-6 py-4 text-center text-gray-500 italic">No open positions found.</td>
-          </tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 3. Charts Section -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Portfolio Curve -->
-      <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 transition-colors duration-200 border border-gray-100 dark:border-gray-700">
-           <div class="flex justify-between items-center mb-6">
-               <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100">Equity Curve</h3>
-               {% if strategy_metrics.max_drawdown > 0 %}
-               <span class="text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">
-                   Max DD: -${{ "%.2f"|format(strategy_metrics.max_drawdown) }}
-               </span>
-               {% endif %}
-           </div>
-           <div class="h-72"><canvas id="portfolioChart"></canvas></div>
+      <div class="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
+           <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Equity Curve</h3>
+           <div class="h-64 w-full"><canvas id="portfolioChart"></canvas></div>
       </div>
-      <!-- Monthly Income -->
-      <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 transition-colors duration-200 border border-gray-100 dark:border-gray-700">
-           <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6">Monthly Income</h3>
-           <div class="h-72"><canvas id="incomeChart"></canvas></div>
+      <div class="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
+           <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Monthly Income</h3>
+           <div class="h-64 w-full"><canvas id="incomeChart"></canvas></div>
       </div>
   </div>
 
-  <!-- 4. Leakage Report -->
-  <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700">
-      <div class="bg-gradient-to-r from-purple-50 to-white dark:from-gray-700 dark:to-gray-800 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <div class="flex items-center space-x-2">
-               <i class="bi bi-funnel text-purple-600 dark:text-purple-400"></i>
-               <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">Leakage & Efficiency</h3>
-          </div>
-          <span class="text-xs font-bold uppercase tracking-wide text-purple-600 dark:text-purple-400">Optimization Report</span>
+  <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+          <h3 class="font-bold text-gray-900 dark:text-white">Active Positions</h3>
+          <span class="bg-primary-100 text-primary-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-primary-900 dark:text-primary-300">{{ open_positions|length }} Open</span>
       </div>
-      <div class="p-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <!-- Metric A: Fee Drag -->
-              <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
-                  <h4 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Fee Drag %</h4>
-                  <div class="flex items-baseline mb-2">
-                      <span class="text-4xl font-extrabold {% if leakage_report.fee_drag > 10 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-                          {{ leakage_report.fee_drag }}%
-                      </span>
-                      <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">of Gross Profit</span>
-                  </div>
-                  <div class="h-2 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden mb-3">
-                      <div class="h-full {% if leakage_report.fee_drag > 10 %}bg-red-500{% else %}bg-green-500{% endif %}" style="width: {{ [leakage_report.fee_drag, 100]|min }}%"></div>
-                  </div>
-                  <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {{ leakage_report.fee_drag_verdict }}
-                  </p>
-                  <p class="text-xs text-gray-400 mt-1">Target: < 10%</p>
-              </div>
-
-              <!-- Metric B: Stale Capital -->
-              <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
-                  <h4 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Stale Capital</h4>
-                  <div class="flex items-baseline mb-2">
-                      <span class="text-4xl font-extrabold {% if leakage_report.stale_capital|length > 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-                          {{ leakage_report.stale_capital|length }}
-                      </span>
-                      <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">Trades Identified</span>
-                  </div>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                      Positions held >10 days generating <$1 Theta/day.
-                  </p>
-                  {% if leakage_report.stale_capital %}
-                  <div class="max-h-32 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                      {% for item in leakage_report.stale_capital %}
-                      <div class="flex justify-between items-center text-xs p-2 bg-white dark:bg-gray-800 rounded shadow-sm border border-gray-200 dark:border-gray-700">
-                          <div>
-                              <span class="font-bold text-gray-700 dark:text-gray-200">{{ item.symbol }}</span> <span class="text-gray-500">{{ item.strategy }}</span>
-                          </div>
-                          <div class="text-right">
-                              <span class="block font-mono text-red-500">{{ item.hold_days }}d</span>
-                              <span class="block font-mono text-gray-400">${{ item.average_daily_pnl }}/d</span>
-                          </div>
-                      </div>
-                      {% endfor %}
-                  </div>
+      <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+              <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                  <tr>
+                      <th class="px-6 py-3">Symbol</th>
+                      <th class="px-6 py-3 text-right">Price</th>
+                      <th class="px-6 py-3 text-center">Expiry</th>
+                      <th class="px-6 py-3 text-right">Qty</th>
+                      <th class="px-6 py-3 text-right">DTE</th>
+                      <th class="px-6 py-3 text-center">Status</th>
+                  </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  {% for p in open_positions %}
+                  <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                      <td class="px-6 py-4 font-bold text-gray-900 dark:text-white">{{ p.symbol }}</td>
+                      <td class="px-6 py-4 text-right">${{ "%.2f"|format(p.current_price) if p.current_price else '-' }}</td>
+                      <td class="px-6 py-4 text-center">{{ p.expiry }}</td>
+                      <td class="px-6 py-4 text-right font-mono {% if p.qty_open < 0 %}text-red-500{% else %}text-emerald-500{% endif %}">{{ "%.0f"|format(p.qty_open) }}</td>
+                      <td class="px-6 py-4 text-right">
+                           {% if p.dte is not none %}
+                            <span class="{% if p.dte < 5 %}text-red-500 font-bold{% endif %}">{{ p.dte }}d</span>
+                           {% else %}-{% endif %}
+                      </td>
+                      <td class="px-6 py-4 text-center">
+                          {% if p.risk_alert %}
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">{{ p.risk_alert }}</span>
+                          {% else %}
+                            <span class="text-emerald-600 dark:text-emerald-400 text-xs"><i class="bi bi-check-circle"></i> OK</span>
+                          {% endif %}
+                      </td>
+                  </tr>
                   {% else %}
-                  <div class="flex items-center text-green-600 dark:text-green-400 text-sm font-medium bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                      <i class="bi bi-check-circle-fill mr-2"></i> No stale capital detected.
-                  </div>
-                  {% endif %}
-              </div>
-          </div>
+                  <tr><td colspan="6" class="px-6 py-8 text-center italic">No active positions.</td></tr>
+                  {% endfor %}
+              </tbody>
+          </table>
       </div>
   </div>
 
-  <!-- 5. Strategy Table -->
-  <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700">
-    <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
-      <h5 class="text-lg font-bold text-gray-700 dark:text-gray-200">Strategy Log</h5>
-      <span class="text-xs text-gray-400">{{ strategy_groups|length }} entries</span>
-    </div>
-    <div class="p-0 overflow-x-auto">
-      <table id="strategyTable" class="w-full text-sm text-left">
-        <thead class="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-          <tr>
-            <th class="px-6 py-4 font-semibold tracking-wider">Strategy</th>
-            <th class="px-6 py-4 font-semibold tracking-wider">Symbol</th>
-            <th class="px-6 py-4 text-right font-semibold tracking-wider">Net PnL</th>
-            <th class="px-6 py-4 text-right font-semibold tracking-wider">Fees</th>
-            <th class="px-6 py-4 text-right font-semibold tracking-wider">Hold (Days)</th>
-            <th class="px-6 py-4 text-right font-semibold tracking-wider">Daily PnL</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-          {% for s in strategy_groups %}
-          <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
-            <td class="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-gray-100">
-                <div class="flex flex-col">
-                    <div class="flex items-center">
-                        <span class="font-bold">{{ s.strategy }}</span>
-                        {% if s.is_revenge %}
-                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 border border-red-200 dark:border-red-800" title="Opened <30m after a loss">
-                            <i class="bi bi-fire mr-1"></i> Tilt?
-                        </span>
-                        {% endif %}
-                    </div>
-                    <span class="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
-                        {{ s.legs_desc }}
-                    </span>
-                </div>
-                {% if s.segments|length > 1 %}
-                <div class="inline-flex items-center mt-1 px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
-                    <i class="bi bi-arrow-repeat mr-1"></i> {{ s.segments|length }} rolls
-                </div>
-                {% endif %}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-500">
-                    {{ s.symbol }}
-                </span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right font-mono font-bold text-base {% if s.pnl < 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}" data-order="{{ s.pnl }}">
-              ${{ "%.2f"|format(s.pnl) }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-gray-500 dark:text-gray-400" data-order="{{ s.fees }}">${{ "%.2f"|format(s.fees) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-gray-900 dark:text-gray-100" data-order="{{ s.hold_days }}">{{ "%.1f"|format(s.hold_days) }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-gray-500 dark:text-gray-400" data-order="{{ s.average_daily_pnl }}">${{ "%.2f"|format(s.average_daily_pnl) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  
-  <div class="text-center my-10 pb-10">
-      <a href="/download/{{ token }}/report.xlsx" class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-full shadow-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:-translate-y-1">
-        <i class="bi bi-download me-2"></i>Download Excel Report
-      </a>
+  <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+           <h3 class="font-bold text-gray-900 dark:text-white">Strategy Performance</h3>
+      </div>
+      <div class="overflow-x-auto">
+          <table id="strategyTable" class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+               <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                  <tr>
+                      <th class="px-6 py-3">Strategy</th>
+                      <th class="px-6 py-3">Symbol</th>
+                      <th class="px-6 py-3 text-right">Net PnL</th>
+                      <th class="px-6 py-3 text-right">Daily PnL</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {% for s in strategy_groups %}
+                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b dark:border-gray-700">
+                      <td class="px-6 py-4">
+                          <div class="font-bold text-gray-900 dark:text-white">{{ s.strategy }}</div>
+                          <div class="text-xs text-gray-400 mt-1">{{ s.legs_desc }}</div>
+                      </td>
+                      <td class="px-6 py-4">
+                          <span class="bg-gray-100 text-gray-800 text-xs font-semibold px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">{{ s.symbol }}</span>
+                      </td>
+                      <td class="px-6 py-4 text-right font-bold {% if s.pnl < 0 %}text-red-500{% else %}text-emerald-500{% endif %}">
+                          ${{ "%.2f"|format(s.pnl) }}
+                      </td>
+                      <td class="px-6 py-4 text-right font-mono">
+                           ${{ "%.2f"|format(s.average_daily_pnl) }}
+                      </td>
+                  </tr>
+                  {% endfor %}
+              </tbody>
+          </table>
+      </div>
   </div>
 
-  <!-- Chart.js and DataTables Logic -->
-  <script>
+  <div class="flex justify-center mt-8 pb-8">
+    <a href="/download/{{ token }}/report.xlsx" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all hover:-translate-y-0.5 shadow-lg shadow-primary-500/30">
+        <i class="bi bi-download mr-2"></i> Download Excel Report
+    </a>
+  </div>
+
+</div>
+
+<script>
     const isDark = document.documentElement.classList.contains('dark');
-    const textColor = isDark ? '#9ca3af' : '#4b5563'; // gray-400 / gray-600
-    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+    // New Slate-themed colors for Charts
+    const textColor = isDark ? '#94a3b8' : '#64748b'; // Slate-400 / Slate-500
+    const gridColor = isDark ? '#334155' : '#e2e8f0'; // Slate-700 / Slate-200
 
     // Portfolio Curve Chart
     const portfolioData = {{ portfolio_curve | tojson }};
@@ -363,14 +220,14 @@
                 datasets: [{
                     label: 'Cumulative Net PnL ($)',
                     data: portfolioData,
-                    borderColor: 'rgb(37, 99, 235)', // Blue-600
-                    backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                    borderColor: '#4f46e5', // Indigo-600
+                    backgroundColor: 'rgba(79, 70, 229, 0.05)',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.2,
                     pointRadius: 0,
                     pointHoverRadius: 6,
-                    pointBackgroundColor: 'rgb(37, 99, 235)'
+                    pointBackgroundColor: '#4f46e5'
                 }]
             },
             options: {
@@ -399,10 +256,10 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: isDark ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                        titleColor: isDark ? '#fff' : '#111827',
-                        bodyColor: isDark ? '#d1d5db' : '#4b5563',
-                        borderColor: isDark ? '#374151' : '#e5e7eb',
+                        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                        titleColor: isDark ? '#fff' : '#0f172a',
+                        bodyColor: isDark ? '#cbd5e1' : '#475569',
+                        borderColor: isDark ? '#334155' : '#e2e8f0',
                         borderWidth: 1,
                         padding: 12,
                         cornerRadius: 8,
@@ -441,9 +298,9 @@
                 datasets: [{
                     label: 'Net Income ($)',
                     data: incomeData.map(d => d.income),
-                    backgroundColor: incomeData.map(d => d.income >= 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)'), // Green-500/Red-500
+                    // Emerald-500 / Danger-500 (Rose-500)
+                    backgroundColor: incomeData.map(d => d.income >= 0 ? '#10b981' : '#f43f5e'),
                     borderRadius: 4,
-                    hoverBackgroundColor: incomeData.map(d => d.income >= 0 ? 'rgba(16, 185, 129, 1)' : 'rgba(239, 68, 68, 1)'),
                 }]
             },
             options: {
@@ -465,10 +322,10 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                         backgroundColor: isDark ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                        titleColor: isDark ? '#fff' : '#111827',
-                        bodyColor: isDark ? '#d1d5db' : '#4b5563',
-                        borderColor: isDark ? '#374151' : '#e5e7eb',
+                        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                        titleColor: isDark ? '#fff' : '#0f172a',
+                        bodyColor: isDark ? '#cbd5e1' : '#475569',
+                        borderColor: isDark ? '#334155' : '#e2e8f0',
                         borderWidth: 1,
                         padding: 12,
                         cornerRadius: 8,
@@ -498,6 +355,5 @@
             info: "{start}-{end} of {rows}",
         },
     });
-  </script>
-</div>
+</script>
 {% endblock %}

@@ -22,9 +22,9 @@ def test_upload_and_results_page(client):
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert "Net PnL" in html
-    assert "Strategy Log" in html
+    assert "Strategy Performance" in html
     assert "Verdict" in html
-    assert "Buying Power Used" in html
+    assert "BP Usage" in html
     assert "55%" in html
 
 def test_rejects_large_upload(app, client):
@@ -58,7 +58,7 @@ def test_upload_with_preset_last_7_days(client):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Range:" in html
+    assert "Analysis Period" in html
 
 def test_upload_with_preset_ytd(client):
     now = datetime.now()
@@ -86,7 +86,7 @@ def test_upload_with_all_mode_shows_no_badge(client):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Range:" not in html
+    assert "Analysis Period" not in html
 
 def test_upload_with_custom_date_range(client):
     t1 = datetime(2025, 1, 10, 10, 0)
@@ -101,7 +101,7 @@ def test_upload_with_custom_date_range(client):
     resp = client.post("/analyze", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "Range:" in html
+    assert "Analysis Period" in html
     assert "2025-01-01" in html and "2025-01-31" in html
 
 def test_upload_with_custom_range_missing_dates_redirects(client):
@@ -180,6 +180,5 @@ def test_homepage_links(client):
     resp = client.get("/")
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
-    assert "https://github.com/Ramkumar78/OptionThetaRisk/blob/main/README.md" in html
-    assert "mailto:shriram2222@gmail.com" in html
-    assert "Contact" in html
+    assert "https://github.com/Ramkumar78/OptionThetaRisk" in html
+    assert "GitHub" in html
