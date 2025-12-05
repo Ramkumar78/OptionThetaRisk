@@ -435,3 +435,132 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
             r['company_name'] = SECTOR_NAMES[code]
 
     return results
+
+def screen_turtle_setups(ticker_list: list = None) -> list:
+    """
+    Screens for Turtle Trading Setups (20-Day Breakouts).
+    """
+    import yfinance as yf
+    import pandas_ta as ta
+    import pandas as pd
+
+    if ticker_list is None:
+        # Default liquid list if none provided
+        ticker_list = [
+            "SPY", "QQQ", "IWM", "GLD", "SLV", "USO", "TLT", # ETFs
+            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN", # Tech
+            "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS" # Blue Chips
+        ]
+
+    # Additional names for ETFs not in TICKER_NAMES
+    ETF_NAMES = {
+        "SPY": "SPDR S&P 500 ETF Trust",
+        "QQQ": "Invesco QQQ Trust",
+        "IWM": "iShares Russell 2000 ETF",
+        "GLD": "SPDR Gold Shares",
+        "SLV": "iShares Silver Trust",
+        "USO": "United States Oil Fund, LP",
+        "TLT": "iShares 20+ Year Treasury Bond ETF",
+    }
+
+    results = []
+
+    # Fetch data (enough for 20-day lookback + buffer)
+    # Download in bulk for speed
+    try:
+        data = yf.download(ticker_list, period="3mo", interval="1d", progress=False)
+    except Exception:
+        return []
+
+    # Handle MultiIndex columns from yfinance bulk download
+    # We iterate through tickers manually to handle the DataFrame structure
+
+    for ticker in ticker_list:
+        try:
+            # Extract single ticker DF
+            df = pd.DataFrame()
+            if not data.empty:
+                if isinstance(data.columns, pd.MultiIndex):
+                    try:
+                        # Try level 1 (Ticker) - standard yfinance download format (Price, Ticker)
+                        if ticker in data.columns.get_level_values(1):
+                            df = data.xs(ticker, axis=1, level=1).copy()
+                        # Sometimes it's level 0 if group_by='ticker' was used
+                        elif ticker in data.columns.get_level_values(0):
+                            df = data.xs(ticker, axis=1, level=0).copy()
+                    except Exception:
+                        pass
+                else:
+                    # Single ticker or flat structure
+                    df = data.copy()
+
+            # Drop NaNs
+            df.dropna(inplace=True)
+            if len(df) < 21:
+                continue
+
+            # --- TURTLE CALCULATIONS ---
+
+            # 1. Donchian Channels (20-day High/Low)
+            # We use .shift(1) because we want the High of the PREVIOUS 20 days to define the breakout level
+            df['20_High'] = df['High'].rolling(window=20).max().shift(1)
+            df['20_Low'] = df['Low'].rolling(window=20).min().shift(1)
+
+            # 2. ATR (Volatility 'N')
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
+
+            # 3. Current Values
+            curr_close = float(df['Close'].iloc[-1])
+
+            # Check if 20_High is NaN
+            if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
+                continue
+
+            prev_high = float(df['20_High'].iloc[-1])
+            atr = float(df['ATR'].iloc[-1])
+
+            # 4. Logic
+            signal = "WAIT"
+            buy_price = 0.0
+            stop_loss = 0.0
+            target = 0.0
+
+            # Check for Breakout (Close > Previous 20-day High)
+            # Or simpler: Price is near the high (within 1% of breakout)
+
+            dist_to_breakout = (curr_close - prev_high) / prev_high
+
+            if curr_close > prev_high:
+                signal = "🚀 BREAKOUT (BUY)"
+                buy_price = curr_close
+                stop_loss = buy_price - (2 * atr) # 2N Rule
+                target = buy_price + (4 * atr)    # 2:1 Reward Projection
+
+            # "Near" Breakout (Watchlist) - Within 2% of high
+            elif -0.02 <= dist_to_breakout <= 0:
+                signal = "👀 WATCH (Near High)"
+                buy_price = prev_high # Buy stop limit would be here
+                stop_loss = prev_high - (2 * atr)
+                target = prev_high + (4 * atr)
+
+            if signal != "WAIT":
+                # Get company name
+                company_name = TICKER_NAMES.get(ticker, ETF_NAMES.get(ticker, ticker))
+
+                results.append({
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "price": curr_close,
+                    "signal": signal,
+                    "breakout_level": prev_high,
+                    "stop_loss": stop_loss,
+                    "target": target,
+                    "atr": atr,
+                    "risk_per_share": buy_price - stop_loss
+                })
+
+        except Exception as e:
+            # print(f"Error on {ticker}: {e}")
+            continue
+
+    return results

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="bg-green-700 rounded-t-lg p-6 shadow-lg mb-0">
+        <h2 class="text-2xl font-bold text-white">🐢 Turtle Trading Screener</h2>
+        <p class="text-green-100 mt-2 text-sm">System 1: 20-Day Breakout | Stop Loss: 2x ATR</p>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-b-lg p-8 border border-t-0 border-gray-200 dark:border-gray-700">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ticker</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Signal</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Buy Price</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Stop Loss (2N)</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Target (Proj)</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Risk/Share</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    {% for row in results %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-6 py-4 font-bold text-gray-900 dark:text-white group relative cursor-pointer"
+                            onclick="copyToClipboard('{{ row.ticker }} - {{ row.company_name }}')"
+                            title="Click to copy: {{ row.ticker }} - {{ row.company_name }}">
+                            {{ row.ticker }}
+                            <span class="hidden group-hover:inline-block absolute left-full ml-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded-lg shadow-sm whitespace-nowrap z-10">
+                                {{ row.company_name }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 text-xs font-bold rounded
+                                {% if 'BREAKOUT' in row.signal %}bg-green-100 text-green-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                {{ row.signal }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-right font-mono text-blue-600 dark:text-blue-400">${{ "%.2f"|format(row.price) }}</td>
+                        <td class="px-6 py-4 text-right font-mono text-red-600">${{ "%.2f"|format(row.stop_loss) }}</td>
+                        <td class="px-6 py-4 text-right font-mono text-green-600">${{ "%.2f"|format(row.target) }}</td>
+                        <td class="px-6 py-4 text-right text-xs text-gray-500">${{ "%.2f"|format(row.risk_per_share) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

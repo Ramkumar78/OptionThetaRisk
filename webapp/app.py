@@ -95,6 +95,15 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return render_template("error.html", message=f"Screener failed: {e}")
 
+    @app.route("/screen/turtle", methods=["GET"])
+    def screen_turtle():
+        try:
+            # You can allow passing a custom list via query params if you want
+            results = screener.screen_turtle_setups()
+            return render_template("turtle_results.html", results=results)
+        except Exception as e:
+            return render_template("error.html", message=f"Turtle Screener failed: {e}")
+
     @app.route("/analyze", methods=["POST"])
     def analyze():
         file = request.files.get("csv")
