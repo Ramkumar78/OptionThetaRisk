@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Analyze - Option Auditor{% endblock %}
+{% block title %}Analyze - Trade Auditor{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto" x-data="manualEntryForm()">
 
     <div class="text-center mb-10 fade-in">
         <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-2">
-            Import Your <span class="text-primary-600 dark:text-primary-400">Trading Data</span>
+            Trade <span class="text-primary-600 dark:text-primary-400">Auditor</span>
         </h1>
         <p class="text-gray-500 dark:text-gray-400 text-lg">
-            Upload CSV logs or enter positions manually to uncover your Theta risk.
+            The Automated Risk Manager for Stocks & Options.
         </p>
     </div>
 
@@ -199,8 +199,10 @@
                     <label for="screener_type" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Screener Strategy</label>
                     <select id="screener_type" x-model="screenerType" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500">
                         <option value="market">Market Screener (RSI/IV)</option>
-                        <option value="turtle">Turtle Trading (Trend Following)</option>
-                        <option value="ema">5/13 & 5/21 EMA (Momentum)</option>
+                        <option value="turtle">Turtle Trading (US)</option>
+                        <option value="turtle_uk">Turtle Trading (UK/Euro)</option>
+                        <option value="ema">5/13 & 5/21 EMA (US)</option>
+                        <option value="ema_uk">5/13 & 5/21 EMA (UK/Euro)</option>
                     </select>
                 </div>
 
@@ -241,10 +243,10 @@
                     </button>
                 </form>
 
-                <!-- Turtle Screener Form -->
+                <!-- Turtle Screener Form (US) -->
                 <div x-show="screenerType === 'turtle'" class="space-y-6">
                     <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-gray-800 dark:text-green-400 border border-green-100 dark:border-green-900" role="alert">
-                        <span class="font-medium">Turtle Strategy:</span> Scans for 20-Day Breakouts (Donchian Channels).
+                        <span class="font-medium">Turtle Strategy (US):</span> Scans for 20-Day Breakouts (Donchian Channels).
                     </div>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
                         This screen checks a basket of liquid ETFs and Blue Chip stocks for trend following setups.
@@ -272,10 +274,42 @@
                     </form>
                 </div>
 
-                <!-- 5/13 EMA Screener Form -->
+                <!-- Turtle Screener Form (UK/Euro) -->
+                <div x-show="screenerType === 'turtle_uk'" class="space-y-6">
+                    <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-gray-800 dark:text-green-400 border border-green-100 dark:border-green-900" role="alert">
+                        <span class="font-medium">Turtle Strategy (UK/Euro):</span> Scans for 20-Day Breakouts on FTSE/Euro Stocks.
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        This screen checks UK FTSE 50, Liquid UK Mid-caps, and Top 50 Euro stocks.
+                        <br>
+                        <strong>Buy Signal:</strong> Price > 20-Day High.
+                        <br>
+                        <strong>Stop Loss:</strong> 2x ATR.
+                    </p>
+
+                    <form action="/screen/turtle" method="get">
+                        <input type="hidden" name="region" value="uk_euro">
+                        <div class="relative mb-4">
+                            <select name="time_frame" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-green-500 focus:outline-none focus:ring-0 focus:border-green-600 peer">
+                                <option value="49m">49m (Intraday)</option>
+                                <option value="98m">98m (Intraday)</option>
+                                <option value="196m">196m (Intraday)</option>
+                                <option value="1d" selected>1 Day</option>
+                                <option value="1wk">1 Week</option>
+                                <option value="1mo">1 Month</option>
+                            </select>
+                            <label class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-green-600 peer-focus:dark:text-green-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Time Frame</label>
+                        </div>
+                        <button type="submit" class="w-full text-white bg-green-600 hover:bg-green-700 font-bold rounded-xl text-sm px-5 py-4 text-center shadow-lg transition-all">
+                            Run Turtle Screen (UK/Euro)
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 5/13 EMA Screener Form (US) -->
                 <div x-show="screenerType === 'ema'" class="space-y-6">
                     <div class="p-4 mb-4 text-sm text-indigo-800 rounded-lg bg-indigo-50 dark:bg-gray-800 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900" role="alert">
-                        <span class="font-medium">5/13 & 5/21 EMA:</span> Momentum Breakouts & Trends.
+                        <span class="font-medium">5/13 & 5/21 EMA (US):</span> Momentum Breakouts & Trends.
                     </div>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
                         Detects fast momentum shifts using Exponential Moving Averages.
@@ -299,6 +333,38 @@
                         </div>
                         <button type="submit" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl text-sm px-5 py-4 text-center shadow-lg transition-all">
                             Run EMA Screen
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 5/13 EMA Screener Form (UK/Euro) -->
+                <div x-show="screenerType === 'ema_uk'" class="space-y-6">
+                    <div class="p-4 mb-4 text-sm text-indigo-800 rounded-lg bg-indigo-50 dark:bg-gray-800 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900" role="alert">
+                        <span class="font-medium">5/13 & 5/21 EMA (UK/Euro):</span> Momentum Breakouts on FTSE/Euro Stocks.
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Detects fast momentum shifts using Exponential Moving Averages.
+                        <br>
+                        <strong>Buy Signal:</strong> 5 EMA crosses ABOVE 13 or 21 EMA.
+                        <br>
+                        <strong>Stop Loss:</strong> Close below the slow EMA (13 or 21).
+                    </p>
+
+                    <form action="/screen/ema" method="get">
+                        <input type="hidden" name="region" value="uk_euro">
+                        <div class="relative mb-4">
+                            <select name="time_frame" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-indigo-500 focus:outline-none focus:ring-0 focus:border-indigo-600 peer">
+                                <option value="49m">49m (Intraday)</option>
+                                <option value="98m">98m (Intraday)</option>
+                                <option value="196m">196m (Intraday)</option>
+                                <option value="1d" selected>1 Day</option>
+                                <option value="1wk">1 Week</option>
+                                <option value="1mo">1 Month</option>
+                            </select>
+                            <label class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-indigo-600 peer-focus:dark:text-indigo-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Time Frame</label>
+                        </div>
+                        <button type="submit" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl text-sm px-5 py-4 text-center shadow-lg transition-all">
+                            Run EMA Screen (UK/Euro)
                         </button>
                     </form>
                 </div>

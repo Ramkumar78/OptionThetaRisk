@@ -92,6 +92,199 @@ TICKER_NAMES = {
     "GILD": "Gilead Sciences, Inc.",
     "OXY": "Occidental Petroleum Corporation",
     "LULU": "Lululemon Athletica Inc.",
+}
+
+UK_EURO_TICKERS = [
+    # Top 50 FTSE (UK)
+    "AZN", "SHEL", "HSBA", "ULVR", "BP.", "RIO", "REL", "GSK", "DGE", "LSEG", "BATS", "GLEN", "BA.", "CNA", "NG.", "LLOY", "RR.", "BARC", "CPG", "NWG", "RKT", "VOD", "AAL", "SGE", "HLN", "EXR", "TSCO", "SSE", "MNG", "ADM", "III", "ANTO", "SPX", "STAN", "IMB", "WTB", "SVT", "AUTO", "SN.", "CRDA", "WPP", "SMIN", "DCC", "AV.", "LGEN", "KGF", "SBRY", "MKS", "LAND", "PSON",
+    # Liquid UK
+    "JD.", "IAG", "EZJ", "TUI", "AML", "IDS", "DLG", "ITM", "CINE", "PFC", "FRES", "KAP", "BOO", "ASOS", "HBR", "ENOG", "TLW", "CWR", "GNC", "THG", "DARK", "CURY", "DOM", "WKB", "SFOR", "QINET", "GREG", "PETS", "VMUK", "MRO", "INVP", "OCDO", "IGG", "CMC", "PLUS", "EMG", "HWDN", "COST", "BEZ", "SGRO", "BDEV", "PSN", "TW.", "RDW", "VISTRY", "BYG", "SAFE", "UTG", "BBOX", "GRG",
+    # Top 50 Euro
+    "ASML", "MC", "SAP", "RMS", "TTE", "SIE", "CDI", "AIR", "SAN", "IBE", "OR", "ALV", "SU", "EL", "AI", "BNP", "DTE", "ENEL", "DG", "BBVA", "CS", "BAS", "ADS", "MUV2", "IFX", "SAF", "ENI", "INGA", "ISP", "KER", "STLA", "AD", "VOW3", "BMW", "MBG", "BAYN", "DB1", "BN", "RI", "CRH", "G", "PHIA", "AH", "NOKIA", "VIV", "ORANGE", "KNEBV", "UMG", "HEIA", "ABI"
+]
+
+def get_uk_euro_tickers():
+    """Returns normalized UK/Euro tickers list."""
+    tickers = []
+
+    # Process the raw list
+    for t in UK_EURO_TICKERS:
+        # Heuristic for UK tickers:
+        # If user input has dot at end (e.g. "BP."), replace with .L
+        if t.endswith("."):
+            tickers.append(t[:-1] + ".L")
+        else:
+            # Check against known UK list (without dots)
+            # Reconstruct sets for logic (using known UK tickers from the list)
+            uk_set = {
+                "AZN", "SHEL", "HSBA", "ULVR", "BP.", "RIO", "REL", "GSK", "DGE", "LSEG", "BATS", "GLEN", "BA.", "CNA", "NG.", "LLOY", "RR.", "BARC", "CPG", "NWG", "RKT", "VOD", "AAL", "SGE", "HLN", "EXR", "TSCO", "SSE", "MNG", "ADM", "III", "ANTO", "SPX", "STAN", "IMB", "WTB", "SVT", "AUTO", "SN.", "CRDA", "WPP", "SMIN", "DCC", "AV.", "LGEN", "KGF", "SBRY", "MKS", "LAND", "PSON",
+                "JD.", "IAG", "EZJ", "TUI", "AML", "IDS", "DLG", "ITM", "CINE", "PFC", "FRES", "KAP", "BOO", "ASOS", "HBR", "ENOG", "TLW", "CWR", "GNC", "THG", "DARK", "CURY", "DOM", "WKB", "SFOR", "QINET", "GREG", "PETS", "VMUK", "MRO", "INVP", "OCDO", "IGG", "CMC", "PLUS", "EMG", "HWDN", "COST", "BEZ", "SGRO", "BDEV", "PSN", "TW.", "RDW", "VISTRY", "BYG", "SAFE", "UTG", "BBOX", "GRG"
+            }
+
+            # Simple check: if it's in the UK set (or has a dot version in UK set)
+            if t in uk_set or (t + ".") in uk_set:
+                 # It's UK but doesn't have the dot in the raw string here?
+                 # Actually the raw string is exactly what is in the list.
+                 # "AZN" is in the list. So append .L
+                 tickers.append(t + ".L")
+            else:
+                # Assume Euro or US-listed Euro
+                tickers.append(t)
+
+    return list(set(tickers))
+
+TICKER_NAMES = {
+    "ECL": "Ecolab Inc.",
+    "AZN": "AstraZeneca PLC",
+    "SHEL": "Shell plc",
+    "HSBA": "HSBC Holdings plc",
+    "ULVR": "Unilever PLC",
+    "BP": "BP p.l.c.",
+    "RIO": "Rio Tinto Group",
+    "REL": "RELX PLC",
+    "GSK": "GSK plc",
+    "DGE": "Diageo plc",
+    "LSEG": "London Stock Exchange Group plc",
+    "BATS": "British American Tobacco p.l.c.",
+    "GLEN": "Glencore plc",
+    "BA": "BAE Systems plc",
+    "CNA": "Centrica plc",
+    "NG": "National Grid plc",
+    "LLOY": "Lloyds Banking Group plc",
+    "RR": "Rolls-Royce Holdings plc",
+    "BARC": "Barclays PLC",
+    "CPG": "Compass Group PLC",
+    "NWG": "NatWest Group plc",
+    "RKT": "Reckitt Benckiser Group plc",
+    "VOD": "Vodafone Group Plc",
+    "AAL": "Anglo American plc",
+    "SGE": "Sage Group plc",
+    "HLN": "Haleon plc",
+    "EXR": "Exor N.V.",
+    "TSCO": "Tesco PLC",
+    "SSE": "SSE plc",
+    "MNG": "M&G plc",
+    "ADM": "Admiral Group plc",
+    "III": "3i Group plc",
+    "ANTO": "Antofagasta plc",
+    "SPX": "Spirax-Sarco Engineering plc",
+    "STAN": "Standard Chartered PLC",
+    "IMB": "Imperial Brands PLC",
+    "WTB": "Whitbread PLC",
+    "SVT": "Severn Trent Plc",
+    "AUTO": "Auto Trader Group plc",
+    "SN": "Smith & Nephew plc",
+    "CRDA": "Croda International Plc",
+    "WPP": "WPP plc",
+    "SMIN": "Smiths Group plc",
+    "DCC": "DCC plc",
+    "AV": "Aviva plc",
+    "LGEN": "Legal & General Group Plc",
+    "KGF": "Kingfisher plc",
+    "SBRY": "J Sainsbury plc",
+    "MKS": "Marks and Spencer Group plc",
+    "LAND": "Land Securities Group PLC",
+    "PSON": "Pearson plc",
+    "JD": "JD Sports Fashion plc",
+    "IAG": "International Consolidated Airlines Group S.A.",
+    "EZJ": "easyJet plc",
+    "TUI": "TUI AG",
+    "AML": "Aston Martin Lagonda Global Holdings plc",
+    "IDS": "International Distributions Services plc",
+    "DLG": "Direct Line Insurance Group plc",
+    "ITM": "ITM Power Plc",
+    "CINE": "Cineworld Group plc",
+    "PFC": "Petrofac Limited",
+    "FRES": "Fresnillo plc",
+    "KAP": "Kazatomprom",
+    "BOO": "boohoo group plc",
+    "ASOS": "ASOS Plc",
+    "HBR": "Harbour Energy plc",
+    "ENOG": "Energean plc",
+    "TLW": "Tullow Oil plc",
+    "CWR": "Ceres Power Holdings plc",
+    "GNC": "Greencore Group plc",
+    "THG": "THG plc",
+    "DARK": "Darktrace plc",
+    "CURY": "Currys plc",
+    "DOM": "Domino's Pizza Group plc",
+    "WKB": "Warhammer (Games Workshop Group PLC)",
+    "SFOR": "S4 Capital plc",
+    "QINET": "QinetiQ Group plc",
+    "GREG": "Greggs plc",
+    "PETS": "Pets at Home Group Plc",
+    "VMUK": "Virgin Money UK PLC",
+    "MRO": "Melrose Industries PLC",
+    "INVP": "Investec plc",
+    "OCDO": "Ocado Group plc",
+    "IGG": "IG Group Holdings plc",
+    "CMC": "CMC Markets plc",
+    "PLUS": "Plus500 Ltd",
+    "EMG": "Man Group plc",
+    "HWDN": "Howden Joinery Group Plc",
+    "COST": "Costain Group PLC",
+    "BEZ": "Beazley plc",
+    "SGRO": "Segro Plc",
+    "BDEV": "Barratt Developments plc",
+    "PSN": "Persimmon Plc",
+    "TW": "Taylor Wimpey plc",
+    "RDW": "Redrow plc",
+    "VISTRY": "Vistry Group PLC",
+    "BYG": "Big Yellow Group PLC",
+    "SAFE": "Safestore Holdings plc",
+    "UTG": "Unite Group plc",
+    "BBOX": "Tritax Big Box REIT plc",
+    "GRG": "Greggs plc",
+    "ASML": "ASML Holding N.V.",
+    "MC": "LVMH Moët Hennessy - Louis Vuitton, SE",
+    "SAP": "SAP SE",
+    "RMS": "Hermès International",
+    "TTE": "TotalEnergies SE",
+    "SIE": "Siemens AG",
+    "CDI": "Christian Dior SE",
+    "AIR": "Airbus SE",
+    "SAN": "Banco Santander, S.A.",
+    "IBE": "Iberdrola, S.A.",
+    "OR": "L'Oréal S.A.",
+    "ALV": "Allianz SE",
+    "SU": "Schneider Electric S.E.",
+    "EL": "EssilorLuxottica",
+    "AI": "Air Liquide S.A.",
+    "BNP": "BNP Paribas S.A.",
+    "DTE": "Deutsche Telekom AG",
+    "ENEL": "Enel S.p.A.",
+    "DG": "Vinci S.A.",
+    "BBVA": "Banco Bilbao Vizcaya Argentaria, S.A.",
+    "CS": "AXA S.A.",
+    "BAS": "BASF SE",
+    "ADS": "adidas AG",
+    "MUV2": "Münchener Rückversicherungs-Gesellschaft",
+    "IFX": "Infineon Technologies AG",
+    "SAF": "Safran S.A.",
+    "ENI": "Eni S.p.A.",
+    "INGA": "ING Groep N.V.",
+    "ISP": "Intesa Sanpaolo S.p.A.",
+    "KER": "Kering S.A.",
+    "STLA": "Stellantis N.V.",
+    "AD": "Koninklijke Ahold Delhaize N.V.",
+    "VOW3": "Volkswagen AG",
+    "BMW": "Bayerische Motoren Werke AG",
+    "MBG": "Mercedes-Benz Group AG",
+    "BAYN": "Bayer AG",
+    "DB1": "Deutsche Börse AG",
+    "BN": "Danone S.A.",
+    "RI": "Pernod Ricard S.A.",
+    "CRH": "CRH plc",
+    "G": "Assicurazioni Generali S.p.A.",
+    "PHIA": "Koninklijke Philips N.V.",
+    "AH": "Koninklijke Ahold Delhaize N.V.",
+    "NOKIA": "Nokia Oyj",
+    "VIV": "Vivendi SE",
+    "ORANGE": "Orange S.A.",
+    "KNEBV": "Kone Oyj",
+    "UMG": "Universal Music Group N.V.",
+    "HEIA": "Heineken N.V.",
+    "ABI": "Anheuser-Busch InBev SA/NV",
     "LLY": "Eli Lilly and Company",
     "SPG": "Simon Property Group, Inc.",
     "CVX": "Chevron Corporation",
