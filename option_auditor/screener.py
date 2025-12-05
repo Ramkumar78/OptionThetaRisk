@@ -445,23 +445,73 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
 
     return results
 
-def screen_turtle_setups(ticker_list: list = None) -> list:
+def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval, resample_rule, is_intraday):
+    """Helper to prepare DataFrame for a single ticker."""
+    import pandas as pd
+    import yfinance as yf
+
+    df = pd.DataFrame()
+
+    # Extract from batch if available
+    if data_source is not None:
+        if isinstance(data_source.columns, pd.MultiIndex):
+            try:
+                 # Check Level 1 (standard) or Level 0 (group_by='ticker')
+                if ticker in data_source.columns.get_level_values(1):
+                    df = data_source.xs(ticker, axis=1, level=1).copy()
+                elif ticker in data_source.columns.get_level_values(0):
+                    df = data_source.xs(ticker, axis=1, level=0).copy()
+            except Exception:
+                pass
+        else:
+             df = data_source.copy()
+
+    # If empty, sequential fetch
+    if df.empty:
+         try:
+            df = yf.download(ticker, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
+         except Exception:
+            pass
+
+    # Clean NaNs
+    df = df.dropna(how='all')
+    if df.empty:
+        return None
+
+    # Flatten if needed
+    if isinstance(df.columns, pd.MultiIndex):
+        try:
+            df.columns = df.columns.get_level_values(0)
+        except Exception:
+            pass
+
+    # Resample if needed
+    if resample_rule:
+        agg_dict = {'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}
+        agg_dict = {k: v for k, v in agg_dict.items() if k in df.columns}
+        try:
+            df = df.resample(resample_rule).agg(agg_dict)
+            df = df.dropna()
+        except Exception:
+            pass
+
+    return df
+
+def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
     """
     Screens for Turtle Trading Setups (20-Day Breakouts).
+    Supports multiple timeframes.
     """
     import yfinance as yf
     import pandas_ta as ta
     import pandas as pd
 
     if ticker_list is None:
-        # Default liquid list if none provided
         ticker_list = [
             "SPY", "QQQ", "IWM", "GLD", "SLV", "USO", "TLT", # ETFs
             "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN", # Tech
             "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS" # Blue Chips
         ]
-
-        # Add Watchlist tickers
         if "WATCH" in SECTOR_COMPONENTS:
              ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
 
@@ -476,104 +526,281 @@ def screen_turtle_setups(ticker_list: list = None) -> list:
         "TLT": "iShares 20+ Year Treasury Bond ETF",
     }
 
+    # Timeframe logic
+    yf_interval = "1d"
+    resample_rule = None
+    is_intraday = False
+    period = "3mo"
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "196m":
+        yf_interval = "5m"
+        resample_rule = "196min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y"
+
     results = []
 
-    # Fetch data (enough for 20-day lookback + buffer)
-    # Download in bulk for speed
-    try:
-        data = yf.download(ticker_list, period="3mo", interval="1d", progress=False)
-    except Exception:
-        return []
-
-    # Handle MultiIndex columns from yfinance bulk download
-    # We iterate through tickers manually to handle the DataFrame structure
+    # Bulk download if not intraday
+    data = None
+    if not is_intraday:
+        try:
+            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
+        except Exception:
+            pass
 
     for ticker in ticker_list:
         try:
-            # Extract single ticker DF
-            df = pd.DataFrame()
-            if not data.empty:
-                if isinstance(data.columns, pd.MultiIndex):
-                    try:
-                        # Try level 1 (Ticker) - standard yfinance download format (Price, Ticker)
-                        if ticker in data.columns.get_level_values(1):
-                            df = data.xs(ticker, axis=1, level=1).copy()
-                        # Sometimes it's level 0 if group_by='ticker' was used
-                        elif ticker in data.columns.get_level_values(0):
-                            df = data.xs(ticker, axis=1, level=0).copy()
-                    except Exception:
-                        pass
-                else:
-                    # Single ticker or flat structure
-                    df = data.copy()
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            # Drop NaNs
-            df.dropna(inplace=True)
-            if len(df) < 21:
+            if df is None or len(df) < 21:
                 continue
 
             # --- TURTLE CALCULATIONS ---
-
             # 1. Donchian Channels (20-day High/Low)
-            # We use .shift(1) because we want the High of the PREVIOUS 20 days to define the breakout level
             df['20_High'] = df['High'].rolling(window=20).max().shift(1)
             df['20_Low'] = df['Low'].rolling(window=20).min().shift(1)
 
             # 2. ATR (Volatility 'N')
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
 
-            # 3. Current Values
             curr_close = float(df['Close'].iloc[-1])
 
-            # Check if 20_High is NaN
             if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
                 continue
 
             prev_high = float(df['20_High'].iloc[-1])
+            prev_low = float(df['20_Low'].iloc[-1])
             atr = float(df['ATR'].iloc[-1])
 
-            # 4. Logic
             signal = "WAIT"
             buy_price = 0.0
             stop_loss = 0.0
             target = 0.0
 
-            # Check for Breakout (Close > Previous 20-day High)
-            # Or simpler: Price is near the high (within 1% of breakout)
+            dist_to_breakout_high = (curr_close - prev_high) / prev_high
 
-            dist_to_breakout = (curr_close - prev_high) / prev_high
-
+            # Buy Breakout
             if curr_close > prev_high:
                 signal = "🚀 BREAKOUT (BUY)"
                 buy_price = curr_close
-                stop_loss = buy_price - (2 * atr) # 2N Rule
-                target = buy_price + (4 * atr)    # 2:1 Reward Projection
+                stop_loss = buy_price - (2 * atr)
+                target = buy_price + (4 * atr)
 
-            # "Near" Breakout (Watchlist) - Within 2% of high
-            elif -0.02 <= dist_to_breakout <= 0:
+            # Sell Breakout (Short)
+            elif curr_close < prev_low:
+                signal = "📉 BREAKDOWN (SELL)"
+                buy_price = curr_close
+                stop_loss = buy_price + (2 * atr) # Stop above entry for short
+                target = buy_price - (4 * atr)    # Target below entry
+
+            # Near High
+            elif -0.02 <= dist_to_breakout_high <= 0:
                 signal = "👀 WATCH (Near High)"
-                buy_price = prev_high # Buy stop limit would be here
+                buy_price = prev_high
                 stop_loss = prev_high - (2 * atr)
                 target = prev_high + (4 * atr)
 
             if signal != "WAIT":
-                # Get company name
                 company_name = TICKER_NAMES.get(ticker, ETF_NAMES.get(ticker, ticker))
-
                 results.append({
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": curr_close,
                     "signal": signal,
-                    "breakout_level": prev_high,
+                    "breakout_level": prev_high if "SELL" not in signal else prev_low,
                     "stop_loss": stop_loss,
                     "target": target,
                     "atr": atr,
-                    "risk_per_share": buy_price - stop_loss
+                    "risk_per_share": abs(buy_price - stop_loss)
                 })
 
-        except Exception as e:
-            # print(f"Error on {ticker}: {e}")
+        except Exception:
             continue
 
+    return results
+
+def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
+    """
+    Screens for 5/13 and 5/21 EMA Crossovers (Momentum Breakouts).
+    """
+    try:
+        import pandas_ta as ta
+    except ImportError:
+        return []
+
+    import yfinance as yf
+    import pandas as pd
+
+    if ticker_list is None:
+        # Default liquid list + Crypto proxies usually traded with this system
+        ticker_list = [
+            "SPY", "QQQ", "IWM", "GLD", "SLV", "BITO", "COIN", "MSTR", # Crypto-adj
+            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN",
+            "NFLX", "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS"
+        ]
+        if "WATCH" in SECTOR_COMPONENTS:
+             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
+
+    # Additional names for ETFs not in TICKER_NAMES
+    ETF_NAMES = {
+        "SPY": "SPDR S&P 500 ETF Trust",
+        "QQQ": "Invesco QQQ Trust",
+        "IWM": "iShares Russell 2000 ETF",
+        "GLD": "SPDR Gold Shares",
+        "SLV": "iShares Silver Trust",
+        "USO": "United States Oil Fund, LP",
+        "TLT": "iShares 20+ Year Treasury Bond ETF",
+        "BITO": "ProShares Bitcoin Strategy ETF",
+    }
+
+    # Timeframe logic
+    yf_interval = "1d"
+    resample_rule = None
+    is_intraday = False
+    period = "3mo"
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "196m":
+        yf_interval = "5m"
+        resample_rule = "196min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y"
+
+    results = []
+
+    # Bulk download if not intraday
+    data = None
+    if not is_intraday:
+        try:
+            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
+        except Exception:
+            pass
+
+    for ticker in ticker_list:
+        try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+
+            if df is None or len(df) < 22: # Need 21 for EMA 21
+                continue
+
+            # --- EMA CALCULATIONS ---
+            df['EMA_5'] = ta.ema(df['Close'], length=5)
+            df['EMA_13'] = ta.ema(df['Close'], length=13)
+            df['EMA_21'] = ta.ema(df['Close'], length=21)
+
+            # Current & Previous values
+            curr_5 = df['EMA_5'].iloc[-1]
+            curr_13 = df['EMA_13'].iloc[-1]
+            curr_21 = df['EMA_21'].iloc[-1]
+
+            prev_5 = df['EMA_5'].iloc[-2]
+            prev_13 = df['EMA_13'].iloc[-2]
+            prev_21 = df['EMA_21'].iloc[-2]
+
+            curr_close = float(df['Close'].iloc[-1])
+
+            signal = "WAIT"
+            status_color = "gray"
+            stop_loss = 0.0
+            ema_slow = curr_13 # Default to 13
+
+            # Logic 5/13:
+            # 1. Fresh Breakout (Crossed TODAY)
+            if curr_5 > curr_13 and prev_5 <= prev_13:
+                signal = "🚀 FRESH 5/13 BREAKOUT"
+                status_color = "green"
+                ema_slow = curr_13
+                stop_loss = curr_13 * 0.99
+
+            # Logic 5/21:
+            elif curr_5 > curr_21 and prev_5 <= prev_21:
+                signal = "🚀 FRESH 5/21 BREAKOUT"
+                status_color = "green"
+                ema_slow = curr_21
+                stop_loss = curr_21 * 0.99
+
+            # 2. Trending (Held for >1 day)
+            elif curr_5 > curr_13:
+                # Check how far extended?
+                dist = (curr_close - curr_13) / curr_13
+                if dist < 0.01: # Price is pulling back to 13 EMA (Buy Support)
+                    signal = "✅ 5/13 TREND (Buy Support)"
+                    status_color = "blue"
+                else:
+                    signal = "📈 5/13 TRENDING"
+                    status_color = "blue"
+                ema_slow = curr_13
+                stop_loss = curr_13 * 0.99
+
+            elif curr_5 > curr_21:
+                 signal = "📈 5/21 TRENDING"
+                 status_color = "blue"
+                 ema_slow = curr_21
+                 stop_loss = curr_21 * 0.99
+
+            # 3. Bearish Cross (Sell)
+            if curr_5 < curr_13 and prev_5 >= prev_13:
+                signal = "❌ 5/13 DUMP (Sell Signal)"
+                status_color = "red"
+                ema_slow = curr_13
+                stop_loss = curr_13 * 1.01 # Stop above
+
+            elif curr_5 < curr_21 and prev_5 >= prev_21:
+                signal = "❌ 5/21 DUMP (Sell Signal)"
+                status_color = "red"
+                ema_slow = curr_21
+                stop_loss = curr_21 * 1.01
+
+            if signal != "WAIT":
+                company_name = TICKER_NAMES.get(ticker, ETF_NAMES.get(ticker, ticker))
+                results.append({
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "price": curr_close,
+                    "signal": signal,
+                    "color": status_color,
+                    "ema_5": curr_5,
+                    "ema_13": curr_13,
+                    "ema_21": curr_21,
+                    # Stop Loss usually strictly below the slow EMA line
+                    "stop_loss": stop_loss,
+                    "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100
+                })
+
+        except Exception:
+            continue
+
+    # Sort by "Freshness" (Breakouts first)
+    results.sort(key=lambda x: 0 if "FRESH" in x['signal'] else 1)
     return results

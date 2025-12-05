@@ -98,11 +98,20 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/turtle", methods=["GET"])
     def screen_turtle():
         try:
-            # You can allow passing a custom list via query params if you want
-            results = screener.screen_turtle_setups()
+            time_frame = request.args.get("time_frame", "1d")
+            results = screener.screen_turtle_setups(time_frame=time_frame)
             return render_template("turtle_results.html", results=results)
         except Exception as e:
             return render_template("error.html", message=f"Turtle Screener failed: {e}")
+
+    @app.route("/screen/ema", methods=["GET"])
+    def screen_ema():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            results = screener.screen_5_13_setups(time_frame=time_frame)
+            return render_template("ema_results.html", results=results)
+        except Exception as e:
+            return render_template("error.html", message=f"EMA Screener failed: {e}")
 
     @app.route("/analyze", methods=["POST"])
     def analyze():
