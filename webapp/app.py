@@ -104,6 +104,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
 
             results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
             return render_template("turtle_results.html", results=results)
@@ -119,6 +121,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
 
             results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
             return render_template("ema_results.html", results=results)

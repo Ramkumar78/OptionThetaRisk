@@ -103,6 +103,13 @@ UK_EURO_TICKERS = [
     "ASML", "MC", "SAP", "RMS", "TTE", "SIE", "CDI", "AIR", "SAN", "IBE", "OR", "ALV", "SU", "EL", "AI", "BNP", "DTE", "ENEL", "DG", "BBVA", "CS", "BAS", "ADS", "MUV2", "IFX", "SAF", "ENI", "INGA", "ISP", "KER", "STLA", "AD", "VOW3", "BMW", "MBG", "BAYN", "DB1", "BN", "RI", "CRH", "G", "PHIA", "AH", "NOKIA", "VIV", "ORANGE", "KNEBV", "UMG", "HEIA", "ABI"
 ]
 
+INDIAN_TICKERS = [
+    # Nifty 50
+    "RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK", "INFY", "HINDUNILVR", "SBIN", "ITC", "LTIM", "LT", "HCLTECH", "BAJFINANCE", "AXISBANK", "MARUTI", "ULTRACEMCO", "SUNPHARMA", "M&M", "TITAN", "KOTAKBANK", "ADANIENT", "TATAMOTORS", "NTPC", "TATASTEEL", "POWERGRID", "ASIANPAINT", "JSWSTEEL", "BAJAJFINSV", "NESTLEIND", "GRASIM", "ONGC", "TECHM", "HINDALCO", "ADANIPORTS", "CIPLA", "WIPRO", "SBILIFE", "DRREDDY", "BRITANNIA", "TATACONSUM", "COALINDIA", "APOLLOHOSP", "EICHERMOT", "INDUSINDBK", "DIVISLAB", "BAJAJ-AUTO", "HDFCLIFE", "HEROMOTOCO", "BEL", "SHRIRAMFIN",
+    # Nifty Next 50
+    "LICI", "HAL", "ADANIPOWER", "DMART", "VBL", "JIOFIN", "SIEMENS", "TRENT", "ZOMATO", "ADANIGREEN", "IOC", "DLF", "VEDL", "BANKBARODA", "GAIL", "AMBUJACEM", "CHOLAFIN", "HAVELLS", "ABB", "PIDILITIND", "GODREJCP", "DABUR", "SHREECEM", "PNB", "BPCL", "SBICARD", "SRF", "MOTHERSON", "ICICIPRULI", "MARICO", "BERGEPAINT", "ICICIGI", "TVSMOTOR", "NAUKRI", "LODHA", "BOSCHLTD", "INDIGO", "CANBK", "UNITDSPR", "TORNTPHARM", "PIIND", "UPL", "JINDALSTEL", "ALKEM", "ZYDUSLIFE", "COLPAL", "BAJAJHLDNG", "TATAPOWER", "IRCTC", "MUTHOOTFIN"
+]
+
 def get_uk_euro_tickers():
     """Returns normalized UK/Euro tickers list."""
     tickers = []
@@ -132,6 +139,11 @@ def get_uk_euro_tickers():
                 tickers.append(t)
 
     return list(set(tickers))
+
+def get_indian_tickers():
+    """Returns normalized Indian tickers list."""
+    # Append .NS for NSE
+    return [t + ".NS" for t in INDIAN_TICKERS]
 
 TICKER_NAMES = {
     "ECL": "Ecolab Inc.",
@@ -285,6 +297,106 @@ TICKER_NAMES = {
     "UMG": "Universal Music Group N.V.",
     "HEIA": "Heineken N.V.",
     "ABI": "Anheuser-Busch InBev SA/NV",
+    "RELIANCE": "Reliance Industries Limited",
+    "TCS": "Tata Consultancy Services Limited",
+    "HDFCBANK": "HDFC Bank Limited",
+    "BHARTIARTL": "Bharti Airtel Limited",
+    "ICICIBANK": "ICICI Bank Limited",
+    "INFY": "Infosys Limited",
+    "HINDUNILVR": "Hindustan Unilever Limited",
+    "SBIN": "State Bank of India",
+    "ITC": "ITC Limited",
+    "LTIM": "LTIMindtree Limited",
+    "LT": "Larsen & Toubro Limited",
+    "HCLTECH": "HCL Technologies Limited",
+    "BAJFINANCE": "Bajaj Finance Limited",
+    "AXISBANK": "Axis Bank Limited",
+    "MARUTI": "Maruti Suzuki India Limited",
+    "ULTRACEMCO": "UltraTech Cement Limited",
+    "SUNPHARMA": "Sun Pharmaceutical Industries Limited",
+    "M&M": "Mahindra & Mahindra Limited",
+    "TITAN": "Titan Company Limited",
+    "KOTAKBANK": "Kotak Mahindra Bank Limited",
+    "ADANIENT": "Adani Enterprises Limited",
+    "TATAMOTORS": "Tata Motors Limited",
+    "NTPC": "NTPC Limited",
+    "TATASTEEL": "Tata Steel Limited",
+    "POWERGRID": "Power Grid Corporation of India Limited",
+    "ASIANPAINT": "Asian Paints Limited",
+    "JSWSTEEL": "JSW Steel Limited",
+    "BAJAJFINSV": "Bajaj Finserv Limited",
+    "NESTLEIND": "Nestlé India Limited",
+    "GRASIM": "Grasim Industries Limited",
+    "ONGC": "Oil and Natural Gas Corporation Limited",
+    "TECHM": "Tech Mahindra Limited",
+    "HINDALCO": "Hindalco Industries Limited",
+    "ADANIPORTS": "Adani Ports and Special Economic Zone Limited",
+    "CIPLA": "Cipla Limited",
+    "WIPRO": "Wipro Limited",
+    "SBILIFE": "SBI Life Insurance Company Limited",
+    "DRREDDY": "Dr. Reddy's Laboratories Limited",
+    "BRITANNIA": "Britannia Industries Limited",
+    "TATACONSUM": "Tata Consumer Products Limited",
+    "COALINDIA": "Coal India Limited",
+    "APOLLOHOSP": "Apollo Hospitals Enterprise Limited",
+    "EICHERMOT": "Eicher Motors Limited",
+    "INDUSINDBK": "IndusInd Bank Limited",
+    "DIVISLAB": "Divi's Laboratories Limited",
+    "BAJAJ-AUTO": "Bajaj Auto Limited",
+    "HDFCLIFE": "HDFC Life Insurance Company Limited",
+    "HEROMOTOCO": "Hero MotoCorp Limited",
+    "BEL": "Bharat Electronics Limited",
+    "SHRIRAMFIN": "Shriram Finance Limited",
+    "LICI": "Life Insurance Corporation of India",
+    "HAL": "Hindustan Aeronautics Limited",
+    "ADANIPOWER": "Adani Power Limited",
+    "DMART": "Avenue Supermarts Limited",
+    "VBL": "Varun Beverages Limited",
+    "JIOFIN": "Jio Financial Services Limited",
+    "SIEMENS": "Siemens Limited",
+    "TRENT": "Trent Limited",
+    "ZOMATO": "Zomato Limited",
+    "ADANIGREEN": "Adani Green Energy Limited",
+    "IOC": "Indian Oil Corporation Limited",
+    "DLF": "DLF Limited",
+    "VEDL": "Vedanta Limited",
+    "BANKBARODA": "Bank of Baroda",
+    "GAIL": "GAIL (India) Limited",
+    "AMBUJACEM": "Ambuja Cements Limited",
+    "CHOLAFIN": "Cholamandalam Investment and Finance Company Limited",
+    "HAVELLS": "Havells India Limited",
+    "ABB": "ABB India Limited",
+    "PIDILITIND": "Pidilite Industries Limited",
+    "GODREJCP": "Godrej Consumer Products Limited",
+    "DABUR": "Dabur India Limited",
+    "SHREECEM": "Shree Cement Limited",
+    "PNB": "Punjab National Bank",
+    "BPCL": "Bharat Petroleum Corporation Limited",
+    "SBICARD": "SBI Cards and Payment Services Limited",
+    "SRF": "SRF Limited",
+    "MOTHERSON": "Samvardhana Motherson International Limited",
+    "ICICIPRULI": "ICICI Prudential Life Insurance Company Limited",
+    "MARICO": "Marico Limited",
+    "BERGEPAINT": "Berger Paints India Limited",
+    "ICICIGI": "ICICI Lombard General Insurance Company Limited",
+    "TVSMOTOR": "TVS Motor Company Limited",
+    "NAUKRI": "Info Edge (India) Limited",
+    "LODHA": "Macrotech Developers Limited",
+    "BOSCHLTD": "Bosch Limited",
+    "INDIGO": "InterGlobe Aviation Limited",
+    "CANBK": "Canara Bank",
+    "UNITDSPR": "United Spirits Limited",
+    "TORNTPHARM": "Torrent Pharmaceuticals Limited",
+    "PIIND": "PI Industries Limited",
+    "UPL": "UPL Limited",
+    "JINDALSTEL": "Jindal Steel & Power Limited",
+    "ALKEM": "Alkem Laboratories Limited",
+    "ZYDUSLIFE": "Zydus Lifesciences Limited",
+    "COLPAL": "Colgate-Palmolive (India) Limited",
+    "BAJAJHLDNG": "Bajaj Holdings & Investment Limited",
+    "TATAPOWER": "The Tata Power Company Limited",
+    "IRCTC": "Indian Railway Catering and Tourism Corporation Limited",
+    "MUTHOOTFIN": "Muthoot Finance Limited",
     "LLY": "Eli Lilly and Company",
     "SPG": "Simon Property Group, Inc.",
     "CVX": "Chevron Corporation",
@@ -860,7 +972,9 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                 target = prev_high + (4 * atr)
 
             if signal != "WAIT":
-                company_name = TICKER_NAMES.get(ticker, ETF_NAMES.get(ticker, ticker))
+                # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
+                base_ticker = ticker.split('.')[0]
+                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
                 results.append({
                     "ticker": ticker,
                     "company_name": company_name,
@@ -1026,7 +1140,9 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                 stop_loss = curr_21 * 1.01
 
             if signal != "WAIT":
-                company_name = TICKER_NAMES.get(ticker, ETF_NAMES.get(ticker, ticker))
+                # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
+                base_ticker = ticker.split('.')[0]
+                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
                 results.append({
                     "ticker": ticker,
                     "company_name": company_name,
