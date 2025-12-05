@@ -136,6 +136,7 @@
             <th class="px-6 py-3 text-right font-semibold">Qty</th>
             <th class="px-6 py-3 text-right font-semibold">Avg Price</th>
             <th class="px-6 py-3 text-right font-semibold">Breakeven</th>
+            <th class="px-6 py-3 text-right font-semibold">DTE</th>
             <th class="px-6 py-3 text-right font-semibold">Days Open</th>
             <th class="px-6 py-3 text-center font-semibold">Status</th>
           </tr>
@@ -160,6 +161,19 @@
             </td>
             <td class="px-6 py-3 text-right font-medium text-gray-700 dark:text-gray-300">
                 ${{ "%.2f"|format(p.breakeven) }}
+            </td>
+            <td class="px-6 py-3 text-right font-mono font-bold">
+                {% if p.dte is not none %}
+                    {% if p.dte <= 3 %}
+                        <span class="text-red-600">{{ p.dte }}d</span>
+                    {% elif p.dte <= 7 %}
+                        <span class="text-yellow-600">{{ p.dte }}d</span>
+                    {% else %}
+                        <span class="text-gray-700 dark:text-gray-300">{{ p.dte }}d</span>
+                    {% endif %}
+                {% else %}
+                    -
+                {% endif %}
             </td>
             <td class="px-6 py-3 text-right text-gray-500">{{ "%.1f"|format(p.days_open) }}</td>
             <td class="px-6 py-3 text-center">
