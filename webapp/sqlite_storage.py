@@ -41,6 +41,9 @@ class LocalStorage(StorageProvider):
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("DELETE FROM reports WHERE created_at < ?", (cutoff,))
+                # VACUUM cannot be run inside a transaction
+                conn.commit()
+                conn.execute("VACUUM")
         except Exception:
             pass
 

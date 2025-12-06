@@ -15,9 +15,9 @@ from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
 
 # Cleanup interval in seconds
-CLEANUP_INTERVAL = 3600 # 1 hour
+CLEANUP_INTERVAL = 1200 # 20 minutes
 # Max age of reports in seconds
-MAX_REPORT_AGE = 3600 # 1 hour
+MAX_REPORT_AGE = 1200 # 20 minutes
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
