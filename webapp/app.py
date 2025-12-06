@@ -16,9 +16,9 @@ from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
 
 # Cleanup interval in seconds
-CLEANUP_INTERVAL = 3600 # 1 hour
+CLEANUP_INTERVAL = 1200 # 20 minutes
 # Max age of reports in seconds
-MAX_REPORT_AGE = 3600 # 1 hour
+MAX_REPORT_AGE = 1200 # 20 minutes
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
@@ -136,6 +136,10 @@ def create_app(testing: bool = False) -> Flask:
             )
         except Exception as e:
             return render_template("error.html", message=f"Failed to load dashboard: {e}")
+
+    @app.route("/health")
+    def health():
+        return "OK", 200
 
     @app.route("/", methods=["GET"])
     def index():
@@ -356,7 +360,7 @@ def create_app(testing: bool = False) -> Flask:
 
                 storage = get_storage_provider(app)
                 storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
-        
+
         except Exception as exc:
             return render_template("error.html", message=f"Failed to analyze data: {exc}")
 
