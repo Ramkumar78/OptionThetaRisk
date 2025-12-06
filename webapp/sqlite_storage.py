@@ -1,5 +1,6 @@
 import sqlite3
 import time
+import uuid
 from .storage import StorageProvider
 
 class LocalStorage(StorageProvider):
@@ -11,10 +12,6 @@ class LocalStorage(StorageProvider):
         with sqlite3.connect(self.db_path) as conn:
             # Migration: Drop old tables if schema changed significantly (Sandbox only)
             # In a real app, we'd use Alembic or similar.
-            # Here, we need to add username, password, etc.
-            # We'll just create if not exists, but the user table needs to be different.
-            # Let's drop users table to be safe since we are changing PK and fields.
-            # Check if columns exist? No, simplest is drop.
             try:
                 # Check if old table exists
                 cursor = conn.execute("PRAGMA table_info(users)")
@@ -60,6 +57,23 @@ class LocalStorage(StorageProvider):
                     username TEXT PRIMARY KEY,
                     data_json BLOB,
                     updated_at REAL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS journal_entries (
+                    id TEXT PRIMARY KEY,
+                    username TEXT,
+                    entry_date TEXT,
+                    entry_time TEXT,
+                    symbol TEXT,
+                    strategy TEXT,
+                    direction TEXT,
+                    entry_price REAL,
+                    exit_price REAL,
+                    qty REAL,
+                    pnl REAL,
+                    notes TEXT,
+                    created_at REAL
                 )
             """)
 
@@ -143,6 +157,43 @@ class LocalStorage(StorageProvider):
             if row:
                 return row[0]
         return None
+
+    def save_journal_entry(self, entry: dict) -> str:
+        with sqlite3.connect(self.db_path) as conn:
+            if 'id' not in entry or not entry['id']:
+                entry['id'] = str(uuid.uuid4())
+
+            # Check exist
+            cursor = conn.execute("SELECT id FROM journal_entries WHERE id = ?", (entry['id'],))
+            if cursor.fetchone():
+                # Update
+                fields = []
+                values = []
+                for k, v in entry.items():
+                    if k != 'id':
+                        fields.append(f"{k} = ?")
+                        values.append(v)
+                values.append(entry['id'])
+                conn.execute(f"UPDATE journal_entries SET {', '.join(fields)} WHERE id = ?", values)
+            else:
+                # Insert
+                keys = list(entry.keys())
+                values = list(entry.values())
+                placeholders = ",".join(["?"] * len(keys))
+                conn.execute(f"INSERT INTO journal_entries ({', '.join(keys)}) VALUES ({placeholders})", values)
+
+            return entry['id']
+
+    def get_journal_entries(self, username: str) -> list:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM journal_entries WHERE username = ? ORDER BY created_at DESC", (username,))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    def delete_journal_entry(self, username: str, entry_id: str) -> None:
+         with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM journal_entries WHERE username = ? AND id = ?", (username, entry_id))
 
     def close(self) -> None:
         pass

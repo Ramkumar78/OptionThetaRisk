@@ -1,5 +1,6 @@
 import os
 import time
+import uuid
 from abc import ABC, abstractmethod
 from flask import current_app
 import boto3
@@ -39,6 +40,22 @@ class Portfolio(Base):
     data_json = Column(LargeBinary) # Storing JSON as bytes/blob
     updated_at = Column(Float, default=time.time)
 
+class JournalEntry(Base):
+    __tablename__ = 'journal_entries'
+    id = Column(String, primary_key=True) # UUID
+    username = Column(String)
+    entry_date = Column(String)
+    entry_time = Column(String)
+    symbol = Column(String)
+    strategy = Column(String)
+    direction = Column(String)
+    entry_price = Column(Float)
+    exit_price = Column(Float)
+    qty = Column(Float)
+    pnl = Column(Float)
+    notes = Column(Text)
+    created_at = Column(Float, default=time.time)
+
 class StorageProvider(ABC):
     @abstractmethod
     def save_report(self, token: str, filename: str, data: bytes) -> None:
@@ -70,6 +87,18 @@ class StorageProvider(ABC):
 
     @abstractmethod
     def get_portfolio(self, username: str) -> bytes:
+        pass
+
+    @abstractmethod
+    def save_journal_entry(self, entry: dict) -> str:
+        pass
+
+    @abstractmethod
+    def get_journal_entries(self, username: str) -> list:
+        pass
+
+    @abstractmethod
+    def delete_journal_entry(self, username: str, entry_id: str) -> None:
         pass
 
     @abstractmethod
@@ -115,9 +144,6 @@ class PostgresStorage(StorageProvider):
             username = user_data.get('username')
             user = session.query(User).filter_by(username=username).first()
             if user:
-                # Update existing (e.g. login time) or overwrite?
-                # For registration, we assume check happens before.
-                # Here we just update/insert.
                 for k, v in user_data.items():
                     if hasattr(user, k):
                         setattr(user, k, v)
@@ -161,6 +187,42 @@ class PostgresStorage(StorageProvider):
         try:
             pf = session.query(Portfolio).filter_by(username=username).first()
             return pf.data_json if pf else None
+        finally:
+            session.close()
+
+    def save_journal_entry(self, entry: dict) -> str:
+        session = self.Session()
+        try:
+            if 'id' not in entry or not entry['id']:
+                entry['id'] = str(uuid.uuid4())
+
+            db_entry = session.query(JournalEntry).filter_by(id=entry['id']).first()
+            if db_entry:
+                for k, v in entry.items():
+                     if hasattr(db_entry, k):
+                        setattr(db_entry, k, v)
+            else:
+                db_entry = JournalEntry(**entry)
+                session.add(db_entry)
+
+            session.commit()
+            return entry['id']
+        finally:
+            session.close()
+
+    def get_journal_entries(self, username: str) -> list:
+        session = self.Session()
+        try:
+            entries = session.query(JournalEntry).filter_by(username=username).all()
+            return [{c.name: getattr(e, c.name) for c in JournalEntry.__table__.columns} for e in entries]
+        finally:
+            session.close()
+
+    def delete_journal_entry(self, username: str, entry_id: str) -> None:
+        session = self.Session()
+        try:
+            session.query(JournalEntry).filter_by(username=username, id=entry_id).delete()
+            session.commit()
         finally:
             session.close()
 
@@ -211,7 +273,6 @@ class S3Storage(StorageProvider):
             pass
 
     def save_user(self, user_data: dict) -> None:
-        # S3 simple impl: Store JSON
         username = user_data['username']
         key = f"users/{username}.json"
         try:
@@ -265,6 +326,67 @@ class S3Storage(StorageProvider):
             return None
         except Exception:
             return None
+
+    def _get_journal_s3_key(self, username: str) -> str:
+        return f"journal/{username}.json"
+
+    def save_journal_entry(self, entry: dict) -> str:
+        import json
+        username = entry['username']
+        key = self._get_journal_s3_key(username)
+
+        # Load existing
+        entries = self.get_journal_entries(username)
+
+        if 'id' not in entry or not entry['id']:
+            entry['id'] = str(uuid.uuid4())
+
+        # Update or Append
+        found = False
+        for i, e in enumerate(entries):
+            if e['id'] == entry['id']:
+                entries[i] = entry
+                found = True
+                break
+        if not found:
+            entries.append(entry)
+
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(entries).encode('utf-8')
+            )
+            return entry['id']
+        except Exception:
+            return None
+
+    def get_journal_entries(self, username: str) -> list:
+        import json
+        key = self._get_journal_s3_key(username)
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=key)
+            return json.loads(response['Body'].read().decode('utf-8'))
+        except self.s3.exceptions.NoSuchKey:
+            return []
+        except Exception:
+            return []
+
+    def delete_journal_entry(self, username: str, entry_id: str) -> None:
+        import json
+        key = self._get_journal_s3_key(username)
+        entries = self.get_journal_entries(username)
+
+        new_entries = [e for e in entries if e['id'] != entry_id]
+
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(new_entries).encode('utf-8')
+            )
+        except Exception:
+            pass
 
     def close(self) -> None:
         pass

@@ -11,10 +11,10 @@ import ssl
 from email.message import EmailMessage
 from typing import Optional
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from option_auditor import analyze_csv, screener
+from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
@@ -266,6 +266,46 @@ def create_app(testing: bool = False) -> Flask:
             if storage.get_portfolio(username):
                 has_portfolio = True
         return render_template("upload.html", has_portfolio=has_portfolio)
+
+    @app.route("/journal", methods=["GET"])
+    def journal_get_entries():
+        username = session.get('username')
+        storage = get_storage_provider(app)
+        entries = storage.get_journal_entries(username)
+        return jsonify(entries)
+
+    @app.route("/journal/add", methods=["POST"])
+    def journal_add_entry():
+        username = session.get('username')
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data"}), 400
+
+        data['username'] = username
+        data['created_at'] = time.time()
+
+        storage = get_storage_provider(app)
+        try:
+            entry_id = storage.save_journal_entry(data)
+            return jsonify({"success": True, "id": entry_id})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/journal/delete/<entry_id>", methods=["DELETE"])
+    def journal_delete_entry(entry_id):
+        username = session.get('username')
+        storage = get_storage_provider(app)
+        storage.delete_journal_entry(username, entry_id)
+        return jsonify({"success": True})
+
+    @app.route("/journal/analyze", methods=["POST"])
+    def journal_analyze_batch():
+        username = session.get('username')
+        storage = get_storage_provider(app)
+        entries = storage.get_journal_entries(username)
+
+        result = journal_analyzer.analyze_journal(entries)
+        return jsonify(result)
 
     @app.route("/screen", methods=["POST"])
     def screen():
