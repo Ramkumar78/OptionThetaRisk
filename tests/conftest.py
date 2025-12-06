@@ -15,12 +15,5 @@ def app():
 
 @pytest.fixture
 def client(app):
-    """A test client for the app (unauthenticated)."""
+    """A test client for the app."""
     return app.test_client()
-
-@pytest.fixture
-def authed_client(client):
-    """A test client with a user logged in."""
-    with client.session_transaction() as sess:
-        sess['username'] = "testuser"
-    return client

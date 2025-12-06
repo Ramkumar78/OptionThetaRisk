@@ -6,13 +6,9 @@ import uuid
 import threading
 import time
 import json
-import smtplib
-import ssl
-from email.message import EmailMessage
 from typing import Optional
 
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
 
 from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
@@ -23,7 +19,6 @@ from webapp.storage import get_storage_provider
 CLEANUP_INTERVAL = 3600 # 1 hour
 # Max age of reports in seconds
 MAX_REPORT_AGE = 3600 # 1 hour
-ADMIN_EMAIL = "shriram2222@gmail.com"
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
@@ -35,36 +30,6 @@ def cleanup_job(app):
             except Exception:
                 pass
             time.sleep(CLEANUP_INTERVAL)
-
-def send_email_background(subject, body, to_email):
-    """Sends an email in the background using smtplib."""
-    smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", 587))
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_password = os.environ.get("SMTP_PASSWORD")
-
-    if not smtp_user or not smtp_password:
-        print(f"[Mock Email] To: {to_email} | Subject: {subject} | Body: {body}")
-        return
-
-    try:
-        msg = EmailMessage()
-        msg.set_content(body)
-        msg["Subject"] = subject
-        msg["From"] = smtp_user
-        msg["To"] = to_email
-
-        context = ssl.create_default_context()
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls(context=context)
-            server.login(smtp_user, smtp_password)
-            server.send_message(msg)
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-
-def send_email_async(subject, body, to_email=ADMIN_EMAIL):
-    t = threading.Thread(target=send_email_background, args=(subject, body, to_email))
-    t.start()
 
 def create_app(testing: bool = False) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
@@ -79,7 +44,7 @@ def create_app(testing: bool = False) -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
 
     # Session config
-    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90) # Longer session for guest persistence
 
     if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
@@ -108,92 +73,11 @@ def create_app(testing: bool = False) -> Flask:
         return render_template("error.html", message="Upload too large. Max size is limited."), 413
 
     @app.before_request
-    def require_login():
-        # Allow static files and the login/register route
-        if request.endpoint in ['login', 'register', 'static', 'favicon']:
-            return
-
-        # Check if user is logged in
+    def ensure_guest_session():
+        # Ensure every visitor has a username (UUID) for storage keyed by username
         if 'username' not in session:
-            return redirect(url_for('login'))
-
-    @app.route("/register", methods=["GET", "POST"])
-    def register():
-        if request.method == "POST":
-            username = request.form.get("username", "").strip()
-            password = request.form.get("password", "").strip()
-            first_name = request.form.get("first_name", "").strip()
-            last_name = request.form.get("last_name", "").strip()
-            location = request.form.get("location", "").strip()
-            experience = request.form.get("trading_experience", "").strip()
-
-            if not username or not password:
-                flash("Username and password are required.", "error")
-                return render_template("register.html")
-
-            storage = get_storage_provider(app)
-            if storage.get_user(username):
-                flash("Username already exists.", "error")
-                return render_template("register.html")
-
-            user_data = {
-                "username": username,
-                "password_hash": generate_password_hash(password),
-                "first_name": first_name,
-                "last_name": last_name,
-                "location": location,
-                "trading_experience": experience,
-                "created_at": time.time(),
-                "last_login": time.time()
-            }
-
-            try:
-                storage.save_user(user_data)
-
-                # Notify Admin
-                send_email_async(
-                    subject=f"New User Registration: {username}",
-                    body=f"User: {first_name} {last_name} ({username})\nLocation: {location}\nExperience: {experience}\nTime: {datetime.now()}",
-                    to_email=ADMIN_EMAIL
-                )
-
-                flash("Registration successful! Please login.", "success")
-                return redirect(url_for('login'))
-            except Exception as e:
-                flash(f"Error creating account: {e}", "error")
-
-        return render_template("register.html")
-
-    @app.route("/login", methods=["GET", "POST"])
-    def login():
-        if request.method == "POST":
-            username = request.form.get("username", "").strip()
-            password = request.form.get("password", "").strip()
-
-            if username and password:
-                storage = get_storage_provider(app)
-                user = storage.get_user(username)
-
-                if user and check_password_hash(user['password_hash'], password):
-                    session['username'] = username
-                    session.permanent = True
-
-                    # Update login time
-                    user['last_login'] = time.time()
-                    storage.save_user(user) # Update
-
-                    return redirect(url_for('index'))
-                else:
-                    flash("Invalid username or password.", "error")
-            else:
-                flash("Please enter both username and password.", "error")
-
-        return render_template("login.html")
-
-    @app.route("/logout")
-    def logout():
-        session.pop('username', None)
-        return redirect(url_for('login'))
+            session['username'] = f"guest_{uuid.uuid4().hex}"
+            session.permanent = True
 
     @app.route("/feedback", methods=["POST"])
     def feedback():
@@ -204,11 +88,6 @@ def create_app(testing: bool = False) -> Flask:
             storage = get_storage_provider(app)
             try:
                 storage.save_feedback(username, message)
-                send_email_async(
-                    subject=f"New Feedback from {username}",
-                    body=f"User: {username}\n\nMessage:\n{message}",
-                    to_email=ADMIN_EMAIL
-                )
                 flash("Thank you for your feedback!", "success")
             except Exception as e:
                 flash("Failed to submit feedback. Please try again.", "error")
@@ -221,8 +100,9 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/dashboard")
     def dashboard():
         username = session.get('username')
+        # Username is guaranteed by before_request, but let's be safe
         if not username:
-            return redirect(url_for('login'))
+             return redirect(url_for('index'))
 
         storage = get_storage_provider(app)
         data_bytes = storage.get_portfolio(username)
