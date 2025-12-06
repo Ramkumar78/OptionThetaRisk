@@ -6,9 +6,12 @@ import uuid
 import threading
 import time
 import json
+import smtplib
+import ssl
+from email.message import EmailMessage
 from typing import Optional
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session
 
 from option_auditor import analyze_csv, screener
 from datetime import datetime, timedelta
@@ -18,6 +21,7 @@ from webapp.storage import get_storage_provider
 CLEANUP_INTERVAL = 3600 # 1 hour
 # Max age of reports in seconds
 MAX_REPORT_AGE = 3600 # 1 hour
+ADMIN_EMAIL = "shriram2222@gmail.com"
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
@@ -30,6 +34,36 @@ def cleanup_job(app):
                 pass
             time.sleep(CLEANUP_INTERVAL)
 
+def send_email_background(subject, body, to_email):
+    """Sends an email in the background using smtplib."""
+    smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+
+    if not smtp_user or not smtp_password:
+        print(f"[Mock Email] To: {to_email} | Subject: {subject} | Body: {body}")
+        return
+
+    try:
+        msg = EmailMessage()
+        msg.set_content(body)
+        msg["Subject"] = subject
+        msg["From"] = smtp_user
+        msg["To"] = to_email
+
+        context = ssl.create_default_context()
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls(context=context)
+            server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+def send_email_async(subject, body, to_email=ADMIN_EMAIL):
+    t = threading.Thread(target=send_email_background, args=(subject, body, to_email))
+    t.start()
+
 def create_app(testing: bool = False) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     # Ensure the instance folder exists
@@ -41,6 +75,9 @@ def create_app(testing: bool = False) -> Flask:
     app.config["TESTING"] = testing
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
+
+    # Session config
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
     if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
@@ -67,6 +104,70 @@ def create_app(testing: bool = False) -> Flask:
     @app.errorhandler(413)
     def too_large(e):
         return render_template("error.html", message="Upload too large. Max size is limited."), 413
+
+    @app.before_request
+    def require_login():
+        # Allow static files and the login route
+        if request.endpoint in ['login', 'static', 'favicon']:
+            return
+
+        # Check if user is logged in
+        if 'user_email' not in session:
+            return redirect(url_for('login'))
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if request.method == "POST":
+            email = request.form.get("email", "").strip().lower()
+            if email:
+                session['user_email'] = email
+                session.permanent = True
+
+                # Store user and notify admin
+                storage = get_storage_provider(app)
+                try:
+                    storage.save_user(email)
+                    send_email_async(
+                        subject=f"New User Login: {email}",
+                        body=f"User {email} has logged into Trade Auditor at {datetime.now()}.",
+                        to_email=ADMIN_EMAIL
+                    )
+                except Exception as e:
+                    print(f"Error saving user or sending email: {e}")
+
+                return redirect(url_for('index'))
+            else:
+                flash("Please enter a valid email address.", "error")
+
+        return render_template("login.html")
+
+    @app.route("/logout")
+    def logout():
+        session.pop('user_email', None)
+        return redirect(url_for('login'))
+
+    @app.route("/feedback", methods=["POST"])
+    def feedback():
+        message = request.form.get("message", "").strip()
+        email = session.get("user_email", "Anonymous")
+
+        if message:
+            storage = get_storage_provider(app)
+            try:
+                storage.save_feedback(email, message)
+                send_email_async(
+                    subject=f"New Feedback from {email}",
+                    body=f"User: {email}\n\nMessage:\n{message}",
+                    to_email=ADMIN_EMAIL
+                )
+                flash("Thank you for your feedback!", "success")
+            except Exception as e:
+                flash("Failed to submit feedback. Please try again.", "error")
+                print(f"Feedback error: {e}")
+        else:
+            flash("Feedback message cannot be empty.", "warning")
+
+        return redirect(request.referrer or url_for('index'))
 
     @app.route("/", methods=["GET"])
     def index():

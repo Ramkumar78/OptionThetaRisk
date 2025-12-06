@@ -3,7 +3,7 @@ import time
 from abc import ABC, abstractmethod
 from flask import current_app
 import boto3
-from sqlalchemy import create_engine, text, Column, String, LargeBinary, Float
+from sqlalchemy import create_engine, text, Column, String, LargeBinary, Float, Integer, Text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -13,6 +13,19 @@ class Report(Base):
     token = Column(String, primary_key=True)
     filename = Column(String, primary_key=True)
     data = Column(LargeBinary)
+    created_at = Column(Float, default=time.time)
+
+class User(Base):
+    __tablename__ = 'users'
+    email = Column(String, primary_key=True)
+    first_seen = Column(Float, default=time.time)
+    last_seen = Column(Float, default=time.time)
+
+class Feedback(Base):
+    __tablename__ = 'feedback'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String)
+    message = Column(Text)
     created_at = Column(Float, default=time.time)
 
 class StorageProvider(ABC):
@@ -26,6 +39,14 @@ class StorageProvider(ABC):
 
     @abstractmethod
     def cleanup_old_reports(self, max_age_seconds: int) -> None:
+        pass
+
+    @abstractmethod
+    def save_user(self, email: str) -> None:
+        pass
+
+    @abstractmethod
+    def save_feedback(self, email: str, message: str) -> None:
         pass
 
     @abstractmethod
@@ -61,6 +82,28 @@ class PostgresStorage(StorageProvider):
         try:
             cutoff = time.time() - max_age_seconds
             session.query(Report).filter(Report.created_at < cutoff).delete()
+            session.commit()
+        finally:
+            session.close()
+
+    def save_user(self, email: str) -> None:
+        session = self.Session()
+        try:
+            user = session.query(User).filter_by(email=email).first()
+            if user:
+                user.last_seen = time.time()
+            else:
+                user = User(email=email)
+            session.add(user)
+            session.commit()
+        finally:
+            session.close()
+
+    def save_feedback(self, email: str, message: str) -> None:
+        session = self.Session()
+        try:
+            feedback = Feedback(email=email, message=message)
+            session.add(feedback)
             session.commit()
         finally:
             session.close()
@@ -108,6 +151,29 @@ class S3Storage(StorageProvider):
                                 Bucket=self.bucket_name,
                                 Delete={'Objects': batch}
                             )
+        except Exception:
+            pass
+
+    def save_user(self, email: str) -> None:
+        key = f"users/{email}"
+        try:
+             self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=str(time.time()).encode('utf-8')
+            )
+        except Exception:
+            pass
+
+    def save_feedback(self, email: str, message: str) -> None:
+        timestamp = int(time.time())
+        key = f"feedback/{timestamp}_{email}.txt"
+        try:
+             self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=message.encode('utf-8')
+            )
         except Exception:
             pass
 

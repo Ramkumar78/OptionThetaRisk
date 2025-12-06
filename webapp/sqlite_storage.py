@@ -18,6 +18,21 @@ class LocalStorage(StorageProvider):
                     PRIMARY KEY (token, filename)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    email TEXT PRIMARY KEY,
+                    first_seen REAL,
+                    last_seen REAL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT,
+                    message TEXT,
+                    created_at REAL
+                )
+            """)
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -43,6 +58,22 @@ class LocalStorage(StorageProvider):
                 conn.execute("DELETE FROM reports WHERE created_at < ?", (cutoff,))
         except Exception:
             pass
+
+    def save_user(self, email: str) -> None:
+        now = time.time()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("SELECT email FROM users WHERE email = ?", (email,))
+            if cursor.fetchone():
+                conn.execute("UPDATE users SET last_seen = ? WHERE email = ?", (now, email))
+            else:
+                conn.execute("INSERT INTO users (email, first_seen, last_seen) VALUES (?, ?, ?)", (email, now, now))
+
+    def save_feedback(self, email: str, message: str) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO feedback (email, message, created_at) VALUES (?, ?, ?)",
+                (email, message, time.time())
+            )
 
     def close(self) -> None:
         pass
