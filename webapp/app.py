@@ -68,6 +68,10 @@ def create_app(testing: bool = False) -> Flask:
     def too_large(e):
         return render_template("error.html", message="Upload too large. Max size is limited."), 413
 
+    @app.route("/health")
+    def health():
+        return "OK", 200
+
     @app.route("/", methods=["GET"])
     def index():
         return render_template("upload.html")
