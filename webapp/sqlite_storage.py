@@ -9,6 +9,23 @@ class LocalStorage(StorageProvider):
 
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
+            # Migration: Drop old tables if schema changed significantly (Sandbox only)
+            # In a real app, we'd use Alembic or similar.
+            # Here, we need to add username, password, etc.
+            # We'll just create if not exists, but the user table needs to be different.
+            # Let's drop users table to be safe since we are changing PK and fields.
+            # Check if columns exist? No, simplest is drop.
+            try:
+                # Check if old table exists
+                cursor = conn.execute("PRAGMA table_info(users)")
+                cols = [row[1] for row in cursor.fetchall()]
+                if 'email' in cols and 'username' not in cols:
+                    conn.execute("DROP TABLE users")
+                    conn.execute("DROP TABLE portfolios") # Needs to be re-keyed
+                    conn.execute("DROP TABLE feedback")
+            except Exception:
+                pass
+
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS reports (
                     token TEXT,
@@ -20,22 +37,27 @@ class LocalStorage(StorageProvider):
             """)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    email TEXT PRIMARY KEY,
-                    first_seen REAL,
-                    last_seen REAL
+                    username TEXT PRIMARY KEY,
+                    password_hash TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    location TEXT,
+                    trading_experience TEXT,
+                    created_at REAL,
+                    last_login REAL
                 )
             """)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS feedback (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    email TEXT,
+                    username TEXT,
                     message TEXT,
                     created_at REAL
                 )
             """)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS portfolios (
-                    email TEXT PRIMARY KEY,
+                    username TEXT PRIMARY KEY,
                     data_json BLOB,
                     updated_at REAL
                 )
@@ -66,33 +88,56 @@ class LocalStorage(StorageProvider):
         except Exception:
             pass
 
-    def save_user(self, email: str) -> None:
-        now = time.time()
+    def save_user(self, user_data: dict) -> None:
+        username = user_data['username']
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("SELECT email FROM users WHERE email = ?", (email,))
+            # Check if user exists
+            cursor = conn.execute("SELECT username FROM users WHERE username = ?", (username,))
             if cursor.fetchone():
-                conn.execute("UPDATE users SET last_seen = ? WHERE email = ?", (now, email))
+                # Update
+                fields = []
+                values = []
+                for k, v in user_data.items():
+                    if k != 'username':
+                        fields.append(f"{k} = ?")
+                        values.append(v)
+                if fields:
+                    values.append(username)
+                    conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE username = ?", values)
             else:
-                conn.execute("INSERT INTO users (email, first_seen, last_seen) VALUES (?, ?, ?)", (email, now, now))
+                # Insert
+                keys = list(user_data.keys())
+                values = list(user_data.values())
+                placeholders = ",".join(["?"] * len(keys))
+                conn.execute(f"INSERT INTO users ({', '.join(keys)}) VALUES ({placeholders})", values)
 
-    def save_feedback(self, email: str, message: str) -> None:
+    def get_user(self, username: str) -> dict:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM users WHERE username = ?", (username,))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+        return None
+
+    def save_feedback(self, username: str, message: str) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO feedback (email, message, created_at) VALUES (?, ?, ?)",
-                (email, message, time.time())
+                "INSERT INTO feedback (username, message, created_at) VALUES (?, ?, ?)",
+                (username, message, time.time())
             )
 
-    def save_portfolio(self, email: str, data: bytes) -> None:
+    def save_portfolio(self, username: str, data: bytes) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO portfolios (email, data_json, updated_at) VALUES (?, ?, ?)",
-                (email, data, time.time())
+                "INSERT OR REPLACE INTO portfolios (username, data_json, updated_at) VALUES (?, ?, ?)",
+                (username, data, time.time())
             )
 
-    def get_portfolio(self, email: str) -> bytes:
+    def get_portfolio(self, username: str) -> bytes:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT data_json FROM portfolios WHERE email = ?", (email,)
+                "SELECT data_json FROM portfolios WHERE username = ?", (username,)
             )
             row = cursor.fetchone()
             if row:

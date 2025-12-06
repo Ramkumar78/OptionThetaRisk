@@ -12,6 +12,7 @@ from email.message import EmailMessage
 from typing import Optional
 
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from option_auditor import analyze_csv, screener
 from option_auditor.main_analyzer import refresh_dashboard_data
@@ -108,57 +109,104 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.before_request
     def require_login():
-        # Allow static files and the login route
-        if request.endpoint in ['login', 'static', 'favicon']:
+        # Allow static files and the login/register route
+        if request.endpoint in ['login', 'register', 'static', 'favicon']:
             return
 
         # Check if user is logged in
-        if 'user_email' not in session:
+        if 'username' not in session:
             return redirect(url_for('login'))
+
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        if request.method == "POST":
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "").strip()
+            first_name = request.form.get("first_name", "").strip()
+            last_name = request.form.get("last_name", "").strip()
+            location = request.form.get("location", "").strip()
+            experience = request.form.get("trading_experience", "").strip()
+
+            if not username or not password:
+                flash("Username and password are required.", "error")
+                return render_template("register.html")
+
+            storage = get_storage_provider(app)
+            if storage.get_user(username):
+                flash("Username already exists.", "error")
+                return render_template("register.html")
+
+            user_data = {
+                "username": username,
+                "password_hash": generate_password_hash(password),
+                "first_name": first_name,
+                "last_name": last_name,
+                "location": location,
+                "trading_experience": experience,
+                "created_at": time.time(),
+                "last_login": time.time()
+            }
+
+            try:
+                storage.save_user(user_data)
+
+                # Notify Admin
+                send_email_async(
+                    subject=f"New User Registration: {username}",
+                    body=f"User: {first_name} {last_name} ({username})\nLocation: {location}\nExperience: {experience}\nTime: {datetime.now()}",
+                    to_email=ADMIN_EMAIL
+                )
+
+                flash("Registration successful! Please login.", "success")
+                return redirect(url_for('login'))
+            except Exception as e:
+                flash(f"Error creating account: {e}", "error")
+
+        return render_template("register.html")
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
-            email = request.form.get("email", "").strip().lower()
-            if email:
-                session['user_email'] = email
-                session.permanent = True
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "").strip()
 
-                # Store user and notify admin
+            if username and password:
                 storage = get_storage_provider(app)
-                try:
-                    storage.save_user(email)
-                    send_email_async(
-                        subject=f"New User Login: {email}",
-                        body=f"User {email} has logged into Trade Auditor at {datetime.now()}.",
-                        to_email=ADMIN_EMAIL
-                    )
-                except Exception as e:
-                    print(f"Error saving user or sending email: {e}")
+                user = storage.get_user(username)
 
-                return redirect(url_for('index'))
+                if user and check_password_hash(user['password_hash'], password):
+                    session['username'] = username
+                    session.permanent = True
+
+                    # Update login time
+                    user['last_login'] = time.time()
+                    storage.save_user(user) # Update
+
+                    return redirect(url_for('index'))
+                else:
+                    flash("Invalid username or password.", "error")
             else:
-                flash("Please enter a valid email address.", "error")
+                flash("Please enter both username and password.", "error")
 
         return render_template("login.html")
 
     @app.route("/logout")
     def logout():
-        session.pop('user_email', None)
+        session.pop('username', None)
         return redirect(url_for('login'))
 
     @app.route("/feedback", methods=["POST"])
     def feedback():
         message = request.form.get("message", "").strip()
-        email = session.get("user_email", "Anonymous")
+        username = session.get("username", "Anonymous")
 
         if message:
             storage = get_storage_provider(app)
             try:
-                storage.save_feedback(email, message)
+                storage.save_feedback(username, message)
                 send_email_async(
-                    subject=f"New Feedback from {email}",
-                    body=f"User: {email}\n\nMessage:\n{message}",
+                    subject=f"New Feedback from {username}",
+                    body=f"User: {username}\n\nMessage:\n{message}",
                     to_email=ADMIN_EMAIL
                 )
                 flash("Thank you for your feedback!", "success")
@@ -172,12 +220,12 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route("/dashboard")
     def dashboard():
-        email = session.get('user_email')
-        if not email:
+        username = session.get('username')
+        if not username:
             return redirect(url_for('login'))
 
         storage = get_storage_provider(app)
-        data_bytes = storage.get_portfolio(email)
+        data_bytes = storage.get_portfolio(username)
 
         if not data_bytes:
             flash("No saved portfolio found. Please upload a CSV first.", "info")
@@ -211,11 +259,11 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route("/", methods=["GET"])
     def index():
-        email = session.get('user_email')
+        username = session.get('username')
         has_portfolio = False
-        if email:
+        if username:
             storage = get_storage_provider(app)
-            if storage.get_portfolio(email):
+            if storage.get_portfolio(username):
                 has_portfolio = True
         return render_template("upload.html", has_portfolio=has_portfolio)
 
@@ -375,8 +423,8 @@ def create_app(testing: bool = False) -> Flask:
                 storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
 
             # Save for Persistence
-            email = session.get('user_email')
-            if email and "error" not in res:
+            username = session.get('username')
+            if username and "error" not in res:
                 to_save = res.copy()
                 if "excel_report" in to_save:
                     del to_save["excel_report"]
@@ -387,7 +435,7 @@ def create_app(testing: bool = False) -> Flask:
                 to_save["style"] = style
 
                 storage = get_storage_provider(app)
-                storage.save_portfolio(email, json.dumps(to_save).encode('utf-8'))
+                storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
         
         except Exception as exc:
             return render_template("error.html", message=f"Failed to analyze data: {exc}")

@@ -17,20 +17,25 @@ class Report(Base):
 
 class User(Base):
     __tablename__ = 'users'
-    email = Column(String, primary_key=True)
-    first_seen = Column(Float, default=time.time)
-    last_seen = Column(Float, default=time.time)
+    username = Column(String, primary_key=True)
+    password_hash = Column(String)
+    first_name = Column(String)
+    last_name = Column(String)
+    location = Column(String)
+    trading_experience = Column(String)
+    created_at = Column(Float, default=time.time)
+    last_login = Column(Float, default=time.time)
 
 class Feedback(Base):
     __tablename__ = 'feedback'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    email = Column(String)
+    username = Column(String)
     message = Column(Text)
     created_at = Column(Float, default=time.time)
 
 class Portfolio(Base):
     __tablename__ = 'portfolios'
-    email = Column(String, primary_key=True)
+    username = Column(String, primary_key=True)
     data_json = Column(LargeBinary) # Storing JSON as bytes/blob
     updated_at = Column(Float, default=time.time)
 
@@ -48,19 +53,23 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def save_user(self, email: str) -> None:
+    def save_user(self, user_data: dict) -> None:
         pass
 
     @abstractmethod
-    def save_feedback(self, email: str, message: str) -> None:
+    def get_user(self, username: str) -> dict:
         pass
 
     @abstractmethod
-    def save_portfolio(self, email: str, data: bytes) -> None:
+    def save_feedback(self, username: str, message: str) -> None:
         pass
 
     @abstractmethod
-    def get_portfolio(self, email: str) -> bytes:
+    def save_portfolio(self, username: str, data: bytes) -> None:
+        pass
+
+    @abstractmethod
+    def get_portfolio(self, username: str) -> bytes:
         pass
 
     @abstractmethod
@@ -100,41 +109,57 @@ class PostgresStorage(StorageProvider):
         finally:
             session.close()
 
-    def save_user(self, email: str) -> None:
+    def save_user(self, user_data: dict) -> None:
         session = self.Session()
         try:
-            user = session.query(User).filter_by(email=email).first()
+            username = user_data.get('username')
+            user = session.query(User).filter_by(username=username).first()
             if user:
-                user.last_seen = time.time()
+                # Update existing (e.g. login time) or overwrite?
+                # For registration, we assume check happens before.
+                # Here we just update/insert.
+                for k, v in user_data.items():
+                    if hasattr(user, k):
+                        setattr(user, k, v)
             else:
-                user = User(email=email)
+                user = User(**user_data)
             session.add(user)
             session.commit()
         finally:
             session.close()
 
-    def save_feedback(self, email: str, message: str) -> None:
+    def get_user(self, username: str) -> dict:
         session = self.Session()
         try:
-            feedback = Feedback(email=email, message=message)
+            user = session.query(User).filter_by(username=username).first()
+            if user:
+                return {c.name: getattr(user, c.name) for c in User.__table__.columns}
+            return None
+        finally:
+            session.close()
+
+    def save_feedback(self, username: str, message: str) -> None:
+        session = self.Session()
+        try:
+            feedback = Feedback(username=username, message=message)
             session.add(feedback)
             session.commit()
         finally:
             session.close()
 
-    def save_portfolio(self, email: str, data: bytes) -> None:
+    def save_portfolio(self, username: str, data: bytes) -> None:
         session = self.Session()
         try:
-            pf = Portfolio(email=email, data_json=data, updated_at=time.time())
+            pf = Portfolio(username=username, data_json=data, updated_at=time.time())
             session.merge(pf)
             session.commit()
         finally:
             session.close()
 
-    def get_portfolio(self, email: str) -> bytes:
+    def get_portfolio(self, username: str) -> bytes:
         session = self.Session()
         try:
-            pf = session.query(Portfolio).filter_by(email=email).first()
+            pf = session.query(Portfolio).filter_by(username=username).first()
             return pf.data_json if pf else None
         finally:
             session.close()
@@ -185,20 +210,32 @@ class S3Storage(StorageProvider):
         except Exception:
             pass
 
-    def save_user(self, email: str) -> None:
-        key = f"users/{email}"
+    def save_user(self, user_data: dict) -> None:
+        # S3 simple impl: Store JSON
+        username = user_data['username']
+        key = f"users/{username}.json"
         try:
+             import json
              self.s3.put_object(
                 Bucket=self.bucket_name,
                 Key=key,
-                Body=str(time.time()).encode('utf-8')
+                Body=json.dumps(user_data).encode('utf-8')
             )
         except Exception:
             pass
 
-    def save_feedback(self, email: str, message: str) -> None:
+    def get_user(self, username: str) -> dict:
+        key = f"users/{username}.json"
+        try:
+            import json
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=key)
+            return json.loads(response['Body'].read().decode('utf-8'))
+        except Exception:
+            return None
+
+    def save_feedback(self, username: str, message: str) -> None:
         timestamp = int(time.time())
-        key = f"feedback/{timestamp}_{email}.txt"
+        key = f"feedback/{timestamp}_{username}.txt"
         try:
              self.s3.put_object(
                 Bucket=self.bucket_name,
@@ -208,8 +245,8 @@ class S3Storage(StorageProvider):
         except Exception:
             pass
 
-    def save_portfolio(self, email: str, data: bytes) -> None:
-        key = f"portfolios/{email}.json"
+    def save_portfolio(self, username: str, data: bytes) -> None:
+        key = f"portfolios/{username}.json"
         try:
             self.s3.put_object(
                 Bucket=self.bucket_name,
@@ -219,8 +256,8 @@ class S3Storage(StorageProvider):
         except Exception:
             pass
 
-    def get_portfolio(self, email: str) -> bytes:
-        key = f"portfolios/{email}.json"
+    def get_portfolio(self, username: str) -> bytes:
+        key = f"portfolios/{username}.json"
         try:
             response = self.s3.get_object(Bucket=self.bucket_name, Key=key)
             return response['Body'].read()

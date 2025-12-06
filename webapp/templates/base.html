@@ -114,7 +114,7 @@
                 Feedback
             </button>
         </li>
-        {% if session.get('user_email') %}
+        {% if session.get('username') %}
         <li><a href="/logout" class="text-red-500 hover:text-red-600 transition-colors">Logout</a></li>
         {% endif %}
       </ul>
