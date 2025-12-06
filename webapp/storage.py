@@ -28,6 +28,12 @@ class Feedback(Base):
     message = Column(Text)
     created_at = Column(Float, default=time.time)
 
+class Portfolio(Base):
+    __tablename__ = 'portfolios'
+    email = Column(String, primary_key=True)
+    data_json = Column(LargeBinary) # Storing JSON as bytes/blob
+    updated_at = Column(Float, default=time.time)
+
 class StorageProvider(ABC):
     @abstractmethod
     def save_report(self, token: str, filename: str, data: bytes) -> None:
@@ -47,6 +53,14 @@ class StorageProvider(ABC):
 
     @abstractmethod
     def save_feedback(self, email: str, message: str) -> None:
+        pass
+
+    @abstractmethod
+    def save_portfolio(self, email: str, data: bytes) -> None:
+        pass
+
+    @abstractmethod
+    def get_portfolio(self, email: str) -> bytes:
         pass
 
     @abstractmethod
@@ -105,6 +119,23 @@ class PostgresStorage(StorageProvider):
             feedback = Feedback(email=email, message=message)
             session.add(feedback)
             session.commit()
+        finally:
+            session.close()
+
+    def save_portfolio(self, email: str, data: bytes) -> None:
+        session = self.Session()
+        try:
+            pf = Portfolio(email=email, data_json=data, updated_at=time.time())
+            session.merge(pf)
+            session.commit()
+        finally:
+            session.close()
+
+    def get_portfolio(self, email: str) -> bytes:
+        session = self.Session()
+        try:
+            pf = session.query(Portfolio).filter_by(email=email).first()
+            return pf.data_json if pf else None
         finally:
             session.close()
 
@@ -176,6 +207,27 @@ class S3Storage(StorageProvider):
             )
         except Exception:
             pass
+
+    def save_portfolio(self, email: str, data: bytes) -> None:
+        key = f"portfolios/{email}.json"
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=data
+            )
+        except Exception:
+            pass
+
+    def get_portfolio(self, email: str) -> bytes:
+        key = f"portfolios/{email}.json"
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=key)
+            return response['Body'].read()
+        except self.s3.exceptions.NoSuchKey:
+            return None
+        except Exception:
+            return None
 
     def close(self) -> None:
         pass

@@ -33,6 +33,13 @@ class LocalStorage(StorageProvider):
                     created_at REAL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS portfolios (
+                    email TEXT PRIMARY KEY,
+                    data_json BLOB,
+                    updated_at REAL
+                )
+            """)
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -74,6 +81,23 @@ class LocalStorage(StorageProvider):
                 "INSERT INTO feedback (email, message, created_at) VALUES (?, ?, ?)",
                 (email, message, time.time())
             )
+
+    def save_portfolio(self, email: str, data: bytes) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO portfolios (email, data_json, updated_at) VALUES (?, ?, ?)",
+                (email, data, time.time())
+            )
+
+    def get_portfolio(self, email: str) -> bytes:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT data_json FROM portfolios WHERE email = ?", (email,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+        return None
 
     def close(self) -> None:
         pass

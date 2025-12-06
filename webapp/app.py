@@ -14,6 +14,7 @@ from typing import Optional
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session
 
 from option_auditor import analyze_csv, screener
+from option_auditor.main_analyzer import refresh_dashboard_data
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
 
@@ -169,9 +170,54 @@ def create_app(testing: bool = False) -> Flask:
 
         return redirect(request.referrer or url_for('index'))
 
+    @app.route("/dashboard")
+    def dashboard():
+        email = session.get('user_email')
+        if not email:
+            return redirect(url_for('login'))
+
+        storage = get_storage_provider(app)
+        data_bytes = storage.get_portfolio(email)
+
+        if not data_bytes:
+            flash("No saved portfolio found. Please upload a CSV first.", "info")
+            return redirect(url_for('index'))
+
+        try:
+            saved_data = json.loads(data_bytes)
+
+            # Refresh with Live Data
+            updated_data = refresh_dashboard_data(saved_data)
+
+            # Add display metadata
+            last_saved = "Unknown"
+            if "saved_at" in updated_data:
+                try:
+                    dt = datetime.fromisoformat(updated_data["saved_at"])
+                    last_saved = dt.strftime("%Y-%m-%d %H:%M")
+                except:
+                    pass
+
+            return render_template(
+                "results.html",
+                dashboard_mode=True,
+                last_updated=last_saved,
+                token=updated_data.get("token", uuid.uuid4().hex),
+                style=updated_data.get("style", "income"),
+                **updated_data
+            )
+        except Exception as e:
+            return render_template("error.html", message=f"Failed to load dashboard: {e}")
+
     @app.route("/", methods=["GET"])
     def index():
-        return render_template("upload.html")
+        email = session.get('user_email')
+        has_portfolio = False
+        if email:
+            storage = get_storage_provider(app)
+            if storage.get_portfolio(email):
+                has_portfolio = True
+        return render_template("upload.html", has_portfolio=has_portfolio)
 
     @app.route("/screen", methods=["POST"])
     def screen():
@@ -327,6 +373,21 @@ def create_app(testing: bool = False) -> Flask:
             if res.get("excel_report"):
                 storage = get_storage_provider(app)
                 storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
+
+            # Save for Persistence
+            email = session.get('user_email')
+            if email and "error" not in res:
+                to_save = res.copy()
+                if "excel_report" in to_save:
+                    del to_save["excel_report"]
+
+                to_save["saved_at"] = datetime.now().isoformat()
+                # Persist token and style too
+                to_save["token"] = token
+                to_save["style"] = style
+
+                storage = get_storage_provider(app)
+                storage.save_portfolio(email, json.dumps(to_save).encode('utf-8'))
         
         except Exception as exc:
             return render_template("error.html", message=f"Failed to analyze data: {exc}")

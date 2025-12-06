@@ -10,6 +10,7 @@ import io
 import yfinance as yf
 from datetime import datetime
 from collections import defaultdict
+import copy
 
 def _calculate_drawdown(strategies: List[Any]) -> float:
     """Returns Max Drawdown ($) based on closed equity curve."""
@@ -345,6 +346,137 @@ def _format_legs(strat) -> str:
     # Sort for consistency (e.g. puts ascending, calls ascending)
     # Simple alpha sort is good enough for V1 "390P, 400P"
     return "/".join(sorted(list(items)))
+
+def refresh_dashboard_data(saved_data: Dict) -> Dict:
+    """
+    Refreshes the 'open_positions' in the saved analysis result with live prices.
+    Re-calculates PnL (approx), Risk Alerts, and Verdicts based on new data.
+    """
+    data = copy.deepcopy(saved_data)
+    open_positions = data.get("open_positions", [])
+
+    if not open_positions:
+        return data
+
+    # 1. Identify Symbols
+    symbols = list({p["symbol"] for p in open_positions if p.get("symbol")})
+
+    # 2. Fetch Live Prices
+    norm_map = {s: _normalize_ticker(s) for s in symbols}
+    live_prices = _fetch_live_prices(list(norm_map.values()))
+
+    # Map back to raw symbol
+    current_prices = {}
+    for raw, norm in norm_map.items():
+        if norm in live_prices:
+            current_prices[raw] = live_prices[norm]
+
+    # 3. Update Positions & Check Risk
+    # We need to re-aggregate per symbol for "Net Intrinsic Exposure" check
+    net_exposure_map = defaultdict(float)
+
+    # First pass: Calculate Exposure
+    for p in open_positions:
+        sym = p["symbol"]
+        if sym not in current_prices:
+            continue
+
+        cp = current_prices[sym]
+        qty = p.get("qty_open", 0)
+        strike = p.get("strike") # May be None/NaN if stock?
+        # Ensure strike is float if present
+        try:
+             strike = float(strike) if strike else 0.0
+        except:
+             strike = 0.0
+
+        right = p.get("contract", "").split(" ")[0] if "contract" in p else ""
+        # The 'contract' field is like "P 400.0" or "C 150.0" or just "Stock" (if constructed that way)
+        # Actually 'contract' in open_rows is "P 400.0" or "C 150.0".
+        # But 'right' might not be explicitly stored in open_rows?
+        # Wait, 'open_rows' has 'contract' which is built from 'right' and 'strike'.
+        # AND check if 'right' is in the dict? No.
+        # We need to parse 'contract' string "P 400.0".
+
+        is_put = "P " in p["contract"]
+        is_call = "C " in p["contract"]
+
+        intrinsic = 0.0
+        if is_call:
+            intrinsic = max(0.0, cp - strike) * qty * 100
+        elif is_put:
+            intrinsic = max(0.0, strike - cp) * qty * 100
+        else:
+             # Stock
+             intrinsic = cp * qty
+
+        net_exposure_map[sym] += intrinsic
+
+    # Second pass: Update Row
+    itm_risk_flag = False
+    itm_risk_details = []
+    total_risk_amt = 0.0
+
+    for sym, net_val in net_exposure_map.items():
+        if net_val < -500:
+            itm_risk_flag = True
+            total_risk_amt += abs(net_val)
+            itm_risk_details.append(f"{sym}: Net ITM Exposure -${abs(net_val):,.0f}")
+
+    for p in open_positions:
+        sym = p["symbol"]
+        p["current_price"] = current_prices.get(sym)
+
+        # Clear old alerts
+        if "risk_alert" in p:
+            del p["risk_alert"]
+
+        # Re-check DTE
+        # p["expiry"] is ISO string "YYYY-MM-DD"
+        dte = 0
+        if p.get("expiry"):
+             try:
+                 exp_dt = datetime.fromisoformat(p["expiry"])
+                 dte = (exp_dt - datetime.now()).days
+                 p["dte"] = dte
+             except:
+                 pass
+
+        if dte <= 0:
+            p["risk_alert"] = "Expiring Today"
+        elif dte <= 3:
+            p["risk_alert"] = "Gamma Risk (<3d)"
+
+        # ITM Risk Alert (Row level)
+        if itm_risk_flag and sym in current_prices:
+             # Check if this specific leg is the problem
+             cp = current_prices[sym]
+             qty = p.get("qty_open", 0)
+             if qty < 0 and " " in p.get("contract", ""):
+                  # Parse strike again
+                  parts = p["contract"].split(" ")
+                  if len(parts) >= 2:
+                       try:
+                           strike = float(parts[1])
+                           right = parts[0]
+                           is_risky = False
+                           if right == 'P' and cp < strike and (strike-cp)/strike > 0.01:
+                               is_risky = True
+                           elif right == 'C' and cp > strike and (cp-strike)/strike > 0.01:
+                               is_risky = True
+
+                           if is_risky:
+                               p["risk_alert"] = "ITM Risk"
+                       except:
+                           pass
+
+    # Update Verdict if Risk Changed
+    if itm_risk_flag:
+        data["verdict"] = "Red Flag: High Open Risk"
+        data["verdict_color"] = "red"
+        data["verdict_details"] = f"Warning: {len(itm_risk_details)} positions are deep ITM. Total Intrinsic Exposure: -${total_risk_amt:,.2f}."
+
+    return data
 
 def analyze_csv(csv_path: Optional[str] = None,
                 broker: str = "auto",
