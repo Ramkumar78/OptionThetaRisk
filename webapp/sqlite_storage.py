@@ -198,5 +198,43 @@ class LocalStorage(StorageProvider):
          with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM journal_entries WHERE username = ? AND id = ?", (username, entry_id))
 
+    def save_upload(self, key: str, data: bytes) -> None:
+        # In LocalStorage, we can reuse the reports table or create a new one.
+        # For simplicity, let's use a "temp_" prefix in filename in reports table
+        # or create a dedicated table. Let's create a dedicated table if not exists.
+
+        # Or even simpler: Use the reports table with a special token/filename convention?
+        # No, clean separation is better.
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS uploads (
+                    key TEXT PRIMARY KEY,
+                    data BLOB,
+                    created_at REAL
+                )
+            """)
+            conn.execute(
+                "INSERT OR REPLACE INTO uploads (key, data, created_at) VALUES (?, ?, ?)",
+                (key, data, time.time())
+            )
+
+    def get_upload(self, key: str) -> bytes:
+        with sqlite3.connect(self.db_path) as conn:
+            # Ensure table exists
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS uploads (
+                    key TEXT PRIMARY KEY,
+                    data BLOB,
+                    created_at REAL
+                )
+            """)
+            cursor = conn.execute(
+                "SELECT data FROM uploads WHERE key = ?", (key,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+        return None
+
     def close(self) -> None:
         pass

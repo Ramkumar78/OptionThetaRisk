@@ -11,3 +11,5 @@ boto3>=1.28.0
 SQLAlchemy>=2.0
 psycopg2-binary>=2.9.0
 pandas_ta==0.4.71b0
+celery[redis]>=5.2.0
+redis>=4.0.0

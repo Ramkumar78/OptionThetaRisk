@@ -1,0 +1,8 @@
+
+    @abstractmethod
+    def save_upload(self, key: str, data: bytes) -> None:
+        pass
+
+    @abstractmethod
+    def get_upload(self, key: str) -> bytes:
+        pass
