@@ -1,9 +1,10 @@
 import os
 import time
+import uuid
 from abc import ABC, abstractmethod
 from flask import current_app
 import boto3
-from sqlalchemy import create_engine, text, Column, String, LargeBinary, Float
+from sqlalchemy import create_engine, text, Column, String, LargeBinary, Float, Integer, Text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -13,6 +14,46 @@ class Report(Base):
     token = Column(String, primary_key=True)
     filename = Column(String, primary_key=True)
     data = Column(LargeBinary)
+    created_at = Column(Float, default=time.time)
+
+class User(Base):
+    __tablename__ = 'users'
+    username = Column(String, primary_key=True)
+    password_hash = Column(String)
+    first_name = Column(String)
+    last_name = Column(String)
+    location = Column(String)
+    trading_experience = Column(String)
+    created_at = Column(Float, default=time.time)
+    last_login = Column(Float, default=time.time)
+
+class Feedback(Base):
+    __tablename__ = 'feedback'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String)
+    message = Column(Text)
+    created_at = Column(Float, default=time.time)
+
+class Portfolio(Base):
+    __tablename__ = 'portfolios'
+    username = Column(String, primary_key=True)
+    data_json = Column(LargeBinary) # Storing JSON as bytes/blob
+    updated_at = Column(Float, default=time.time)
+
+class JournalEntry(Base):
+    __tablename__ = 'journal_entries'
+    id = Column(String, primary_key=True) # UUID
+    username = Column(String)
+    entry_date = Column(String)
+    entry_time = Column(String)
+    symbol = Column(String)
+    strategy = Column(String)
+    direction = Column(String)
+    entry_price = Column(Float)
+    exit_price = Column(Float)
+    qty = Column(Float)
+    pnl = Column(Float)
+    notes = Column(Text)
     created_at = Column(Float, default=time.time)
 
 class StorageProvider(ABC):
@@ -26,6 +67,38 @@ class StorageProvider(ABC):
 
     @abstractmethod
     def cleanup_old_reports(self, max_age_seconds: int) -> None:
+        pass
+
+    @abstractmethod
+    def save_user(self, user_data: dict) -> None:
+        pass
+
+    @abstractmethod
+    def get_user(self, username: str) -> dict:
+        pass
+
+    @abstractmethod
+    def save_feedback(self, username: str, message: str) -> None:
+        pass
+
+    @abstractmethod
+    def save_portfolio(self, username: str, data: bytes) -> None:
+        pass
+
+    @abstractmethod
+    def get_portfolio(self, username: str) -> bytes:
+        pass
+
+    @abstractmethod
+    def save_journal_entry(self, entry: dict) -> str:
+        pass
+
+    @abstractmethod
+    def get_journal_entries(self, username: str) -> list:
+        pass
+
+    @abstractmethod
+    def delete_journal_entry(self, username: str, entry_id: str) -> None:
         pass
 
     @abstractmethod
@@ -61,6 +134,94 @@ class PostgresStorage(StorageProvider):
         try:
             cutoff = time.time() - max_age_seconds
             session.query(Report).filter(Report.created_at < cutoff).delete()
+            session.commit()
+        finally:
+            session.close()
+
+    def save_user(self, user_data: dict) -> None:
+        session = self.Session()
+        try:
+            username = user_data.get('username')
+            user = session.query(User).filter_by(username=username).first()
+            if user:
+                for k, v in user_data.items():
+                    if hasattr(user, k):
+                        setattr(user, k, v)
+            else:
+                user = User(**user_data)
+            session.add(user)
+            session.commit()
+        finally:
+            session.close()
+
+    def get_user(self, username: str) -> dict:
+        session = self.Session()
+        try:
+            user = session.query(User).filter_by(username=username).first()
+            if user:
+                return {c.name: getattr(user, c.name) for c in User.__table__.columns}
+            return None
+        finally:
+            session.close()
+
+    def save_feedback(self, username: str, message: str) -> None:
+        session = self.Session()
+        try:
+            feedback = Feedback(username=username, message=message)
+            session.add(feedback)
+            session.commit()
+        finally:
+            session.close()
+
+    def save_portfolio(self, username: str, data: bytes) -> None:
+        session = self.Session()
+        try:
+            pf = Portfolio(username=username, data_json=data, updated_at=time.time())
+            session.merge(pf)
+            session.commit()
+        finally:
+            session.close()
+
+    def get_portfolio(self, username: str) -> bytes:
+        session = self.Session()
+        try:
+            pf = session.query(Portfolio).filter_by(username=username).first()
+            return pf.data_json if pf else None
+        finally:
+            session.close()
+
+    def save_journal_entry(self, entry: dict) -> str:
+        session = self.Session()
+        try:
+            if 'id' not in entry or not entry['id']:
+                entry['id'] = str(uuid.uuid4())
+
+            db_entry = session.query(JournalEntry).filter_by(id=entry['id']).first()
+            if db_entry:
+                for k, v in entry.items():
+                     if hasattr(db_entry, k):
+                        setattr(db_entry, k, v)
+            else:
+                db_entry = JournalEntry(**entry)
+                session.add(db_entry)
+
+            session.commit()
+            return entry['id']
+        finally:
+            session.close()
+
+    def get_journal_entries(self, username: str) -> list:
+        session = self.Session()
+        try:
+            entries = session.query(JournalEntry).filter_by(username=username).all()
+            return [{c.name: getattr(e, c.name) for c in JournalEntry.__table__.columns} for e in entries]
+        finally:
+            session.close()
+
+    def delete_journal_entry(self, username: str, entry_id: str) -> None:
+        session = self.Session()
+        try:
+            session.query(JournalEntry).filter_by(username=username, id=entry_id).delete()
             session.commit()
         finally:
             session.close()
@@ -108,6 +269,122 @@ class S3Storage(StorageProvider):
                                 Bucket=self.bucket_name,
                                 Delete={'Objects': batch}
                             )
+        except Exception:
+            pass
+
+    def save_user(self, user_data: dict) -> None:
+        username = user_data['username']
+        key = f"users/{username}.json"
+        try:
+             import json
+             self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(user_data).encode('utf-8')
+            )
+        except Exception:
+            pass
+
+    def get_user(self, username: str) -> dict:
+        key = f"users/{username}.json"
+        try:
+            import json
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=key)
+            return json.loads(response['Body'].read().decode('utf-8'))
+        except Exception:
+            return None
+
+    def save_feedback(self, username: str, message: str) -> None:
+        timestamp = int(time.time())
+        key = f"feedback/{timestamp}_{username}.txt"
+        try:
+             self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=message.encode('utf-8')
+            )
+        except Exception:
+            pass
+
+    def save_portfolio(self, username: str, data: bytes) -> None:
+        key = f"portfolios/{username}.json"
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=data
+            )
+        except Exception:
+            pass
+
+    def get_portfolio(self, username: str) -> bytes:
+        key = f"portfolios/{username}.json"
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=key)
+            return response['Body'].read()
+        except self.s3.exceptions.NoSuchKey:
+            return None
+        except Exception:
+            return None
+
+    def _get_journal_s3_key(self, username: str) -> str:
+        return f"journal/{username}.json"
+
+    def save_journal_entry(self, entry: dict) -> str:
+        import json
+        username = entry['username']
+        key = self._get_journal_s3_key(username)
+
+        # Load existing
+        entries = self.get_journal_entries(username)
+
+        if 'id' not in entry or not entry['id']:
+            entry['id'] = str(uuid.uuid4())
+
+        # Update or Append
+        found = False
+        for i, e in enumerate(entries):
+            if e['id'] == entry['id']:
+                entries[i] = entry
+                found = True
+                break
+        if not found:
+            entries.append(entry)
+
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(entries).encode('utf-8')
+            )
+            return entry['id']
+        except Exception:
+            return None
+
+    def get_journal_entries(self, username: str) -> list:
+        import json
+        key = self._get_journal_s3_key(username)
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=key)
+            return json.loads(response['Body'].read().decode('utf-8'))
+        except self.s3.exceptions.NoSuchKey:
+            return []
+        except Exception:
+            return []
+
+    def delete_journal_entry(self, username: str, entry_id: str) -> None:
+        import json
+        key = self._get_journal_s3_key(username)
+        entries = self.get_journal_entries(username)
+
+        new_entries = [e for e in entries if e['id'] != entry_id]
+
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(new_entries).encode('utf-8')
+            )
         except Exception:
             pass
 

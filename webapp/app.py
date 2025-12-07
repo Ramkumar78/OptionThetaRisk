@@ -8,9 +8,10 @@ import time
 import json
 from typing import Optional
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session, jsonify
 
-from option_auditor import analyze_csv, screener
+from option_auditor import analyze_csv, screener, journal_analyzer
+from option_auditor.main_analyzer import refresh_dashboard_data
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
 
@@ -42,6 +43,9 @@ def create_app(testing: bool = False) -> Flask:
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
 
+    # Session config
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90) # Longer session for guest persistence
+
     if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
@@ -68,13 +72,124 @@ def create_app(testing: bool = False) -> Flask:
     def too_large(e):
         return render_template("error.html", message="Upload too large. Max size is limited."), 413
 
+    @app.before_request
+    def ensure_guest_session():
+        # Ensure every visitor has a username (UUID) for storage keyed by username
+        if 'username' not in session:
+            session['username'] = f"guest_{uuid.uuid4().hex}"
+            session.permanent = True
+
+    @app.route("/feedback", methods=["POST"])
+    def feedback():
+        message = request.form.get("message", "").strip()
+        username = session.get("username", "Anonymous")
+
+        if message:
+            storage = get_storage_provider(app)
+            try:
+                storage.save_feedback(username, message)
+                flash("Thank you for your feedback!", "success")
+            except Exception as e:
+                flash("Failed to submit feedback. Please try again.", "error")
+                print(f"Feedback error: {e}")
+        else:
+            flash("Feedback message cannot be empty.", "warning")
+
+        return redirect(request.referrer or url_for('index'))
+
+    @app.route("/dashboard")
+    def dashboard():
+        username = session.get('username')
+        # Username is guaranteed by before_request, but let's be safe
+        if not username:
+             return redirect(url_for('index'))
+
+        storage = get_storage_provider(app)
+        data_bytes = storage.get_portfolio(username)
+
+        if not data_bytes:
+            flash("No saved portfolio found. Please upload a CSV first.", "info")
+            return redirect(url_for('index'))
+
+        try:
+            saved_data = json.loads(data_bytes)
+
+            # Refresh with Live Data
+            updated_data = refresh_dashboard_data(saved_data)
+
+            # Add display metadata
+            last_saved = "Unknown"
+            if "saved_at" in updated_data:
+                try:
+                    dt = datetime.fromisoformat(updated_data["saved_at"])
+                    last_saved = dt.strftime("%Y-%m-%d %H:%M")
+                except:
+                    pass
+
+            return render_template(
+                "results.html",
+                dashboard_mode=True,
+                last_updated=last_saved,
+                token=updated_data.get("token", uuid.uuid4().hex),
+                style=updated_data.get("style", "income"),
+                **updated_data
+            )
+        except Exception as e:
+            return render_template("error.html", message=f"Failed to load dashboard: {e}")
+
     @app.route("/health")
     def health():
         return "OK", 200
 
     @app.route("/", methods=["GET"])
     def index():
-        return render_template("upload.html")
+        username = session.get('username')
+        has_portfolio = False
+        if username:
+            storage = get_storage_provider(app)
+            if storage.get_portfolio(username):
+                has_portfolio = True
+        return render_template("upload.html", has_portfolio=has_portfolio)
+
+    @app.route("/journal", methods=["GET"])
+    def journal_get_entries():
+        username = session.get('username')
+        storage = get_storage_provider(app)
+        entries = storage.get_journal_entries(username)
+        return jsonify(entries)
+
+    @app.route("/journal/add", methods=["POST"])
+    def journal_add_entry():
+        username = session.get('username')
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data"}), 400
+
+        data['username'] = username
+        data['created_at'] = time.time()
+
+        storage = get_storage_provider(app)
+        try:
+            entry_id = storage.save_journal_entry(data)
+            return jsonify({"success": True, "id": entry_id})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/journal/delete/<entry_id>", methods=["DELETE"])
+    def journal_delete_entry(entry_id):
+        username = session.get('username')
+        storage = get_storage_provider(app)
+        storage.delete_journal_entry(username, entry_id)
+        return jsonify({"success": True})
+
+    @app.route("/journal/analyze", methods=["POST"])
+    def journal_analyze_batch():
+        username = session.get('username')
+        storage = get_storage_provider(app)
+        entries = storage.get_journal_entries(username)
+
+        result = journal_analyzer.analyze_journal(entries)
+        return jsonify(result)
 
     @app.route("/screen", methods=["POST"])
     def screen():
@@ -230,7 +345,22 @@ def create_app(testing: bool = False) -> Flask:
             if res.get("excel_report"):
                 storage = get_storage_provider(app)
                 storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
-        
+
+            # Save for Persistence
+            username = session.get('username')
+            if username and "error" not in res:
+                to_save = res.copy()
+                if "excel_report" in to_save:
+                    del to_save["excel_report"]
+
+                to_save["saved_at"] = datetime.now().isoformat()
+                # Persist token and style too
+                to_save["token"] = token
+                to_save["style"] = style
+
+                storage = get_storage_provider(app)
+                storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
+
         except Exception as exc:
             return render_template("error.html", message=f"Failed to analyze data: {exc}")
 
