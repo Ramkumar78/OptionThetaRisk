@@ -150,6 +150,8 @@ class PostgresStorage(StorageProvider):
         try:
             cutoff = time.time() - max_age_seconds
             session.query(Report).filter(Report.created_at < cutoff).delete()
+            # Also cleanup uploads
+            session.query(Upload).filter(Upload.created_at < cutoff).delete()
             session.commit()
         finally:
             session.close()

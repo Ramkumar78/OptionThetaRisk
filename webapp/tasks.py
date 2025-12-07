@@ -4,7 +4,7 @@ import io
 import time
 from datetime import datetime
 from celery import Celery
-from webapp.storage import get_storage_provider, SaaSStorage
+from webapp.storage import get_storage_provider, SaaSStorage, PostgresStorage
 from option_auditor import analyze_csv
 
 # Configure Celery
@@ -48,6 +48,9 @@ def analyze_csv_task(self, upload_key, options):
     storage = None
     if db_url and bucket_name:
          storage = SaaSStorage(db_url, bucket_name, os.environ.get("AWS_REGION", "us-east-1"))
+    elif db_url:
+         # Fallback to PostgresStorage (no S3)
+         storage = PostgresStorage(db_url)
     else:
         # Fallback or error?
         # If we are running this task, we assume SaaS environment.
