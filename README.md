@@ -56,32 +56,31 @@ python -m webapp.app
 ```
 Then open http://127.0.0.1:5000 in your browser.
 
-#### Running with Docker
-You can also run the web application using Docker, which simplifies setup by containerizing the environment.
+#### Running with Docker (SaaS Architecture)
+The application is designed to run as a set of containers mirroring a production SaaS architecture. This setup includes:
+- **Web**: The Flask web application.
+- **Worker**: A Celery worker for processing large CSV uploads in the background.
+- **Postgres**: A persistent database for user data, portfolios, and journal entries.
+- **Redis**: A message broker for the task queue and result backend.
 
 **Prerequisites:**
-- Docker installed on your machine.
-- (Optional) Docker Compose.
+- Docker and Docker Compose installed on your machine.
 
-**Using Docker Compose (Recommended):**
-1.  Run the application:
+**Steps:**
+1.  Start all services:
     ```bash
     docker-compose up --build
     ```
-2.  Open http://127.0.0.1:5000 in your browser.
-
-**Using Docker manually:**
-1.  Build the image:
+2.  The application will be available at http://127.0.0.1:5000.
+3.  To stop the services:
     ```bash
-    docker build -t option-auditor .
-    ```
-2.  Run the container:
-    ```bash
-    docker run -p 5000:5000 option-auditor
+    docker-compose down
     ```
 
 **Persistence:**
-The application uses a SQLite database in the `instance/` directory to store report metadata. To persist this data across container restarts, mount a volume to `/app/instance`. The `docker-compose.yml` file is pre-configured to do this.
+- Database data is persisted in a Docker volume `postgres_data`.
+- Redis data is persisted in a Docker volume `redis_data`.
+- Report metadata and logs are stored in the mounted `./instance` directory.
 
 #### Building an Executable
 You can build a standalone executable for your operating system (Windows or macOS).
