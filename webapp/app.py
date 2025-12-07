@@ -41,7 +41,13 @@ def create_app(testing: bool = False) -> Flask:
         pass
 
     app.config["TESTING"] = testing
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(16))
+
+    # Secret Key logic: ensure it's not empty string
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key:
+        secret_key = os.urandom(16)
+    app.config["SECRET_KEY"] = secret_key
+
     app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
 
     # Session config
