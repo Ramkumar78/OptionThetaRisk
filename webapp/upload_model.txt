@@ -1,0 +1,5 @@
+class Upload(Base):
+    __tablename__ = 'uploads'
+    key = Column(String, primary_key=True)
+    data = Column(LargeBinary)
+    created_at = Column(Float, default=time.time)

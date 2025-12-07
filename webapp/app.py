@@ -382,7 +382,7 @@ def create_app(testing: bool = False) -> Flask:
         }
 
         if is_async and file and file.filename != "":
-             # Upload to storage (S3) first
+             # Upload to storage (S3 or DB) first
              try:
                  file_data = file.read()
                  storage.save_upload(token, file_data)
@@ -393,25 +393,19 @@ def create_app(testing: bool = False) -> Flask:
                  return redirect(url_for('processing', task_id=task.id))
 
              except Exception as e:
-                 # Fallback to sync if upload fails? or just error.
-                 # If SaaSStorage is used but upload fails, it's an error.
-                 # If LocalStorage is used, save_upload works locally too? (I haven't implemented it in LocalStorage yet)
-                 # Wait, LocalStorage doesn't implement save_upload yet!
-                 # Let's fix that or fallback.
-                 if not hasattr(storage, 'save_upload'):
-                     # Fallback to Sync
-                     pass
-                 else:
-                     return render_template("error.html", message=f"Failed to initiate background job: {e}")
+                 # If async dispatch fails, we return error.
+                 # We no longer gracefully fallback to sync because 'save_upload' is expected to work if is_async is True.
+                 # However, to be robust, we could log and error out.
+                 return render_template("error.html", message=f"Failed to initiate background job: {e}")
 
         # Sync Flow (Legacy / Local / Fallback)
         csv_path = None
         if file and file.filename != "":
             # In-memory processing (re-read if needed, but file.read() consumes it)
-            if 'file_data' in locals():
-                csv_path = io.StringIO(file_data.decode('utf-8'))
-            else:
-                csv_path = io.StringIO(file.read().decode('utf-8'))
+            # file_data is only present if we tried async and failed or just read it?
+            # Actually, if is_async was true, we either returned redirect or error.
+            # So if we are here, is_async is false.
+            csv_path = io.StringIO(file.read().decode('utf-8'))
 
         try:
             res = analyze_csv(

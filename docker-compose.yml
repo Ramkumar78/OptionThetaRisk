@@ -12,26 +12,11 @@ services:
       - DATABASE_URL=postgresql://user:password@postgres:5432/tradeauditor
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      # For local docker testing without S3, we might need a flag or fallback.
-      # But the code falls back to PostgresStorage if S3 is missing.
-      # If we want to test S3, we'd need MinIO or real credentials.
-      # For now, let's assume partial SaaS mode (DB only) works if S3 vars are missing,
-      # OR we can just rely on the fallback logic I wrote.
-      # However, `analyze_csv_task` in `webapp/tasks.py` requires S3 vars to init SaaSStorage.
-      # Let's add dummy S3 vars so it tries to use S3, or rely on LocalStack?
-      # The user asked for Postgres and Redis. S3 is cloud.
-      # If I don't provide S3 vars, `get_storage_provider` returns PostgresStorage.
-      # But `webapp/app.py` checks `is_async = ... or hasattr(storage, 'save_upload')`.
-      # PostgresStorage (base class) does NOT implement save_upload (it's abstract in base, implemented in SaaSStorage).
-      # Wait, I implemented `save_upload` in `SaaSStorage` but NOT in `PostgresStorage`.
-      # If I use `PostgresStorage`, I will get "Can't instantiate abstract class" if I try to instantiate it directly?
-      # `PostgresStorage` inherits from `StorageProvider`.
-      # `StorageProvider` has abstract `save_upload`.
-      # `PostgresStorage` does NOT implement it in my previous edits?
-      # Let me check `webapp/storage.py` again.
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   worker:
     build: .
@@ -41,8 +26,10 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   postgres:
     image: postgres:15
@@ -52,11 +39,21 @@ services:
       - POSTGRES_DB=tradeauditor
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d tradeauditor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

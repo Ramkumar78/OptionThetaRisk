@@ -56,6 +56,12 @@ class JournalEntry(Base):
     notes = Column(Text)
     created_at = Column(Float, default=time.time)
 
+class Upload(Base):
+    __tablename__ = 'uploads'
+    key = Column(String, primary_key=True)
+    data = Column(LargeBinary)
+    created_at = Column(Float, default=time.time)
+
 class StorageProvider(ABC):
     @abstractmethod
     def save_report(self, token: str, filename: str, data: bytes) -> None:
@@ -237,18 +243,22 @@ class PostgresStorage(StorageProvider):
             session.close()
 
     def save_upload(self, key: str, data: bytes) -> None:
-        """Postgres fallback: Store upload in dedicated table (if we want to support non-S3 SaaS)."""
-        # For strict Postgres-only (no S3), we can store in Reports or a new Uploads table.
-        # But for now, let's just make it a no-op or raise error if needed,
-        # or implement it similar to SQLite LocalStorage.
-        # Let's reuse Report table for simplicity or create a new model.
-        # But adding models requires migration.
-        # Given the task is about Dockerizing Postgres/Redis, let's assume S3 is available OR
-        # we implement DB storage for uploads.
-        pass
+        """Postgres fallback: Store upload in dedicated table."""
+        session = self.Session()
+        try:
+            upload = Upload(key=key, data=data, created_at=time.time())
+            session.merge(upload)
+            session.commit()
+        finally:
+            session.close()
 
     def get_upload(self, key: str) -> bytes:
-        return None
+        session = self.Session()
+        try:
+            upload = session.query(Upload).filter_by(key=key).first()
+            return upload.data if upload else None
+        finally:
+            session.close()
 
     def close(self) -> None:
         self.engine.dispose()
