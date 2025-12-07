@@ -122,11 +122,23 @@ class StorageProvider(ABC):
         """Close any open connections."""
         pass
 
+    def initialize(self) -> None:
+        """Perform one-time initialization (e.g. creating tables)."""
+        pass
+
 class PostgresStorage(StorageProvider):
     def __init__(self, db_url: str):
         self.engine = create_engine(db_url)
-        Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+
+    def initialize(self) -> None:
+        """Create tables if they don't exist."""
+        try:
+            Base.metadata.create_all(self.engine)
+        except Exception as e:
+            # Log error but don't crash app if DB is temporarily down
+            # However, if tables don't exist, app will fail later.
+            print(f"Warning: Failed to initialize database schema: {e}")
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
         session = self.Session()

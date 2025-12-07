@@ -47,6 +47,16 @@ def create_app(testing: bool = False) -> Flask:
     # Session config
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90) # Longer session for guest persistence
 
+    # Initialize Storage (Schema) on Startup
+    # This prevents race conditions or repeated checks during requests.
+    with app.app_context():
+        try:
+            storage = get_storage_provider(app)
+            if hasattr(storage, 'initialize'):
+                storage.initialize()
+        except Exception as e:
+            print(f"Startup Warning: Storage initialization failed: {e}")
+
     if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
