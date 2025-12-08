@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Home - Trade Auditor{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+
+    <!-- Hero Section: Cycle of Mastery -->
+    <div class="text-center mb-16 fade-in">
+
+        <!-- Cycle Visualization Image -->
+        <div class="flex justify-center mb-8">
+            <img src="{{ url_for('static', filename='img/find_track_audit.jpg') }}"
+                 alt="The Trader's Cycle of Mastery: Find Trade, Journal, Track, Audit & Conclude"
+                 class="max-w-full h-auto rounded-3xl shadow-2xl hover:shadow-3xl transition-shadow duration-300 md:max-w-3xl">
+        </div>
+
+        {% if has_portfolio %}
+        <div class="mt-10 animate-pulse">
+            <a href="/dashboard" class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-gradient-to-r from-primary-600 to-indigo-600 rounded-full hover:from-primary-700 hover:to-indigo-700 shadow-lg shadow-primary-500/30">
+                <i class="bi bi-speedometer2 mr-2"></i> Return to Dashboard
+            </a>
+            <p class="mt-2 text-sm text-gray-400">Your previous analysis is active.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Tool Navigation Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20 fade-in" style="animation-delay: 0.2s;">
+        <!-- Screener -->
+        <a href="/screener" class="group block p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:border-primary-500 dark:hover:border-primary-500 transition-all duration-300 transform hover:-translate-y-1">
+            <div class="w-12 h-12 rounded-lg bg-primary-100 dark:bg-primary-900/50 flex items-center justify-center mb-4 group-hover:bg-primary-600 transition-colors">
+                <i class="bi bi-radar text-xl text-primary-600 dark:text-primary-400 group-hover:text-white transition-colors"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">Screener</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Locate your edge. Scan the market for high IV rank and technical setups.</p>
+        </a>
+
+        <!-- Journal -->
+        <a href="/journal_ui" class="group block p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:border-indigo-500 dark:hover:border-indigo-500 transition-all duration-300 transform hover:-translate-y-1">
+            <div class="w-12 h-12 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center mb-4 group-hover:bg-indigo-600 transition-colors">
+                <i class="bi bi-journal-text text-xl text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Journal</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Master your psychology. Log trades and track emotional patterns.</p>
+        </a>
+
+        <!-- Manual Entry -->
+        <a href="/manual" class="group block p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:border-emerald-500 dark:hover:border-emerald-500 transition-all duration-300 transform hover:-translate-y-1">
+            <div class="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center mb-4 group-hover:bg-emerald-600 transition-colors">
+                <i class="bi bi-keyboard text-xl text-emerald-600 dark:text-emerald-400 group-hover:text-white transition-colors"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Track (Manual)</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Track your trades manually if you don't have broker CSVs.</p>
+        </a>
+
+        <!-- Audit -->
+        <a href="/audit" class="group block p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:border-slate-500 dark:hover:border-slate-500 transition-all duration-300 transform hover:-translate-y-1">
+            <div class="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 group-hover:bg-slate-600 transition-colors">
+                <i class="bi bi-file-earmark-spreadsheet text-xl text-slate-600 dark:text-slate-400 group-hover:text-white transition-colors"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-slate-600 dark:group-hover:text-slate-400 transition-colors">Audit (CSV)</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Data-Driven Post-Mortem. Upload CSVs for deep strategy analysis.</p>
+        </a>
+    </div>
+
+    <!-- About Us Section -->
+    <div class="bg-gray-50 dark:bg-gray-900 rounded-3xl p-8 md:p-12 border border-gray-200 dark:border-gray-800 fade-in" style="animation-delay: 0.4s;">
+        <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">From Execution to Evolution</h2>
+        <div class="prose dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 space-y-4">
+            <p>
+                Option Auditor is an open-source intelligence engine designed for the serious retail trader. We don't just list your trades; we reconstruct them.
+            </p>
+            <p>
+                By seamlessly ingesting raw data from Tastytrade and Interactive Brokers, our engine groups disparate order legs into complex strategies (Iron Condors, Verticals) and runs institutional-grade risk checks. Whether it's monitoring Average Daily PnL or flagging over-leverage, our goal is simple: turn your raw trading data into a roadmap for consistency.
+            </p>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
