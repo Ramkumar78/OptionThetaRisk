@@ -46,18 +46,23 @@ Outputs:
 - `out/trades.csv`: detailed grouped trades with metrics.
 - `out/report.md`: markdown summary of the audit.
 
-#### Web UI (upload and view results)
-A lightweight Flask app is included so you can upload a CSV from a webpage and view results directly.
+#### Web UI (Single Command Startup)
+The application features a modern React frontend backed by a Flask API. To build and run everything in one go:
 
-How to run the web app (development):
+**Prerequisites:** Node.js (v18+), Python (3.9+)
+
+```bash
+./run.sh
 ```
-pip install -r requirements.txt
-python -m webapp.app
-```
+This script will:
+1. Install frontend dependencies and build the React app.
+2. Install backend dependencies.
+3. Start the Flask server.
+
 Then open http://127.0.0.1:5000 in your browser.
 
 #### Running with Docker
-You can also run the web application using Docker, which simplifies setup by containerizing the environment.
+You can also run the web application using Docker, which automatically handles the frontend build and backend setup.
 
 **Prerequisites:**
 - Docker installed on your machine.

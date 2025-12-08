@@ -1,4 +1,12 @@
-# Use an official Python runtime as a parent image
+# Stage 1: Build React Frontend
+FROM node:20-slim AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python Backend
 FROM python:3.12-slim
 
 # Set the working directory in the container
@@ -12,8 +20,11 @@ COPY requirements.txt .
 # Use --pre to allow installation of pre-release versions (required for pandas_ta)
 RUN pip install --no-cache-dir --pre -r requirements.txt gunicorn
 
-# Copy the current directory contents into the container at /app
+# Copy the backend code
 COPY . .
+
+# Copy built frontend assets from the previous stage
+COPY --from=frontend-builder /app/frontend/dist /app/webapp/static/react_build
 
 # Set environment variables
 ENV PYTHONPATH=/app
