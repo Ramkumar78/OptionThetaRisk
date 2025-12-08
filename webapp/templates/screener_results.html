@@ -87,7 +87,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4 font-mono text-gray-900 dark:text-gray-300">
-                                ${{ "%.2f"|format(row.price) }}
+                                {{ row.currency_symbol }}{{ "%.2f"|format(row.price) }}
                             </td>
                             <td class="px-6 py-4 font-bold">
                                 {% if row.pct_change_1d is not none %}
@@ -175,7 +175,7 @@
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 font-mono text-gray-900 dark:text-gray-300">
-                                    ${{ "%.2f"|format(row.price) }}
+                                    {{ row.currency_symbol }}{{ "%.2f"|format(row.price) }}
                                 </td>
                                 <td class="px-6 py-4 font-bold">
                                     {% if row.pct_change_1d is not none %}

@@ -453,6 +453,16 @@ TICKER_NAMES = {
     "AMGN": "Amgen Inc.",
 }
 
+def _get_currency_symbol(ticker: str) -> str:
+    """Returns the currency symbol based on the ticker suffix."""
+    if ticker.endswith('.L'):
+        return '£'
+    elif any(ticker.endswith(s) for s in ['.PA', '.DE', '.AS', '.MC', '.MI', '.HE', '.BR']):
+        return '€'
+    elif ticker.endswith('.NS'):
+        return '₹'
+    return '$'
+
 def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str) -> list:
     """
     Internal helper to screen a list of tickers.
@@ -526,6 +536,13 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
             if df.empty:
                 return None
+
+            # Convert .L (GBp) to GBP
+            if symbol.endswith('.L'):
+                # Volume is usually shares, so don't convert it.
+                # OHLC are in pence.
+                cols_to_fix = [c for c in ['Open', 'High', 'Low', 'Close', 'Adj Close'] if c in df.columns]
+                df[cols_to_fix] = df[cols_to_fix] / 100.0
 
             # Flatten multi-index columns if present (yfinance update)
             if isinstance(df.columns, pd.MultiIndex):
@@ -665,6 +682,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "ticker": symbol,
                 "company_name": company_name,
                 "price": current_price,
+                "currency_symbol": _get_currency_symbol(symbol),
                 "pct_change_1d": pct_change_1d,
                 "pct_change_1w": pct_change_1w,
                 "rsi": current_rsi,
@@ -777,6 +795,11 @@ def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interva
     df = df.dropna(how='all')
     if df.empty:
         return None
+
+    # Convert .L (GBp) to GBP
+    if ticker.endswith('.L'):
+        cols_to_fix = [c for c in ['Open', 'High', 'Low', 'Close', 'Adj Close'] if c in df.columns]
+        df[cols_to_fix] = df[cols_to_fix] / 100.0
 
     # Flatten if needed
     if isinstance(df.columns, pd.MultiIndex):
@@ -949,6 +972,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": curr_close,
+                    "currency_symbol": _get_currency_symbol(ticker),
                     "signal": signal,
                     "breakout_level": prev_high if "SELL" not in signal else prev_low,
                     "stop_loss": stop_loss,
@@ -1117,6 +1141,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": curr_close,
+                    "currency_symbol": _get_currency_symbol(ticker),
                     "signal": signal,
                     "color": status_color,
                     "ema_5": curr_5,
