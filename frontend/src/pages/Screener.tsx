@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { runMarketScreener, runTurtleScreener, runEmaScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
@@ -189,10 +189,18 @@ const Screener: React.FC<ScreenerProps> = () => {
             )}
 
             {activeTab === 'market' && results.results && (
-                <div className="p-6">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Market Results</h3>
-                    {/* Market results are grouped by sector in the backend list of dicts */}
-                    <ScreenerTable data={results.results} type="market" />
+                <div className="p-6 space-y-8">
+                    {/* Iterate over sector keys */}
+                    {Object.keys(results.results).map((sectorName) => {
+                        const sectorData = results.results[sectorName];
+                        if (!sectorData || sectorData.length === 0) return null;
+                        return (
+                            <div key={sectorName}>
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{sectorName}</h3>
+                                <ScreenerTable data={sectorData} type="market" />
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
@@ -210,10 +218,98 @@ const Screener: React.FC<ScreenerProps> = () => {
   );
 };
 
+interface SortConfig {
+  key: string;
+  direction: 'asc' | 'desc';
+}
+
 const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, type }) => {
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+
+    const sortedData = useMemo(() => {
+        let sortableItems = [...data];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                // Map frontend sort keys to data keys
+                let aValue = a[sortConfig.key];
+                let bValue = b[sortConfig.key];
+
+                // Handle specific mappings if key doesn't match directly
+                if (sortConfig.key === 'symbol') {
+                     aValue = a.Ticker || a.ticker || a.symbol;
+                     bValue = b.Ticker || b.ticker || b.symbol;
+                } else if (sortConfig.key === 'company') {
+                    aValue = a.Company || a.company_name;
+                    bValue = b.Company || b.company_name;
+                } else if (sortConfig.key === 'price') {
+                    aValue = a.Close || a.price;
+                    bValue = b.Close || b.price;
+                } else if (sortConfig.key === 'change') {
+                    aValue = a['1D %'] || a.pct_change_1d || a.pct_change;
+                    bValue = b['1D %'] || b.pct_change_1d || b.pct_change;
+                } else if (sortConfig.key === 'rsi') {
+                    aValue = a.RSI || a.rsi;
+                    bValue = b.RSI || b.rsi;
+                } else if (sortConfig.key === 'iv_rank') {
+                     aValue = a['IV Rank'] || a.iv_rank;
+                     if (aValue === 'N/A*') aValue = -1; // Treat N/A as low
+                     bValue = b['IV Rank'] || b.iv_rank;
+                     if (bValue === 'N/A*') bValue = -1;
+                } else if (sortConfig.key === 'signal') {
+                    aValue = a.Signal || a.signal;
+                    bValue = b.Signal || b.signal;
+                } else if (sortConfig.key === 'stop_loss') {
+                    aValue = a.stop_loss;
+                    bValue = b.stop_loss;
+                }
+
+                if (aValue === undefined || aValue === null) return 1;
+                if (bValue === undefined || bValue === null) return -1;
+
+                if (typeof aValue === 'string') {
+                     aValue = aValue.toLowerCase();
+                     bValue = bValue.toLowerCase();
+                }
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [data, sortConfig]);
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIndicator = (key: string) => {
+        if (!sortConfig || sortConfig.key !== key) return <span className="text-gray-300 ml-1">⇅</span>;
+        return sortConfig.direction === 'asc' ? <span className="text-primary-600 ml-1">↑</span> : <span className="text-primary-600 ml-1">↓</span>;
+    };
+
     if (!data || data.length === 0) {
         return <div className="text-gray-500 italic p-4 text-center">No results found matching criteria.</div>;
     }
+
+    const HeaderCell = ({ label, sortKey, align = 'left' }: { label: string, sortKey: string, align?: string }) => (
+        <th
+            className={clsx("px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none", align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left')}
+            onClick={() => requestSort(sortKey)}
+        >
+            <div className={clsx("flex items-center", align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start')}>
+                {label} {getSortIndicator(sortKey)}
+            </div>
+        </th>
+    );
 
     // Determine columns based on type
     return (
@@ -221,65 +317,71 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
             <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                 <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                     <tr>
-                        <th className="px-4 py-3">Symbol</th>
-                        {type === 'market' && <th className="px-4 py-3">Company</th>}
-                        <th className="px-4 py-3 text-right">Price</th>
-                        <th className="px-4 py-3 text-right">Change</th>
+                        <HeaderCell label="Symbol" sortKey="symbol" />
+                        {type === 'market' && <HeaderCell label="Company" sortKey="company" />}
+                        <HeaderCell label="Price" sortKey="price" align="right" />
+                        <HeaderCell label="Change" sortKey="change" align="right" />
                         {type === 'market' && (
                             <>
-                                <th className="px-4 py-3 text-right">RSI</th>
-                                <th className="px-4 py-3 text-right">IV Rank</th>
-                                <th className="px-4 py-3 text-center">Signal</th>
+                                <HeaderCell label="RSI" sortKey="rsi" align="right" />
+                                <HeaderCell label="IV Rank" sortKey="iv_rank" align="right" />
+                                <HeaderCell label="Signal" sortKey="signal" align="center" />
                             </>
                         )}
                         {type !== 'market' && (
                             <>
-                                <th className="px-4 py-3 text-center">Signal</th>
-                                <th className="px-4 py-3 text-right">Stop Loss</th>
+                                <HeaderCell label="Signal" sortKey="signal" align="center" />
+                                <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
                             </>
                         )}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {data.map((row, idx) => {
-                        const currency = getCurrencySymbol(row.Ticker || row.symbol);
+                    {sortedData.map((row, idx) => {
+                        const currency = getCurrencySymbol(row.Ticker || row.ticker || row.symbol);
                         const price = row.Close || row.price;
-                        const change = row['1D %'] || row.pct_change; // Handle different keys
-                        const symbol = row.Ticker || row.symbol;
+                        // Handle multiple possible keys for change
+                        const change = row['1D %'] !== undefined ? row['1D %'] : (row.pct_change_1d !== undefined ? row.pct_change_1d : row.pct_change);
+                        const symbol = row.Ticker || row.ticker || row.symbol;
+                        const company = row.Company || row.company_name;
+                        const rsi = row.RSI || row.rsi;
+                        const ivRank = row['IV Rank'] || row.iv_rank;
+                        const signal = row.Signal || row.signal;
 
                         return (
                             <tr key={idx} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                 <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">
                                     {symbol}
                                     {/* Tooltip or small text for name if available */}
-                                    {row.Company && type !== 'market' && <div className="text-xs text-gray-400 font-normal">{row.Company}</div>}
+                                    {company && type !== 'market' && <div className="text-xs text-gray-400 font-normal">{company}</div>}
                                 </td>
-                                {type === 'market' && <td className="px-4 py-3 text-xs">{row.Company || '-'}</td>}
+                                {type === 'market' && <td className="px-4 py-3 text-xs">{company || '-'}</td>}
 
                                 <td className="px-4 py-3 text-right font-mono">
                                     {formatCurrency(price, currency)}
                                 </td>
 
                                 <td className={clsx("px-4 py-3 text-right font-bold", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
-                                    {change ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%` : '-'}
+                                    {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
                                 </td>
 
                                 {type === 'market' && (
                                     <>
-                                        <td className={clsx("px-4 py-3 text-right", (row.RSI || 0) < 30 ? "text-blue-500 font-bold" : (row.RSI || 0) > 70 ? "text-red-500 font-bold" : "")}>
-                                            {row.RSI ? row.RSI.toFixed(1) : '-'}
+                                        <td className={clsx("px-4 py-3 text-right", (rsi || 0) < 30 ? "text-blue-500 font-bold" : (rsi || 0) > 70 ? "text-red-500 font-bold" : "")}>
+                                            {rsi !== undefined && rsi !== null ? (typeof rsi === 'number' ? rsi.toFixed(1) : rsi) : '-'}
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            {row['IV Rank'] ? row['IV Rank'].toFixed(1) : '-'}
+                                            {ivRank !== undefined && ivRank !== null ? (typeof ivRank === 'number' ? ivRank.toFixed(1) : ivRank) : '-'}
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            {row.Signal && (
+                                            {signal && (
                                                 <span className={clsx("px-2 py-1 rounded text-xs font-bold",
-                                                    row.Signal === 'WAIT' ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" :
-                                                    row.Signal === 'OVERSOLD' ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                                                    signal === 'WAIT' ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" :
+                                                    signal.includes('OVERSOLD') || signal.includes('Buy') ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                                                    signal.includes('OVERBOUGHT') || signal.includes('Sell') ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
                                                     "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
                                                 )}>
-                                                    {row.Signal}
+                                                    {signal}
                                                 </span>
                                             )}
                                         </td>
@@ -290,10 +392,11 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                     <>
                                         <td className="px-4 py-3 text-center">
                                              <span className={clsx("px-2 py-1 rounded text-xs font-bold",
-                                                row.signal === 'Long' || row.signal?.includes('Buy') ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                                signal && (signal.includes('Long') || signal.includes('Buy') || signal.includes('BREAKOUT')) ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
+                                                signal && (signal.includes('Short') || signal.includes('Sell') || signal.includes('DUMP')) ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                                                "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                                              )}>
-                                                {row.signal}
+                                                {signal}
                                              </span>
                                         </td>
                                         <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
