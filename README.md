@@ -56,13 +56,11 @@ python -m webapp.app
 ```
 Then open http://127.0.0.1:5000 in your browser.
 
-#### Running with Docker (SaaS Architecture)
-The application is designed to run as a set of containers mirroring a production SaaS architecture. This setup includes:
+#### Running with Docker
+The application runs as a set of containers. This setup includes:
 - **Web**: The Flask web application.
-- **Worker**: A Celery worker for processing large CSV uploads in the background.
 - **Postgres**: A persistent database for user data, portfolios, and journal entries.
-- **Redis**: A message broker for the task queue and result backend.
- - **pgAdmin**: A web-based interface for managing the PostgreSQL database.
+- **pgAdmin**: A web-based interface for managing the PostgreSQL database.
 
 **Prerequisites:**
 - Docker and Docker Compose installed on your machine.
@@ -73,17 +71,16 @@ The application is designed to run as a set of containers mirroring a production
     docker-compose up --build
     ```
 2.  The application will be available at http://127.0.0.1:5000.
- 3.  pgAdmin will be available at http://127.0.0.1:5050.
-     -   **Default Login:** `admin@example.com` / `admin`
-     -   **Add Server:** Hostname: `postgres`, Username: `user`, Password: `securepassword` (or as defined in .env).
- 4.  To stop the services:
+3.  pgAdmin will be available at http://127.0.0.1:5050.
+    -   **Default Login:** `admin@example.com` / `admin`
+    -   **Add Server:** Hostname: `postgres`, Username: `user`, Password: `securepassword` (or as defined in .env).
+4.  To stop the services:
     ```bash
     docker-compose down
     ```
 
 **Persistence:**
 - Database data is persisted in a Docker volume `postgres_data`.
-- Redis data is persisted in a Docker volume `redis_data`.
 - Report metadata and logs are stored in the mounted `./instance` directory.
 
 **Configuration (.env):**
@@ -95,13 +92,7 @@ POSTGRES_DB=tradeauditor
 SECRET_KEY=really-long-random-string
 PGADMIN_DEFAULT_EMAIL=admin@example.com
 PGADMIN_DEFAULT_PASSWORD=admin
-# Optional: Enable S3 Storage
-# AWS_ACCESS_KEY_ID=your_key
-# AWS_SECRET_ACCESS_KEY=your_secret
-# S3_BUCKET_NAME=your_bucket
-# AWS_REGION=us-east-1
 ```
-The application will automatically switch to S3 storage for uploads and reports if `S3_BUCKET_NAME` is defined. Otherwise, it falls back to database storage (Postgres).
 
 #### Building an Executable
 You can build a standalone executable for your operating system (Windows or macOS).

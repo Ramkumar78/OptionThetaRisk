@@ -10,25 +10,8 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-me}
       - ENABLE_HTTPS=0
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-tradeauditor}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  worker:
-    build: .
-    command: celery -A webapp.tasks.celery_app worker --loglevel=info
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-tradeauditor}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   postgres:
@@ -41,16 +24,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-tradeauditor}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -70,5 +43,4 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   pgadmin_data:

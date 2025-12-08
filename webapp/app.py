@@ -14,7 +14,6 @@ from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
-from webapp.tasks import analyze_csv_task
 
 # Cleanup interval in seconds
 CLEANUP_INTERVAL = 1200 # 20 minutes
@@ -265,36 +264,6 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return render_template("error.html", message=f"EMA Screener failed: {e}")
 
-    @app.route("/job_status/<task_id>")
-    def job_status(task_id):
-        task = analyze_csv_task.AsyncResult(task_id)
-        if task.state == 'PENDING':
-            response = {
-                'state': task.state,
-                'status': 'Processing...'
-            }
-        elif task.state == 'PROCESSING':
-            response = {
-                'state': task.state,
-                'status': 'Analyzing data...'
-            }
-        elif task.state != 'FAILURE':
-            response = {
-                'state': task.state,
-                'status': 'Complete',
-                'result': task.result
-            }
-        else:
-            response = {
-                'state': task.state,
-                'status': str(task.info)
-            }
-        return jsonify(response)
-
-    @app.route("/processing/<task_id>")
-    def processing(task_id):
-        return render_template("processing.html", task_id=task_id)
-
     @app.route("/analyze", methods=["POST"])
     def analyze():
         file = request.files.get("csv")
@@ -370,57 +339,10 @@ def create_app(testing: bool = False) -> Flask:
         final_global_fees = fee_per_trade if manual_data else csv_fee_per_trade
         username = session.get('username')
 
-        # Async Flow (SaaS mode check)
-        storage = get_storage_provider(app)
-        # We can detect if we should use Celery by checking if we are using SaaSStorage
-        # or just if CELERY_BROKER_URL is set in env.
-        # But `webapp/tasks.py` is always imported.
-
-        # We generally only want async if explicitly configured or if we are in SaaS mode.
-        # However, testing environments might trigger this if we check hasattr(storage, 'save_upload').
-        # So let's check if we are NOT testing, or if CELERY_BROKER_URL is explicitly set.
-
-        is_async = (os.environ.get("CELERY_BROKER_URL") is not None) and (not app.config["TESTING"])
-
-        # Prepare Options for Task
-        options = {
-            "broker": broker,
-            "account_size_start": account_size_start,
-            "net_liquidity_now": net_liquidity_now,
-            "buying_power_available_now": buying_power_available_now,
-            "style": style,
-            "global_fees": final_global_fees,
-            "start_date": start_date,
-            "end_date": end_date,
-            "manual_data": manual_data,
-            "token": token,
-            "username": username
-        }
-
-        if is_async and file and file.filename != "":
-             # Upload to storage (S3 or DB) first
-             try:
-                 file_data = file.read()
-                 storage.save_upload(token, file_data)
-
-                 # Dispatch Task
-                 task = analyze_csv_task.delay(token, options)
-
-                 return redirect(url_for('processing', task_id=task.id))
-
-             except Exception as e:
-                 # If async dispatch fails, we return error.
-                 # We no longer gracefully fallback to sync because 'save_upload' is expected to work if is_async is True.
-                 # However, to be robust, we could log and error out.
-                 return render_template("error.html", message=f"Failed to initiate background job: {e}")
-
-        # Sync Flow (Legacy / Local / Fallback)
+        # Synchronous processing
         csv_path = None
         if file and file.filename != "":
-            # In-memory processing (re-read if needed, but file.read() consumes it)
-            # file_data is only present if we tried async and failed or just read it?
-            # Actually, if is_async was true, we either returned redirect or error.
-            # So if we are here, is_async is false.
+            # In-memory processing
             csv_path = io.StringIO(file.read().decode('utf-8'))
 
         try:
@@ -438,6 +360,7 @@ def create_app(testing: bool = False) -> Flask:
                 style=style
             )
 
+            storage = get_storage_provider(app)
             if res.get("excel_report"):
                 storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
 
