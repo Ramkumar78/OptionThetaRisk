@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Audit - Trade Auditor{% endblock %}
+{% block title %}Audit Options - Trade Auditor{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 py-8">
+<div class="max-w-5xl mx-auto px-4 py-8" x-data="auditForm()">
 
     <!-- Header Content -->
     <div class="text-center mb-10 fade-in">
-        <h1 class="text-4xl font-extrabold text-gray-900 dark:text-white mb-2">Data-Driven Post-Mortem</h1>
-        <p class="text-xl text-slate-600 dark:text-slate-400 font-medium">You can't improve what you don't measure.</p>
+        <h1 class="text-4xl font-extrabold text-gray-900 dark:text-white mb-2">Audit for Options</h1>
+        <p class="text-xl text-slate-600 dark:text-slate-400 font-medium">Capture every detail. Leave nothing to chance.</p>
 
         <div class="mt-6 text-left max-w-2xl mx-auto bg-gray-50 dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
              <h3 class="font-bold text-gray-900 dark:text-white mb-3">Key Features:</h3>
@@ -20,49 +20,119 @@
                     <i class="bi bi-check-circle-fill text-green-500 mt-0.5 mr-2"></i>
                     <span><strong>Risk Audits:</strong> Detects over-leveraged positions and calculates fee drag.</span>
                 </li>
-                <li class="flex items-start">
-                    <i class="bi bi-check-circle-fill text-green-500 mt-0.5 mr-2"></i>
-                    <span><strong>Performance Metrics:</strong> View PnL, win rates, and holding duration to separate luck from skill.</span>
-                </li>
             </ul>
         </div>
     </div>
 
-    <!-- CSV Upload Form -->
+    <!-- Toggle Buttons -->
+    <div class="flex justify-center mb-8 fade-in" style="animation-delay: 0.1s;">
+        <div class="inline-flex rounded-lg shadow-sm" role="group">
+            <button type="button" @click="mode = 'csv'" :class="mode === 'csv' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'" class="px-6 py-3 text-sm font-medium border border-gray-200 dark:border-gray-700 rounded-l-lg transition-colors">
+                <i class="bi bi-file-earmark-spreadsheet mr-2"></i> CSV Upload
+            </button>
+            <button type="button" @click="mode = 'manual'" :class="mode === 'manual' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'" class="px-6 py-3 text-sm font-medium border border-gray-200 dark:border-gray-700 rounded-r-lg transition-colors">
+                <i class="bi bi-keyboard mr-2"></i> Manual Entry
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Analysis Form -->
     <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 p-6 md:p-8 fade-in" style="animation-delay: 0.2s;">
-        <form action="/analyze" method="post" enctype="multipart/form-data">
-            <input type="hidden" name="input_method" value="csv">
+        <form action="/analyze" method="post" enctype="multipart/form-data" id="analyze-form">
+            <input type="hidden" name="input_method" x-model="mode">
+            <input type="hidden" name="manual_trades" id="manual-trades-input">
 
-            <div class="flex items-center justify-center w-full mb-8">
-                <label for="csv" class="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-2xl cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900 hover:bg-gray-100 dark:border-gray-700 dark:hover:border-gray-500 transition-all group hover:scale-[1.01]">
-                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                        <div class="p-4 bg-slate-100 dark:bg-slate-800 rounded-full mb-3 group-hover:scale-110 transition-transform shadow-sm">
-                            <i class="bi bi-cloud-arrow-up text-3xl text-slate-600 dark:text-slate-400"></i>
+            <!-- CSV Upload Section -->
+            <div x-show="mode === 'csv'" class="space-y-6">
+                <div class="flex items-center justify-center w-full mb-8">
+                    <label for="csv" class="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-2xl cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900 hover:bg-gray-100 dark:border-gray-700 dark:hover:border-gray-500 transition-all group hover:scale-[1.01]">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <div class="p-4 bg-slate-100 dark:bg-slate-800 rounded-full mb-3 group-hover:scale-110 transition-transform shadow-sm">
+                                <i class="bi bi-cloud-arrow-up text-3xl text-slate-600 dark:text-slate-400"></i>
+                            </div>
+                            <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-900 dark:text-gray-100">Click to upload</span> or drag and drop</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Tastytrade or IBKR CSV files (Max 50MB)</p>
                         </div>
-                        <p class="mb-1 text-sm text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-900 dark:text-gray-100">Click to upload</span> or drag and drop</p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Tastytrade or IBKR CSV files (Max 50MB)</p>
+                        <input id="csv" name="csv" type="file" accept=".csv" class="hidden" />
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <div class="relative group">
+                        <select name="broker" id="broker" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-slate-500 focus:outline-none focus:ring-0 focus:border-slate-600 peer">
+                            <option value="auto" selected>Auto-Detect Broker</option>
+                            <option value="tasty">Tastytrade</option>
+                            <option value="ibkr">Interactive Brokers</option>
+                        </select>
+                        <label for="broker" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-slate-600 peer-focus:dark:text-slate-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Broker Format</label>
                     </div>
-                    <input id="csv" name="csv" type="file" accept=".csv" class="hidden" required />
-                </label>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div class="relative group">
-                    <select name="broker" id="broker" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-slate-500 focus:outline-none focus:ring-0 focus:border-slate-600 peer">
-                        <option value="auto" selected>Auto-Detect Broker</option>
-                        <option value="tasty">Tastytrade</option>
-                        <option value="ibkr">Interactive Brokers</option>
-                    </select>
-                    <label for="broker" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-slate-600 peer-focus:dark:text-slate-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Broker Format</label>
-                </div>
-                <div class="relative group">
-                    <input type="number" name="csv_fee_per_trade" id="csv_fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-slate-600 peer" placeholder=" " />
-                    <label for="csv_fee_per_trade" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-slate-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Est. Fee per Trade ($)</label>
+                    <div class="relative group">
+                        <input type="number" name="csv_fee_per_trade" id="csv_fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-slate-600 peer" placeholder=" " />
+                        <label for="csv_fee_per_trade" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-slate-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Est. Fee per Trade ($)</label>
+                    </div>
                 </div>
             </div>
 
-            <!-- Analysis Settings -->
-            <div class="border-t border-gray-200 dark:border-gray-800 pt-6 mb-8">
+            <!-- Manual Entry Section -->
+            <div x-show="mode === 'manual'" class="space-y-6" style="display: none;">
+                 <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner">
+                    <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-800 dark:text-gray-400">
+                            <tr>
+                                <th class="px-3 py-3">Date</th>
+                                <th class="px-3 py-3">Symbol</th>
+                                <th class="px-3 py-3">Action</th>
+                                <th class="px-3 py-3">Qty</th>
+                                <th class="px-3 py-3">Price</th>
+                                <th class="px-3 py-3">Expiry</th>
+                                <th class="px-3 py-3">Strike</th>
+                                <th class="px-3 py-3">Type</th>
+                                <th class="px-3 py-3 text-center">Opt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(row, index) in rows" :key="index">
+                                <tr class="bg-white border-b dark:bg-gray-900 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                    <td class="px-2 py-2"><input type="date" x-model="row.date" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"></td>
+                                    <td class="px-2 py-2"><input type="text" x-model="row.symbol" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white uppercase font-bold"></td>
+                                    <td class="px-2 py-2">
+                                        <select x-model="row.action" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                            <option>Sell Open</option><option>Buy Open</option><option>Sell Close</option><option>Buy Close</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-2 py-2"><input type="number" x-model="row.qty" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"></td>
+                                    <td class="px-2 py-2"><input type="number" step="0.01" x-model="row.price" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"></td>
+                                    <td class="px-2 py-2"><input type="date" x-model="row.expiry" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"></td>
+                                    <td class="px-2 py-2"><input type="number" step="0.5" x-model="row.strike" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"></td>
+                                    <td class="px-2 py-2">
+                                        <select x-model="row.right" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                            <option value="P">Put</option>
+                                            <option value="C">Call</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-2 py-2 text-center">
+                                        <button type="button" @click="removeRow(index)" class="text-gray-400 hover:text-red-500 transition-colors"><i class="bi bi-x-circle-fill"></i></button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex items-center justify-between">
+                     <button type="button" @click="addRow()" class="text-emerald-600 hover:text-emerald-800 text-sm font-bold flex items-center transition-colors">
+                        <i class="bi bi-plus-circle-fill mr-2"></i> Add another trade leg
+                    </button>
+                    <!-- Manual Fee Input -->
+                    <div class="relative w-48">
+                         <input type="number" name="fee_per_trade" id="fee_per_trade" step="0.01" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 focus:outline-none focus:ring-0 focus:border-emerald-600 peer" placeholder=" " />
+                        <label for="fee_per_trade" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-emerald-600 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1">Fee per Trade ($)</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Settings (Shared) -->
+            <div class="border-t border-gray-200 dark:border-gray-800 pt-6 mb-8 mt-6">
                 <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Account & Analysis Settings</h4>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -74,8 +144,8 @@
                         <label for="style_csv" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-slate-600 peer-focus:dark:text-slate-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Strategy Type</label>
                     </div>
 
-                    <div class="relative" x-data="{ mode: 'all' }">
-                        <select name="date_mode" id="date_mode" x-model="mode" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-slate-500 focus:outline-none focus:ring-0 focus:border-slate-600 peer">
+                    <div class="relative" x-data="{ range_mode: 'all' }">
+                        <select name="date_mode" id="date_mode" x-model="range_mode" class="block px-2.5 pb-2.5 pt-4 w-full text-sm text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-slate-500 focus:outline-none focus:ring-0 focus:border-slate-600 peer">
                             <option value="all">All Data</option>
                             <option value="7d">Last 7 Days</option>
                             <option value="1m">Last 30 Days</option>
@@ -85,7 +155,7 @@
                         </select>
                          <label for="date_mode" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-slate-600 peer-focus:dark:text-slate-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Analysis Period</label>
 
-                         <div x-show="mode === 'range'" class="absolute top-14 left-0 w-full grid grid-cols-2 gap-2 bg-white dark:bg-gray-900 p-2 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                         <div x-show="range_mode === 'range'" class="absolute top-14 left-0 w-full grid grid-cols-2 gap-2 bg-white dark:bg-gray-900 p-2 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
                             <div>
                                 <label class="block text-xs text-gray-500">Start</label>
                                 <input type="date" name="start_date" class="w-full text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
@@ -114,14 +184,14 @@
                 </div>
             </div>
 
-            <button type="submit" class="w-full text-white bg-slate-700 hover:bg-slate-800 font-bold rounded-xl text-lg px-5 py-4 text-center shadow-lg transition-all hover:scale-[1.02]">
+            <button type="button" @click="prepareSubmission()" class="w-full text-white bg-slate-700 hover:bg-slate-800 font-bold rounded-xl text-lg px-5 py-4 text-center shadow-lg transition-all hover:scale-[1.02]">
                 <i class="bi bi-file-earmark-bar-graph mr-2"></i> Run Audit Analysis
             </button>
         </form>
     </div>
 
     <!-- How to Read CSV Help Section -->
-    <div class="mt-12 bg-gray-50 dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800">
+    <div x-show="mode === 'csv'" class="mt-12 bg-gray-50 dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 fade-in">
         <h3 class="font-bold text-lg text-gray-900 dark:text-white mb-4"><i class="bi bi-question-circle-fill mr-2 text-slate-500"></i> How to Read the CSV File</h3>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-gray-600 dark:text-gray-400">
@@ -150,4 +220,59 @@
     </div>
 
 </div>
+
+<script>
+    function auditForm() {
+        return {
+            mode: 'csv', // 'csv' or 'manual'
+            rows: [],
+
+            init() {
+                // Check if user has saved preference or rows
+                const saved = localStorage.getItem('manual_rows_v3');
+                if (saved) {
+                    try {
+                        if (saved.trim().startsWith('<')) throw new Error('Invalid JSON');
+                        this.rows = JSON.parse(saved);
+                    } catch(e) { this.rows = []; }
+                }
+                if (this.rows.length === 0) this.rows.push(this.createRow());
+
+                this.$watch('rows', val => localStorage.setItem('manual_rows_v3', JSON.stringify(val)));
+            },
+
+            createRow() {
+                return {
+                    date: new Date().toISOString().split('T')[0],
+                    symbol: 'SPY',
+                    action: 'Sell Open',
+                    qty: 1,
+                    price: 1.0,
+                    expiry: new Date(Date.now() + 30*86400000).toISOString().split('T')[0],
+                    strike: 400,
+                    right: 'P'
+                };
+            },
+
+            addRow() {
+                if (this.rows.length < 20) this.rows.push(this.createRow());
+            },
+
+            removeRow(index) {
+                if (this.rows.length > 0) this.rows.splice(index, 1);
+                if (this.rows.length === 0) this.addRow();
+            },
+
+            prepareSubmission() {
+                if (this.mode === 'manual') {
+                    document.getElementById('manual-trades-input').value = JSON.stringify(this.rows);
+                    // Clear CSV input to avoid confusion in backend if browser auto-filled it
+                    const csvInput = document.getElementById('csv');
+                    if (csvInput) csvInput.value = '';
+                }
+                document.getElementById('analyze-form').submit();
+            }
+        }
+    }
+</script>
 {% endblock %}

@@ -163,10 +163,6 @@ def create_app(testing: bool = False) -> Flask:
     def audit_page():
         return render_template("tool_audit.html")
 
-    @app.route("/manual", methods=["GET"])
-    def manual_page():
-        return render_template("tool_manual.html")
-
     @app.route("/journal", methods=["GET"])
     def journal_get_entries():
         username = session.get('username')
