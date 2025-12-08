@@ -16,6 +16,7 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import clsx from 'clsx';
+import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 ChartJS.register(
   CategoryScale,
@@ -65,7 +66,7 @@ const Results: React.FC = () => {
 
   const portfolioChartData = {
     datasets: [{
-      label: 'Cumulative Net PnL ($)',
+      label: 'Cumulative Net PnL',
       data: portfolio_curve, // Assuming [{x: date, y: value}] format from backend
       borderColor: '#4f46e5',
       backgroundColor: 'rgba(79, 70, 229, 0.05)',
@@ -81,7 +82,7 @@ const Results: React.FC = () => {
   const incomeChartData = {
     labels: monthly_income.map((d: any) => d.month),
     datasets: [{
-      label: 'Net Income ($)',
+      label: 'Net Income',
       data: monthly_income.map((d: any) => d.income),
       backgroundColor: monthly_income.map((d: any) => d.income >= 0 ? '#10b981' : '#f43f5e'),
       borderRadius: 4,
@@ -99,7 +100,7 @@ const Results: React.FC = () => {
       },
       y: {
         grid: { color: gridColor, drawBorder: false },
-        ticks: { color: textColor, callback: (val: number) => '$' + val }
+        ticks: { color: textColor, callback: (val: number) => formatCurrency(val, '$') } // Default to $ for charts for now as mixed currency charts are complex
       }
     },
     plugins: {
@@ -204,24 +205,27 @@ const Results: React.FC = () => {
                      {open_positions.length === 0 ? (
                          <tr><td colSpan={6} className="px-6 py-8 text-center italic">No active positions.</td></tr>
                      ) : (
-                         open_positions.map((p: any, idx: number) => (
-                             <tr key={idx} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                 <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{p.symbol}</td>
-                                 <td className="px-6 py-4 text-right">${p.current_price?.toFixed(2) || '-'}</td>
-                                 <td className="px-6 py-4 text-center">{p.expiry}</td>
-                                 <td className={clsx("px-6 py-4 text-right font-mono", p.qty_open < 0 ? "text-red-500" : "text-emerald-500")}>{Math.round(p.qty_open)}</td>
-                                 <td className="px-6 py-4 text-right">
-                                    <span className={clsx(p.dte < 5 && "text-red-500 font-bold")}>{p.dte !== null ? `${p.dte}d` : '-'}</span>
-                                 </td>
-                                 <td className="px-6 py-4 text-center">
-                                    {p.risk_alert ? (
-                                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">{p.risk_alert}</span>
-                                    ) : (
-                                        <span className="text-emerald-600 dark:text-emerald-400 text-xs">OK</span>
-                                    )}
-                                 </td>
-                             </tr>
-                         ))
+                         open_positions.map((p: any, idx: number) => {
+                             const currency = getCurrencySymbol(p.symbol);
+                             return (
+                                 <tr key={idx} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                     <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{p.symbol}</td>
+                                     <td className="px-6 py-4 text-right">{formatCurrency(p.current_price, currency)}</td>
+                                     <td className="px-6 py-4 text-center">{p.expiry}</td>
+                                     <td className={clsx("px-6 py-4 text-right font-mono", p.qty_open < 0 ? "text-red-500" : "text-emerald-500")}>{Math.round(p.qty_open)}</td>
+                                     <td className="px-6 py-4 text-right">
+                                        <span className={clsx(p.dte < 5 && "text-red-500 font-bold")}>{p.dte !== null ? `${p.dte}d` : '-'}</span>
+                                     </td>
+                                     <td className="px-6 py-4 text-center">
+                                        {p.risk_alert ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">{p.risk_alert}</span>
+                                        ) : (
+                                            <span className="text-emerald-600 dark:text-emerald-400 text-xs">OK</span>
+                                        )}
+                                     </td>
+                                 </tr>
+                             );
+                         })
                      )}
                  </tbody>
              </table>
@@ -254,10 +258,10 @@ const Results: React.FC = () => {
                                   <span className="bg-gray-100 text-gray-800 text-xs font-semibold px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">{s.symbol}</span>
                               </td>
                               <td className={clsx("px-6 py-4 text-right font-bold", s.pnl < 0 ? "text-red-500" : "text-emerald-500")}>
-                                  ${s.pnl.toFixed(2)}
+                                  {formatCurrency(s.pnl, '$')}
                               </td>
                               <td className="px-6 py-4 text-right font-mono">
-                                  ${s.average_daily_pnl.toFixed(2)}
+                                  {formatCurrency(s.average_daily_pnl, '$')}
                               </td>
                           </tr>
                       ))}

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { runMarketScreener, runTurtleScreener, runEmaScreener } from '../api';
 import clsx from 'clsx';
+import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
 type ScreenerType = 'market' | 'turtle' | 'ema';
 
 const Screener: React.FC<ScreenerProps> = () => {
-  const [activeTab, setActiveTab] = useState<ScreenerType>('market');
+  const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,10 +43,10 @@ const Screener: React.FC<ScreenerProps> = () => {
     }
   };
 
-  const tabs: { id: ScreenerType; label: string }[] = [
-    { id: 'market', label: 'Market Screener' },
+  const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
     { id: 'turtle', label: 'Turtle Trading' },
     { id: 'ema', label: '5/13 EMA' },
+    { id: 'market', label: 'Market Screener (RSI/IV)', subLabel: 'US Options Only' },
   ];
 
   return (
@@ -64,13 +65,15 @@ const Screener: React.FC<ScreenerProps> = () => {
                 id={`tab-${tab.id}`}
                 onClick={() => { setActiveTab(tab.id); setResults(null); }}
                 className={clsx(
-                  "px-4 py-2 text-sm font-medium rounded-md transition-all",
+                  "px-4 py-2 text-sm font-medium rounded-md transition-all flex flex-col items-center",
                   activeTab === tab.id
                     ? "bg-white dark:bg-gray-700 text-primary-600 dark:text-white shadow-sm"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",
+                  tab.id === 'market' && "text-gray-400 dark:text-gray-500 font-light"
                 )}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                {tab.subLabel && <span className="text-[10px] uppercase tracking-wide opacity-75">{tab.subLabel}</span>}
               </button>
             ))}
           </div>
@@ -177,24 +180,134 @@ const Screener: React.FC<ScreenerProps> = () => {
 
       {/* Results Section */}
       {results && (
-        <div id="screener-results" className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 overflow-x-auto">
-            {/*
-                NOTE: This is a placeholder for the actual results table.
-                Since the backend logic for returning JSON is not yet implemented,
-                we will just dump the JSON for now or show a message.
+        <div id="screener-results" className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+            {activeTab === 'market' && results.sector_results && (
+                <div className="p-6 border-b border-gray-200 dark:border-gray-800">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Sector Indices</h3>
+                    <ScreenerTable data={results.sector_results} type="market" />
+                </div>
+            )}
 
-                Once the backend is updated to return structured JSON (lists of dicts),
-                we can render a proper table here.
-            */}
-             <pre className="text-xs text-gray-600 dark:text-gray-400 overflow-auto max-h-96">
-                {JSON.stringify(results, null, 2)}
-             </pre>
+            {activeTab === 'market' && results.results && (
+                <div className="p-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Market Results</h3>
+                    {/* Market results are grouped by sector in the backend list of dicts */}
+                    <ScreenerTable data={results.results} type="market" />
+                </div>
+            )}
 
-             {/* Note for later: We need to implement specific table components for each screener type */}
+            {activeTab !== 'market' && (
+                <div className="p-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                        {activeTab === 'turtle' ? 'Turtle Breakouts' : '5/13 EMA Setups'}
+                    </h3>
+                    <ScreenerTable data={results} type={activeTab} />
+                </div>
+            )}
         </div>
       )}
     </div>
   );
+};
+
+const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, type }) => {
+    if (!data || data.length === 0) {
+        return <div className="text-gray-500 italic p-4 text-center">No results found matching criteria.</div>;
+    }
+
+    // Determine columns based on type
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                    <tr>
+                        <th className="px-4 py-3">Symbol</th>
+                        {type === 'market' && <th className="px-4 py-3">Company</th>}
+                        <th className="px-4 py-3 text-right">Price</th>
+                        <th className="px-4 py-3 text-right">Change</th>
+                        {type === 'market' && (
+                            <>
+                                <th className="px-4 py-3 text-right">RSI</th>
+                                <th className="px-4 py-3 text-right">IV Rank</th>
+                                <th className="px-4 py-3 text-center">Signal</th>
+                            </>
+                        )}
+                        {type !== 'market' && (
+                            <>
+                                <th className="px-4 py-3 text-center">Signal</th>
+                                <th className="px-4 py-3 text-right">Stop Loss</th>
+                            </>
+                        )}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {data.map((row, idx) => {
+                        const currency = getCurrencySymbol(row.Ticker || row.symbol);
+                        const price = row.Close || row.price;
+                        const change = row['1D %'] || row.pct_change; // Handle different keys
+                        const symbol = row.Ticker || row.symbol;
+
+                        return (
+                            <tr key={idx} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">
+                                    {symbol}
+                                    {/* Tooltip or small text for name if available */}
+                                    {row.Company && type !== 'market' && <div className="text-xs text-gray-400 font-normal">{row.Company}</div>}
+                                </td>
+                                {type === 'market' && <td className="px-4 py-3 text-xs">{row.Company || '-'}</td>}
+
+                                <td className="px-4 py-3 text-right font-mono">
+                                    {formatCurrency(price, currency)}
+                                </td>
+
+                                <td className={clsx("px-4 py-3 text-right font-bold", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
+                                    {change ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%` : '-'}
+                                </td>
+
+                                {type === 'market' && (
+                                    <>
+                                        <td className={clsx("px-4 py-3 text-right", (row.RSI || 0) < 30 ? "text-blue-500 font-bold" : (row.RSI || 0) > 70 ? "text-red-500 font-bold" : "")}>
+                                            {row.RSI ? row.RSI.toFixed(1) : '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            {row['IV Rank'] ? row['IV Rank'].toFixed(1) : '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {row.Signal && (
+                                                <span className={clsx("px-2 py-1 rounded text-xs font-bold",
+                                                    row.Signal === 'WAIT' ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" :
+                                                    row.Signal === 'OVERSOLD' ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                                                    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+                                                )}>
+                                                    {row.Signal}
+                                                </span>
+                                            )}
+                                        </td>
+                                    </>
+                                )}
+
+                                {type !== 'market' && (
+                                    <>
+                                        <td className="px-4 py-3 text-center">
+                                             <span className={clsx("px-2 py-1 rounded text-xs font-bold",
+                                                row.signal === 'Long' || row.signal?.includes('Buy') ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
+                                                "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                             )}>
+                                                {row.signal}
+                                             </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                            {formatCurrency(row.stop_loss, currency)}
+                                        </td>
+                                    </>
+                                )}
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
 };
 
 export default Screener;

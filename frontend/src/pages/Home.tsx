@@ -4,6 +4,10 @@ import { Link } from 'react-router-dom';
 const Home: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center space-y-12">
+      <div className="relative w-full max-w-lg mb-4">
+         <img src="/static/img/find_track_audit.jpg" className="w-full h-auto rounded-full shadow-2xl opacity-90 dark:opacity-80 border-4 border-white dark:border-gray-800" alt="Cycle of Mastery" />
+      </div>
+
       <div className="text-center space-y-4 max-w-3xl">
         <h1 id="home-title" className="text-4xl md:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white">
           Analyze. Optimize. <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-emerald-500">Evolve.</span>
@@ -13,18 +17,18 @@ const Home: React.FC = () => {
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <Link
-            to="/audit"
-            id="home-cta-audit"
-            className="w-full sm:w-auto px-8 py-3.5 text-base font-semibold text-white bg-primary-600 rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all hover:-translate-y-0.5 focus:ring-4 focus:ring-primary-300 dark:focus:ring-primary-900"
-          >
-            Start Audit
-          </Link>
-          <Link
             to="/screener"
             id="home-cta-screener"
-            className="w-full sm:w-auto px-8 py-3.5 text-base font-semibold text-gray-900 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-primary-600 dark:bg-gray-800 dark:text-white dark:border-gray-700 dark:hover:bg-gray-700 transition-all focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700"
+            className="w-full sm:w-auto px-8 py-3.5 text-base font-semibold text-white bg-primary-600 rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all hover:-translate-y-0.5 focus:ring-4 focus:ring-primary-300 dark:focus:ring-primary-900"
           >
             Market Screener
+          </Link>
+          <Link
+            to="/audit"
+            id="home-cta-audit"
+            className="w-full sm:w-auto px-8 py-3.5 text-base font-semibold text-gray-900 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-primary-600 dark:bg-gray-800 dark:text-white dark:border-gray-700 dark:hover:bg-gray-700 transition-all focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700"
+          >
+            Start Audit
           </Link>
         </div>
       </div>
