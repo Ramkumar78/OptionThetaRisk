@@ -149,7 +149,19 @@ def create_app(testing: bool = False) -> Flask:
             storage = get_storage_provider(app)
             if storage.get_portfolio(username):
                 has_portfolio = True
-        return render_template("upload.html", has_portfolio=has_portfolio)
+        return render_template("home.html", has_portfolio=has_portfolio)
+
+    @app.route("/screener", methods=["GET"])
+    def screener_page():
+        return render_template("tool_screener.html")
+
+    @app.route("/journal_ui", methods=["GET"])
+    def journal_ui():
+        return render_template("tool_journal.html")
+
+    @app.route("/audit", methods=["GET"])
+    def audit_page():
+        return render_template("tool_audit.html")
 
     @app.route("/journal", methods=["GET"])
     def journal_get_entries():
@@ -288,15 +300,15 @@ def create_app(testing: bool = False) -> Flask:
         csv_fee_per_trade = _to_float("csv_fee_per_trade")
 
         if had_error:
-            return redirect(url_for("index"))
+            return redirect(request.referrer or url_for("index"))
 
         if (not file or file.filename == "") and not manual_data:
             flash("Please choose a CSV file or enter trades manually.", "warning")
-            return redirect(url_for("index"))
+            return redirect(request.referrer or url_for("index"))
 
         if file and file.filename != "" and not _allowed_filename(file.filename):
             flash("Only .csv files are allowed", "warning")
-            return redirect(url_for("index"))
+            return redirect(request.referrer or url_for("index"))
 
         date_mode = request.form.get("date_mode", "all")
         start_date = request.form.get("start_date", "").strip() or None
@@ -316,7 +328,7 @@ def create_app(testing: bool = False) -> Flask:
         elif date_mode == "range":
             if not start_date or not end_date:
                 flash("Please select both start and end dates or choose 'All data'", "warning")
-                return redirect(url_for("index"))
+                return redirect(request.referrer or url_for("index"))
 
         token = uuid.uuid4().hex
         
