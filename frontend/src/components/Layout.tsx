@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
+import FeedbackModal from './FeedbackModal';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -12,6 +13,7 @@ const Layout: React.FC<LayoutProps> = () => {
       (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -123,13 +125,19 @@ const Layout: React.FC<LayoutProps> = () => {
           <ul className="flex flex-wrap items-center mt-3 text-sm font-medium text-gray-500 dark:text-gray-400 sm:mt-0 space-x-4 md:space-x-6">
             <li><a href="https://github.com/Ramkumar78/OptionThetaRisk" target="_blank" rel="noopener noreferrer" className="hover:text-primary-600 transition-colors">GitHub</a></li>
             <li>
-                <button id="footer-feedback-btn" className="hover:text-primary-600 transition-colors focus:outline-none">
+                <button
+                    id="footer-feedback-btn"
+                    onClick={() => setIsFeedbackOpen(true)}
+                    className="hover:text-primary-600 transition-colors focus:outline-none"
+                >
                     Feedback
                 </button>
             </li>
           </ul>
         </div>
       </footer>
+
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
   );
 };
