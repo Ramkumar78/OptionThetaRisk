@@ -2,6 +2,40 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import torch
+import torch.nn as nn
+import numpy as np
+import os
+
+# Define the LSTM Model class (Must match training script)
+class ReversalLSTM(nn.Module):
+    def __init__(self, input_size=1, hidden_size=32, num_layers=1, output_size=1):
+        super(ReversalLSTM, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        out, _ = self.lstm(x, (h0, c0))
+        out = self.fc(out[:, -1, :])
+        return self.sigmoid(out)
+
+# Load Model Once
+model = None
+try:
+    model_path = "models/reversal_model.pth"
+    if os.path.exists(model_path):
+        model = ReversalLSTM()
+        # Load state dict with map_location='cpu' to be safe
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+        model.eval()
+except Exception as e:
+    print(f"Warning: AI Model failed to load: {e}")
+    model = None
 
 SECTOR_NAMES = {
     "XLC": "Communication Services",
@@ -658,6 +692,27 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 elif current_rsi > 70:
                     signal = "🔴 OVERBOUGHT (Bearish)"
 
+            # AI Inference (Reversal Score)
+            ai_score_str = "N/A"
+            if model and len(df) >= 11:
+                # Get last 10 percent changes
+                # Note: pct_change results in NaN for first element, so we need 11 points to get 10 changes
+                pct_changes = df['Close'].pct_change().tail(10).values
+                # Handle potential NaNs if data is gappy, fill with 0
+                pct_changes = np.nan_to_num(pct_changes)
+
+                if len(pct_changes) == 10:
+                    try:
+                        # Prepare input: (1, 10, 1)
+                        # pct_changes is 1D array of 10 float64
+                        input_tensor = torch.tensor(pct_changes, dtype=torch.float32).view(1, 10, 1)
+                        with torch.no_grad():
+                            prediction = model(input_tensor)
+                            score_val = prediction.item() * 100
+                            ai_score_str = f"{score_val:.1f}%"
+                    except Exception:
+                        pass
+
             # Use TICKER_NAMES if available
             company_name = TICKER_NAMES.get(symbol, symbol)
 
@@ -674,7 +729,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "is_green": is_green,
                 "iv_rank": "N/A*",
                 "atr": current_atr,
-                "pe_ratio": pe_ratio
+                "pe_ratio": pe_ratio,
+                "ai_confidence": ai_score_str
             }
 
         except Exception:
