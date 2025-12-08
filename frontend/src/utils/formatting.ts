@@ -1,8 +1,15 @@
 export const formatCurrency = (value: number | undefined | null, symbol: string): string => {
   if (value === undefined || value === null) return '-';
 
+  let displayValue = value;
+
+  // Convert Pence (GBX) to Pounds (GBP)
+  if (symbol === '£') {
+      displayValue = value / 100;
+  }
+
   // Basic formatting with commas
-  const formattedValue = value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const formattedValue = displayValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
   return `${symbol}${formattedValue}`;
 };

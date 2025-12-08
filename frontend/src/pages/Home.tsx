@@ -5,7 +5,7 @@ const Home: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center space-y-12">
       <div className="relative w-full max-w-lg mb-4">
-         <img src="/static/img/find_track_audit.jpg" className="w-full h-auto rounded-full shadow-2xl opacity-90 dark:opacity-80 border-4 border-white dark:border-gray-800" alt="Cycle of Mastery" />
+         <img id="home-cycle-image" src="/static/img/find_track_audit.jpg" className="w-full h-auto rounded-full shadow-2xl opacity-90 dark:opacity-80 border-4 border-white dark:border-gray-800" alt="Cycle of Mastery" />
       </div>
 
       <div className="text-center space-y-4 max-w-3xl">

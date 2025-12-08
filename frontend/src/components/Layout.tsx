@@ -39,7 +39,7 @@ const Layout: React.FC<LayoutProps> = () => {
         <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
           <Link to="/" id="nav-logo-link" className="flex items-center space-x-3 rtl:space-x-reverse group">
               <div className="p-1.5 bg-primary-600 rounded-lg shadow-lg shadow-primary-500/30 group-hover:scale-105 transition-transform">
-                 <img src="/static/img/logo.png" className="h-6 w-6 brightness-0 invert" alt="Logo" />
+                 <img id="nav-logo-img" src="/static/img/logo.png" className="h-6 w-6 brightness-0 invert" alt="Logo" />
               </div>
               <span className="self-center text-xl font-bold tracking-tight text-gray-900 dark:text-white">Trade<span className="text-primary-600 dark:text-primary-400">Auditor</span></span>
           </Link>

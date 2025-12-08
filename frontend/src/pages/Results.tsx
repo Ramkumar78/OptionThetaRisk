@@ -31,9 +31,13 @@ ChartJS.register(
   Filler
 );
 
-const Results: React.FC = () => {
+interface ResultsProps {
+    directData?: any;
+}
+
+const Results: React.FC<ResultsProps> = ({ directData }) => {
   const location = useLocation();
-  const results = location.state?.results;
+  const results = directData || location.state?.results;
   const isDark = document.documentElement.classList.contains('dark'); // Initial check, might need context for reactivity
 
   if (!results) {
