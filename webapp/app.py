@@ -8,7 +8,7 @@ import time
 import json
 from typing import Optional
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session, jsonify
+from flask import Flask, request, redirect, url_for, flash, send_file, session, jsonify, send_from_directory
 
 from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
@@ -32,7 +32,7 @@ def cleanup_job(app):
             time.sleep(CLEANUP_INTERVAL)
 
 def create_app(testing: bool = False) -> Flask:
-    app = Flask(__name__, instance_relative_config=True)
+    app = Flask(__name__, instance_relative_config=True, static_folder="static")
     # Ensure the instance folder exists
     try:
         os.makedirs(app.instance_path)
@@ -58,6 +58,7 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.after_request
     def add_security_headers(response):
+        # Adjusted CSP for React compatibility (removed some strict directives for now to ensure easier dev)
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com; "
@@ -70,7 +71,7 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.errorhandler(413)
     def too_large(e):
-        return render_template("error.html", message="Upload too large. Max size is limited."), 413
+        return jsonify({"error": "Upload too large. Max size is limited."}), 413
 
     @app.before_request
     def ensure_guest_session():
@@ -88,81 +89,99 @@ def create_app(testing: bool = False) -> Flask:
             storage = get_storage_provider(app)
             try:
                 storage.save_feedback(username, message)
-                flash("Thank you for your feedback!", "success")
+                return jsonify({"success": True, "message": "Feedback submitted"})
             except Exception as e:
-                flash("Failed to submit feedback. Please try again.", "error")
                 print(f"Feedback error: {e}")
+                return jsonify({"error": "Failed to submit feedback"}), 500
         else:
-            flash("Feedback message cannot be empty.", "warning")
-
-        return redirect(request.referrer or url_for('index'))
+            return jsonify({"error": "Message cannot be empty"}), 400
 
     @app.route("/dashboard")
     def dashboard():
         username = session.get('username')
-        # Username is guaranteed by before_request, but let's be safe
         if not username:
-             return redirect(url_for('index'))
+             return jsonify({"error": "No session"}), 401
 
         storage = get_storage_provider(app)
         data_bytes = storage.get_portfolio(username)
 
         if not data_bytes:
-            flash("No saved portfolio found. Please upload a CSV first.", "info")
-            return redirect(url_for('index'))
+            return jsonify({"error": "No portfolio found"})
 
         try:
             saved_data = json.loads(data_bytes)
-
-            # Refresh with Live Data
             updated_data = refresh_dashboard_data(saved_data)
-
-            # Add display metadata
-            last_saved = "Unknown"
-            if "saved_at" in updated_data:
-                try:
-                    dt = datetime.fromisoformat(updated_data["saved_at"])
-                    last_saved = dt.strftime("%Y-%m-%d %H:%M")
-                except:
-                    pass
-
-            return render_template(
-                "results.html",
-                dashboard_mode=True,
-                last_updated=last_saved,
-                token=updated_data.get("token", uuid.uuid4().hex),
-                style=updated_data.get("style", "income"),
-                **updated_data
-            )
+            return jsonify(updated_data)
         except Exception as e:
-            return render_template("error.html", message=f"Failed to load dashboard: {e}")
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/health")
     def health():
         return "OK", 200
 
-    @app.route("/", methods=["GET"])
-    def index():
-        username = session.get('username')
-        has_portfolio = False
-        if username:
-            storage = get_storage_provider(app)
-            if storage.get_portfolio(username):
-                has_portfolio = True
-        return render_template("home.html", has_portfolio=has_portfolio)
+    # API Routes for Screener
+    @app.route("/screen", methods=["POST"])
+    def screen():
+        iv_rank = 30.0
+        try:
+            iv_rank = float(request.form.get("iv_rank", 30))
+        except ValueError:
+            pass
 
-    @app.route("/screener", methods=["GET"])
-    def screener_page():
-        return render_template("tool_screener.html")
+        rsi_threshold = 50.0
+        try:
+            rsi_threshold = float(request.form.get("rsi_threshold", 50))
+        except ValueError:
+            pass
 
-    @app.route("/journal_ui", methods=["GET"])
-    def journal_ui():
-        return render_template("tool_journal.html")
+        time_frame = request.form.get("time_frame", "1d")
 
-    @app.route("/audit", methods=["GET"])
-    def audit_page():
-        return render_template("tool_audit.html")
+        try:
+            results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
+            sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
+            return jsonify({
+                "results": results,
+                "sector_results": sector_results,
+                "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame}
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/turtle", methods=["GET"])
+    def screen_turtle():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            region = request.args.get("region", "us")
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+
+            results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/screen/ema", methods=["GET"])
+    def screen_ema():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            region = request.args.get("region", "us")
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+
+            results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # API Routes for Journal
     @app.route("/journal", methods=["GET"])
     def journal_get_entries():
         username = session.get('username')
@@ -199,67 +218,10 @@ def create_app(testing: bool = False) -> Flask:
         username = session.get('username')
         storage = get_storage_provider(app)
         entries = storage.get_journal_entries(username)
-
         result = journal_analyzer.analyze_journal(entries)
         return jsonify(result)
 
-    @app.route("/screen", methods=["POST"])
-    def screen():
-        iv_rank = 30.0
-        try:
-            iv_rank = float(request.form.get("iv_rank", 30))
-        except ValueError:
-            pass
-
-        rsi_threshold = 50.0
-        try:
-            rsi_threshold = float(request.form.get("rsi_threshold", 50))
-        except ValueError:
-            pass
-
-        time_frame = request.form.get("time_frame", "1d")
-
-        try:
-            results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
-            sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
-            return render_template("screener_results.html", results=results, sector_results=sector_results, iv_rank_threshold=iv_rank, rsi_threshold=rsi_threshold, time_frame=time_frame)
-        except Exception as e:
-            return render_template("error.html", message=f"Screener failed: {e}")
-
-    @app.route("/screen/turtle", methods=["GET"])
-    def screen_turtle():
-        try:
-            time_frame = request.args.get("time_frame", "1d")
-            region = request.args.get("region", "us")
-
-            ticker_list = None
-            if region == "uk_euro":
-                ticker_list = screener.get_uk_euro_tickers()
-            elif region == "india":
-                ticker_list = screener.get_indian_tickers()
-
-            results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
-            return render_template("turtle_results.html", results=results)
-        except Exception as e:
-            return render_template("error.html", message=f"Turtle Screener failed: {e}")
-
-    @app.route("/screen/ema", methods=["GET"])
-    def screen_ema():
-        try:
-            time_frame = request.args.get("time_frame", "1d")
-            region = request.args.get("region", "us")
-
-            ticker_list = None
-            if region == "uk_euro":
-                ticker_list = screener.get_uk_euro_tickers()
-            elif region == "india":
-                ticker_list = screener.get_indian_tickers()
-
-            results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
-            return render_template("ema_results.html", results=results)
-        except Exception as e:
-            return render_template("error.html", message=f"EMA Screener failed: {e}")
-
+    # API Route for Analysis (Audit)
     @app.route("/analyze", methods=["POST"])
     def analyze():
         file = request.files.get("csv")
@@ -280,16 +242,13 @@ def create_app(testing: bool = False) -> Flask:
             except json.JSONDecodeError:
                 pass
 
-        had_error = False
         def _to_float(name: str) -> Optional[float]:
-            nonlocal had_error
             val = request.form.get(name, "").strip()
             if val:
                 try:
                     return float(val)
                 except ValueError:
-                    flash(f"{name.replace('_', ' ').title()} must be a number.", "warning")
-                    had_error = True
+                    return None
             return None
 
         account_size_start = _to_float("account_size_start")
@@ -299,16 +258,11 @@ def create_app(testing: bool = False) -> Flask:
         fee_per_trade = _to_float("fee_per_trade")
         csv_fee_per_trade = _to_float("csv_fee_per_trade")
 
-        if had_error:
-            return redirect(request.referrer or url_for("index"))
-
         if (not file or file.filename == "") and not manual_data:
-            flash("Please choose a CSV file or enter trades manually.", "warning")
-            return redirect(request.referrer or url_for("index"))
+            return jsonify({"error": "No input data provided"}), 400
 
         if file and file.filename != "" and not _allowed_filename(file.filename):
-            flash("Only .csv files are allowed", "warning")
-            return redirect(request.referrer or url_for("index"))
+             return jsonify({"error": "Invalid file type"}), 400
 
         date_mode = request.form.get("date_mode", "all")
         start_date = request.form.get("start_date", "").strip() or None
@@ -325,16 +279,11 @@ def create_app(testing: bool = False) -> Flask:
             else: s_dt = datetime(now.year, 1, 1)
             start_date = s_dt.date().isoformat()
             end_date = now.date().isoformat()
-        elif date_mode == "range":
-            if not start_date or not end_date:
-                flash("Please select both start and end dates or choose 'All data'", "warning")
-                return redirect(request.referrer or url_for("index"))
 
         token = uuid.uuid4().hex
         
         csv_path = None
         if file and file.filename != "":
-            # In-memory processing
             csv_path = io.StringIO(file.read().decode('utf-8'))
 
         final_global_fees = fee_per_trade if manual_data else csv_fee_per_trade
@@ -358,7 +307,6 @@ def create_app(testing: bool = False) -> Flask:
                 storage = get_storage_provider(app)
                 storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
 
-            # Save for Persistence
             username = session.get('username')
             if username and "error" not in res:
                 to_save = res.copy()
@@ -366,25 +314,20 @@ def create_app(testing: bool = False) -> Flask:
                     del to_save["excel_report"]
 
                 to_save["saved_at"] = datetime.now().isoformat()
-                # Persist token and style too
                 to_save["token"] = token
                 to_save["style"] = style
 
                 storage = get_storage_provider(app)
                 storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
 
+            if "excel_report" in res:
+                del res["excel_report"] # Can't JSON serialize bytes
+
+            res["token"] = token
+            return jsonify(res)
+
         except Exception as exc:
-            return render_template("error.html", message=f"Failed to analyze data: {exc}")
-
-        if "error" in res:
-            return render_template("error.html", message=f"Failed to analyze: {res['error']}")
-
-        return render_template(
-            "results.html",
-            token=token,
-            style=style,
-            **res
-        )
+            return jsonify({"error": str(exc)}), 500
 
     @app.route("/download/<token>/<filename>")
     def download(token: str, filename: str):
@@ -392,13 +335,29 @@ def create_app(testing: bool = False) -> Flask:
         data = storage.get_report(token, filename)
 
         if not data:
-             return render_template("error.html", message="Download link expired or invalid."), 404
+             return "File not found", 404
         
         return send_file(
             io.BytesIO(data),
             as_attachment=True,
             download_name=filename
         )
+
+    # Serve React App
+    @app.route("/", defaults={'path': ''})
+    @app.route("/<path:path>")
+    def catch_all(path):
+        # Allow requests to API routes or static files to pass through
+        if path.startswith("api/") or path.startswith("static/") or path.startswith("download/"):
+            return "Not Found", 404
+
+        # Check if the requested file exists in the react build directory
+        build_dir = os.path.join(app.static_folder, "react_build")
+        if path != "" and os.path.exists(os.path.join(build_dir, path)):
+            return send_from_directory(build_dir, path)
+
+        # Otherwise serve index.html
+        return send_from_directory(build_dir, "index.html")
 
     return app
 
