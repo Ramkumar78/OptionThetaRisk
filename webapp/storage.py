@@ -3,7 +3,6 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from flask import current_app
-import boto3
 from sqlalchemy import create_engine, text, Column, String, LargeBinary, Float, Integer, Text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
