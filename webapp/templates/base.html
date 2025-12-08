@@ -51,6 +51,28 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
     .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; }
+
+    /* Simple Datatables Customization */
+    .datatable-selector, .datatable-input {
+      padding: 0.375rem 2rem 0.375rem 0.75rem; /* Match Flowbite inputs */
+      border-radius: 0.5rem;
+      border: 1px solid #d1d5db;
+      background-color: #f9fafb;
+      color: #111827;
+      font-size: 0.875rem;
+    }
+
+    .dark .datatable-selector, .dark .datatable-input {
+      background-color: #374151;
+      border-color: #4b5563;
+      color: #f9fafb;
+    }
+
+    .dark .datatable-selector:focus, .dark .datatable-input:focus {
+      border-color: #6366f1; /* primary-500 */
+      outline: none;
+      ring: 1px solid #6366f1;
+    }
   </style>
   <script>
     if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
