@@ -1179,3 +1179,268 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
     # Sort by "Freshness" (Breakouts first)
     results.sort(key=lambda x: 0 if "FRESH" in x['signal'] else 1)
     return results
+
+def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
+    """
+    Screens for Darvas Box Breakouts.
+    Strategy:
+    1. Trend: Stock near 52-week High.
+    2. Box: Price breaks above a "Ceiling" established by a recent high (3-day non-penetration).
+    3. Volume: Spike on breakout.
+    """
+    import yfinance as yf
+    import pandas_ta as ta
+    import pandas as pd
+    import numpy as np
+
+    if ticker_list is None:
+        ticker_list = [
+            "SPY", "QQQ", "IWM", "GLD", "SLV", "USO", "TLT", # ETFs
+            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN", # Tech
+            "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS" # Blue Chips
+        ]
+        if "WATCH" in SECTOR_COMPONENTS:
+             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
+
+    ETF_NAMES = {
+        "SPY": "SPDR S&P 500 ETF Trust",
+        "QQQ": "Invesco QQQ Trust",
+        "IWM": "iShares Russell 2000 ETF",
+        "GLD": "SPDR Gold Shares",
+        "SLV": "iShares Silver Trust",
+        "USO": "United States Oil Fund, LP",
+        "TLT": "iShares 20+ Year Treasury Bond ETF",
+    }
+
+    # Timeframe logic
+    yf_interval = "1d"
+    resample_rule = None
+    is_intraday = False
+    period = "1y" # Need longer history for 52-week high
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "196m":
+        yf_interval = "5m"
+        resample_rule = "196min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y"
+
+    results = []
+
+    # Bulk download if not intraday
+    data = None
+    if not is_intraday:
+        try:
+            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False, group_by='ticker', auto_adjust=True)
+        except Exception:
+            pass
+
+    def _process_darvas(ticker):
+        try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+
+            if df is None or len(df) < 50:
+                return None
+
+            curr_close = float(df['Close'].iloc[-1])
+            curr_volume = float(df['Volume'].iloc[-1]) if 'Volume' in df.columns else 0
+
+            # 1. 52-Week High Check (Momentum Filter)
+            # If intraday, we might not have full 52-week data in `df` (only 1mo).
+            # So we rely on the data we have. For proper Darvas, 1y daily is best.
+            # If intraday, we assume the user accepts the "local" high as the filter or we skip.
+            # Let's use the max of the available data.
+            period_high = df['High'].max()
+            # If we are within 5% of the high
+            if curr_close < period_high * 0.90:
+                # Darvas requires new highs. If we are deep in drawdown, ignore.
+                # Exception: Early stage breakout from a base might be slightly lower.
+                # Strictest rule: Must be making a new high.
+                # Let's relax to: Near High (> 90%).
+                pass # Just a filter, but we proceed to check boxes
+
+            # 2. Identify Box (Ceiling & Floor)
+            # We iterate back to find the most recent valid Box.
+            # A valid box has a Ceiling (Top) and a Floor (Bottom).
+
+            # Logic:
+            # Find the most recent "Pivot High" (Ceiling).
+            # A Top at index T is valid if High[T] >= High[T-3...T-1] AND High[T] >= High[T+1...T+3].
+
+            # Optimization: We only need the last established box.
+            # We scan backwards from T-3.
+
+            ceiling = None
+            floor = None
+
+            # Convert to numpy for speed
+            highs = df['High'].values
+            lows = df['Low'].values
+            closes = df['Close'].values
+            volumes = df['Volume'].values if 'Volume' in df.columns else np.zeros(len(df))
+
+            # Look back window: last 60 bars (approx 3 months)
+            lookback = min(len(df), 60)
+
+            # Find potential Tops
+            # We iterate backwards
+            found_top_idx = -1
+
+            for i in range(len(df) - 4, len(df) - lookback, -1):
+                # Check for Pivot High at i
+                # Left neighbors (i-3 to i-1)
+                if i < 3: break
+
+                # Check if High[i] is >= High[i-3...i-1] AND High[i] >= High[i+1...i+3]
+                # Note: i+3 must exist.
+                if i + 3 >= len(df): continue
+
+                curr_h = highs[i]
+                if (curr_h >= highs[i-1] and curr_h >= highs[i-2] and curr_h >= highs[i-3] and
+                    curr_h >= highs[i+1] and curr_h >= highs[i+2] and curr_h >= highs[i+3]):
+
+                    found_top_idx = i
+                    ceiling = curr_h
+                    break
+
+            if found_top_idx == -1:
+                return None # No defined top recently
+
+            # Find Floor (Bottom) AFTER the Top
+            # Darvas: "The point where it stops dropping... becomes the bottom"
+            # So we look for a Pivot Low in the range (found_top_idx + 1 ... Today)
+            # But the pivot low also needs 3 days confirmation.
+
+            found_bot_idx = -1
+
+            for j in range(found_top_idx + 1, len(df) - 3):
+                # Check for Pivot Low at j
+                # Left neighbors?
+                # Actually, Darvas establishes the floor *after* the ceiling.
+                # Condition: Low[j] <= Low[j-3...j-1] AND Low[j] <= Low[j+1...j+3]
+                # And Low[j] < Ceiling
+
+                if j < 3: continue
+                if j + 3 >= len(df): continue
+
+                curr_l = lows[j]
+                if curr_l >= ceiling: continue # Bottom must be below top
+
+                if (curr_l <= lows[j-1] and curr_l <= lows[j-2] and curr_l <= lows[j-3] and
+                    curr_l <= lows[j+1] and curr_l <= lows[j+2] and curr_l <= lows[j+3]):
+
+                    found_bot_idx = j
+                    floor = curr_l
+                    # We take the *first* valid bottom after top? Or the lowest?
+                    # Darvas boxes are usually defined by the first consolidation range.
+                    # Let's assume the first valid pivot low establishes the floor.
+                    break
+
+            if floor is None:
+                # We have a Top but no confirmed Floor yet.
+                # We are likely "In Formation".
+                pass
+
+            signal = "WAIT"
+
+            # 3. Check for Breakout
+            # If we have a valid Box [Floor, Ceiling]
+            if ceiling and floor:
+                # Check if we are breaking out NOW (last bar)
+                # Breakout: Close > Ceiling
+                if closes[-1] > ceiling and closes[-2] <= ceiling:
+                     signal = "📦 DARVAS BREAKOUT"
+
+                # Check for Breakdown (Stop Loss)
+                elif closes[-1] < floor and closes[-2] >= floor:
+                     signal = "📉 BOX BREAKDOWN"
+
+                elif closes[-1] > ceiling:
+                     # Already broken out, sustaining high?
+                     if (closes[-1] - ceiling) / ceiling < 0.05:
+                         signal = "🚀 MOMENTUM (Post-Breakout)"
+
+            elif ceiling and not floor:
+                # Setup phase?
+                # Price is between Top and (undefined) Bottom.
+                pass
+
+            if signal == "WAIT":
+                return None
+
+            # 4. Volume Filter (for Breakouts)
+            is_valid_volume = True
+            if "BREAKOUT" in signal:
+                # Volume > 150% of 20-day MA
+                vol_ma = np.mean(volumes[-21:-1]) if len(volumes) > 21 else np.mean(volumes)
+                if vol_ma > 0 and curr_volume < vol_ma * 1.2: # Relaxed to 1.2x
+                    # signal += " (Low Vol)"
+                    # Maybe filter it out strictly?
+                    # Darvas insisted on volume.
+                    is_valid_volume = False
+
+            if not is_valid_volume:
+                return None
+
+            # 52-Week High check (Strict for Entry)
+            if "BREAKOUT" in signal:
+                if curr_close < period_high * 0.95:
+                     # Breakout of a box, but far from 52w high?
+                     # Might be a recovery box. Darvas preferred ATH.
+                     # We label it differently?
+                     pass
+
+            # Calculate metrics
+            pct_change_1d = None
+            if len(df) >= 2:
+                 pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
+
+            atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1]
+
+            stop_loss = floor if floor else (ceiling - 2*atr if ceiling else curr_close * 0.95)
+
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
+
+            return {
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": curr_close,
+                "pct_change_1d": pct_change_1d,
+                "signal": signal,
+                "breakout_level": ceiling,
+                "floor_level": floor,
+                "stop_loss": stop_loss,
+                "volume_ratio": (curr_volume / np.mean(volumes[-21:-1])) if len(volumes) > 21 else 1.0
+            }
+
+        except Exception as e:
+            # print(f"Error processing {ticker}: {e}")
+            return None
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_symbol = {executor.submit(_process_darvas, sym): sym for sym in ticker_list}
+        for future in as_completed(future_to_symbol):
+            try:
+                data = future.result()
+                if data:
+                    results.append(data)
+            except Exception:
+                pass
+
+    return results

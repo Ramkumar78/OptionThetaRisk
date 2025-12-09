@@ -20,6 +20,13 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const runDarvasScreener = async (region: string, timeFrame: string) => {
+  const response = await api.get('/screen/darvas', {
+    params: { region, time_frame: timeFrame }
+  });
+  return response.data;
+};
+
 export const importTradesToJournal = async (trades: any[]) => {
   const response = await api.post('/journal/import', trades);
   return response.data;
