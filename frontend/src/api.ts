@@ -20,6 +20,11 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const importTradesToJournal = async (trades: any[]) => {
+  const response = await api.post('/journal/import', trades);
+  return response.data;
+};
+
 export const runEmaScreener = async (region: string, timeFrame: string) => {
   const response = await api.get('/screen/ema', {
     params: { region, time_frame: timeFrame }

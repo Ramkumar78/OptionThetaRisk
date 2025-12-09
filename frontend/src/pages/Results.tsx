@@ -1,5 +1,6 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { importTradesToJournal } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,8 +38,30 @@ interface ResultsProps {
 
 const Results: React.FC<ResultsProps> = ({ directData }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const results = directData || location.state?.results;
   const isDark = document.documentElement.classList.contains('dark'); // Initial check, might need context for reactivity
+  const [importing, setImporting] = React.useState(false);
+
+  const handleImportToJournal = async () => {
+      if (!results || !results.strategy_groups) return;
+      if (!confirm("Import all analyzed closed trades into your Journal? This will create new entries.")) return;
+
+      setImporting(true);
+      try {
+          const res = await importTradesToJournal(results.strategy_groups);
+          if (res.success) {
+              alert(`Successfully imported ${res.count} trades into Journal!`);
+              navigate('/journal');
+          } else {
+              alert(`Error importing trades: ${res.error}`);
+          }
+      } catch (e) {
+          alert("Failed to import trades.");
+      } finally {
+          setImporting(false);
+      }
+  };
 
   if (!results) {
     return (
@@ -288,13 +311,27 @@ const Results: React.FC<ResultsProps> = ({ directData }) => {
           </div>
        </div>
 
-       {token && (
-           <div className="flex justify-center mt-8 pb-8">
-            <a href={`/download/${token}/report.xlsx`} className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all hover:-translate-y-0.5 shadow-lg shadow-primary-500/30">
-                <i className="bi bi-download mr-2"></i> Download Excel Report
-            </a>
-          </div>
-       )}
+       <div className="flex flex-col md:flex-row justify-center items-center gap-4 mt-8 pb-8">
+           {token && (
+                <a href={`/download/${token}/report.xlsx`} className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all hover:-translate-y-0.5 shadow-lg shadow-primary-500/30">
+                    <i className="bi bi-download mr-2"></i> Download Excel Report
+                </a>
+           )}
+
+           {strategy_groups && strategy_groups.length > 0 && (
+                <button
+                    onClick={handleImportToJournal}
+                    disabled={importing}
+                    className="inline-flex items-center px-6 py-3 border border-gray-300 dark:border-gray-600 text-base font-medium rounded-xl shadow-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all hover:-translate-y-0.5"
+                >
+                    {importing ? "Importing..." : (
+                        <>
+                            <span className="mr-2">📓</span> Add Closed Trades to Journal
+                        </>
+                    )}
+                </button>
+           )}
+       </div>
 
     </div>
   );

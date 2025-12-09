@@ -219,7 +219,11 @@ class TastytradeFillsParser(TransactionParser):
 class ManualInputParser(TransactionParser):
     def parse(self, df: pd.DataFrame) -> pd.DataFrame:
         # Expected columns from manual input list-of-dicts:
-        # date, symbol, action, qty, price, fees, expiry, strike, right
+        # date, symbol, action, qty, price, fees, expiry, strike, opt (mapped to right)
+
+        # Mapping 'opt' -> 'right' if needed (frontend uses 'opt')
+        if "opt" in df.columns and "right" not in df.columns:
+            df["right"] = df["opt"]
 
         required = ["date", "symbol", "action", "qty", "price", "fees", "expiry", "strike", "right"]
         # Basic validation
@@ -234,7 +238,9 @@ class ManualInputParser(TransactionParser):
         out["symbol"] = df["symbol"].astype(str)
 
         action = df["action"].astype(str).str.lower()
-        sign = np.where(action.str.contains("sell"), -1.0, 1.0)
+        # Handle "sell" (full word) or "s" (STO/STC)
+        is_sell = action.str.contains("sell") | action.str.startswith("s")
+        sign = np.where(is_sell, -1.0, 1.0)
         qty_abs = pd.to_numeric(df["qty"], errors="coerce").fillna(0).abs()
         out["qty"] = qty_abs * sign
 

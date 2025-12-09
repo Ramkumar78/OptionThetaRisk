@@ -28,6 +28,22 @@ CLEANUP_INTERVAL = 1200 # 20 minutes
 # Max age of reports in seconds
 MAX_REPORT_AGE = 1200 # 20 minutes
 
+# Screener Cache
+SCREENER_CACHE = {}
+SCREENER_CACHE_TIMEOUT = 600  # 10 minutes
+
+def get_cached_screener_result(key):
+    if key in SCREENER_CACHE:
+        timestamp, data = SCREENER_CACHE[key]
+        if time.time() - timestamp < SCREENER_CACHE_TIMEOUT:
+            return data
+        else:
+            del SCREENER_CACHE[key]
+    return None
+
+def cache_screener_result(key, data):
+    SCREENER_CACHE[key] = (time.time(), data)
+
 # Helper Function for Email
 def send_email_notification(subject, body):
     sender_email = os.environ.get("SMTP_USER")
@@ -35,11 +51,11 @@ def send_email_notification(subject, body):
     recipient_email = os.environ.get("ADMIN_EMAIL")
 
     if not sender_email or not sender_password:
-        print("SMTP credentials missing (SMTP_USER/SMTP_PASSWORD). Skipping email.")
+        print("⚠️  SMTP credentials missing (SMTP_USER/SMTP_PASSWORD). Skipping email.", flush=True)
         return
 
     if not recipient_email:
-        print("Recipient email missing (ADMIN_EMAIL). Skipping email.")
+        print("⚠️  Recipient email missing (ADMIN_EMAIL). Skipping email.", flush=True)
         return
 
     msg = EmailMessage()
@@ -49,23 +65,36 @@ def send_email_notification(subject, body):
     msg['To'] = recipient_email
 
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", 465))
+
+    # Safely parse port
+    try:
+        smtp_port = int(os.environ.get("SMTP_PORT", 465))
+    except ValueError:
+        smtp_port = 465
 
     print(f"📧 Sending email to {recipient_email} via {smtp_host}:{smtp_port}...", flush=True)
 
     try:
         # Create unverified context to avoid SSL certificate errors in some environments
         context = ssl._create_unverified_context()
+
+        # Explicitly handle standard ports for SSL vs StartTLS
         if smtp_port == 465:
             with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
                 server.login(sender_email, sender_password)
                 server.send_message(msg)
         else:
+            # Default to StartTLS for 587 or other ports
             with smtplib.SMTP(smtp_host, smtp_port) as server:
                 server.starttls(context=context)
                 server.login(sender_email, sender_password)
                 server.send_message(msg)
+
         print("✅ Email sent successfully!", flush=True)
+    except smtplib.SMTPAuthenticationError:
+        print("❌ SMTP Authentication Failed. Check SMTP_USER and SMTP_PASSWORD.", flush=True)
+    except smtplib.SMTPConnectError:
+        print("❌ SMTP Connection Failed. Check SMTP_HOST and SMTP_PORT.", flush=True)
     except Exception as e:
         print(f"❌ Failed to send email: {e}", flush=True)
 
@@ -195,15 +224,21 @@ def create_app(testing: bool = False) -> Flask:
             pass
 
         time_frame = request.form.get("time_frame", "1d")
+        cache_key = ("market", iv_rank, rsi_threshold, time_frame)
+        cached = get_cached_screener_result(cache_key)
+        if cached:
+            return jsonify(cached)
 
         try:
             results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
             sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
-            return jsonify({
+            data = {
                 "results": results,
                 "sector_results": sector_results,
                 "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame}
-            })
+            }
+            cache_screener_result(cache_key, data)
+            return jsonify(data)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -213,6 +248,11 @@ def create_app(testing: bool = False) -> Flask:
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
 
+            cache_key = ("turtle", region, time_frame)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
@@ -220,6 +260,7 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_indian_tickers()
 
             results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
+            cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -230,6 +271,11 @@ def create_app(testing: bool = False) -> Flask:
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
 
+            cache_key = ("ema", region, time_frame)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
@@ -237,6 +283,7 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_indian_tickers()
 
             results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
+            cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -280,6 +327,60 @@ def create_app(testing: bool = False) -> Flask:
         entries = storage.get_journal_entries(username)
         result = journal_analyzer.analyze_journal(entries)
         return jsonify(result)
+
+    @app.route("/journal/import", methods=["POST"])
+    def journal_import_trades():
+        username = session.get('username')
+        data = request.json
+        if not data or not isinstance(data, list):
+            return jsonify({"error": "Invalid data format. Expected list of trades."}), 400
+
+        storage = get_storage_provider(app)
+        count = 0
+        try:
+            for trade in data:
+                # Map analysis trade object to journal entry
+                # trade is likely a dict from strategy_rows in main_analyzer
+
+                # Extract entry date from segments if available
+                entry_date = ""
+                entry_time = ""
+                if trade.get("segments") and len(trade.get("segments")) > 0:
+                    first_seg = trade["segments"][0]
+                    ts_str = first_seg.get("entry_ts", "")
+                    if ts_str:
+                         try:
+                             dt = datetime.fromisoformat(ts_str)
+                             entry_date = dt.date().isoformat()
+                             entry_time = dt.time().isoformat()
+                         except:
+                             pass
+
+                # Fallback to current date if missing (though analysis results usually have dates)
+                if not entry_date:
+                    entry_date = datetime.now().date().isoformat()
+
+                journal_entry = {
+                    "id": str(uuid.uuid4()),
+                    "username": username,
+                    "entry_date": entry_date,
+                    "entry_time": entry_time,
+                    "symbol": trade.get("symbol", ""),
+                    "strategy": trade.get("strategy", ""),
+                    "direction": "", # Not explicit in strategy object, user can edit
+                    "entry_price": 0.0, # Not explicit aggregated
+                    "exit_price": 0.0,
+                    "qty": 1.0, # Strategy level aggregation
+                    "pnl": float(trade.get("pnl", 0.0)),
+                    "notes": f"Imported Analysis. Legs: {trade.get('legs_desc', '')}. Description: {trade.get('description', '')}",
+                    "created_at": time.time()
+                }
+                storage.save_journal_entry(journal_entry)
+                count += 1
+
+            return jsonify({"success": True, "count": count})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     # API Route for Analysis (Audit)
     @app.route("/analyze", methods=["POST"])
