@@ -162,30 +162,46 @@ class LocalStorage(StorageProvider):
         return None
 
     def save_journal_entry(self, entry: dict) -> str:
-        with sqlite3.connect(self.db_path) as conn:
-            if 'id' not in entry or not entry['id']:
-                entry['id'] = str(uuid.uuid4())
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                if 'id' not in entry or not entry['id']:
+                    entry['id'] = str(uuid.uuid4())
 
-            # Check exist
-            cursor = conn.execute("SELECT id FROM journal_entries WHERE id = ?", (entry['id'],))
-            if cursor.fetchone():
-                # Update
-                fields = []
-                values = []
-                for k, v in entry.items():
-                    if k != 'id':
-                        fields.append(f"{k} = ?")
-                        values.append(v)
-                values.append(entry['id'])
-                conn.execute(f"UPDATE journal_entries SET {', '.join(fields)} WHERE id = ?", values)
-            else:
-                # Insert
-                keys = list(entry.keys())
-                values = list(entry.values())
-                placeholders = ",".join(["?"] * len(keys))
-                conn.execute(f"INSERT INTO journal_entries ({', '.join(keys)}) VALUES ({placeholders})", values)
+                # Clean entry dict to match schema columns roughly (avoid extra keys from breaking things if strict)
+                # But actually, SQLite is forgiving unless we explicitly use keys in the INSERT that don't exist.
+                # However, if 'sentiment' is passed in the JSON but not in the DB schema, it will cause an error
+                # if we try to insert it.
 
-            return entry['id']
+                # Filter entry to only allowed columns
+                valid_columns = {
+                    'id', 'username', 'entry_date', 'entry_time', 'symbol', 'strategy',
+                    'direction', 'entry_price', 'exit_price', 'qty', 'pnl', 'notes', 'created_at'
+                }
+                filtered_entry = {k: v for k, v in entry.items() if k in valid_columns}
+
+                # Check exist
+                cursor = conn.execute("SELECT id FROM journal_entries WHERE id = ?", (filtered_entry['id'],))
+                if cursor.fetchone():
+                    # Update
+                    fields = []
+                    values = []
+                    for k, v in filtered_entry.items():
+                        if k != 'id':
+                            fields.append(f"{k} = ?")
+                            values.append(v)
+                    values.append(filtered_entry['id'])
+                    conn.execute(f"UPDATE journal_entries SET {', '.join(fields)} WHERE id = ?", values)
+                else:
+                    # Insert
+                    keys = list(filtered_entry.keys())
+                    values = list(filtered_entry.values())
+                    placeholders = ",".join(["?"] * len(keys))
+                    conn.execute(f"INSERT INTO journal_entries ({', '.join(keys)}) VALUES ({placeholders})", values)
+
+                return filtered_entry['id']
+        except Exception as e:
+            print(f"Error saving journal entry: {e}")
+            raise e
 
     def get_journal_entries(self, username: str) -> list:
         with sqlite3.connect(self.db_path) as conn:
