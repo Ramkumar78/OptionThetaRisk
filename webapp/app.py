@@ -14,9 +14,7 @@ from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
-import smtplib
-import ssl
-from email.message import EmailMessage
+import resend
 from dotenv import load_dotenv
 import sys
 
@@ -72,55 +70,29 @@ def _get_env_or_docker_default(key, default=None):
     return default
 
 def send_email_notification(subject, body):
-    sender_email = _get_env_or_docker_default("SMTP_USER")
-    sender_password = _get_env_or_docker_default("SMTP_PASSWORD")
-    recipient_email = _get_env_or_docker_default("ADMIN_EMAIL")
-
-    if not sender_email or not sender_password:
-        print("⚠️  SMTP credentials missing (SMTP_USER/SMTP_PASSWORD). Skipping email.", flush=True)
+    api_key = _get_env_or_docker_default("RESEND_API_KEY")
+    if not api_key:
+        print("⚠️  Resend API Key missing. Skipping email.", flush=True)
         return
 
-    if not recipient_email:
-        print("⚠️  Recipient email missing (ADMIN_EMAIL). Skipping email.", flush=True)
-        return
+    resend.api_key = api_key
 
-    msg = EmailMessage()
-    msg.set_content(body)
-    msg['Subject'] = subject
-    msg['From'] = sender_email
-    msg['To'] = recipient_email
+    # Intended recipients
+    # Note: On free/testing tier, can only send to the account email (shriram2222@gmail.com)
+    recipients = ["shriram2222@gmail.com"]
 
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-
-    # Safely parse port
-    try:
-        smtp_port = int(os.environ.get("SMTP_PORT", 465))
-    except ValueError:
-        smtp_port = 465
-
-    print(f"📧 Sending email to {recipient_email} via {smtp_host}:{smtp_port}...", flush=True)
+    print(f"📧 Sending email via Resend to {recipients}...", flush=True)
 
     try:
-        # Create unverified context to avoid SSL certificate errors in some environments
-        context = ssl._create_unverified_context()
+        params = {
+            "from": "Trade Auditor <onboarding@resend.dev>",
+            "to": recipients,
+            "subject": subject,
+            "text": body,
+        }
 
-        # Explicitly handle standard ports for SSL vs StartTLS
-        if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
-                server.login(sender_email, sender_password)
-                server.send_message(msg)
-        else:
-            # Default to StartTLS for 587 or other ports
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                server.starttls(context=context)
-                server.login(sender_email, sender_password)
-                server.send_message(msg)
-
-        print("✅ Email sent successfully!", flush=True)
-    except smtplib.SMTPAuthenticationError:
-        print("❌ SMTP Authentication Failed. Check SMTP_USER and SMTP_PASSWORD.", flush=True)
-    except smtplib.SMTPConnectError:
-        print("❌ SMTP Connection Failed. Check SMTP_HOST and SMTP_PORT.", flush=True)
+        email = resend.Emails.send(params)
+        print(f"✅ Email sent successfully! ID: {email.get('id')}", flush=True)
     except Exception as e:
         print(f"❌ Failed to send email: {e}", flush=True)
 

@@ -10,9 +10,6 @@ services:
       - SECRET_KEY=dev-secret-key-change-me
       # Set to 1 to enable HTTPS if you have SSL setup, or handled by reverse proxy
       - ENABLE_HTTPS=0
-      # SMTP Configuration for Feedback Emails
-      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
-      - SMTP_PORT=${SMTP_PORT:-465}
-      - SMTP_USER=${SMTP_USER:-tradeauditor9@gmail.com}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-ezec qwib ntlr fowi}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-tradeauditor9@gmail.com}
+      # Resend API Configuration for Feedback Emails
+      - RESEND_API_KEY=${RESEND_API_KEY:-re_ZyvLRhL6_CDNzYkCtd7dxShpeoCUCdv5v}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-shriram2222@gmail.com}

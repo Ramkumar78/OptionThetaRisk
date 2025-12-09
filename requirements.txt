@@ -12,3 +12,4 @@ SQLAlchemy>=2.0
 psycopg2-binary>=2.9.0
 pandas_ta==0.4.71b0
 python-dotenv>=1.0.0
+resend>=2.0.0
