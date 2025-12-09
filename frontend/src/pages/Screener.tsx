@@ -45,7 +45,7 @@ const Screener: React.FC<ScreenerProps> = () => {
 
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
     { id: 'turtle', label: 'Turtle Trading' },
-    { id: 'ema', label: '5/13 EMA' },
+    { id: 'ema', label: '5/13 & 5/21 EMA' },
     { id: 'market', label: 'Market Screener (RSI/IV)', subLabel: 'US Options Only' },
   ];
 
