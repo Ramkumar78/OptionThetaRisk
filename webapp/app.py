@@ -132,17 +132,20 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/feedback", methods=["POST"])
     def feedback():
         message = request.form.get("message", "").strip()
+        name = request.form.get("name", "").strip() or None
+        email = request.form.get("email", "").strip() or None
         username = session.get("username", "Anonymous")
 
         if message:
             storage = get_storage_provider(app)
             try:
-                storage.save_feedback(username, message)
+                storage.save_feedback(username, message, name=name, email=email)
 
                 # --- NEW CODE: Send Email ---
+                email_body = f"User: {username}\nName: {name or 'N/A'}\nEmail: {email or 'N/A'}\n\nMessage:\n{message}"
                 send_email_notification(
                     subject=f"New Feedback from {username}",
-                    body=f"User: {username}\n\nMessage:\n{message}"
+                    body=email_body
                 )
                 # ---------------------------
 
