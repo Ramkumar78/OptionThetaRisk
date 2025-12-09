@@ -14,11 +14,39 @@ from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider
+import smtplib
+import ssl
+from email.message import EmailMessage
 
 # Cleanup interval in seconds
 CLEANUP_INTERVAL = 1200 # 20 minutes
 # Max age of reports in seconds
 MAX_REPORT_AGE = 1200 # 20 minutes
+
+# Helper Function for Email
+def send_email_notification(subject, body):
+    sender_email = os.environ.get("SMTP_USER")
+    sender_password = os.environ.get("SMTP_PASSWORD")
+    recipient_email = os.environ.get("ADMIN_EMAIL")
+
+    if not sender_email or not sender_password:
+        print("SMTP credentials missing. Skipping email.")
+        return
+
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg['Subject'] = subject
+    msg['From'] = sender_email
+    msg['To'] = recipient_email
+
+    try:
+        context = ssl.create_default_context()
+        # Connect to Gmail SMTP (change host if using Outlook/AWS SES)
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+    except Exception as e:
+        print(f"Failed to send email: {e}")
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
@@ -89,6 +117,14 @@ def create_app(testing: bool = False) -> Flask:
             storage = get_storage_provider(app)
             try:
                 storage.save_feedback(username, message)
+
+                # --- NEW CODE: Send Email ---
+                send_email_notification(
+                    subject=f"New Feedback from {username}",
+                    body=f"User: {username}\n\nMessage:\n{message}"
+                )
+                # ---------------------------
+
                 return jsonify({"success": True, "message": "Feedback submitted"})
             except Exception as e:
                 print(f"Feedback error: {e}")
