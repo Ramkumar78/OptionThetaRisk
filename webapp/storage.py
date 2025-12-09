@@ -31,6 +31,8 @@ class Feedback(Base):
     __tablename__ = 'feedback'
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String)
+    name = Column(String, nullable=True)
+    email = Column(String, nullable=True)
     message = Column(Text)
     created_at = Column(Float, default=time.time)
 
@@ -78,7 +80,7 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def save_feedback(self, username: str, message: str) -> None:
+    def save_feedback(self, username: str, message: str, name: str = None, email: str = None) -> None:
         pass
 
     @abstractmethod
@@ -164,10 +166,10 @@ class PostgresStorage(StorageProvider):
         finally:
             session.close()
 
-    def save_feedback(self, username: str, message: str) -> None:
+    def save_feedback(self, username: str, message: str, name: str = None, email: str = None) -> None:
         session = self.Session()
         try:
-            feedback = Feedback(username=username, message=message)
+            feedback = Feedback(username=username, message=message, name=name, email=email)
             session.add(feedback)
             session.commit()
         finally:
@@ -294,14 +296,15 @@ class S3Storage(StorageProvider):
         except Exception:
             return None
 
-    def save_feedback(self, username: str, message: str) -> None:
+    def save_feedback(self, username: str, message: str, name: str = None, email: str = None) -> None:
         timestamp = int(time.time())
         key = f"feedback/{timestamp}_{username}.txt"
+        content = f"User: {username}\nName: {name or 'N/A'}\nEmail: {email or 'N/A'}\n\nMessage:\n{message}"
         try:
              self.s3.put_object(
                 Bucket=self.bucket_name,
                 Key=key,
-                Body=message.encode('utf-8')
+                Body=content.encode('utf-8')
             )
         except Exception:
             pass

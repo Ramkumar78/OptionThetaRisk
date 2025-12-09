@@ -82,6 +82,9 @@ const Audit: React.FC = () => {
       <div className="text-center space-y-2">
          <h1 id="audit-title" className="text-3xl font-bold text-gray-900 dark:text-white">Audit Your Portfolio</h1>
          <p className="text-gray-500 dark:text-gray-400">Upload your trade logs or enter them manually to uncover risks and opportunities.</p>
+         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+           The Audit tool is the core risk management engine. Upload your trade logs (CSV) from supported brokers like Tastytrade or Interactive Brokers, or enter trades manually. The system will analyze your portfolio for 'Greeks' exposure, PnL attribution, and strategy efficiency, generating a comprehensive risk report.
+         </p>
       </div>
 
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">

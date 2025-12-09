@@ -11,6 +11,8 @@ services:
       # Set to 1 to enable HTTPS if you have SSL setup, or handled by reverse proxy
       - ENABLE_HTTPS=0
       # SMTP Configuration for Feedback Emails
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-465}
       - SMTP_USER=${SMTP_USER:-tradeauditor9@gmail.com}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-ezec qwib ntlr fowi}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-tradeauditor9@gmail.com}

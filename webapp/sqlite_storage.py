@@ -48,10 +48,23 @@ class LocalStorage(StorageProvider):
                 CREATE TABLE IF NOT EXISTS feedback (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT,
+                    name TEXT,
+                    email TEXT,
                     message TEXT,
                     created_at REAL
                 )
             """)
+
+            # Ensure columns exist (simple migration)
+            try:
+                cursor = conn.execute("PRAGMA table_info(feedback)")
+                columns = [info[1] for info in cursor.fetchall()]
+                if 'name' not in columns:
+                    conn.execute("ALTER TABLE feedback ADD COLUMN name TEXT")
+                if 'email' not in columns:
+                    conn.execute("ALTER TABLE feedback ADD COLUMN email TEXT")
+            except Exception:
+                pass
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS portfolios (
                     username TEXT PRIMARY KEY,
@@ -137,11 +150,11 @@ class LocalStorage(StorageProvider):
                 return dict(row)
         return None
 
-    def save_feedback(self, username: str, message: str) -> None:
+    def save_feedback(self, username: str, message: str, name: str = None, email: str = None) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO feedback (username, message, created_at) VALUES (?, ?, ?)",
-                (username, message, time.time())
+                "INSERT INTO feedback (username, message, name, email, created_at) VALUES (?, ?, ?, ?, ?)",
+                (username, message, name, email, time.time())
             )
 
     def save_portfolio(self, username: str, data: bytes) -> None:

@@ -17,6 +17,11 @@ from webapp.storage import get_storage_provider
 import smtplib
 import ssl
 from email.message import EmailMessage
+from dotenv import load_dotenv
+import sys
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Cleanup interval in seconds
 CLEANUP_INTERVAL = 1200 # 20 minutes
@@ -30,7 +35,11 @@ def send_email_notification(subject, body):
     recipient_email = os.environ.get("ADMIN_EMAIL")
 
     if not sender_email or not sender_password:
-        print("SMTP credentials missing. Skipping email.")
+        print("SMTP credentials missing (SMTP_USER/SMTP_PASSWORD). Skipping email.")
+        return
+
+    if not recipient_email:
+        print("Recipient email missing (ADMIN_EMAIL). Skipping email.")
         return
 
     msg = EmailMessage()
@@ -39,14 +48,26 @@ def send_email_notification(subject, body):
     msg['From'] = sender_email
     msg['To'] = recipient_email
 
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", 465))
+
+    print(f"📧 Sending email to {recipient_email} via {smtp_host}:{smtp_port}...", flush=True)
+
     try:
-        context = ssl.create_default_context()
-        # Connect to Gmail SMTP (change host if using Outlook/AWS SES)
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
+        # Create unverified context to avoid SSL certificate errors in some environments
+        context = ssl._create_unverified_context()
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls(context=context)
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+        print("✅ Email sent successfully!", flush=True)
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print(f"❌ Failed to send email: {e}", flush=True)
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
@@ -111,17 +132,20 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/feedback", methods=["POST"])
     def feedback():
         message = request.form.get("message", "").strip()
+        name = request.form.get("name", "").strip() or None
+        email = request.form.get("email", "").strip() or None
         username = session.get("username", "Anonymous")
 
         if message:
             storage = get_storage_provider(app)
             try:
-                storage.save_feedback(username, message)
+                storage.save_feedback(username, message, name=name, email=email)
 
                 # --- NEW CODE: Send Email ---
+                email_body = f"User: {username}\nName: {name or 'N/A'}\nEmail: {email or 'N/A'}\n\nMessage:\n{message}"
                 send_email_notification(
                     subject=f"New Feedback from {username}",
-                    body=f"User: {username}\n\nMessage:\n{message}"
+                    body=email_body
                 )
                 # ---------------------------
 

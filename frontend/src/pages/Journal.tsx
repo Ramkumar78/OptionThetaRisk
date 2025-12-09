@@ -85,7 +85,10 @@ const Journal: React.FC = () => {
       {/* Input Form */}
       <div className="lg:col-span-1">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sticky top-24">
-           <h3 id="journal-form-title" className="text-xl font-bold text-gray-900 dark:text-white mb-4">New Journal Entry</h3>
+           <h3 id="journal-form-title" className="text-xl font-bold text-gray-900 dark:text-white mb-2">New Journal Entry</h3>
+           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+             Consistent journaling is the key to trading mastery. Log your trades here with notes on sentiment and strategy. Over time, use the 'Analyze Habits' feature to detect patterns in your behavior, such as emotional trading or strategy drift.
+           </p>
            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="journal-symbol" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Symbol</label>
