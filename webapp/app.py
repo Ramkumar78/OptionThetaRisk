@@ -45,10 +45,36 @@ def cache_screener_result(key, data):
     SCREENER_CACHE[key] = (time.time(), data)
 
 # Helper Function for Email
+def _get_env_or_docker_default(key, default=None):
+    """
+    Get environment variable, or fall back to docker-compose.yml default if available.
+    This helps in environments like Render that don't use docker-compose but have the file.
+    """
+    val = os.environ.get(key)
+    if val:
+        return val
+
+    # Try to parse docker-compose.yml for defaults like ${VAR:-default}
+    try:
+        docker_compose_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docker-compose.yml')
+        if os.path.exists(docker_compose_path):
+            with open(docker_compose_path, 'r') as f:
+                content = f.read()
+                # Regex to find specific key pattern: key=${key:-value}
+                # Handles lines like: - SMTP_USER=${SMTP_USER:-tradeauditor9@gmail.com}
+                import re
+                match = re.search(fr"{key}=\${{{key}:-(.*?)}}", content)
+                if match:
+                    return match.group(1)
+    except Exception:
+        pass
+
+    return default
+
 def send_email_notification(subject, body):
-    sender_email = os.environ.get("SMTP_USER")
-    sender_password = os.environ.get("SMTP_PASSWORD")
-    recipient_email = os.environ.get("ADMIN_EMAIL")
+    sender_email = _get_env_or_docker_default("SMTP_USER")
+    sender_password = _get_env_or_docker_default("SMTP_PASSWORD")
+    recipient_email = _get_env_or_docker_default("ADMIN_EMAIL")
 
     if not sender_email or not sender_password:
         print("⚠️  SMTP credentials missing (SMTP_USER/SMTP_PASSWORD). Skipping email.", flush=True)
