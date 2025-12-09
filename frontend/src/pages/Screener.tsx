@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas';
 
 const Screener: React.FC<ScreenerProps> = () => {
   const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
@@ -34,6 +34,8 @@ const Screener: React.FC<ScreenerProps> = () => {
         data = await runTurtleScreener(region, strategyTimeFrame);
       } else if (activeTab === 'ema') {
         data = await runEmaScreener(region, strategyTimeFrame);
+      } else if (activeTab === 'darvas') {
+        data = await runDarvasScreener(region, strategyTimeFrame);
       }
       setResults(data);
     } catch (err: any) {
@@ -45,6 +47,7 @@ const Screener: React.FC<ScreenerProps> = () => {
 
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
     { id: 'turtle', label: 'Turtle Trading' },
+    { id: 'darvas', label: 'Darvas Box' },
     { id: 'ema', label: '5/13 & 5/21 EMA' },
     { id: 'market', label: 'Market Screener (RSI/IV)', subLabel: 'US Options Only' },
   ];
@@ -57,7 +60,7 @@ const Screener: React.FC<ScreenerProps> = () => {
             <h2 id="screener-title" className="text-2xl font-bold text-gray-900 dark:text-white">Stock & Option Screener</h2>
             <p id="screener-subtitle" className="text-sm text-gray-500 dark:text-gray-400">Find high-probability setups based on volatility and trend.</p>
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 max-w-2xl">
-              Use the <strong>Market Screener</strong> to scan for liquid US options with specific IV Rank and RSI thresholds. The <strong>Turtle Trading</strong> and <strong>EMA</strong> screeners are trend-following tools designed to identify breakout candidates across multiple regions (US, UK/Euro, India). Select a strategy tab above to begin.
+              Use the <strong>Market Screener</strong> to scan for liquid US options with specific IV Rank and RSI thresholds. The <strong>Turtle Trading</strong>, <strong>Darvas Box</strong>, and <strong>EMA</strong> screeners are trend-following tools designed to identify breakout candidates across multiple regions (US, UK/Euro, India). Select a strategy tab above to begin.
             </p>
           </div>
 
@@ -123,7 +126,7 @@ const Screener: React.FC<ScreenerProps> = () => {
             </>
           )}
 
-          {(activeTab === 'turtle' || activeTab === 'ema') && (
+          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas') && (
              <>
               <div>
                 <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -210,7 +213,7 @@ const Screener: React.FC<ScreenerProps> = () => {
             {activeTab !== 'market' && (
                 <div className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                        {activeTab === 'turtle' ? 'Turtle Breakouts' : '5/13 EMA Setups'}
+                        {activeTab === 'turtle' ? 'Turtle Breakouts' : activeTab === 'darvas' ? 'Darvas Box Setups' : '5/13 EMA Setups'}
                     </h3>
                     <ScreenerTable data={results} type={activeTab} />
                 </div>
