@@ -54,7 +54,8 @@ def send_email_notification(subject, body):
     print(f"📧 Sending email to {recipient_email} via {smtp_host}:{smtp_port}...", flush=True)
 
     try:
-        context = ssl.create_default_context()
+        # Create unverified context to avoid SSL certificate errors in some environments
+        context = ssl._create_unverified_context()
         if smtp_port == 465:
             with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
                 server.login(sender_email, sender_password)
