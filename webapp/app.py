@@ -39,12 +39,20 @@ def send_email_notification(subject, body):
     msg['From'] = sender_email
     msg['To'] = recipient_email
 
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", 465))
+
     try:
         context = ssl.create_default_context()
-        # Connect to Gmail SMTP (change host if using Outlook/AWS SES)
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls(context=context)
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
     except Exception as e:
         print(f"Failed to send email: {e}")
 

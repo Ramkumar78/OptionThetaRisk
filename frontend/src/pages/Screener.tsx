@@ -56,6 +56,9 @@ const Screener: React.FC<ScreenerProps> = () => {
           <div>
             <h2 id="screener-title" className="text-2xl font-bold text-gray-900 dark:text-white">Stock & Option Screener</h2>
             <p id="screener-subtitle" className="text-sm text-gray-500 dark:text-gray-400">Find high-probability setups based on volatility and trend.</p>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 max-w-2xl">
+              Use the <strong>Market Screener</strong> to scan for liquid US options with specific IV Rank and RSI thresholds. The <strong>Turtle Trading</strong> and <strong>EMA</strong> screeners are trend-following tools designed to identify breakout candidates across multiple regions (US, UK/Euro, India). Select a strategy tab above to begin.
+            </p>
           </div>
 
           <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
