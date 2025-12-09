@@ -106,12 +106,12 @@ def send_email_notification(subject, body):
 
         # Explicitly handle standard ports for SSL vs StartTLS
         if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
                 server.login(sender_email, sender_password)
                 server.send_message(msg)
         else:
             # Default to StartTLS for 587 or other ports
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                 server.starttls(context=context)
                 server.login(sender_email, sender_password)
                 server.send_message(msg)
@@ -198,10 +198,8 @@ def create_app(testing: bool = False) -> Flask:
 
                 # --- NEW CODE: Send Email ---
                 email_body = f"User: {username}\nName: {name or 'N/A'}\nEmail: {email or 'N/A'}\n\nMessage:\n{message}"
-                send_email_notification(
-                    subject=f"New Feedback from {username}",
-                    body=email_body
-                )
+                # Run in background to avoid blocking response
+                threading.Thread(target=send_email_notification, args=(f"New Feedback from {username}", email_body)).start()
                 # ---------------------------
 
                 return jsonify({"success": True, "message": "Feedback submitted"})
