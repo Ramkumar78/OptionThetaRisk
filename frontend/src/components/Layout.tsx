@@ -135,6 +135,11 @@ const Layout: React.FC<LayoutProps> = () => {
             </li>
           </ul>
         </div>
+        <div className="text-center pb-6 text-xs text-gray-400 dark:text-gray-500 max-w-2xl mx-auto px-4">
+            Disclaimer: This application is for educational and informational purposes only.
+            It does not constitute financial advice. Trading options involves significant risk
+            and is not suitable for all investors. Data provided by third-party sources may be delayed or inaccurate.
+        </div>
       </footer>
 
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />

@@ -38,6 +38,7 @@ def main(argv=None):
     lr = res["leakage_report"]
 
     print("\n--- PORTFOLIO AUDIT ---")
+    print("DISCLAIMER: For educational purposes only. Not financial advice.")
     summary = [
         ["Strategies Closed", f"{sm['num_trades']}"],
         ["Win Rate (Real)", f"{sm['win_rate'] * 100:.1f}%"],
