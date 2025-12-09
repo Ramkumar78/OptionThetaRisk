@@ -130,3 +130,10 @@ against Python 3.9–3.12. It installs dependencies from `requirements.txt` and 
 
 #### Contact
 shriram2222@gmail.com
+
+#### Disclaimer
+The Option Auditor is an educational tool designed to analyze past trading performance. It is not a financial advisor and does not provide investment recommendations.
+
+**No Warranty:** The software is provided "as is." Calculations (including PnL, Theta, and Risk) are estimates based on heuristics and third-party data sources (yfinance) which may be inaccurate or delayed.
+
+**Risk Warning:** Options trading involves high risk and you can lose more than your initial investment. Always consult a qualified financial professional before trading.

@@ -121,6 +121,20 @@ const Results: React.FC<ResultsProps> = ({ directData }) => {
               type: 'time',
               time: { unit: 'day', displayFormats: { day: 'MMM d' } }
           }
+      },
+      plugins: {
+          ...chartOptions.plugins,
+          tooltip: {
+              callbacks: {
+                  afterBody: (context: any) => {
+                      const dataPoint = context[0]?.raw;
+                      if (dataPoint && dataPoint.trades && dataPoint.trades.length > 0) {
+                          return ['', ...dataPoint.trades];
+                      }
+                      return [];
+                  }
+              }
+          }
       }
   };
 
