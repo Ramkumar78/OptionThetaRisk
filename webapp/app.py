@@ -17,6 +17,11 @@ from webapp.storage import get_storage_provider
 import smtplib
 import ssl
 from email.message import EmailMessage
+from dotenv import load_dotenv
+import sys
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Cleanup interval in seconds
 CLEANUP_INTERVAL = 1200 # 20 minutes
@@ -30,7 +35,11 @@ def send_email_notification(subject, body):
     recipient_email = os.environ.get("ADMIN_EMAIL")
 
     if not sender_email or not sender_password:
-        print("SMTP credentials missing. Skipping email.")
+        print("SMTP credentials missing (SMTP_USER/SMTP_PASSWORD). Skipping email.")
+        return
+
+    if not recipient_email:
+        print("Recipient email missing (ADMIN_EMAIL). Skipping email.")
         return
 
     msg = EmailMessage()
@@ -41,6 +50,8 @@ def send_email_notification(subject, body):
 
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", 465))
+
+    print(f"📧 Sending email to {recipient_email} via {smtp_host}:{smtp_port}...", flush=True)
 
     try:
         context = ssl.create_default_context()
@@ -53,8 +64,9 @@ def send_email_notification(subject, body):
                 server.starttls(context=context)
                 server.login(sender_email, sender_password)
                 server.send_message(msg)
+        print("✅ Email sent successfully!", flush=True)
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print(f"❌ Failed to send email: {e}", flush=True)
 
 def cleanup_job(app):
     """Background thread to clean up old reports."""
