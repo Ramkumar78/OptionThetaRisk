@@ -896,15 +896,28 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
             if df is None or len(df) < 21:
                 continue
 
-            # --- TURTLE CALCULATIONS ---
+            # --- TURTLE & DARVAS CALCULATIONS ---
             # 1. Donchian Channels (20-day High/Low)
             df['20_High'] = df['High'].rolling(window=20).max().shift(1)
             df['20_Low'] = df['Low'].rolling(window=20).min().shift(1)
+
+            # Darvas / 10-day Box for faster breakouts
+            df['10_High'] = df['High'].rolling(window=10).max().shift(1)
+            df['10_Low'] = df['Low'].rolling(window=10).min().shift(1)
 
             # 2. ATR (Volatility 'N')
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
 
             curr_close = float(df['Close'].iloc[-1])
+
+            # Calculate % Change
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
+                except Exception as e:
+                    print(f"Error calc % change for {ticker}: {e}")
 
             if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
                 continue
@@ -913,6 +926,10 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
             prev_low = float(df['20_Low'].iloc[-1])
             atr = float(df['ATR'].iloc[-1])
 
+            # 10-day values
+            prev_high_10 = float(df['10_High'].iloc[-1]) if not pd.isna(df['10_High'].iloc[-1]) else prev_high
+            prev_low_10 = float(df['10_Low'].iloc[-1]) if not pd.isna(df['10_Low'].iloc[-1]) else prev_low
+
             signal = "WAIT"
             buy_price = 0.0
             stop_loss = 0.0
@@ -920,9 +937,16 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
 
             dist_to_breakout_high = (curr_close - prev_high) / prev_high
 
-            # Buy Breakout
+            # Buy Breakout (Turtle 20-Day)
             if curr_close > prev_high:
                 signal = "🚀 BREAKOUT (BUY)"
+                buy_price = curr_close
+                stop_loss = buy_price - (2 * atr)
+                target = buy_price + (4 * atr)
+
+            # Buy Breakout (Darvas/10-Day) - if not 20-day
+            elif curr_close > prev_high_10:
+                signal = "📦 DARVAS BREAKOUT"
                 buy_price = curr_close
                 stop_loss = buy_price - (2 * atr)
                 target = buy_price + (4 * atr)
@@ -934,7 +958,14 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                 stop_loss = buy_price + (2 * atr) # Stop above entry for short
                 target = buy_price - (4 * atr)    # Target below entry
 
-            # Near High
+            # Sell Breakdown (Darvas/10-Day)
+            elif curr_close < prev_low_10:
+                signal = "📦 DARVAS BREAKDOWN"
+                buy_price = curr_close
+                stop_loss = buy_price + (2 * atr)
+                target = buy_price - (4 * atr)
+
+            # Near High (Turtle 20-Day only for now)
             elif -0.02 <= dist_to_breakout_high <= 0:
                 signal = "👀 WATCH (Near High)"
                 buy_price = prev_high
@@ -949,8 +980,9 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": curr_close,
+                    "pct_change_1d": pct_change_1d,
                     "signal": signal,
-                    "breakout_level": prev_high if "SELL" not in signal else prev_low,
+                    "breakout_level": prev_high if "SELL" in signal or "BREAKDOWN" in signal else (prev_high_10 if "DARVAS" in signal else prev_high),
                     "stop_loss": stop_loss,
                     "target": target,
                     "atr": atr,
@@ -1062,22 +1094,41 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
             stop_loss = 0.0
             ema_slow = curr_13 # Default to 13
 
-            # Logic 5/13:
-            # 1. Fresh Breakout (Crossed TODAY)
-            if curr_5 > curr_13 and prev_5 <= prev_13:
-                signal = "🚀 FRESH 5/13 BREAKOUT"
-                status_color = "green"
-                ema_slow = curr_13
-                stop_loss = curr_13 * 0.99
+            # Calculate % Change
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
 
-            # Logic 5/21:
-            elif curr_5 > curr_21 and prev_5 <= prev_21:
+            # Logic Priority:
+            # 1. Fresh 5/21 Breakout (Stronger/Rarer)
+            # 2. Fresh 5/13 Breakout
+            # 3. Trending 5/21 (Trend strength)
+            # 4. Trending 5/13
+
+            # 1. Fresh Breakouts
+            if curr_5 > curr_21 and prev_5 <= prev_21:
                 signal = "🚀 FRESH 5/21 BREAKOUT"
                 status_color = "green"
                 ema_slow = curr_21
                 stop_loss = curr_21 * 0.99
 
+            elif curr_5 > curr_13 and prev_5 <= prev_13:
+                signal = "🚀 FRESH 5/13 BREAKOUT"
+                status_color = "green"
+                ema_slow = curr_13
+                stop_loss = curr_13 * 0.99
+
             # 2. Trending (Held for >1 day)
+            elif curr_5 > curr_21:
+                 signal = "📈 5/21 TRENDING"
+                 status_color = "blue"
+                 ema_slow = curr_21
+                 stop_loss = curr_21 * 0.99
+
             elif curr_5 > curr_13:
                 # Check how far extended?
                 dist = (curr_close - curr_13) / curr_13
@@ -1089,12 +1140,6 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                     status_color = "blue"
                 ema_slow = curr_13
                 stop_loss = curr_13 * 0.99
-
-            elif curr_5 > curr_21:
-                 signal = "📈 5/21 TRENDING"
-                 status_color = "blue"
-                 ema_slow = curr_21
-                 stop_loss = curr_21 * 0.99
 
             # 3. Bearish Cross (Sell)
             if curr_5 < curr_13 and prev_5 >= prev_13:
@@ -1117,6 +1162,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": curr_close,
+                    "pct_change_1d": pct_change_1d,
                     "signal": signal,
                     "color": status_color,
                     "ema_5": curr_5,
