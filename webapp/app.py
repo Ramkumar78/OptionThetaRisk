@@ -587,7 +587,9 @@ app = create_app()
 
 if __name__ == "__main__":
     enable_https = os.environ.get("ENABLE_HTTPS", "0") == "1"
+    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+
     if enable_https:
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True, ssl_context="adhoc")
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=debug_mode, ssl_context="adhoc")
     else:
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=debug_mode)
