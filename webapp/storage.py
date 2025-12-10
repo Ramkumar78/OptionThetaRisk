@@ -54,6 +54,7 @@ class JournalEntry(Base):
     exit_price = Column(Float)
     qty = Column(Float)
     pnl = Column(Float)
+    sentiment = Column(String)
     notes = Column(Text)
     created_at = Column(Float, default=time.time)
 
