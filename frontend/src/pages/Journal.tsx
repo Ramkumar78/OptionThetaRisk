@@ -116,7 +116,7 @@ const Journal: React.FC = () => {
                      id="journal-date"
                      value={entryDate}
                      onChange={(e) => setEntryDate(e.target.value)}
-                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base sm:text-xs"
+                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base py-3"
                      required
                    />
                 </div>
@@ -127,7 +127,7 @@ const Journal: React.FC = () => {
                      id="journal-time"
                      value={entryTime}
                      onChange={(e) => setEntryTime(e.target.value)}
-                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base sm:text-xs"
+                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base py-3"
                      required
                    />
                 </div>
@@ -140,7 +140,7 @@ const Journal: React.FC = () => {
                   id="journal-symbol"
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base sm:text-xs"
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base py-3"
                   required
                 />
               </div>
@@ -153,7 +153,7 @@ const Journal: React.FC = () => {
                   value={strategy}
                   onChange={(e) => setStrategy(e.target.value)}
                   placeholder="e.g. Iron Condor"
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base sm:text-xs"
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base py-3"
                 />
               </div>
 
@@ -163,7 +163,7 @@ const Journal: React.FC = () => {
                   id="journal-sentiment"
                   value={sentiment}
                   onChange={(e) => setSentiment(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base sm:text-xs"
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base py-3"
                 >
                   <option>Bullish</option>
                   <option>Bearish</option>
@@ -178,7 +178,7 @@ const Journal: React.FC = () => {
                   id="journal-pnl"
                   value={pnl}
                   onChange={(e) => setPnl(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base sm:text-xs"
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base py-3"
                 />
               </div>
 
@@ -189,7 +189,7 @@ const Journal: React.FC = () => {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={4}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base sm:text-xs"
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white text-base py-3"
                 ></textarea>
               </div>
 
