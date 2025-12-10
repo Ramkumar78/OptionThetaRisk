@@ -1435,3 +1435,272 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
                 pass
 
     return results
+
+# -------------------------------------------------------------------------
+#  SMC / ICT HELPER FUNCTIONS
+# -------------------------------------------------------------------------
+
+def _identify_swings(df: pd.DataFrame, lookback: int = 2) -> pd.DataFrame:
+    """
+    Identifies fractal Swing Highs and Swing Lows.
+    A swing high is a high surrounded by lower highs on both sides.
+    """
+    df = df.copy()
+    # Swing High
+    df['Swing_High'] = df['High'][
+        (df['High'] > df['High'].shift(1)) &
+        (df['High'] > df['High'].shift(-1))
+    ]
+    # Swing Low
+    df['Swing_Low'] = df['Low'][
+        (df['Low'] < df['Low'].shift(1)) &
+        (df['Low'] < df['Low'].shift(-1))
+    ]
+    return df
+
+def _detect_fvgs(df: pd.DataFrame) -> list:
+    """
+    Detects unmitigated Fair Value Gaps (FVGs) in the last 20 candles.
+    Returns a list of dicts: {'type': 'bull/bear', 'top': float, 'bottom': float, 'index': datetime}
+    """
+    fvgs = []
+    # Iterate through recent candles (last 50 is enough for active setups)
+    # We need index access, so we convert to records or iterate by index
+    # Logic:
+    # Bearish FVG: Low of candle[i-2] > High of candle[i]. Gap is between them.
+    # Bullish FVG: High of candle[i-2] < Low of candle[i]. Gap is between them.
+
+    if len(df) < 3:
+        return []
+
+    highs = df['High'].values
+    lows = df['Low'].values
+    times = df.index
+
+    # Check last 30 candles
+    start_idx = max(2, len(df) - 30)
+
+    for i in range(start_idx, len(df)):
+        # Bearish FVG (Down move)
+        # Candle i (current), i-1 (displacement), i-2 (high anchor)
+        # Gap exists if Low[i-2] > High[i]
+        if lows[i-2] > highs[i]:
+            gap_size = lows[i-2] - highs[i]
+            # Filter tiny gaps (noise) - e.g., < 0.02% price
+            if gap_size > (highs[i] * 0.0002):
+                fvgs.append({
+                    "type": "BEARISH",
+                    "top": lows[i-2],
+                    "bottom": highs[i],
+                    "ts": times[i-1] # Timestamp of the big candle
+                })
+
+        # Bullish FVG (Up move)
+        # Gap exists if High[i-2] < Low[i]
+        if highs[i-2] < lows[i]:
+            gap_size = lows[i] - highs[i-2]
+            if gap_size > (lows[i] * 0.0002):
+                fvgs.append({
+                    "type": "BULLISH",
+                    "top": lows[i],
+                    "bottom": highs[i-2],
+                    "ts": times[i-1]
+                })
+    return fvgs
+
+def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> list:
+    """
+    Screens for ICT Market Maker Models + OTE (Optimal Trade Entry).
+
+    Strategy:
+    1.  Bias: Daily Trend.
+    2.  Setup:
+        -   Price Sweeps a Swing High/Low (Liquidity Raid).
+        -   Reverses with DISPLACEMENT (leaving an FVG).
+        -   Breaks Structure (MSS).
+    3.  Trigger: Price is currently retracing into the OTE Zone (62-79% Fib).
+    """
+    import pandas as pd
+    import numpy as np
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if ticker_list is None:
+        # Default to liquid lists + Forex proxies
+        ticker_list = ["SPY", "QQQ", "IWM", "GLD", "FXE", "FXY", "MSFT", "AAPL", "NVDA", "TSLA", "AMD", "AMZN", "META", "GOOGL"]
+
+    # For OTE, we usually want Intraday data to see the displacement clearly.
+    # 1h (60m) is a good balance for Swing Trading this model.
+    yf_interval = "1h"
+    period = "60d" # Max 60d for 1h data in yfinance
+    is_intraday = True
+
+    # Override for different timeframes
+    if time_frame == "15m":
+        yf_interval = "15m"
+        period = "1mo" # Max 1mo for 15m
+    elif time_frame == "1d":
+        yf_interval = "1d"
+        period = "1y"
+        is_intraday = False
+
+    results = []
+
+    def _process_ote(ticker):
+        try:
+            # 1. Fetch Data
+            # We need standard data preparation
+            import yfinance as yf
+            df = yf.download(ticker, period=period, interval=yf_interval, progress=False, auto_adjust=True)
+
+            if df.empty or len(df) < 50:
+                return None
+
+            # Flatten columns if MultiIndex (yfinance fix)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            curr_close = float(df['Close'].iloc[-1])
+
+            # 2. Identify Structure (Swings)
+            df = _identify_swings(df, lookback=3)
+
+            # Get last valid Swing High and Low
+            last_swings_high = df[df['Swing_High'].notna()]
+            last_swings_low = df[df['Swing_Low'].notna()]
+
+            if last_swings_high.empty or last_swings_low.empty:
+                return None
+
+            # ---------------------------------------------------------
+            # BEARISH SETUP (Market Maker Sell Model)
+            # ---------------------------------------------------------
+            # Logic:
+            # A. Find the Highest High in recent window (Liquidity Pool)
+            # B. Check if price swept it and rejected.
+            # C. Check for displacement down.
+
+            signal = "WAIT"
+            setup_details = {}
+
+            # Look at the last major swing high (e.g., from 10-50 bars ago)
+            # We want a sweep of a SIGNIFICANT level, not just the last candle.
+
+            recent_highs = last_swings_high.tail(5) # Get last 5 swing highs
+
+            # Iterate backwards to find a setup
+            # We look for a "Leg" that created a High, then broke a Low.
+
+            # Simplified Logic for Screener:
+            # 1. Find the highest point in the last 40 bars (extended from 20 to catch session highs).
+            peak_idx = df['High'].iloc[-40:].idxmax()
+            peak_high = df.loc[peak_idx, 'High']
+
+            # 2. Verify displacement AFTER peak
+            # Find lowest low AFTER the peak
+            after_peak = df.loc[peak_idx:]
+            if len(after_peak) < 3: return None # Too fresh
+
+            valley_idx = after_peak['Low'].idxmin()
+            valley_low = df.loc[valley_idx, 'Low']
+
+            # 3. Calculate Fibonacci of this range (High -> Low)
+            # Range for Bearish OTE: We draw Fib from High to Low.
+            # OTE is retracement back UP to 62-79%.
+            range_size = peak_high - valley_low
+            fib_62 = peak_high - (range_size * 0.618)
+            fib_79 = peak_high - (range_size * 0.79)
+
+            # 4. Check if current price is IN the OTE zone
+            # Bearish OTE: Price is between 62% and 79% retracement
+            # (Which means it is HIGHER than the low)
+
+            # Also check for FVG in the down leg
+            fvgs = _detect_fvgs(after_peak)
+            bearish_fvgs = [f for f in fvgs if f['type'] == "BEARISH"]
+            has_fvg = len(bearish_fvgs) > 0
+
+            if has_fvg and (fib_79 <= curr_close <= fib_62):
+                 # One more check: Did we break structure?
+                 # Ideally, the 'valley_low' should be lower than a PREVIOUS swing low (MSS)
+                 # Find swing low BEFORE peak
+                 before_peak = df.loc[:peak_idx].iloc[:-1] # exclude peak itself
+                 if not before_peak.empty:
+                     prev_swing_lows = before_peak[before_peak['Swing_Low'].notna()]
+                     if not prev_swing_lows.empty:
+                         last_structural_low = prev_swing_lows['Low'].iloc[-1]
+
+                         if valley_low < last_structural_low:
+                             signal = "🐻 BEARISH OTE (Sell)"
+                             setup_details = {
+                                 "stop": peak_high,
+                                 "entry_zone": f"{fib_62:.2f} - {fib_79:.2f}",
+                                 "target": valley_low - range_size # -1.0 extension
+                             }
+
+            # ---------------------------------------------------------
+            # BULLISH SETUP (Market Maker Buy Model)
+            # ---------------------------------------------------------
+            if signal == "WAIT":
+                # 1. Find lowest point in last 40 bars
+                trough_idx = df['Low'].iloc[-40:].idxmin()
+                trough_low = df.loc[trough_idx, 'Low']
+
+                # 2. Find highest high AFTER trough (Displacement Up)
+                after_trough = df.loc[trough_idx:]
+                if len(after_trough) >= 3:
+                    peak_up_idx = after_trough['High'].idxmax()
+                    peak_up_high = df.loc[peak_up_idx, 'High']
+
+                    # 3. Fibs (Low to High)
+                    # OTE is retracement DOWN to 62-79%
+                    range_up = peak_up_high - trough_low
+                    fib_62_up = trough_low + (range_up * 0.618)
+                    fib_79_up = trough_low + (range_up * 0.79)
+
+                    # 4. Check FVG
+                    bullish_fvgs = [f for f in _detect_fvgs(after_trough) if f['type'] == "BULLISH"]
+
+                    # 5. Check Zone
+                    if len(bullish_fvgs) > 0 and (fib_79_up <= curr_close <= fib_62_up):
+                        # 6. Check MSS (Did we break a prior High?)
+                        before_trough = df.loc[:trough_idx].iloc[:-1]
+                        if not before_trough.empty:
+                             prev_swing_highs = before_trough[before_trough['Swing_High'].notna()]
+                             if not prev_swing_highs.empty:
+                                 last_struct_high = prev_swing_highs['High'].iloc[-1]
+
+                                 if peak_up_high > last_struct_high:
+                                     signal = "🐂 BULLISH OTE (Buy)"
+                                     setup_details = {
+                                         "stop": trough_low,
+                                         "entry_zone": f"{fib_79_up:.2f} - {fib_62_up:.2f}",
+                                         "target": peak_up_high + range_up
+                                     }
+
+            if signal != "WAIT":
+                return {
+                    "ticker": ticker,
+                    "price": curr_close,
+                    "signal": signal,
+                    "stop_loss": setup_details['stop'],
+                    "ote_zone": setup_details['entry_zone'],
+                    "target": setup_details['target'],
+                    "fvg_detected": "Yes"
+                }
+
+        except Exception as e:
+            return None
+        return None
+
+    # Threaded execution
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_symbol = {executor.submit(_process_ote, sym): sym for sym in ticker_list}
+        for future in as_completed(future_to_symbol):
+            try:
+                data = future.result()
+                if data:
+                    results.append(data)
+            except Exception:
+                pass
+
+    return results

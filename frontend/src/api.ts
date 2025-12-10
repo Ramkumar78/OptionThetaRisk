@@ -20,6 +20,13 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const runMmsScreener = async (region: string, timeFrame: string) => {
+  const response = await api.get('/screen/mms', {
+    params: { region, time_frame: timeFrame }
+  });
+  return response.data;
+};
+
 export const runDarvasScreener = async (region: string, timeFrame: string) => {
   const response = await api.get('/screen/darvas', {
     params: { region, time_frame: timeFrame }
