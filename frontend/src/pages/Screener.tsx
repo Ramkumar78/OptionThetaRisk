@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put';
 
 const Screener: React.FC<ScreenerProps> = () => {
   const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
@@ -18,7 +18,7 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [rsiThreshold, setRsiThreshold] = useState(50);
   const [marketTimeFrame, setMarketTimeFrame] = useState('1d');
 
-  // Turtle/EMA Screener State
+  // Turtle/EMA/Strategy Screener State
   const [region, setRegion] = useState('us');
   const [strategyTimeFrame, setStrategyTimeFrame] = useState('1d');
 
@@ -38,6 +38,9 @@ const Screener: React.FC<ScreenerProps> = () => {
         data = await runDarvasScreener(region, strategyTimeFrame);
       } else if (activeTab === 'mms') {
         data = await runMmsScreener(region, strategyTimeFrame);
+      } else if (activeTab === 'bull_put') {
+        // Bull Put usually implies US liquid, but we can pass region if we want to expand later
+        data = await runBullPutScreener(region);
       }
       setResults(data);
     } catch (err: any) {
@@ -52,6 +55,7 @@ const Screener: React.FC<ScreenerProps> = () => {
     { id: 'darvas', label: 'Darvas Box' },
     { id: 'mms', label: 'MMS / OTE', subLabel: 'SMC' },
     { id: 'ema', label: '5/13 & 5/21 EMA' },
+    { id: 'bull_put', label: 'Bull Put Spreads', subLabel: 'Yield' },
     { id: 'market', label: 'Market Screener (RSI/IV)', subLabel: 'US Options Only' },
   ];
 
@@ -63,28 +67,30 @@ const Screener: React.FC<ScreenerProps> = () => {
             <h2 id="screener-title" className="text-2xl font-bold text-gray-900 dark:text-white">Stock & Option Screener</h2>
             <p id="screener-subtitle" className="text-sm text-gray-500 dark:text-gray-400">Find high-probability setups based on volatility and trend.</p>
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 max-w-2xl">
-              Use the <strong>Market Screener</strong> to scan for liquid US options with specific IV Rank and RSI thresholds. The <strong>Turtle Trading</strong>, <strong>Darvas Box</strong>, and <strong>EMA</strong> screeners are trend-following tools designed to identify breakout candidates across multiple regions (US, UK/Euro, India). Select a strategy tab above to begin.
+              Use the <strong>Market Screener</strong> to scan for liquid US options with specific IV Rank and RSI thresholds. The <strong>Turtle Trading</strong>, <strong>Darvas Box</strong>, and <strong>EMA</strong> screeners are trend-following tools designed to identify breakout candidates across multiple regions (US, UK/Euro, India). The <strong>Bull Put Spreads</strong> screener finds income setups. Select a strategy tab above to begin.
             </p>
           </div>
 
-          <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                id={`tab-${tab.id}`}
-                onClick={() => { setActiveTab(tab.id); setResults(null); }}
-                className={clsx(
-                  "px-4 py-2 text-sm font-medium rounded-md transition-all flex flex-col items-center",
-                  activeTab === tab.id
-                    ? "bg-white dark:bg-gray-700 text-primary-600 dark:text-white shadow-sm"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",
-                  tab.id === 'market' && "text-gray-400 dark:text-gray-500 font-light"
-                )}
-              >
-                <span>{tab.label}</span>
-                {tab.subLabel && <span className="text-[10px] uppercase tracking-wide opacity-75">{tab.subLabel}</span>}
-              </button>
-            ))}
+          <div className="w-full md:w-auto">
+            <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto whitespace-nowrap no-scrollbar">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  id={`tab-${tab.id}`}
+                  onClick={() => { setActiveTab(tab.id); setResults(null); }}
+                  className={clsx(
+                    "px-4 py-2 text-sm font-medium rounded-md transition-all flex flex-col items-center flex-shrink-0",
+                    activeTab === tab.id
+                      ? "bg-white dark:bg-gray-700 text-primary-600 dark:text-white shadow-sm"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",
+                    tab.id === 'market' && "text-gray-400 dark:text-gray-500 font-light"
+                  )}
+                >
+                  <span>{tab.label}</span>
+                  {tab.subLabel && <span className="text-[10px] uppercase tracking-wide opacity-75">{tab.subLabel}</span>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -169,6 +175,25 @@ const Screener: React.FC<ScreenerProps> = () => {
               </div>
              </>
           )}
+
+          {activeTab === 'bull_put' && (
+              <>
+                 <div>
+                    <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
+                    <select
+                      id="region-select"
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    >
+                      <option value="us">United States (Only)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500 italic mt-6">
+                      Targeting 45 DTE, ~30 Delta Puts.
+                  </div>
+              </>
+          )}
         </div>
 
         <button
@@ -229,6 +254,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                         {activeTab === 'turtle' ? 'Turtle Breakouts' :
                          activeTab === 'darvas' ? 'Darvas Box Setups' :
                          activeTab === 'mms' ? 'Market Maker Models (OTE)' :
+                         activeTab === 'bull_put' ? 'Bull Put Spreads' :
                          '5/13 EMA Setups'}
                     </h3>
                     <ScreenerTable data={results} type={activeTab} />
@@ -295,6 +321,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                 } else if (sortConfig.key === 'ote_zone') {
                     aValue = a.ote_zone;
                     bValue = b.ote_zone;
+                } else if (sortConfig.key === 'credit') {
+                    aValue = a.credit;
+                    bValue = b.credit;
+                } else if (sortConfig.key === 'roi') {
+                    aValue = a.roi_pct;
+                    bValue = b.roi_pct;
+                } else if (sortConfig.key === 'dte') {
+                    aValue = a.dte;
+                    bValue = b.dte;
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -354,7 +389,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                         <HeaderCell label="Symbol" sortKey="symbol" />
                         {type === 'market' && <HeaderCell label="Company" sortKey="company" />}
                         <HeaderCell label="Price" sortKey="price" align="right" />
-                        <HeaderCell label="Change" sortKey="change" align="right" />
+                        {type !== 'bull_put' && <HeaderCell label="Change" sortKey="change" align="right" />}
                         {type === 'market' && (
                             <>
                                 <HeaderCell label="RSI" sortKey="rsi" align="right" />
@@ -362,7 +397,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
                             </>
                         )}
-                        {type !== 'market' && (
+                        {type !== 'market' && type !== 'bull_put' && (
                             <>
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
                                 {type === 'darvas' && (
@@ -379,6 +414,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                             </>
                                         )}
                                 <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
+                            </>
+                        )}
+                        {type === 'bull_put' && (
+                            <>
+                                <HeaderCell label="Credit" sortKey="credit" align="right" />
+                                <HeaderCell label="Max Risk" sortKey="risk" align="right" />
+                                <HeaderCell label="ROI" sortKey="roi" align="right" />
+                                <HeaderCell label="Short Strike" sortKey="strike" align="right" />
+                                <HeaderCell label="DTE" sortKey="dte" align="right" />
                             </>
                         )}
                     </tr>
@@ -408,9 +452,11 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                     {formatCurrency(price, currency)}
                                 </td>
 
-                                <td className={clsx("px-4 py-3 text-right font-bold", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
-                                    {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
-                                </td>
+                                {type !== 'bull_put' && (
+                                  <td className={clsx("px-4 py-3 text-right font-bold", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
+                                      {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
+                                  </td>
+                                )}
 
                                 {type === 'market' && (
                                     <>
@@ -435,7 +481,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                     </>
                                 )}
 
-                                {type !== 'market' && (
+                                {type !== 'market' && type !== 'bull_put' && (
                                     <>
                                         <td className="px-4 py-3 text-center">
                                              <span className={clsx("px-2 py-1 rounded text-xs font-bold",
@@ -471,6 +517,26 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                         )}
                                         <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
                                             {formatCurrency(row.stop_loss, currency)}
+                                        </td>
+                                    </>
+                                )}
+
+                                {type === 'bull_put' && (
+                                    <>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                                            ${row.credit.toFixed(2)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                            ${row.max_risk.toFixed(2)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">
+                                            {row.roi_pct}%
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                            {row.short_strike}/{row.long_strike} <span className="text-gray-400 text-[10px]">({row.short_delta})</span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                            {row.dte}d
                                         </td>
                                     </>
                                 )}

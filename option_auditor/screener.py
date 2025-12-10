@@ -1704,3 +1704,182 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
                 pass
 
     return results
+
+# -------------------------------------------------------------------------
+#  OPTIONS STRATEGY HELPERS (Add to option_auditor/screener.py)
+# -------------------------------------------------------------------------
+import math
+from datetime import date
+
+def _norm_cdf(x):
+    """Cumulative distribution function for the standard normal distribution."""
+    return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
+
+def _calculate_put_delta(S, K, T, r, sigma):
+    """
+    Estimates Put Delta using Black-Scholes.
+    S: Spot Price, K: Strike, T: Time to Expiry (years), r: Risk-free rate, sigma: IV
+    """
+    if T <= 0 or sigma <= 0: return -0.5 # Fallback
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    return _norm_cdf(d1) - 1.0
+
+def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> list:
+    """
+    Screens for 45 DTE, 30-Delta Bull Put Spreads ($5 Wide).
+
+    Logic:
+    1. Filter for Bullish Trend (Price > SMA 50).
+    2. Find Expiry closest to 45 DTE.
+    3. Calculate Deltas to find Short Strike (~0.30 Delta).
+    4. Find Long Strike ($5 lower).
+    5. Calculate ROI (Credit / Collateral).
+    """
+    import yfinance as yf
+    import pandas_ta as ta
+    import pandas as pd
+
+    if ticker_list is None:
+        # Liquid stocks are essential for good spreads
+        ticker_list = ["SPY", "QQQ", "IWM", "NVDA", "AMD", "TSLA", "AMZN", "MSFT", "AAPL", "GOOGL", "META", "NFLX", "JPM", "DIS", "BA", "COIN", "MARA"]
+
+    results = []
+
+    # Risk-free rate approx
+    RISK_FREE_RATE = 0.045
+    TARGET_DTE = 45
+    SPREAD_WIDTH = 5.0
+    TARGET_DELTA = -0.30 # Puts have negative delta
+
+    def _process_spread(ticker):
+        try:
+            # 1. Trend Filter (Fast Fail)
+            # We need ~6 months of data for SMA 50 and stability check
+            df = yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
+            if df.empty or len(df) < 50: return None
+
+            # Flatten columns
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            curr_price = float(df['Close'].iloc[-1])
+            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
+
+            # Trend Check: Only sell puts if stock is above SMA 50 (Bullish/Neutral)
+            if curr_price < sma_50:
+                return None
+
+            # 2. Get Option Dates
+            tk = yf.Ticker(ticker)
+            expirations = tk.options
+            if not expirations: return None
+
+            # Find date closest to 45 DTE
+            today = date.today()
+            best_date = None
+            min_diff = 999
+
+            for exp_str in expirations:
+                exp_date = pd.to_datetime(exp_str).date()
+                dte = (exp_date - today).days
+                diff = abs(dte - TARGET_DTE)
+                if diff < min_diff:
+                    min_diff = diff
+                    best_date = exp_str
+
+            # Filter: Ensure DTE is reasonably close (e.g. 30 to 60 days)
+            actual_dte = (pd.to_datetime(best_date).date() - today).days
+            if not (25 <= actual_dte <= 75): return None
+
+            # 3. Get Option Chain for that Date
+            chain = tk.option_chain(best_date)
+            puts = chain.puts
+
+            if puts.empty: return None
+
+            # 4. Find 30 Delta Strike
+            # yfinance gives us 'impliedVolatility'. We calculate delta ourselves.
+            # T in years
+            T_years = actual_dte / 365.0
+
+            # Calculate Delta for each row
+            puts['calc_delta'] = puts.apply(
+                lambda row: _calculate_put_delta(
+                    curr_price, row['strike'], T_years, RISK_FREE_RATE, row['impliedVolatility']
+                ), axis=1
+            )
+
+            # Find the row closest to -0.30
+            # Sort by distance to target delta
+            puts['delta_dist'] = (puts['calc_delta'] - TARGET_DELTA).abs()
+            short_leg_row = puts.loc[puts['delta_dist'].idxmin()]
+
+            short_strike = short_leg_row['strike']
+            short_bid = short_leg_row['bid'] # We sell at bid (conservatively) or mid
+            short_delta = short_leg_row['calc_delta']
+
+            # 5. Find Long Strike ($5 Lower)
+            long_strike_target = short_strike - SPREAD_WIDTH
+
+            # Find strike closest to target (exact match preferred)
+            puts['strike_dist'] = (puts['strike'] - long_strike_target).abs()
+            long_leg_row = puts.loc[puts['strike_dist'].idxmin()]
+
+            long_strike = long_leg_row['strike']
+            long_ask = long_leg_row['ask'] # We buy at ask
+
+            # Check if we actually found a $5 wide spread (allow small variance for weird strikes)
+            actual_width = short_strike - long_strike
+            if abs(actual_width - SPREAD_WIDTH) > 1.0:
+                return None # Could not find the defined spread width
+
+            # 6. Calc Metrics
+            # Credit = Price Sold - Price Bought
+            # Note: yfinance data can be delayed/wide. We use midpoint if bid/ask is messy,
+            # but strictly: Credit = Short_Bid - Long_Ask
+
+            # Fallback to lastPrice if bid/ask is zero (market closed/illiquid)
+            s_price = short_bid if short_bid > 0 else short_leg_row['lastPrice']
+            l_price = long_ask if long_ask > 0 else long_leg_row['lastPrice']
+
+            credit = s_price - l_price
+
+            # Max Risk = Width - Credit
+            risk = actual_width - credit
+
+            if risk <= 0 or credit <= 0: return None # Bad data
+
+            roi = credit / risk
+
+            if roi < min_roi: return None # Yield too low
+
+            return {
+                "ticker": ticker,
+                "price": curr_price,
+                "strategy": "Bull Put Spread",
+                "expiry": best_date,
+                "dte": actual_dte,
+                "short_strike": short_strike,
+                "short_delta": round(short_delta, 2),
+                "long_strike": long_strike,
+                "credit": round(credit, 2),
+                "max_risk": round(risk, 2),
+                "roi_pct": round(roi * 100, 1),
+                "trend": "Bullish (>SMA50)"
+            }
+
+        except Exception as e:
+            return None
+
+    # Multi-threaded Execution
+    import concurrent.futures
+    final_list = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(_process_spread, t): t for t in ticker_list}
+        for future in concurrent.futures.as_completed(futures):
+            res = future.result()
+            if res: final_list.append(res)
+
+    # Sort by ROI
+    final_list.sort(key=lambda x: x['roi_pct'], reverse=True)
+    return final_list

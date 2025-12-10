@@ -261,6 +261,25 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/bull_put", methods=["GET"])
+    def screen_bull_put():
+        try:
+            # Bull Put Spreads are mainly for liquid US stocks for now
+            # region param is accepted but we might just use default liquid list if us
+            region = request.args.get("region", "us")
+
+            cache_key = ("bull_put", region)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            # Use default list in function for now unless specific requirement
+            results = screener.screen_bull_put_spreads()
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/darvas", methods=["GET"])
     def screen_darvas():
         try:
