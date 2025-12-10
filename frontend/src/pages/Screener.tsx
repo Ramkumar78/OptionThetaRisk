@@ -267,6 +267,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                 } else if (sortConfig.key === 'stop_loss') {
                     aValue = a.stop_loss;
                     bValue = b.stop_loss;
+                } else if (sortConfig.key === 'breakout') {
+                    aValue = a.breakout_level;
+                    bValue = b.breakout_level;
+                } else if (sortConfig.key === 'target') {
+                    aValue = a.target_price;
+                    bValue = b.target_price;
+                } else if (sortConfig.key === 'high_52w') {
+                    aValue = a.high_52w;
+                    bValue = b.high_52w;
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -337,6 +346,13 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                         {type !== 'market' && (
                             <>
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
+                                {type === 'darvas' && (
+                                    <>
+                                        <HeaderCell label="Breakout" sortKey="breakout" align="right" />
+                                        <HeaderCell label="Target" sortKey="target" align="right" />
+                                        <HeaderCell label="52W High" sortKey="high_52w" align="right" />
+                                    </>
+                                )}
                                 <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
                             </>
                         )}
@@ -405,6 +421,19 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                                 {signal}
                                              </span>
                                         </td>
+                                        {type === 'darvas' && (
+                                            <>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {formatCurrency(row.breakout_level, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                                                    {formatCurrency(row.target_price, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                    {formatCurrency(row.high_52w, currency)}
+                                                </td>
+                                            </>
+                                        )}
                                         <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
                                             {formatCurrency(row.stop_loss, currency)}
                                         </td>

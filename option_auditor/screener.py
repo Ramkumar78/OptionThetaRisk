@@ -944,26 +944,12 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                 stop_loss = buy_price - (2 * atr)
                 target = buy_price + (4 * atr)
 
-            # Buy Breakout (Darvas/10-Day) - if not 20-day
-            elif curr_close > prev_high_10:
-                signal = "📦 DARVAS BREAKOUT"
-                buy_price = curr_close
-                stop_loss = buy_price - (2 * atr)
-                target = buy_price + (4 * atr)
-
             # Sell Breakout (Short)
             elif curr_close < prev_low:
                 signal = "📉 BREAKDOWN (SELL)"
                 buy_price = curr_close
                 stop_loss = buy_price + (2 * atr) # Stop above entry for short
                 target = buy_price - (4 * atr)    # Target below entry
-
-            # Sell Breakdown (Darvas/10-Day)
-            elif curr_close < prev_low_10:
-                signal = "📦 DARVAS BREAKDOWN"
-                buy_price = curr_close
-                stop_loss = buy_price + (2 * atr)
-                target = buy_price - (4 * atr)
 
             # Near High (Turtle 20-Day only for now)
             elif -0.02 <= dist_to_breakout_high <= 0:
@@ -982,7 +968,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                     "price": curr_close,
                     "pct_change_1d": pct_change_1d,
                     "signal": signal,
-                    "breakout_level": prev_high if "SELL" in signal or "BREAKDOWN" in signal else (prev_high_10 if "DARVAS" in signal else prev_high),
+                    "breakout_level": prev_high,
                     "stop_loss": stop_loss,
                     "target": target,
                     "atr": atr,
@@ -1413,6 +1399,9 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
             atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1]
 
             stop_loss = floor if floor else (ceiling - 2*atr if ceiling else curr_close * 0.95)
+            # Target = Breakout + Box Height
+            box_height = (ceiling - floor) if (ceiling and floor) else (4 * atr)
+            target = ceiling + box_height if ceiling else curr_close * 1.2
 
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
@@ -1426,6 +1415,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
                 "breakout_level": ceiling,
                 "floor_level": floor,
                 "stop_loss": stop_loss,
+                "target_price": target,
+                "high_52w": period_high,
                 "volume_ratio": (curr_volume / np.mean(volumes[-21:-1])) if len(volumes) > 21 else 1.0
             }
 
