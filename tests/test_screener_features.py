@@ -106,8 +106,8 @@ def test_screen_5_13_priority_21(mock_yf_download):
     # This is a Fresh 5/21 Breakout
     assert "FRESH 5/21 BREAKOUT" in results[0]["signal"]
 
-def test_screen_turtle_darvas_breakout(mock_yf_download):
-    """Test Darvas Box (10-day) breakout logic."""
+def test_screen_turtle_no_darvas_leakage(mock_yf_download):
+    """Test that Turtle screener does NOT report Darvas (10-day) breakouts."""
     mock_df = create_mock_df(periods=30, close_pattern="darvas_breakout")
 
     dates = pd.date_range(start="2023-01-01", periods=30)
@@ -130,6 +130,5 @@ def test_screen_turtle_darvas_breakout(mock_yf_download):
 
          results = screen_turtle_setups(ticker_list=["AAPL"], time_frame="1d")
 
-    assert len(results) == 1
-    # Should be Darvas
-    assert "DARVAS BREAKOUT" in results[0]["signal"]
+    # Should be empty because Turtle only cares about 20-day high (115)
+    assert len(results) == 0
