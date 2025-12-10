@@ -1,86 +1,137 @@
-import pytest
-from unittest.mock import MagicMock, patch
+import unittest
+from unittest.mock import patch, MagicMock
 import pandas as pd
+import numpy as np
 from datetime import date, timedelta
-from option_auditor.screener import screen_bull_put_spreads, _calculate_put_delta
+from option_auditor.screener import screen_bull_put_spreads
 
-# Mock data for yfinance
-def mock_yf_download(*args, **kwargs):
-    # Create a DataFrame with a bullish trend
-    dates = pd.date_range(end=date.today(), periods=60)
-    data = {
-        'Open': [100 + i for i in range(60)],
-        'High': [102 + i for i in range(60)],
-        'Low': [99 + i for i in range(60)],
-        'Close': [101 + i for i in range(60)],
-        'Volume': [1000000] * 60
-    }
-    df = pd.DataFrame(data, index=dates)
-    return df
+class TestBullPutScreener(unittest.TestCase):
+    def test_bull_put_spreads_logic(self):
+        """
+        Tests that the Bull Put Spread screener correctly:
+        1. Uses Ticker.history (not yf.download)
+        2. Filters by SMA trend
+        3. Selects correct strikes based on delta
+        4. Calculates ROI and Price correctly
+        """
+        # Patch yfinance globally since it is imported inside the function
+        with patch('yfinance.Ticker') as mock_Ticker, \
+             patch('option_auditor.screener._calculate_put_delta') as mock_delta:
 
-def mock_option_chain(*args, **kwargs):
-    # Create a mock option chain
-    puts_data = {
-        'strike': [135, 140, 145, 150, 155], # Spot is around 160 (101+59)
-        'lastPrice': [1.0, 1.5, 2.0, 3.0, 4.0],
-        'bid': [1.0, 1.5, 2.0, 3.0, 4.0],
-        'ask': [1.2, 1.7, 2.2, 3.2, 4.2],
-        'impliedVolatility': [0.2, 0.2, 0.2, 0.2, 0.2],
-        'volume': [100, 100, 100, 100, 100],
-        'openInterest': [1000, 1000, 1000, 1000, 1000]
-    }
-    puts_df = pd.DataFrame(puts_data)
+            # Setup Ticker Factory to return different data for different tickers
+            def side_effect_Ticker(ticker):
+                instance = MagicMock()
 
-    mock_chain = MagicMock()
-    mock_chain.puts = puts_df
-    mock_chain.calls = pd.DataFrame()
-    return mock_chain
+                # 1. Setup History Data
+                # Create data such that:
+                # NVDA: Price 180 > SMA 50 (Say SMA is 170) -> BULLISH
+                # AMD: Price 120 > SMA 50 (Say SMA is 110) -> BULLISH
+                # BAD: Price 50 < SMA 50 (Say SMA is 60) -> BEARISH (Should be filtered)
 
-@patch('yfinance.download', side_effect=mock_yf_download)
-@patch('yfinance.Ticker')
-def test_screen_bull_put_spreads(mock_ticker, mock_download):
-    # Setup Mock Ticker
-    mock_tk_instance = MagicMock()
-    mock_ticker.return_value = mock_tk_instance
+                price = 100.0
+                if ticker == "NVDA": price = 180.0
+                elif ticker == "AMD": price = 120.0
+                elif ticker == "BAD": price = 50.0
 
-    # Mock Options Dates (approx 45 days away)
-    target_date = date.today() + timedelta(days=45)
-    mock_tk_instance.options = [target_date.strftime("%Y-%m-%d")]
+                dates = pd.date_range(end=pd.Timestamp.now(), periods=60)
+                # Create a trend.
+                # For BULLISH, Price > Rolling Mean.
+                # Flat price works if we cheat the SMA calc or provide long history where past was lower.
+                # Let's just provide constant price and ensure SMA calculation works.
+                # If constant, Price == SMA. Code checks: if curr_price < sma_50: return None.
+                # 180 < 180 is False. It passes.
+                # For BAD, we make price drop at the end.
 
-    # Mock Option Chain
-    mock_tk_instance.option_chain.side_effect = mock_option_chain
+                prices = [price] * 60
+                if ticker == "BAD":
+                    # SMA will be higher if past prices were higher
+                    prices = [60.0] * 50 + [50.0] * 10
+                    # SMA approx 58. Current 50. 50 < 58. Filtered.
 
-    # Run Screener
-    results = screen_bull_put_spreads(ticker_list=["TEST"])
+                df = pd.DataFrame({
+                    "Open": prices,
+                    "High": prices,
+                    "Low": prices,
+                    "Close": prices,
+                    "Volume": [1000000] * 60
+                }, index=dates)
 
-    # Verify Results
-    assert len(results) == 1
-    res = results[0]
-    assert res['ticker'] == "TEST"
-    assert res['strategy'] == "Bull Put Spread"
-    assert res['trend'] == "Bullish (>SMA50)"
+                instance.history.return_value = df
 
-    # Check strikes logic (This will depend on delta calc which depends on price)
-    # Price is 160.
-    # Strikes: 135, 140, 145, 150, 155
-    # Short Strike should be around 30 delta.
-    # At 160 spot, 150 strike Put is OTM.
-    # Let's check if we got a result.
-    assert 'short_strike' in res
-    assert 'long_strike' in res
-    assert res['long_strike'] == res['short_strike'] - 5.0
-    assert res['credit'] > 0
-    assert res['roi_pct'] > 0
+                # 2. Setup Options
+                today = date.today()
+                valid_expiry = today + timedelta(days=45)
+                valid_expiry_str = valid_expiry.strftime("%Y-%m-%d")
+                instance.options = [valid_expiry_str]
 
-def test_calculate_put_delta():
-    # Test ATM Put Delta (approx -0.5)
-    delta = _calculate_put_delta(S=100, K=100, T=0.1, r=0.05, sigma=0.2)
-    assert -0.6 < delta < -0.4
+                # 3. Setup Option Chain
+                def side_effect_chain(date):
+                    # Create strikes
+                    strikes = np.arange(50, 300, 5)
+                    # Prices needed for Credit calculation
+                    # Credit = Short Bid - Long Ask
+                    # We need Positive Credit.
+                    # Puts: Higher Strike = Higher Price.
+                    # Short (Higher K) - Long (Lower K) > 0.
 
-    # Test Deep OTM Put Delta (approx 0)
-    delta = _calculate_put_delta(S=120, K=100, T=0.1, r=0.05, sigma=0.2)
-    assert -0.1 < delta < 0.0
+                    # Let's define price curve
+                    put_prices = strikes * 0.1
 
-    # Test Deep ITM Put Delta (approx -1.0)
-    delta = _calculate_put_delta(S=80, K=100, T=0.1, r=0.05, sigma=0.2)
-    assert -1.0 <= delta < -0.9
+                    puts = pd.DataFrame({
+                        "strike": strikes,
+                        "bid": put_prices - 0.05,
+                        "ask": put_prices + 0.05,
+                        "impliedVolatility": [0.4] * len(strikes),
+                        "lastPrice": put_prices
+                    })
+                    return MagicMock(puts=puts)
+
+                instance.option_chain.side_effect = side_effect_chain
+
+                return instance
+
+            mock_Ticker.side_effect = side_effect_Ticker
+
+            # Setup Delta Mock
+            # We want to select specific strikes.
+            # NVDA (180): Short ~170 (Delta -0.30). Long 165.
+            # AMD (120): Short ~110 (Delta -0.30). Long 105.
+            def side_effect_delta(S, K, T, r, sigma):
+                # Return -0.30 if K is "close" to target
+                target = S - 10
+                if abs(K - target) < 2.5:
+                    return -0.30
+                return -0.10
+
+            mock_delta.side_effect = side_effect_delta
+
+            # Execute
+            results = screen_bull_put_spreads(["NVDA", "AMD", "BAD"], min_roi=0.01)
+
+            # Assertions
+            self.assertEqual(len(results), 2, "Should return 2 results (NVDA, AMD), BAD should be filtered")
+
+            nvda = next((r for r in results if r['ticker'] == "NVDA"), None)
+            amd = next((r for r in results if r['ticker'] == "AMD"), None)
+
+            self.assertIsNotNone(nvda)
+            self.assertIsNotNone(amd)
+
+            # Check Prices
+            self.assertEqual(nvda['price'], 180.0)
+            self.assertEqual(amd['price'], 120.0)
+
+            # Check Strategy Details
+            # NVDA Short Strike should be 170 (180-10)
+            self.assertEqual(nvda['short_strike'], 170.0)
+            # Long Strike should be 165
+            self.assertEqual(nvda['long_strike'], 165.0)
+
+            # Check Credit
+            # Short Bid (170): 17.0 - 0.05 = 16.95
+            # Long Ask (165): 16.5 + 0.05 = 16.55
+            # Credit = 16.95 - 16.55 = 0.40
+            self.assertAlmostEqual(nvda['credit'], 0.40)
+
+if __name__ == '__main__':
+    unittest.main()

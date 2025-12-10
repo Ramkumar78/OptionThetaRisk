@@ -79,7 +79,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   id={`tab-${tab.id}`}
                   onClick={() => { setActiveTab(tab.id); setResults(null); }}
                   className={clsx(
-                    "px-4 py-2 text-sm font-medium rounded-md transition-all flex flex-col items-center flex-shrink-0",
+                    "px-4 py-2 text-sm font-medium rounded-md transition-all flex flex-col items-center justify-center flex-shrink-0",
                     activeTab === tab.id
                       ? "bg-white dark:bg-gray-700 text-primary-600 dark:text-white shadow-sm"
                       : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",

@@ -1754,11 +1754,14 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
     def _process_spread(ticker):
         try:
             # 1. Trend Filter (Fast Fail)
+            # Create Ticker object (Thread-safe usage compared to yf.download batch issues)
+            tk = yf.Ticker(ticker)
+
             # We need ~6 months of data for SMA 50 and stability check
-            df = yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
+            df = tk.history(period="6mo", interval="1d", auto_adjust=True)
             if df.empty or len(df) < 50: return None
 
-            # Flatten columns
+            # Flatten columns if needed (history usually returns simple index but just in case)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
 
@@ -1770,7 +1773,6 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
                 return None
 
             # 2. Get Option Dates
-            tk = yf.Ticker(ticker)
             expirations = tk.options
             if not expirations: return None
 
