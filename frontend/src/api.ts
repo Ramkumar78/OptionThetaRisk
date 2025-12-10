@@ -34,6 +34,13 @@ export const runDarvasScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const runBullPutScreener = async (region: string) => {
+  const response = await api.get('/screen/bull_put', {
+    params: { region }
+  });
+  return response.data;
+};
+
 export const importTradesToJournal = async (trades: any[]) => {
   const response = await api.post('/journal/import', trades);
   return response.data;

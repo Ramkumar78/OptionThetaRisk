@@ -2,6 +2,7 @@ import argparse
 import os
 from tabulate import tabulate
 from .main_analyzer import analyze_csv
+from .screener import screen_bull_put_spreads
 
 # ANSI color codes
 GREEN = '\033[92m'
@@ -17,10 +18,48 @@ def _format_pnl(pnl):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="The Option Auditor")
-    parser.add_argument("--csv", required=True, help="Path to CSV")
+
+    # Make csv optional since we might be running a screener
+    parser.add_argument("--csv", help="Path to CSV (required for audit)")
     parser.add_argument("--output", help="Path to save the report file")
     parser.add_argument("--broker", help="Broker type: auto (default), tasty, ibkr", default="auto")
+
+    # New screener argument
+    parser.add_argument("--strategy", help="Run screener for strategy: bull_put", choices=["bull_put"])
+
     args = parser.parse_args(argv)
+
+    # Dispatch to Screener if strategy is provided
+    if args.strategy == "bull_put":
+        print(f"\nScanning for Bull Put Spreads (45 DTE, 30 Delta)...")
+        results = screen_bull_put_spreads()
+
+        if not results:
+            print("No setups found matching criteria.")
+            return 0
+
+        print(f"\nFound {len(results)} potential setups:\n")
+
+        table_data = []
+        for r in results:
+            table_data.append([
+                r['ticker'],
+                f"${r['price']:.2f}",
+                r['expiry'],
+                r['dte'],
+                f"{r['short_strike']}/{r['long_strike']}",
+                f"${r['credit']:.2f}",
+                f"{r['roi_pct']}%",
+                r['short_delta']
+            ])
+
+        headers = ["Ticker", "Price", "Expiry", "DTE", "Strikes (Short/Long)", "Credit", "ROI", "Short Delta"]
+        print(tabulate(table_data, headers=headers, tablefmt="presto", numalign="right"))
+        return 0
+
+    # Default to Audit functionality (require CSV)
+    if not args.csv:
+        parser.error("--csv is required unless --strategy is specified.")
 
     res = analyze_csv(csv_path=args.csv, broker=args.broker, report_format="excel" if args.output else "none")
 
