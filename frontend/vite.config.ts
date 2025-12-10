@@ -11,7 +11,8 @@ export default defineConfig({
       '/journal': 'http://127.0.0.1:5000',
       '/download': 'http://127.0.0.1:5000',
       '/dashboard': 'http://127.0.0.1:5000',
-      '/feedback': 'http://127.0.0.1:5000'
+      '/feedback': 'http://127.0.0.1:5000',
+      '/static': 'http://127.0.0.1:5000'
     }
   }
 })
