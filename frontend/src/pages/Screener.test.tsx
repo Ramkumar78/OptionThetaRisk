@@ -1,7 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Screener from './Screener';
-import axios from 'axios';
 import { BrowserRouter } from 'react-router-dom';
 
 vi.mock('axios');
@@ -14,7 +13,7 @@ vi.mock('../api', () => ({
     runDarvasScreener: vi.fn(),
 }));
 
-import { runMarketScreener, runTurtleScreener } from '../api';
+import { runTurtleScreener } from '../api';
 
 describe('Screener Component', () => {
   const mockData = [
