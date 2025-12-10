@@ -2,9 +2,8 @@ import os
 import time
 import uuid
 from abc import ABC, abstractmethod
-from flask import current_app
 import boto3
-from sqlalchemy import create_engine, text, Column, String, LargeBinary, Float, Integer, Text
+from sqlalchemy import create_engine, Column, String, LargeBinary, Float, Integer, Text, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -55,6 +54,7 @@ class JournalEntry(Base):
     exit_price = Column(Float)
     qty = Column(Float)
     pnl = Column(Float)
+    sentiment = Column(String)
     notes = Column(Text)
     created_at = Column(Float, default=time.time)
 
@@ -108,11 +108,12 @@ class StorageProvider(ABC):
         """Close any open connections."""
         pass
 
-class PostgresStorage(StorageProvider):
+class DatabaseStorage(StorageProvider):
     def __init__(self, db_url: str):
         self.engine = create_engine(db_url)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+        self.is_sqlite = db_url.startswith("sqlite")
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
         session = self.Session()
@@ -137,6 +138,8 @@ class PostgresStorage(StorageProvider):
             cutoff = time.time() - max_age_seconds
             session.query(Report).filter(Report.created_at < cutoff).delete()
             session.commit()
+            if self.is_sqlite:
+                session.execute(text("VACUUM"))
         finally:
             session.close()
 
@@ -395,8 +398,12 @@ class S3Storage(StorageProvider):
         pass
 
 def get_storage_provider(app) -> StorageProvider:
-    if os.environ.get("DATABASE_URL"):
-        return PostgresStorage(os.environ.get("DATABASE_URL"))
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        # Fix for SQLAlchemy 1.4+ which deprecated 'postgres://'
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        return DatabaseStorage(db_url)
     elif os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME"):
         return S3Storage(
             bucket_name=os.environ.get("S3_BUCKET_NAME"),
@@ -405,5 +412,5 @@ def get_storage_provider(app) -> StorageProvider:
     else:
         # Fallback to local SQLite for simplicity if no other provider is configured
         db_path = os.path.join(app.instance_path, "reports.db")
-        from .sqlite_storage import LocalStorage
-        return LocalStorage(db_path)
+        os.makedirs(app.instance_path, exist_ok=True)
+        return DatabaseStorage(f"sqlite:///{db_path}")

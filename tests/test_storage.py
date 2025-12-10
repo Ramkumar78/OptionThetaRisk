@@ -2,21 +2,21 @@ import os
 import pytest
 import sqlite3
 import uuid
-from unittest.mock import MagicMock, patch
-from webapp.storage import PostgresStorage, S3Storage, get_storage_provider, StorageProvider
-from webapp.sqlite_storage import LocalStorage
+from unittest.mock import MagicMock, patch, ANY
+from webapp.storage import DatabaseStorage, S3Storage, get_storage_provider, StorageProvider, Report
+from sqlalchemy import create_engine
+import time
 
-# --- Tests for LocalStorage (SQLite) ---
+# --- Tests for DatabaseStorage (Both SQLite and Postgres via SQLAlchemy) ---
 
 @pytest.fixture
-def local_storage(tmp_path):
+def db_storage(tmp_path):
     db_path = tmp_path / "test.db"
-    return LocalStorage(str(db_path))
+    return DatabaseStorage(f"sqlite:///{db_path}")
 
-def test_local_storage_init(local_storage):
-    assert os.path.exists(local_storage.db_path)
-    # Check tables exist
-    with sqlite3.connect(local_storage.db_path) as conn:
+def test_db_storage_init(db_storage):
+    # Check tables exist via SQLAlchemy metadata or raw SQL
+    with sqlite3.connect(str(db_storage.engine.url.database)) as conn:
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         table_names = [t[0] for t in tables]
         assert "reports" in table_names
@@ -25,83 +25,89 @@ def test_local_storage_init(local_storage):
         assert "portfolios" in table_names
         assert "journal_entries" in table_names
 
-def test_local_storage_report(local_storage):
+def test_db_storage_report(db_storage):
     token = "test_token"
     filename = "test.pdf"
     data = b"test content"
 
-    local_storage.save_report(token, filename, data)
-    fetched_data = local_storage.get_report(token, filename)
+    db_storage.save_report(token, filename, data)
+    fetched_data = db_storage.get_report(token, filename)
     assert fetched_data == data
 
     # Non-existent report
-    assert local_storage.get_report("bad", "bad") is None
+    assert db_storage.get_report("bad", "bad") is None
 
-def test_local_storage_cleanup_reports(local_storage):
+def test_db_storage_cleanup_reports(db_storage):
     token = "test_token"
     filename = "test.pdf"
     data = b"test content"
 
-    # Insert with explicit time.time() call
-    with patch("time.time") as mock_time:
-        mock_time.return_value = 1000.0
-        local_storage.save_report(token, filename, data)
+    # Manually insert with a specific timestamp to avoid mocking time.time() complexity with SQLAlchemy defaults
+    session = db_storage.Session()
+    # Create a report from 1000 seconds ago (timestamp 1000)
+    report = Report(token=token, filename=filename, data=data, created_at=1000.0)
+    session.add(report)
+    session.commit()
+    session.close()
 
     # Verify exist
-    assert local_storage.get_report(token, filename) == data
+    assert db_storage.get_report(token, filename) == data
 
     # Cleanup with cutoff before 1000.0 (e.g., current time 1100, retention 200 -> cutoff 900)
-    # Should NOT delete
-    with patch("time.time") as mock_time:
+    # 1000 > 900, so should NOT delete
+    with patch("webapp.storage.time.time") as mock_time:
         mock_time.return_value = 1100.0
-        local_storage.cleanup_old_reports(200) # Cutoff 900 < 1000
-    assert local_storage.get_report(token, filename) == data
+        db_storage.cleanup_old_reports(200)
+    assert db_storage.get_report(token, filename) == data
 
     # Cleanup with cutoff after 1000.0 (e.g., current time 1100, retention 50 -> cutoff 1050)
-    # Should delete
-    with patch("time.time") as mock_time:
+    # 1000 < 1050, so SHOULD delete
+    with patch("webapp.storage.time.time") as mock_time:
         mock_time.return_value = 1100.0
-        local_storage.cleanup_old_reports(50) # Cutoff 1050 > 1000
+        db_storage.cleanup_old_reports(50)
 
-    assert local_storage.get_report(token, filename) is None
+    assert db_storage.get_report(token, filename) is None
 
-def test_local_storage_user(local_storage):
+def test_db_storage_user(db_storage):
     user_data = {
         "username": "testuser",
         "first_name": "Test",
         "last_name": "User"
     }
-    local_storage.save_user(user_data)
+    db_storage.save_user(user_data)
 
-    fetched = local_storage.get_user("testuser")
+    fetched = db_storage.get_user("testuser")
     assert fetched["username"] == "testuser"
     assert fetched["first_name"] == "Test"
 
     # Update
     user_data["first_name"] = "Updated"
-    local_storage.save_user(user_data)
-    fetched = local_storage.get_user("testuser")
+    db_storage.save_user(user_data)
+    fetched = db_storage.get_user("testuser")
     assert fetched["first_name"] == "Updated"
 
-def test_local_storage_feedback(local_storage):
-    local_storage.save_feedback("testuser", "Great app!", "Test User", "test@example.com")
+def test_db_storage_feedback(db_storage):
+    db_storage.save_feedback("testuser", "Great app!", "Test User", "test@example.com")
 
-    with sqlite3.connect(local_storage.db_path) as conn:
-        row = conn.execute("SELECT * FROM feedback WHERE username=?", ("testuser",)).fetchone()
-        assert row is not None
-        assert row[2] == "Test User" # name
+    # We can check directly with SQLAlchemy too
+    session = db_storage.Session()
+    from webapp.storage import Feedback
+    f = session.query(Feedback).filter_by(username="testuser").first()
+    assert f is not None
+    assert f.name == "Test User"
+    session.close()
 
-def test_local_storage_portfolio(local_storage):
+def test_db_storage_portfolio(db_storage):
     username = "testuser"
     data = b'{"key": "value"}'
 
-    local_storage.save_portfolio(username, data)
-    fetched = local_storage.get_portfolio(username)
+    db_storage.save_portfolio(username, data)
+    fetched = db_storage.get_portfolio(username)
     assert fetched == data
 
-    assert local_storage.get_portfolio("unknown") is None
+    assert db_storage.get_portfolio("unknown") is None
 
-def test_local_storage_journal(local_storage):
+def test_db_storage_journal(db_storage):
     entry = {
         "username": "testuser",
         "symbol": "AAPL",
@@ -110,119 +116,27 @@ def test_local_storage_journal(local_storage):
     }
 
     # Insert
-    entry_id = local_storage.save_journal_entry(entry)
+    entry_id = db_storage.save_journal_entry(entry)
     assert entry_id is not None
 
     # Get
-    entries = local_storage.get_journal_entries("testuser")
+    entries = db_storage.get_journal_entries("testuser")
     assert len(entries) == 1
     assert entries[0]["symbol"] == "AAPL"
 
     # Update
     entry["id"] = entry_id
     entry["pnl"] = 200.0
-    local_storage.save_journal_entry(entry)
+    db_storage.save_journal_entry(entry)
 
-    entries = local_storage.get_journal_entries("testuser")
+    entries = db_storage.get_journal_entries("testuser")
     assert len(entries) == 1
     assert entries[0]["pnl"] == 200.0
 
     # Delete
-    local_storage.delete_journal_entry("testuser", entry_id)
-    entries = local_storage.get_journal_entries("testuser")
+    db_storage.delete_journal_entry("testuser", entry_id)
+    entries = db_storage.get_journal_entries("testuser")
     assert len(entries) == 0
-
-def test_local_storage_migration_trigger(tmp_path):
-    # Setup a DB with old schema (missing 'name' in feedback)
-    db_path = tmp_path / "old_schema.db"
-    with sqlite3.connect(str(db_path)) as conn:
-         conn.execute("""
-            CREATE TABLE IF NOT EXISTS feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
-                message TEXT,
-                created_at REAL
-            )
-        """)
-
-    # Initialize LocalStorage, should trigger migration
-    storage = LocalStorage(str(db_path))
-
-    with sqlite3.connect(str(db_path)) as conn:
-        cursor = conn.execute("PRAGMA table_info(feedback)")
-        columns = [info[1] for info in cursor.fetchall()]
-        assert 'name' in columns
-        assert 'email' in columns
-
-# --- Tests for PostgresStorage ---
-
-@patch("webapp.storage.create_engine")
-@patch("webapp.storage.sessionmaker")
-def test_postgres_storage(mock_sessionmaker, mock_create_engine):
-    # Setup mocks
-    mock_engine = MagicMock()
-    mock_create_engine.return_value = mock_engine
-
-    mock_session = MagicMock()
-    mock_sessionmaker.return_value = mock_session
-    mock_db_session = MagicMock()
-    mock_session.return_value = mock_db_session
-
-    storage = PostgresStorage("postgresql://user:pass@localhost/db")
-
-    # Test save_report
-    storage.save_report("token", "file.pdf", b"data")
-    assert mock_db_session.merge.called
-    assert mock_db_session.commit.called
-    assert mock_db_session.close.called
-
-    # Test get_report
-    mock_db_session.query.return_value.filter_by.return_value.first.return_value.data = b"data"
-    data = storage.get_report("token", "file.pdf")
-    assert data == b"data"
-
-    # Test cleanup
-    storage.cleanup_old_reports(100)
-    assert mock_db_session.query.return_value.filter.return_value.delete.called
-
-    # Test save_user
-    storage.save_user({"username": "u"})
-    assert mock_db_session.add.called
-
-    # Test get_user
-    mock_user = MagicMock()
-    mock_user.username = "u"
-    # Need to mock __table__.columns for dict comprehension
-    # This is tricky with mocks, so we skip exact return value check and just check calls
-    mock_db_session.query.return_value.filter_by.return_value.first.return_value = None # Simplest case
-    storage.get_user("u")
-    assert mock_db_session.query.called
-
-    # Test save_portfolio
-    storage.save_portfolio("u", b"{}")
-    assert mock_db_session.merge.called
-
-    # Test get_portfolio
-    # Setup chain: query -> filter_by -> first -> return an object with .data_json
-    mock_portfolio = MagicMock()
-    mock_portfolio.data_json = b"{}"
-    mock_db_session.query.return_value.filter_by.return_value.first.return_value = mock_portfolio
-    res = storage.get_portfolio("u")
-    assert res == b"{}"
-
-    # Test journal
-    storage.save_journal_entry({"username": "u", "symbol": "A"})
-    assert mock_db_session.add.called # New entry
-
-    storage.get_journal_entries("u")
-    assert mock_db_session.query.called
-
-    storage.delete_journal_entry("u", "id")
-    assert mock_db_session.query.return_value.filter_by.return_value.delete.called
-
-    storage.close()
-    assert mock_engine.dispose.called
-
 
 # --- Tests for get_storage_provider factory ---
 
@@ -234,15 +148,16 @@ def test_get_storage_provider_local(monkeypatch, tmp_path):
     app.instance_path = str(tmp_path)
 
     provider = get_storage_provider(app)
-    assert isinstance(provider, LocalStorage)
+    assert isinstance(provider, DatabaseStorage)
+    assert str(provider.engine.url).startswith("sqlite")
 
 def test_get_storage_provider_postgres(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql://...")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/db")
 
-    # We don't want to actually connect, so patch PostgresStorage
-    with patch("webapp.storage.PostgresStorage") as MockPostgres:
+    # We mock DatabaseStorage to avoid actually connecting
+    with patch("webapp.storage.DatabaseStorage") as MockDB:
         get_storage_provider(MagicMock())
-        assert MockPostgres.called
+        MockDB.assert_called_with("postgresql://user:pass@localhost/db")
 
 def test_get_storage_provider_s3(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -302,5 +217,3 @@ def test_s3_storage(mock_boto_client):
     storage.save_journal_entry({"username": "u"})
     # Should put object with list
     mock_s3.put_object.assert_called()
-
-import time
