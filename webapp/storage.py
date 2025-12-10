@@ -397,8 +397,12 @@ class S3Storage(StorageProvider):
         pass
 
 def get_storage_provider(app) -> StorageProvider:
-    if os.environ.get("DATABASE_URL"):
-        return DatabaseStorage(os.environ.get("DATABASE_URL"))
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        # Fix for SQLAlchemy 1.4+ which deprecated 'postgres://'
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        return DatabaseStorage(db_url)
     elif os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("S3_BUCKET_NAME"):
         return S3Storage(
             bucket_name=os.environ.get("S3_BUCKET_NAME"),
