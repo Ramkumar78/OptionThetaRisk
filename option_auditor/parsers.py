@@ -56,7 +56,7 @@ class TastytradeParser(TransactionParser):
         out["datetime"] = pd.to_datetime(df["Time"].astype(str), errors="coerce")
         out["symbol"] = df["Underlying Symbol"].astype(str)
         action = df["Action"].astype(str).str.lower()
-        qty_raw = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0).astype(float)
+        qty_raw = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0).astype(float)
         # Sell -> Short (-1.0). Exercise -> Close Long (-1.0).
         # Buy/Assignment -> Open/Close Short (1.0).
         sign = np.where(action.str.startswith("sell") | action.str.contains("exercise"), -1.0, 1.0)
@@ -149,7 +149,11 @@ class TastytradeFillsParser(TransactionParser):
                         expiry_year = trade_year
                         if ts.month > 10 and month_num < 3:
                             expiry_year += 1
-                        expiry = pd.Timestamp(datetime(expiry_year, month_num, int(d['day'])))
+
+                        day_val = d.get('day')
+                        if day_val is None:
+                            raise ValueError("Missing day")
+                        expiry = pd.Timestamp(datetime(expiry_year, month_num, int(day_val)))
                     except:
                         expiry = pd.NaT
                     total_legs_qty += abs(qty)
@@ -194,7 +198,11 @@ class TastytradeFillsParser(TransactionParser):
                             expiry_year = ts.year if ts else datetime.now().year
                             if ts and ts.month > 10 and month_num < 3:
                                 expiry_year += 1
-                            expiry = pd.Timestamp(datetime(expiry_year, month_num, int(re.findall(r"\d+", day_tok)[0])))
+
+                            found_days = re.findall(r"\d+", str(day_tok))
+                            if not found_days:
+                                raise ValueError("No day found")
+                            expiry = pd.Timestamp(datetime(expiry_year, month_num, int(found_days[0])))
                         except Exception:
                             expiry = pd.NaT
                         parsed_legs.append({
@@ -241,7 +249,7 @@ class ManualInputParser(TransactionParser):
         # Handle "sell" (full word) or "s" (STO/STC)
         is_sell = action.str.contains("sell") | action.str.startswith("s")
         sign = np.where(is_sell, -1.0, 1.0)
-        qty_abs = pd.to_numeric(df["qty"], errors="coerce").fillna(0).abs()
+        qty_abs = pd.to_numeric(df["qty"], errors="coerce").fillna(0.0).abs()
         out["qty"] = qty_abs * sign
 
         price = pd.to_numeric(df["price"], errors="coerce").fillna(0.0)
@@ -262,7 +270,7 @@ class ManualInputParser(TransactionParser):
 
         out["fees"] = pd.to_numeric(df["fees"], errors="coerce").fillna(0.0)
         out["expiry"] = pd.to_datetime(df["expiry"], errors="coerce")
-        out["strike"] = pd.to_numeric(df["strike"], errors="coerce").astype(float)
+        out["strike"] = pd.to_numeric(df["strike"], errors="coerce").fillna(0.0).astype(float)
 
         def _fmt_contract(row):
             if row["asset_type"] == "STOCK":
