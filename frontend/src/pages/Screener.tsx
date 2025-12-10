@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms';
 
 const Screener: React.FC<ScreenerProps> = () => {
   const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
@@ -36,6 +36,8 @@ const Screener: React.FC<ScreenerProps> = () => {
         data = await runEmaScreener(region, strategyTimeFrame);
       } else if (activeTab === 'darvas') {
         data = await runDarvasScreener(region, strategyTimeFrame);
+      } else if (activeTab === 'mms') {
+        data = await runMmsScreener(region, strategyTimeFrame);
       }
       setResults(data);
     } catch (err: any) {
@@ -48,6 +50,7 @@ const Screener: React.FC<ScreenerProps> = () => {
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
     { id: 'turtle', label: 'Turtle Trading' },
     { id: 'darvas', label: 'Darvas Box' },
+    { id: 'mms', label: 'MMS / OTE', subLabel: 'SMC' },
     { id: 'ema', label: '5/13 & 5/21 EMA' },
     { id: 'market', label: 'Market Screener (RSI/IV)', subLabel: 'US Options Only' },
   ];
@@ -126,7 +129,7 @@ const Screener: React.FC<ScreenerProps> = () => {
             </>
           )}
 
-          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas') && (
+          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms') && (
              <>
               <div>
                 <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -149,9 +152,19 @@ const Screener: React.FC<ScreenerProps> = () => {
                   onChange={(e) => setStrategyTimeFrame(e.target.value)}
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 >
-                  <option value="1d">Daily (1d)</option>
-                  <option value="1wk">Weekly (1wk)</option>
-                  <option value="1mo">Monthly (1mo)</option>
+                  {activeTab === 'mms' ? (
+                      <>
+                        <option value="1h">Hourly (1h)</option>
+                        <option value="15m">Intraday (15m)</option>
+                        <option value="1d">Daily (1d)</option>
+                      </>
+                  ) : (
+                      <>
+                        <option value="1d">Daily (1d)</option>
+                        <option value="1wk">Weekly (1wk)</option>
+                        <option value="1mo">Monthly (1mo)</option>
+                      </>
+                  )}
                 </select>
               </div>
              </>
@@ -213,7 +226,10 @@ const Screener: React.FC<ScreenerProps> = () => {
             {activeTab !== 'market' && (
                 <div className="p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                        {activeTab === 'turtle' ? 'Turtle Breakouts' : activeTab === 'darvas' ? 'Darvas Box Setups' : '5/13 EMA Setups'}
+                        {activeTab === 'turtle' ? 'Turtle Breakouts' :
+                         activeTab === 'darvas' ? 'Darvas Box Setups' :
+                         activeTab === 'mms' ? 'Market Maker Models (OTE)' :
+                         '5/13 EMA Setups'}
                     </h3>
                     <ScreenerTable data={results} type={activeTab} />
                 </div>
@@ -276,6 +292,9 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                 } else if (sortConfig.key === 'high_52w') {
                     aValue = a.high_52w;
                     bValue = b.high_52w;
+                } else if (sortConfig.key === 'ote_zone') {
+                    aValue = a.ote_zone;
+                    bValue = b.ote_zone;
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -353,6 +372,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                         <HeaderCell label="52W High" sortKey="high_52w" align="right" />
                                     </>
                                 )}
+                                        {type === 'mms' && (
+                                            <>
+                                                <HeaderCell label="OTE Zone" sortKey="ote_zone" align="right" />
+                                                <HeaderCell label="Target" sortKey="target" align="right" />
+                                            </>
+                                        )}
                                 <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
                             </>
                         )}
@@ -431,6 +456,16 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
                                                     {formatCurrency(row.high_52w, currency)}
+                                                </td>
+                                            </>
+                                        )}
+                                        {type === 'mms' && (
+                                            <>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-indigo-600 dark:text-indigo-400">
+                                                    {row.ote_zone}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                                                    {formatCurrency(row.target, currency)}
                                                 </td>
                                             </>
                                         )}
