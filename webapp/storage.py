@@ -3,7 +3,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 import boto3
-from sqlalchemy import create_engine, Column, String, LargeBinary, Float, Integer, Text, text
+from sqlalchemy import create_engine, Column, String, LargeBinary, Float, Integer, Text, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -114,6 +114,27 @@ class DatabaseStorage(StorageProvider):
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         self.is_sqlite = db_url.startswith("sqlite")
+        self._ensure_schema_migrations()
+
+    def _ensure_schema_migrations(self):
+        """
+        Check for missing columns and migrate if necessary.
+        Specifically for journal_entries: entry_date, entry_time
+        """
+        insp = inspect(self.engine)
+        if insp.has_table('journal_entries'):
+            columns = [c['name'] for c in insp.get_columns('journal_entries')]
+
+            with self.engine.connect() as conn:
+                if 'entry_date' not in columns:
+                    print("Migrating: Adding entry_date to journal_entries")
+                    # SQLite syntax vs Postgres syntax might differ but ADD COLUMN is standard
+                    conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_date VARCHAR'))
+
+                if 'entry_time' not in columns:
+                    print("Migrating: Adding entry_time to journal_entries")
+                    conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_time VARCHAR'))
+                conn.commit()
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
         session = self.Session()
@@ -201,13 +222,17 @@ class DatabaseStorage(StorageProvider):
             if 'id' not in entry or not entry['id']:
                 entry['id'] = str(uuid.uuid4())
 
+            # Sanitize inputs: keep only keys that exist in the model
+            valid_keys = {c.name for c in JournalEntry.__table__.columns}
+            sanitized_entry = {k: v for k, v in entry.items() if k in valid_keys}
+
             db_entry = session.query(JournalEntry).filter_by(id=entry['id']).first()
             if db_entry:
-                for k, v in entry.items():
+                for k, v in sanitized_entry.items():
                      if hasattr(db_entry, k):
                         setattr(db_entry, k, v)
             else:
-                db_entry = JournalEntry(**entry)
+                db_entry = JournalEntry(**sanitized_entry)
                 session.add(db_entry)
 
             session.commit()
