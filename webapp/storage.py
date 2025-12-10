@@ -134,6 +134,10 @@ class DatabaseStorage(StorageProvider):
                 if 'entry_time' not in columns:
                     print("Migrating: Adding entry_time to journal_entries")
                     conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_time VARCHAR'))
+
+                if 'sentiment' not in columns:
+                    print("Migrating: Adding sentiment to journal_entries")
+                    conn.execute(text('ALTER TABLE journal_entries ADD COLUMN sentiment VARCHAR'))
                 conn.commit()
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
