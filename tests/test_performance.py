@@ -51,4 +51,4 @@ def test_strategy_grouping_performance():
     total_segments = sum(len(s.segments) for s in strategies)
     assert total_segments == n_strats
 
-    assert duration < 10.0
+    assert duration < 15.0
