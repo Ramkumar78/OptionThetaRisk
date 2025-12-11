@@ -229,3 +229,12 @@ class TestStrategyClassification:
             make_leg(-1, "P", 90)
         ])
         assert _classify_strategy(strat) == "Box Spread"
+
+    def test_wheel_strategy(self):
+        # Wheel Strategy: Short Put + Long Stock
+        # "requiring the stock quantity to exactly match the absolute value of the put leg's quantity times 100"
+        strat = make_strategy([
+            make_leg(100, None, None, expiry_date=None), # Stock (100 shares)
+            make_leg(-1, "P", 95) # Short Put (1 contract)
+        ])
+        assert _classify_strategy(strat) == "Wheel"

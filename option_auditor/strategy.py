@@ -50,6 +50,9 @@ def _classify_strategy(strat: StrategyGroup) -> str:
                 return "Covered Call"
             if s["qty"] > 0 and o["right"] == "P" and o["qty"] > 0:
                 return "Protective Put"
+            if s["qty"] > 0 and o["right"] == "P" and o["qty"] < 0:
+                if abs(o["qty"] * 100) == s["qty"]:
+                    return "Wheel"
 
         if num_stock == 1 and num_opt == 2:
             s = stock_legs[0]
