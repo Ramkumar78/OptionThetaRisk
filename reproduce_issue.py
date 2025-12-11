@@ -1,50 +1,35 @@
-import sqlite3
-import os
-from sqlalchemy import create_engine, inspect, text
-from webapp.storage import DatabaseStorage
+import pandas as pd
+from option_auditor.strategy import build_strategies
+from option_auditor.models import TradeGroup
 
-DB_PATH = "reproduce.db"
+def reproduction():
+    t1 = pd.Timestamp("2023-01-01 10:00")
+    t2 = pd.Timestamp("2023-01-15 16:00")
 
-if os.path.exists(DB_PATH):
-    os.remove(DB_PATH)
+    legs = []
+    # Short Put: Open
+    legs.append({"datetime": t1, "contract_id": "P1", "symbol": "XYZ", "qty": -1, "proceeds": 100, "fees": 1, "strike": 100, "right": "P", "expiry": t2})
+    # Short Put: Close
+    legs.append({"datetime": t2, "contract_id": "P1", "symbol": "XYZ", "qty": 1, "proceeds": 0, "fees": 0, "strike": 100, "right": "P", "expiry": t2})
 
-# Create a legacy database without 'sentiment'
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
-cursor.execute('''
-    CREATE TABLE journal_entries (
-        id VARCHAR PRIMARY KEY,
-        username VARCHAR,
-        entry_date VARCHAR,
-        entry_time VARCHAR,
-        symbol VARCHAR,
-        strategy VARCHAR,
-        direction VARCHAR,
-        entry_price FLOAT,
-        exit_price FLOAT,
-        qty FLOAT,
-        pnl FLOAT,
-        notes TEXT,
-        created_at FLOAT
-    )
-''')
-conn.commit()
-conn.close()
+    # Stock Acquisition
+    t3 = t2 + pd.Timedelta(hours=1)
+    legs.append({"datetime": t3, "contract_id": "STOCK", "symbol": "XYZ", "qty": 100, "proceeds": -10000, "fees": 5, "strike": None, "right": None, "expiry": None})
 
-print("Created legacy database.")
+    df = pd.DataFrame(legs)
+    print("DataFrame:")
+    print(df)
 
-# Now initialize DatabaseStorage, which should trigger migration
-storage = DatabaseStorage(f"sqlite:///{DB_PATH}")
+    strategies = build_strategies(df)
+    print(f"\nStrategies found: {len(strategies)}")
+    for s in strategies:
+        print(f"Strategy: {s.strategy_name}, ID: {s.id}, Symbol: {s.symbol}")
+        print(f"  Entry: {s.entry_ts}, Exit: {s.exit_ts}")
+        print(f"  PnL: {s.pnl}, Fees: {s.fees}")
+        for leg in s.legs:
+            print(f"    Leg Group: {leg.contract_id}, Right: {leg.right}, Closed: {leg.is_closed}")
+            for l in leg.legs:
+                print(f"      L: {l.ts} Qty: {l.qty}")
 
-# Inspect columns
-insp = inspect(storage.engine)
-columns = [c['name'] for c in insp.get_columns('journal_entries')]
-
-if 'sentiment' in columns:
-    print("SUCCESS: 'sentiment' column found.")
-else:
-    print("FAILURE: 'sentiment' column missing.")
-
-# Cleanup
-storage.close()
-# os.remove(DB_PATH)
+if __name__ == "__main__":
+    reproduction()

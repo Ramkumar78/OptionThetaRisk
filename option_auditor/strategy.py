@@ -193,7 +193,8 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
 
     # Find closed short puts and open long stocks
     short_puts = [g for g in all_groups if g.right == "P" and g.is_closed and any(l.qty < 0 for l in g.legs)]
-    long_stocks = [g for g in all_groups if g.right is None and not g.is_closed and any(l.qty > 0 for l in g.legs)]
+    # Check for None or NaN using pd.isna() to handle different pandas/numpy versions
+    long_stocks = [g for g in all_groups if pd.isna(g.right) and not g.is_closed and any(l.qty > 0 for l in g.legs)]
 
     short_puts.sort(key=lambda g: g.exit_ts)
     long_stocks.sort(key=lambda g: g.entry_ts)
@@ -207,14 +208,17 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                 continue
 
             if put_group.symbol == stock_group.symbol:
+                # Ensure timestamps exist
                 if put_group.exit_ts and stock_group.entry_ts:
                     time_diff_hours = (stock_group.entry_ts - put_group.exit_ts).total_seconds() / 3600
-                    if 0 <= time_diff_hours < 48:  # 2-day window for assignment
+                    # Relaxed window: -1 to 48h to handle slight clock skew or same-tick events
+                    if -1 <= time_diff_hours < 48:  # 2-day window for assignment
                         # Assuming 1 contract = 100 shares.
                         put_qty = sum(l.qty for l in put_group.legs if l.qty < 0)
                         stock_qty = sum(l.qty for l in stock_group.legs if l.qty > 0)
 
-                        if abs(put_qty * 100) == stock_qty:
+                        # Use approx equality for float safety with larger epsilon
+                        if abs(abs(put_qty * 100) - stock_qty) < 0.1:
                             strat = StrategyGroup(
                                 id=f"STRAT-WHEEL-{len(wheel_strategies)}",
                                 symbol=put_group.symbol,
