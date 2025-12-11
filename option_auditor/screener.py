@@ -5,9 +5,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 try:
     from tastytrade import Session
     from tastytrade.dxfeed import Quote
+    from tastytrade.metrics import get_market_metrics
 except ImportError:
     Session = None
     Quote = None
+    get_market_metrics = None
 
 SECTOR_NAMES = {
     "XLC": "Communication Services",
@@ -465,59 +467,69 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     Internal helper to screen a list of tickers.
     Returns tuple: (results, tastytrade_status)
     """
+    # 1. Dependency Check
+    if tasty_creds and not Session:
+        return [], "failed: The 'tastytrade' library is missing. Run 'pip install tastytrade'"
+
     try:
         import pandas_ta as ta
     except ImportError as e:
         raise ImportError("The 'pandas_ta' library is required for the screener. Please install it with 'pip install pandas_ta'.") from e
 
-    # Establish Tastytrade session if credentials provided
+    # 2. Establish Tastytrade session
     tasty_session = None
-    tasty_status = "skipped" # default
+    tasty_status = "skipped"
+    tasty_metrics_map = {}
 
     if tasty_creds and Session:
-        print("Attempting Tastytrade Handshake...")
+        print(f"🔐 Attempting Tastytrade Login...", flush=True)
         try:
-            # Check for API Key / Token Auth (Production / v11+)
+            # Check for API Key / Token Auth (Production)
             if tasty_creds.get('refresh_token') and tasty_creds.get('client_secret'):
                 tasty_session = Session(
                     provider_secret=tasty_creds['client_secret'],
                     refresh_token=tasty_creds['refresh_token']
                 )
-                print("✅ Tastytrade Handshake Success (Token)")
                 tasty_status = "success"
+                print("✅ Tastytrade Login Success", flush=True)
             # Legacy / Sandbox Auth (Username/Password)
             elif tasty_creds.get('username') and tasty_creds.get('password'):
                 try:
                     tasty_session = Session(tasty_creds['username'], tasty_creds['password'])
-                    print("✅ Tastytrade Handshake Success (Legacy)")
                     tasty_status = "success"
+                    print("✅ Tastytrade Login Success (Legacy)", flush=True)
                 except TypeError:
                     reason = "SDK v11+ requires Refresh Token + Client Secret. Username/Password not supported directly."
-                    print(f"❌ Tastytrade Handshake Failure: {reason}")
+                    print(f"❌ Tastytrade Handshake Failure: {reason}", flush=True)
                     tasty_session = None
                     tasty_status = "failed:sdk_version"
             else:
-                # No valid credentials provided in the dict
-                print("❌ Tastytrade Handshake Failure: No valid credentials found")
+                print("❌ Tastytrade Handshake Failure: No valid credentials found", flush=True)
                 tasty_status = "failed:missing_creds"
+                return [], tasty_status
+
+            # Pre-fetch metrics (IV Rank) if successful
+            if tasty_session and get_market_metrics:
+                try:
+                    metrics_list = get_market_metrics(tasty_session, tickers)
+                    tasty_metrics_map = {m.symbol: m for m in metrics_list}
+                except Exception as e:
+                    print(f"⚠️ Tasty Metrics Fetch Error: {e}", flush=True)
 
         except Exception as e:
-            print(f"❌ Tastytrade Handshake Failure: {e}")
-            tasty_session = None
-            tasty_status = f"failed:{str(e)}"
+            print(f"❌ Tastytrade Login Error: {e}", flush=True)
+            return [], f"failed: {str(e)}"
 
-    # STRICT MODE: If Handshake Fails but was attempted (credentials provided), STOP immediately.
-    # Do not fall back to Yahoo Finance silently.
-    if tasty_creds and Session and tasty_status.startswith("failed"):
-        print(f"❌ Handshake failed: {tasty_status}. Aborting strict mode.")
+    # STRICT MODE CHECK
+    if tasty_creds and tasty_status.startswith("failed"):
+        print(f"❌ Handshake failed: {tasty_status}. Aborting strict mode.", flush=True)
         return [], tasty_status
 
+    # 3. Data Fetching
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
     resample_rule = None
     is_intraday = False
-
-    # Default period
     period = "1y"
 
     if time_frame == "49m":
@@ -547,12 +559,13 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     # Batch download result container
     batch_data = None
 
-    # If daily, try batch download first (avoid for new multi-year/weekly intervals to be safe, or just allow it)
-    # yfinance batch download is usually fine for daily/weekly.
-    if not is_intraday and tickers and not tasty_session:
+    # Only batch download from Yahoo if we are NOT in strict Tasty mode
+    # OR if we need history for indicators (hybrid mode).
+    # Currently we need YF for RSI/SMA history.
+    if not is_intraday and tickers:
         try:
-            # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
-            # auto_adjust=True to suppress warning
+            # We still need YFinance for history even in Tasty Mode, as fetching history via Tasty API is complex/slow
+            # But we can suppress progress bar to reduce noise
             batch_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
         except Exception:
             batch_data = None
@@ -561,12 +574,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
         try:
             df = pd.DataFrame()
 
-            # STRICT MODE: If Tasty Session Active, we MUST get live price from it.
-            # However, we still rely on YFinance for historical candles (RSI/SMA).
-            # If we fail to get Tasty data, we should NOT return a result (skip row),
-            # unless we implement a pure-Tasty history fetch (complex/slow).
-
-            # 1. Fetch History from YF (Required for Indicators)
+            # A. Fetch History (Always needed for RSI/SMA)
             # If batch data exists and has this symbol, use it
             if batch_data is not None and symbol in batch_data.columns.levels[0]:
                 df = batch_data[symbol].copy()
@@ -574,40 +582,59 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 # Sequential fetch (Intraday or Batch Fallback)
                 # auto_adjust=False for intraday to prevent KeyError(Timestamp) bug
                 # Use dedicated thread for this call via executor
-                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
+                try:
+                    df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
+                except Exception:
+                    pass
 
             # Clean NaNs
             df = df.dropna(how='all')
 
             if df.empty:
+                # If we have no history, we can't calculate indicators.
+                # In Strict Tasty Mode, we MIGHT proceed if we just wanted price, but screener logic requires RSI/SMA.
                 return None
 
-            # --- TASTYTRADE DATA OVERRIDE ---
+            # B. TASTYTRADE LIVE PRICE OVERRIDE
+            iv_rank_val = "N/A*"
+
             if tasty_session and Quote:
                 tasty_success = False
                 try:
-                    # Using get_quotes to fetch a list of Quote objects
+                    # Fetch LIVE Quote from DXFeed
                     quotes = Quote.get_quotes(tasty_session, [symbol])
                     if quotes and len(quotes) > 0:
-                        live_price = quotes[0].bidPrice
-                        if quotes[0].bidPrice and quotes[0].askPrice:
-                            live_price = (quotes[0].bidPrice + quotes[0].askPrice) / 2
+                        q = quotes[0]
+                        live_price = None
+                        if q.bidPrice and q.askPrice:
+                            live_price = (q.bidPrice + q.askPrice) / 2
                         else:
-                            live_price = quotes[0].bidPrice or quotes[0].askPrice
+                            live_price = float(q.bidPrice or q.askPrice or 0.0)
 
                         if live_price and live_price > 0:
-                            # Update the last close price in the dataframe
+                            # Overwrite the last close price in the dataframe
+                            # This ensures signals (RSI/Price) use REAL market data
                             if not df.empty:
                                 df.iloc[-1, df.columns.get_loc('Close')] = live_price
+                                # Update High/Low if current price breaks bounds
+                                if live_price > df.iloc[-1]['High']:
+                                    df.iloc[-1, df.columns.get_loc('High')] = live_price
+                                if live_price < df.iloc[-1]['Low']:
+                                    df.iloc[-1, df.columns.get_loc('Low')] = live_price
                                 tasty_success = True
                 except Exception as e:
-                    print(f"⚠️ Tasty Quote Error for {symbol}: {e}")
+                    # print(f"⚠️ Tasty Quote Error for {symbol}: {e}")
+                    pass
 
                 # STRICT MODE ENFORCEMENT:
-                # "if dont display data extracted from tastytrade pls dont connect to yfinance"
-                # Interpreted as: If I asked for Tasty and didn't get it, don't show me the YF price as a fallback.
                 if not tasty_success:
                     return None # Skip this row completely
+
+                # Get IV Rank if available
+                if symbol in tasty_metrics_map:
+                    metric = tasty_metrics_map[symbol]
+                    if metric.implied_volatility_index_rank:
+                        iv_rank_val = float(metric.implied_volatility_index_rank) * 100 # Tasty gives 0.x, we usually show 0-100
 
             # Flatten multi-index columns if present (yfinance update)
             if isinstance(df.columns, pd.MultiIndex):
@@ -754,7 +781,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "trend": trend,
                 "signal": signal,
                 "is_green": is_green,
-                "iv_rank": "N/A*",
+                "iv_rank": iv_rank_val,
                 "atr": current_atr,
                 "pe_ratio": pe_ratio
             }
