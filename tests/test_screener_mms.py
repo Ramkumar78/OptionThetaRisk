@@ -114,9 +114,10 @@ def test_detect_fvgs():
     assert fvg['bottom'] == 100
 
 def test_screen_mms_ote_setup(bearish_ote_df):
-    # Mock yfinance download
-    with patch('yfinance.download') as mock_download:
-        mock_download.return_value = bearish_ote_df
+    # Mock yfinance Ticker
+    with patch('yfinance.Ticker') as MockTicker:
+        instance = MockTicker.return_value
+        instance.history.return_value = bearish_ote_df
 
         # Run screener
         results = screen_mms_ote_setups(ticker_list=["TEST"], time_frame="1h")
@@ -132,14 +133,16 @@ def test_screen_mms_ote_setup(bearish_ote_df):
         assert res['stop_loss'] == 115.0
 
 def test_screen_mms_no_setup(sample_df):
-    with patch('yfinance.download') as mock_download:
-        mock_download.return_value = sample_df
+    with patch('yfinance.Ticker') as MockTicker:
+        instance = MockTicker.return_value
+        instance.history.return_value = sample_df
         # This simple DF has no complex OTE structure
         results = screen_mms_ote_setups(ticker_list=["TEST"], time_frame="1h")
         assert len(results) == 0
 
 def test_screen_mms_empty_data():
-    with patch('yfinance.download') as mock_download:
-        mock_download.return_value = pd.DataFrame()
+    with patch('yfinance.Ticker') as MockTicker:
+        instance = MockTicker.return_value
+        instance.history.return_value = pd.DataFrame()
         results = screen_mms_ote_setups(ticker_list=["TEST"], time_frame="1h")
         assert len(results) == 0

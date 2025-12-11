@@ -1550,7 +1550,8 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
             # 1. Fetch Data
             # We need standard data preparation
             import yfinance as yf
-            df = yf.download(ticker, period=period, interval=yf_interval, progress=False, auto_adjust=True)
+            t = yf.Ticker(ticker)
+            df = t.history(period=period, interval=yf_interval, auto_adjust=True)
 
             if df.empty or len(df) < 50:
                 return None
