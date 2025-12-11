@@ -124,8 +124,6 @@ Security notes for web UI:
 This repo includes a GitHub Actions workflow at `.github/workflows/ci.yml` that runs tests on pushes and PRs
 against Python 3.9–3.12. It installs dependencies from `requirements.txt` and executes `pytest -q`.
 
-![Coverage Badge](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Ramkumar78/2929292929292/raw/option-auditor-coverage.json)
-
 #### Security notes
 - CSV uploads are read safely with Pandas and never executed as code.
 - Exported `trades.csv` is sanitized to help prevent CSV/Excel formula injection: any cell beginning with `=`, `+`, `-`, or `@` is prefixed with a quote so that spreadsheet apps do not evaluate it as a formula.

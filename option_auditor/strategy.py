@@ -211,7 +211,8 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                         put_qty = sum(l.qty for l in put_group.legs if l.qty < 0)
                         stock_qty = sum(l.qty for l in stock_group.legs if l.qty > 0)
 
-                        if abs(put_qty * 100) == stock_qty:
+                        # Use approx equality for float safety
+                        if abs(abs(put_qty * 100) - stock_qty) < 0.01:
                             strat = StrategyGroup(
                                 id=f"STRAT-WHEEL-{len(wheel_strategies)}",
                                 symbol=put_group.symbol,
