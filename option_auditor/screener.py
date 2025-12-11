@@ -6,7 +6,9 @@ try:
     from tastytrade import Session
     from tastytrade.dxfeed import Quote
     from tastytrade.metrics import get_market_metrics
-except ImportError:
+except ImportError as e:
+    import sys
+    print(f"DEBUG: Failed to import tastytrade: {e}", file=sys.stderr)
     Session = None
     Quote = None
     get_market_metrics = None
@@ -526,6 +528,28 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
         return [], tasty_status
 
     # 3. Data Fetching
+
+    # DETERMINE MODE: Pure Tasty (No YF) vs Hybrid
+    use_pure_tasty = (tasty_session is not None and tasty_status == "success")
+
+    # BATCH FETCH TASTY QUOTES (Optimization)
+    tasty_quotes_map = {}
+    if use_pure_tasty and Quote:
+        print("⚡ Fetching Real-time Quotes from Tastytrade...", flush=True)
+        try:
+            # Chunking just in case of limits, though DXFeed handles large lists usually
+            chunk_size = 50
+            for i in range(0, len(tickers), chunk_size):
+                chunk = tickers[i:i+chunk_size]
+                qs = Quote.get_quotes(tasty_session, chunk)
+                for q in qs:
+                    tasty_quotes_map[q.symbol] = q
+        except Exception as e:
+            print(f"⚠️ Tasty Batch Quote Error: {e}", flush=True)
+            # If batch fails, we might still try individually or fail strict
+            # For now, let's allow it to fall through to individual checks or fail
+            pass
+
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
     resample_rule = None
@@ -559,10 +583,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     # Batch download result container
     batch_data = None
 
-    # Only batch download from Yahoo if we are NOT in strict Tasty mode
-    # OR if we need history for indicators (hybrid mode).
-    # Currently we need YF for RSI/SMA history.
-    if not is_intraday and tickers:
+    # Only batch download from Yahoo if we are NOT in pure Tasty mode
+    if not use_pure_tasty and not is_intraday and tickers:
         try:
             # We still need YFinance for history even in Tasty Mode, as fetching history via Tasty API is complex/slow
             # But we can suppress progress bar to reduce noise
@@ -572,6 +594,58 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
     def process_symbol(symbol):
         try:
+            # --- PURE TASTYTRADE MODE ---
+            if use_pure_tasty:
+                iv_rank_val = "N/A"
+                # IV Rank from Metrics
+                if symbol in tasty_metrics_map:
+                    metric = tasty_metrics_map[symbol]
+                    if metric.implied_volatility_index_rank:
+                        # Tasty gives 0.x, we usually show 0-100
+                        try:
+                            iv_rank_val = float(metric.implied_volatility_index_rank) * 100
+                        except: pass
+
+                # Price from Quotes
+                q = tasty_quotes_map.get(symbol)
+
+                # If not in batch, try single fetch? (Optional fallback)
+                if not q and Quote:
+                     try:
+                         qs = Quote.get_quotes(tasty_session, [symbol])
+                         if qs: q = qs[0]
+                     except: pass
+
+                if not q:
+                    return None # Strict Mode: Missing data = Skip
+
+                live_price = None
+                if q.bidPrice and q.askPrice:
+                    live_price = (q.bidPrice + q.askPrice) / 2
+                else:
+                    live_price = float(q.bidPrice or q.askPrice or 0.0)
+
+                if not live_price or live_price <= 0:
+                    return None
+
+                # Return Simplified Result (No Indicators)
+                return {
+                    "ticker": symbol,
+                    "company_name": TICKER_NAMES.get(symbol, symbol),
+                    "price": live_price,
+                    "pct_change_1d": None, # Could calculate if we had prev close from Quote
+                    "pct_change_1w": None,
+                    "rsi": -1, # Sentinel for "N/A"
+                    "sma_50": -1,
+                    "trend": "N/A",
+                    "signal": "WAIT",
+                    "is_green": False,
+                    "iv_rank": iv_rank_val,
+                    "atr": 0.0,
+                    "pe_ratio": "N/A"
+                }
+
+            # --- HYBRID / YFINANCE MODE ---
             df = pd.DataFrame()
 
             # A. Fetch History (Always needed for RSI/SMA)
@@ -591,50 +665,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             df = df.dropna(how='all')
 
             if df.empty:
-                # If we have no history, we can't calculate indicators.
-                # In Strict Tasty Mode, we MIGHT proceed if we just wanted price, but screener logic requires RSI/SMA.
                 return None
-
-            # B. TASTYTRADE LIVE PRICE OVERRIDE
-            iv_rank_val = "N/A*"
-
-            if tasty_session and Quote:
-                tasty_success = False
-                try:
-                    # Fetch LIVE Quote from DXFeed
-                    quotes = Quote.get_quotes(tasty_session, [symbol])
-                    if quotes and len(quotes) > 0:
-                        q = quotes[0]
-                        live_price = None
-                        if q.bidPrice and q.askPrice:
-                            live_price = (q.bidPrice + q.askPrice) / 2
-                        else:
-                            live_price = float(q.bidPrice or q.askPrice or 0.0)
-
-                        if live_price and live_price > 0:
-                            # Overwrite the last close price in the dataframe
-                            # This ensures signals (RSI/Price) use REAL market data
-                            if not df.empty:
-                                df.iloc[-1, df.columns.get_loc('Close')] = live_price
-                                # Update High/Low if current price breaks bounds
-                                if live_price > df.iloc[-1]['High']:
-                                    df.iloc[-1, df.columns.get_loc('High')] = live_price
-                                if live_price < df.iloc[-1]['Low']:
-                                    df.iloc[-1, df.columns.get_loc('Low')] = live_price
-                                tasty_success = True
-                except Exception as e:
-                    # print(f"⚠️ Tasty Quote Error for {symbol}: {e}")
-                    pass
-
-                # STRICT MODE ENFORCEMENT:
-                if not tasty_success:
-                    return None # Skip this row completely
-
-                # Get IV Rank if available
-                if symbol in tasty_metrics_map:
-                    metric = tasty_metrics_map[symbol]
-                    if metric.implied_volatility_index_rank:
-                        iv_rank_val = float(metric.implied_volatility_index_rank) * 100 # Tasty gives 0.x, we usually show 0-100
 
             # Flatten multi-index columns if present (yfinance update)
             if isinstance(df.columns, pd.MultiIndex):
@@ -686,10 +717,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                             pct_change_1w = ((curr_close - week_close) / week_close) * 100
                     elif yf_interval == "1wk":
                          # For weekly, pct_change_1d is essentially 1W change
-                         # pct_change_1w (meaning a longer lookback) could be 1 month?
-                         # Let's keep logic simple: 1W change for weekly IS the 1D change
-                         # But to fill the UI column "1W %", we might copy it?
-                         # Let's leave pct_change_1w as None or try 4 weeks back?
                          if len(df) >= 5:
                              month_close = float(df['Close'].iloc[-5])
                              curr_close = float(df['Close'].iloc[-1])
@@ -781,7 +808,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "trend": trend,
                 "signal": signal,
                 "is_green": is_green,
-                "iv_rank": iv_rank_val,
+                "iv_rank": "N/A*", # YF doesn't provide easy IV Rank
                 "atr": current_atr,
                 "pe_ratio": pe_ratio
             }
@@ -842,7 +869,8 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
     """
     Screens specific sectorial indices.
     """
-    sectors = list(SECTOR_NAMES.keys())
+    # Exclude "WATCH" (Custom List) from Sector Indices
+    sectors = [s for s in SECTOR_NAMES.keys() if s != "WATCH"]
     # Note: Sector screening doesn't currently support tasty_creds override
     results, _ = _screen_tickers(sectors, iv_rank_threshold, rsi_threshold, time_frame)
 
