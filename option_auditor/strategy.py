@@ -204,15 +204,17 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
                 continue
 
             if put_group.symbol == stock_group.symbol:
+                # Ensure timestamps exist
                 if put_group.exit_ts and stock_group.entry_ts:
                     time_diff_hours = (stock_group.entry_ts - put_group.exit_ts).total_seconds() / 3600
-                    if 0 <= time_diff_hours < 48:  # 2-day window for assignment
+                    # Relaxed window: -1 to 48h to handle slight clock skew or same-tick events
+                    if -1 <= time_diff_hours < 48:  # 2-day window for assignment
                         # Assuming 1 contract = 100 shares.
                         put_qty = sum(l.qty for l in put_group.legs if l.qty < 0)
                         stock_qty = sum(l.qty for l in stock_group.legs if l.qty > 0)
 
-                        # Use approx equality for float safety
-                        if abs(abs(put_qty * 100) - stock_qty) < 0.01:
+                        # Use approx equality for float safety with larger epsilon
+                        if abs(abs(put_qty * 100) - stock_qty) < 0.1:
                             strat = StrategyGroup(
                                 id=f"STRAT-WHEEL-{len(wheel_strategies)}",
                                 symbol=put_group.symbol,
