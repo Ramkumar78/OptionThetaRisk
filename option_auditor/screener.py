@@ -471,9 +471,25 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
     # Establish Tastytrade session if credentials provided
     tasty_session = None
-    if tasty_creds and tasty_creds.get('username') and tasty_creds.get('password') and Session:
+    if tasty_creds and Session:
         try:
-            tasty_session = Session(tasty_creds['username'], tasty_creds['password'])
+            # Check for API Key / Token Auth (Production / v11+)
+            if tasty_creds.get('refresh_token') and tasty_creds.get('client_secret'):
+                tasty_session = Session(
+                    provider_secret=tasty_creds['client_secret'],
+                    refresh_token=tasty_creds['refresh_token']
+                )
+            # Legacy / Sandbox Auth (Username/Password)
+            # Note: v11 SDK Session signature does NOT support username/password directly.
+            # If using v11+, this branch might fail unless user is on older SDK or using a different class.
+            # Keeping for backward compatibility if signature matches, but prioritizing Token.
+            elif tasty_creds.get('username') and tasty_creds.get('password'):
+                # Try-catch for SDK version mismatch
+                try:
+                    tasty_session = Session(tasty_creds['username'], tasty_creds['password'])
+                except TypeError:
+                    print("⚠️ Tastytrade SDK v11+ requires Refresh Token + Client Secret. Username/Password not supported directly.")
+                    tasty_session = None
         except Exception as e:
             print(f"⚠️ Tasty Login Failed: {e}")
             tasty_session = None

@@ -19,8 +19,13 @@ The application supports a **Hybrid Data Fetching Mode** that integrates with th
 2.  Select the **Market Screener** (US Options Only) sub-tab.
 3.  Toggle the **"Tasty Data"** switch to ON.
 4.  Click the **Settings (Gear)** icon next to the toggle.
-5.  Enter your Tastytrade credentials (Username/Password) in the modal and click Save.
-6.  Run the screener. The application will use your session to fetch live execution prices for the "Close" column, ensuring you see the most accurate spread prices.
+5.  Select **"API Key (New)"** for Production (Open API) usage.
+6.  Enter your **Refresh Token** (JWT) and **Client Secret**.
+    *   *Note: If you are using Sandbox, select "Legacy" and use Username/Password.*
+7.  Run the screener. The application will use your session to fetch live execution prices for the "Close" column via DXFeed.
+
+**Generating a Refresh Token:**
+To use the Tastytrade Open API, you must generate a Refresh Token using the [OAuth Flow](https://developer.tastytrade.com/api-guides/oauth/). This app requires you to bring your own token if using the "API Key" method.
 
 *Note: This feature is only active for the Market Screener tab. All other screeners (Turtle, EMA, etc.) and regions (UK/Euro, India) continue to utilize Yahoo Finance data exclusively.*
 
