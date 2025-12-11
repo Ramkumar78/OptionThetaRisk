@@ -190,7 +190,8 @@ def build_strategies(legs_df: pd.DataFrame) -> List[StrategyGroup]:
 
     # Find closed short puts and open long stocks
     short_puts = [g for g in all_groups if g.right == "P" and g.is_closed and any(l.qty < 0 for l in g.legs)]
-    long_stocks = [g for g in all_groups if g.right is None and not g.is_closed and any(l.qty > 0 for l in g.legs)]
+    # Check for None or NaN using pd.isna() to handle different pandas/numpy versions
+    long_stocks = [g for g in all_groups if pd.isna(g.right) and not g.is_closed and any(l.qty > 0 for l in g.legs)]
 
     short_puts.sort(key=lambda g: g.exit_ts)
     long_stocks.sort(key=lambda g: g.entry_ts)
