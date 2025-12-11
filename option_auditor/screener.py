@@ -2,6 +2,12 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+try:
+    from tastytrade import Session
+    from tastytrade.dxfeed import Quote
+except ImportError:
+    Session = None
+    Quote = None
 
 SECTOR_NAMES = {
     "XLC": "Communication Services",
@@ -453,7 +459,8 @@ TICKER_NAMES = {
     "AMGN": "Amgen Inc.",
 }
 
-def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str) -> list:
+def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str,
+                   tasty_creds: dict = None) -> list:
     """
     Internal helper to screen a list of tickers.
     """
@@ -461,6 +468,15 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
         import pandas_ta as ta
     except ImportError as e:
         raise ImportError("The 'pandas_ta' library is required for the screener. Please install it with 'pip install pandas_ta'.") from e
+
+    # Establish Tastytrade session if credentials provided
+    tasty_session = None
+    if tasty_creds and tasty_creds.get('username') and tasty_creds.get('password') and Session:
+        try:
+            tasty_session = Session(tasty_creds['username'], tasty_creds['password'])
+        except Exception as e:
+            print(f"⚠️ Tasty Login Failed: {e}")
+            tasty_session = None
 
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
@@ -499,7 +515,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
     # If daily, try batch download first (avoid for new multi-year/weekly intervals to be safe, or just allow it)
     # yfinance batch download is usually fine for daily/weekly.
-    if not is_intraday and tickers:
+    if not is_intraday and tickers and not tasty_session:
         try:
             # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
             # auto_adjust=True to suppress warning
@@ -526,6 +542,33 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
             if df.empty:
                 return None
+
+            # --- TASTYTRADE DATA OVERRIDE ---
+            if tasty_session and Quote:
+                try:
+                    # Using get_quotes to fetch a list of Quote objects
+                    quotes = Quote.get_quotes(tasty_session, [symbol])
+                    if quotes and len(quotes) > 0:
+                        live_price = quotes[0].bidPrice  # Use bid or ask or mid? Using bid for conservatism or ask?
+                        # Usually for "Current Price" last trade price is better if available, but dxfeed Quote object structure:
+                        # bidPrice, askPrice, bidSize, askSize.
+                        # Check if tradePrice exists or similar.
+                        # The user snippet used generic approach.
+                        # Assuming bidPrice/askPrice is reliable. Let's use (bid+ask)/2 or bid.
+                        # Actually, Quote usually has `bidPrice`, `askPrice`.
+                        # Trade events have `price`.
+                        # Let's use simple mid or bid.
+                        if quotes[0].bidPrice and quotes[0].askPrice:
+                            live_price = (quotes[0].bidPrice + quotes[0].askPrice) / 2
+                        else:
+                            live_price = quotes[0].bidPrice or quotes[0].askPrice
+
+                        if live_price:
+                            # Update the last close price in the dataframe
+                            if not df.empty:
+                                df.iloc[-1, df.columns.get_loc('Close')] = live_price
+                except Exception:
+                    pass
 
             # Flatten multi-index columns if present (yfinance update)
             if isinstance(df.columns, pd.MultiIndex):
@@ -695,7 +738,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
     return results
 
-def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> dict:
+def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d", tasty_creds: dict = None) -> dict:
     """
     Screens the market for stocks grouped by sector.
     Returns:
@@ -705,7 +748,7 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
     for t_list in SECTOR_COMPONENTS.values():
         all_tickers.extend(t_list)
 
-    flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame)
+    flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame, tasty_creds=tasty_creds)
 
     # Index results by ticker for easy lookup
     result_map = {r['ticker']: r for r in flat_results}

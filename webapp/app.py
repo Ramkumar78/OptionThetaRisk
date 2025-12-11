@@ -207,33 +207,49 @@ def create_app(testing: bool = False) -> Flask:
     # API Routes for Screener
     @app.route("/screen", methods=["POST"])
     def screen():
+        # Handle JSON input if present (preferred for nested creds), else Form
+        json_data = request.get_json(silent=True) or {}
+
         iv_rank = 30.0
         try:
-            iv_rank = float(request.form.get("iv_rank", 30))
+            val = json_data.get("iv_rank") or request.form.get("iv_rank")
+            if val: iv_rank = float(val)
         except ValueError:
             pass
 
         rsi_threshold = 50.0
         try:
-            rsi_threshold = float(request.form.get("rsi_threshold", 50))
+            val = json_data.get("rsi_threshold") or request.form.get("rsi_threshold")
+            if val: rsi_threshold = float(val)
         except ValueError:
             pass
 
-        time_frame = request.form.get("time_frame", "1d")
-        cache_key = ("market", iv_rank, rsi_threshold, time_frame)
-        cached = get_cached_screener_result(cache_key)
-        if cached:
-            return jsonify(cached)
+        time_frame = json_data.get("time_frame") or request.form.get("time_frame") or "1d"
+        tasty_creds = json_data.get("tasty_creds") # Expecting dict
+
+        # Cache key includes credentials status to avoid serving public data to auth user and vice versa
+        has_creds = 1 if tasty_creds else 0
+        cache_key = ("market", iv_rank, rsi_threshold, time_frame, has_creds)
+
+        # Only cache if NO creds (personal data shouldn't be shared cache, though for now we assume single user/guest)
+        # Actually, if creds are invalid, we fall back to YF.
+        # Let's skip cache read if creds are provided to ensure fresh live data.
+        if not has_creds:
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
 
         try:
-            results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
+            results = screener.screen_market(iv_rank, rsi_threshold, time_frame, tasty_creds=tasty_creds)
             sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
             data = {
                 "results": results,
                 "sector_results": sector_results,
                 "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame}
             }
-            cache_screener_result(cache_key, data)
+            # Only cache if no creds
+            if not has_creds:
+                cache_screener_result(cache_key, data)
             return jsonify(data)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
