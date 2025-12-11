@@ -506,8 +506,11 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             tasty_session = None
             tasty_status = f"failed:{str(e)}"
 
-    # If handshake failed, we treat it as if toggle was off (tasty_session is None)
-    # The status will be returned so frontend can react.
+    # STRICT MODE: If Handshake Fails but was attempted (credentials provided), STOP immediately.
+    # Do not fall back to Yahoo Finance silently.
+    if tasty_creds and Session and tasty_status.startswith("failed"):
+        print(f"❌ Handshake failed: {tasty_status}. Aborting strict mode.")
+        return [], tasty_status
 
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
@@ -558,7 +561,12 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
         try:
             df = pd.DataFrame()
 
-            # Fetch Data
+            # STRICT MODE: If Tasty Session Active, we MUST get live price from it.
+            # However, we still rely on YFinance for historical candles (RSI/SMA).
+            # If we fail to get Tasty data, we should NOT return a result (skip row),
+            # unless we implement a pure-Tasty history fetch (complex/slow).
+
+            # 1. Fetch History from YF (Required for Indicators)
             # If batch data exists and has this symbol, use it
             if batch_data is not None and symbol in batch_data.columns.levels[0]:
                 df = batch_data[symbol].copy()
@@ -576,30 +584,30 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
             # --- TASTYTRADE DATA OVERRIDE ---
             if tasty_session and Quote:
+                tasty_success = False
                 try:
                     # Using get_quotes to fetch a list of Quote objects
                     quotes = Quote.get_quotes(tasty_session, [symbol])
                     if quotes and len(quotes) > 0:
-                        live_price = quotes[0].bidPrice  # Use bid or ask or mid? Using bid for conservatism or ask?
-                        # Usually for "Current Price" last trade price is better if available, but dxfeed Quote object structure:
-                        # bidPrice, askPrice, bidSize, askSize.
-                        # Check if tradePrice exists or similar.
-                        # The user snippet used generic approach.
-                        # Assuming bidPrice/askPrice is reliable. Let's use (bid+ask)/2 or bid.
-                        # Actually, Quote usually has `bidPrice`, `askPrice`.
-                        # Trade events have `price`.
-                        # Let's use simple mid or bid.
+                        live_price = quotes[0].bidPrice
                         if quotes[0].bidPrice and quotes[0].askPrice:
                             live_price = (quotes[0].bidPrice + quotes[0].askPrice) / 2
                         else:
                             live_price = quotes[0].bidPrice or quotes[0].askPrice
 
-                        if live_price:
+                        if live_price and live_price > 0:
                             # Update the last close price in the dataframe
                             if not df.empty:
                                 df.iloc[-1, df.columns.get_loc('Close')] = live_price
-                except Exception:
-                    pass
+                                tasty_success = True
+                except Exception as e:
+                    print(f"⚠️ Tasty Quote Error for {symbol}: {e}")
+
+                # STRICT MODE ENFORCEMENT:
+                # "if dont display data extracted from tastytrade pls dont connect to yfinance"
+                # Interpreted as: If I asked for Tasty and didn't get it, don't show me the YF price as a fallback.
+                if not tasty_success:
+                    return None # Skip this row completely
 
             # Flatten multi-index columns if present (yfinance update)
             if isinstance(df.columns, pd.MultiIndex):

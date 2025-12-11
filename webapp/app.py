@@ -240,7 +240,10 @@ def create_app(testing: bool = False) -> Flask:
                 return jsonify(cached)
 
         try:
+            print(f"DEBUG: Calling screen_market with tasty_creds={bool(tasty_creds)}", flush=True)
             results, tasty_status = screener.screen_market(iv_rank, rsi_threshold, time_frame, tasty_creds=tasty_creds)
+            print(f"DEBUG: screen_market returned status={tasty_status}, results_count={len(results) if isinstance(results, list) else len(results.get('results', [])) if isinstance(results, dict) else 'unknown'}", flush=True)
+
             sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
             data = {
                 "results": results,
