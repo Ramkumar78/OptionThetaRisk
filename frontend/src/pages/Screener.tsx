@@ -41,6 +41,13 @@ const Screener: React.FC<ScreenerProps> = () => {
         // Pass credentials if enabled (assumes API updated to accept optional creds object)
         const creds = useTasty ? tastyCreds : undefined;
         data = await runMarketScreener(ivRank, rsiThreshold, marketTimeFrame, creds);
+
+        // Handle Tastytrade Handshake Failure
+        if (useTasty && data.tasty_status && data.tasty_status.startsWith('failed')) {
+            setUseTasty(false);
+            const failureReason = data.tasty_status.split(':')[1] || 'Unknown Error';
+            setError(`Tastytrade Login Failed: ${failureReason}. Switching back to Yahoo Finance.`);
+        }
       } else if (activeTab === 'turtle') {
         data = await runTurtleScreener(region, strategyTimeFrame);
       } else if (activeTab === 'ema') {

@@ -240,12 +240,13 @@ def create_app(testing: bool = False) -> Flask:
                 return jsonify(cached)
 
         try:
-            results = screener.screen_market(iv_rank, rsi_threshold, time_frame, tasty_creds=tasty_creds)
+            results, tasty_status = screener.screen_market(iv_rank, rsi_threshold, time_frame, tasty_creds=tasty_creds)
             sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
             data = {
                 "results": results,
                 "sector_results": sector_results,
-                "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame}
+                "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame},
+                "tasty_status": tasty_status
             }
             # Only cache if no creds
             if not has_creds:

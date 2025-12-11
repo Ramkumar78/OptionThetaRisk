@@ -98,7 +98,7 @@ def test_health_route(client):
 
 def test_screen_route_params(client):
     with patch('option_auditor.screener.screen_market') as mock_screen:
-        mock_screen.return_value = {}
+        mock_screen.return_value = ({}, "skipped")
         with patch('option_auditor.screener.screen_sectors') as mock_sectors:
              mock_sectors.return_value = []
 

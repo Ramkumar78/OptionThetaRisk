@@ -460,9 +460,10 @@ TICKER_NAMES = {
 }
 
 def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str,
-                   tasty_creds: dict = None) -> list:
+                   tasty_creds: dict = None) -> tuple[list, str]:
     """
     Internal helper to screen a list of tickers.
+    Returns tuple: (results, tastytrade_status)
     """
     try:
         import pandas_ta as ta
@@ -471,7 +472,10 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
     # Establish Tastytrade session if credentials provided
     tasty_session = None
+    tasty_status = "skipped" # default
+
     if tasty_creds and Session:
+        print("Attempting Tastytrade Handshake...")
         try:
             # Check for API Key / Token Auth (Production / v11+)
             if tasty_creds.get('refresh_token') and tasty_creds.get('client_secret'):
@@ -479,20 +483,31 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                     provider_secret=tasty_creds['client_secret'],
                     refresh_token=tasty_creds['refresh_token']
                 )
+                print("✅ Tastytrade Handshake Success (Token)")
+                tasty_status = "success"
             # Legacy / Sandbox Auth (Username/Password)
-            # Note: v11 SDK Session signature does NOT support username/password directly.
-            # If using v11+, this branch might fail unless user is on older SDK or using a different class.
-            # Keeping for backward compatibility if signature matches, but prioritizing Token.
             elif tasty_creds.get('username') and tasty_creds.get('password'):
-                # Try-catch for SDK version mismatch
                 try:
                     tasty_session = Session(tasty_creds['username'], tasty_creds['password'])
+                    print("✅ Tastytrade Handshake Success (Legacy)")
+                    tasty_status = "success"
                 except TypeError:
-                    print("⚠️ Tastytrade SDK v11+ requires Refresh Token + Client Secret. Username/Password not supported directly.")
+                    reason = "SDK v11+ requires Refresh Token + Client Secret. Username/Password not supported directly."
+                    print(f"❌ Tastytrade Handshake Failure: {reason}")
                     tasty_session = None
+                    tasty_status = "failed:sdk_version"
+            else:
+                # No valid credentials provided in the dict
+                print("❌ Tastytrade Handshake Failure: No valid credentials found")
+                tasty_status = "failed:missing_creds"
+
         except Exception as e:
-            print(f"⚠️ Tasty Login Failed: {e}")
+            print(f"❌ Tastytrade Handshake Failure: {e}")
             tasty_session = None
+            tasty_status = f"failed:{str(e)}"
+
+    # If handshake failed, we treat it as if toggle was off (tasty_session is None)
+    # The status will be returned so frontend can react.
 
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
@@ -752,19 +767,19 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             except Exception:
                 pass
 
-    return results
+    return results, tasty_status
 
-def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d", tasty_creds: dict = None) -> dict:
+def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d", tasty_creds: dict = None) -> tuple[dict, str]:
     """
     Screens the market for stocks grouped by sector.
     Returns:
-        Dict[str, List[dict]]: Keys are 'Sector Name (Ticker)', Values are lists of ticker results.
+        tuple[Dict[str, List[dict]], str]: (Grouped Results, Tastytrade Status)
     """
     all_tickers = []
     for t_list in SECTOR_COMPONENTS.values():
         all_tickers.extend(t_list)
 
-    flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame, tasty_creds=tasty_creds)
+    flat_results, tasty_status = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame, tasty_creds=tasty_creds)
 
     # Index results by ticker for easy lookup
     result_map = {r['ticker']: r for r in flat_results}
@@ -786,14 +801,15 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
         if sector_rows:
             grouped_results[display_name] = sector_rows
 
-    return grouped_results
+    return grouped_results, tasty_status
 
 def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
     """
     Screens specific sectorial indices.
     """
     sectors = list(SECTOR_NAMES.keys())
-    results = _screen_tickers(sectors, iv_rank_threshold, rsi_threshold, time_frame)
+    # Note: Sector screening doesn't currently support tasty_creds override
+    results, _ = _screen_tickers(sectors, iv_rank_threshold, rsi_threshold, time_frame)
 
     # Enrich with full name
     for r in results:
