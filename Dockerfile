@@ -18,7 +18,9 @@ COPY requirements.txt .
 # Install any needed packages specified in requirements.txt
 # We also install gunicorn for a production-ready WSGI server
 # Use --pre to allow installation of pre-release versions (required for pandas_ta)
-RUN pip install --no-cache-dir --pre -r requirements.txt gunicorn
+# Explicitly uninstall httpx first to resolve potential conflicts in base image or cache
+RUN pip uninstall -y httpx || true && \
+    pip install --no-cache-dir --pre -r requirements.txt gunicorn
 
 # Copy the backend code
 COPY . .

@@ -6,7 +6,7 @@ try:
     # Diagnostic check for httpx (dependency of tastytrade)
     import httpx
     import sys
-    # print(f"DEBUG: httpx version: {getattr(httpx, '__version__', 'unknown')} at {getattr(httpx, '__file__', 'unknown')}", file=sys.stderr)
+    print(f"DEBUG: httpx version: {getattr(httpx, '__version__', 'unknown')} at {getattr(httpx, '__file__', 'unknown')}", file=sys.stderr)
     if not hasattr(httpx, 'AsyncClient'):
         print(f"DEBUG: httpx is missing 'AsyncClient'. Dir: {dir(httpx)}", file=sys.stderr)
 except ImportError:
