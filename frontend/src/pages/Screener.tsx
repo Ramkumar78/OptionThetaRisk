@@ -22,9 +22,6 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [region, setRegion] = useState('us');
   const [strategyTimeFrame, setStrategyTimeFrame] = useState('1d');
 
-  // ISA Specific State
-  const [isaAccountSize, setIsaAccountSize] = useState<number>(10000);
-
   const handleRunScreener = async () => {
     setLoading(true);
     setError(null);
@@ -155,27 +152,9 @@ const Screener: React.FC<ScreenerProps> = () => {
           )}
 
           {activeTab === 'isa' && (
-             <>
-                <div>
-                   <label htmlFor="isa-account-size" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account Cash</label>
-                   <div className="relative rounded-md shadow-sm">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <span className="text-gray-500 sm:text-sm">£</span>
-                        </div>
-                        <input
-                           type="number"
-                           id="isa-account-size"
-                           value={isaAccountSize}
-                           onChange={(e) => setIsaAccountSize(Number(e.target.value))}
-                           className="block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-primary-500 focus:ring-primary-500 sm:text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white py-2.5"
-                           placeholder="10000"
-                        />
-                   </div>
-                </div>
-                 <div className="col-span-2 flex items-center text-sm text-gray-500 italic mt-6">
-                      Strategy: Long Only Trend Following. Risk: 1% per trade. Position: 4% of Account.
-                  </div>
-             </>
+             <div className="col-span-3 flex items-center text-sm text-gray-500 italic mt-2">
+                  Strategy: Long Only Trend Following. Risk: 1% per trade. Position: 4% of Account.
+              </div>
           )}
 
           {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms') && (
@@ -303,7 +282,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                          activeTab === 'isa' ? 'Trend Follower (ISA)' :
                          '5/13 EMA Setups'}
                     </h3>
-                    <ScreenerTable data={results} type={activeTab} isaAccountSize={isaAccountSize} />
+                    <ScreenerTable data={results} type={activeTab} />
                 </div>
             )}
         </div>
@@ -317,7 +296,7 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; isaAccountSize?: number }> = ({ data, type, isaAccountSize }) => {
+const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, type }) => {
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
     const sortedData = useMemo(() => {
@@ -472,7 +451,6 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; isaAccountSize?
                                         <HeaderCell label="Exit (20L)" sortKey="breakout" align="right" />
                                         <HeaderCell label="Vol %" sortKey="volatility" align="right" />
                                         <HeaderCell label="Risk/Share" sortKey="risk_share" align="right" />
-                                        <HeaderCell label="Max Shares" sortKey="" align="right" />
                                     </>
                                 )}
                                 {type !== 'isa' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
@@ -593,29 +571,6 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; isaAccountSize?
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
                                                     {formatCurrency(row.risk_per_share, currency)}
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-mono text-xs text-primary-600 font-bold bg-primary-50 dark:bg-primary-900/20">
-                                                    {isaAccountSize && row.risk_per_share > 0 ? (
-                                                        // 4% Position Sizing Rule
-                                                        // Max Position = Account * 0.04
-                                                        // Shares = Max Position / Price
-                                                        // Tharp Rule: Total Risk <= 1% Account
-                                                        // Total Risk = Shares * RiskPerShare
-                                                        // So Shares <= (Account * 0.01) / RiskPerShare
-                                                        // We take min of both?
-                                                        // Seykota: "Invest 4% of total account cash".
-                                                        // Tharp Adjustment: "If 3xATR stop > 1% risk to total equity, skip".
-                                                        // This implies Position Size is determined by 4% rule, but filtered by Risk rule.
-                                                        // If (PositionSize * RiskPerShare) > (Account * 0.01) -> Too Risky? No, RiskPerShare is per share.
-                                                        // If I buy N shares. Total Risk = N * RiskPerShare.
-                                                        // Constraint 1: N * Price <= Account * 0.04
-                                                        // Constraint 2: N * RiskPerShare <= Account * 0.01
-                                                        // So N = min( (Account*0.04)/Price, (Account*0.01)/RiskPerShare )
-                                                        Math.floor(Math.min(
-                                                            (isaAccountSize * 0.04) / price,
-                                                            (isaAccountSize * 0.01) / row.risk_per_share
-                                                        ))
-                                                    ) : '-'}
                                                 </td>
                                             </>
                                         ) : (
