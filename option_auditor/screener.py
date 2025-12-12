@@ -2110,13 +2110,16 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
             ticker_list = get_indian_tickers()
         elif region == "sp500":
              # S&P 500 filtered
+             # For S&P 500, we specifically return filtered S&P 500 stocks.
+             # We might add Watch list as well if requested, but separation implies purity.
              sp500 = _get_filtered_sp500(check_trend=True)
-             watch = SECTOR_COMPONENTS.get("WATCH", [])
-             ticker_list = list(set(sp500 + watch))
+             ticker_list = sp500
         else: # us / combined default
-            sp500 = _get_filtered_sp500(check_trend=True)
-            watch = SECTOR_COMPONENTS.get("WATCH", [])
-            ticker_list = list(set(sp500 + watch))
+            # "US Market" = High Liquid Sector Components + Watch List
+            all_tickers = []
+            for t_list in SECTOR_COMPONENTS.values():
+                all_tickers.extend(t_list)
+            ticker_list = list(set(all_tickers))
 
     results = []
 
@@ -2175,8 +2178,12 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
             # Breakout Levels: 50-Day High (Entry) & 20-Day Low (Exit)
             # Shift(1) because we want the high of the *previous* window to compare against today
-            high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
-            low_20 = df['Low'].rolling(20).min().shift(1).iloc[-1]
+            # We calculate rolling series for Breakout Date logic later
+            df['High_50'] = df['High'].rolling(50).max().shift(1)
+            df['Low_20'] = df['Low'].rolling(20).min().shift(1)
+
+            high_50 = df['High_50'].iloc[-1]
+            low_20 = df['Low_20'].iloc[-1]
 
             # Volatility: ATR 20
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
@@ -2230,6 +2237,40 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 prev = float(df['Close'].iloc[-2])
                 pct_change_1d = ((curr_close - prev) / prev) * 100
 
+            # --- Breakout Date Logic ---
+            breakout_date = "N/A"
+            # Only relevant if we are in a valid Trend or Breaking out.
+            if "ENTER" in signal or "WATCH" in signal or "HOLD" in signal:
+                 # Search backwards to find the start of this trend.
+                 # Trend starts when Price crossed > High50.
+                 # Trend ends if Price crossed < Low20 (Stop).
+                 # So we find the earliest 'Entry' signal in the current contiguous 'Safe' block.
+
+                 dates = df.index
+                 closes = df['Close'].values
+                 highs50 = df['High_50'].values
+                 lows20 = df['Low_20'].values
+
+                 found_date = None
+                 # Limit lookback (e.g. 400 days ~ 1.5 years max trend duration check for perf)
+                 limit = min(len(df), 400)
+
+                 for i in range(len(df)-1, len(df)-limit, -1):
+                     if pd.isna(lows20[i]) or pd.isna(highs50[i]): continue
+
+                     if closes[i] <= lows20[i]:
+                         # Stop hit here. The current trend (if any) started AFTER this.
+                         break
+
+                     if closes[i] >= highs50[i]:
+                         # This day was a breakout entry.
+                         # We record it, but keep looking back to see if there was an earlier one in this same run.
+                         found_date = dates[i]
+
+                 if found_date:
+                     breakout_date = found_date.strftime("%Y-%m-%d")
+
+
             # Filter results?
             # We return ENTER, WATCH, HOLD, and EXIT signals.
             # We skip AVOID (Downtrend) to reduce noise, unless explicitly requested?
@@ -2257,7 +2298,8 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "trailing_exit_20d": round(low_20, 2),
                 "volatility_pct": round(volatility_pct, 2),
                 "atr_20": round(atr_20, 2),
-                "risk_per_share": round(risk_per_share, 2)
+                "risk_per_share": round(risk_per_share, 2),
+                "breakout_date": breakout_date
             })
 
         except Exception:

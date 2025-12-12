@@ -289,7 +289,7 @@ const Screener: React.FC<ScreenerProps> = () => {
              </div>
           )}
 
-          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms') && (
+          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa') && (
              <>
               <div>
                 <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -597,9 +597,10 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 )}
                                 {type === 'isa' && (
                                     <>
-                                        <HeaderCell label="Breakout" sortKey="breakout" align="right" />
+                                        <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />
+                                        <HeaderCell label="Breakout Level" sortKey="breakout" align="right" />
                                         <HeaderCell label="Stop (3ATR)" sortKey="stop_loss" align="right" />
-                                        <HeaderCell label="Exit (20L)" sortKey="breakout" align="right" />
+                                        <HeaderCell label="Exit (20L)" sortKey="trailing_exit" align="right" />
                                         <HeaderCell label="Vol %" sortKey="volatility" align="right" />
                                         <HeaderCell label="Risk/Share" sortKey="risk_share" align="right" />
                                     </>
@@ -708,6 +709,9 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         )}
                                         {type === 'isa' ? (
                                             <>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {row.breakout_date || "N/A"}
+                                                </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
                                                     {formatCurrency(row.breakout_level, currency)}
                                                 </td>
