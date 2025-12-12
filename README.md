@@ -11,6 +11,102 @@ groups options trades into round-trips (entry → exit), computes key metrics, a
 - **Risk Management & Compliance Module:** Employs a sophisticated "Over-leveraged" heuristic, benchmarked against a configurable account size, to flag high-risk trading behavior.
 - **Multi-Format Reporting Suite:** Generates a variety of outputs, including an executive summary for the console, a detailed CSV for further analysis, and a presentation-ready Markdown report.
 
+## Strategy Reference Guide
+
+This application includes a suite of quantitative screeners designed to identify trading setups across different timeframes and styles.
+
+### 1. Market Screener (The "Traffic Light")
+*Best for: General Market Overview, Swing Trading*
+
+- **Description:** A sector-based scanner that categorizes stocks by trend and momentum. It acts as a "Traffic Light" system for your watchlist.
+- **Time Frames:** Daily (1D), Intraday (49m/98m), Weekly (1W).
+- **Entry Strategy:**
+  - **Trend:** Bullish if Price > SMA 50.
+  - **Signal:** "🟢 GREEN LIGHT" (Buy Dip) triggers when a Bullish stock pulls back to an RSI between 30 and 50 (or user defined).
+- **Exit Strategy:** Sell when RSI becomes Overbought (>70) or Price closes below SMA 50 (Trend Reversal).
+
+### 2. Turtle Trading
+*Best for: Trend Following, Catching big moves*
+
+- **Description:** Based on the classic Richard Dennis "Turtle" rules.
+- **Time Frames:** Daily (1D).
+- **Entry Strategy:** Buy on a **20-Day Breakout** (Price > 20-Day High).
+- **Exit Strategy:**
+  - **Stop Loss:** 2 * ATR below entry price.
+  - **Profit Target:** 4 * ATR above entry (2:1 Risk/Reward).
+  - **Trailing Stop:** Exit if Price falls below the 10-Day Low.
+
+### 3. EMA Momentum (5/13 & 5/21)
+*Best for: Active Swing Trading, Crypto, High Momentum Stocks*
+
+- **Description:** A fast-moving crossover strategy using Exponential Moving Averages (EMA).
+- **Time Frames:** 1H, 4H, Daily.
+- **Entry Strategy:**
+  - **Fresh Breakout:** 5 EMA crosses above 13 EMA or 21 EMA.
+  - **Trend:** 5 EMA > 21 EMA indicates a strong ongoing trend.
+- **Exit Strategy:**
+  - **Stop Loss:** Close below the "Slow" EMA (13 or 21).
+  - **Signal:** "❌ DUMP" when 5 EMA crosses below the Slow EMA.
+
+### 4. Darvas Box
+*Best for: Explosive Growth Stocks*
+
+- **Description:** Identifies stocks consolidating near 52-week highs that break out of a defined "Box" with volume.
+- **Time Frames:** Daily (1D).
+- **Entry Strategy:** Buy when Price breaks above the "Box Ceiling" (a confirmed resistance level) with above-average volume.
+- **Exit Strategy:**
+  - **Stop Loss:** "Box Floor" (Support level) or Ceiling - 2*ATR.
+  - **Target:** Price Projection = Breakout Level + Box Height.
+
+### 5. MMS / OTE (Smart Money Concepts)
+*Best for: Day Trading, Precision Entries*
+
+- **Description:** Implements ICT (Inner Circle Trader) concepts to find "Market Maker Models" and "Optimal Trade Entries" (OTE).
+- **Time Frames:** Intraday (15m, 1H).
+- **Entry Strategy:**
+  - **Bullish:** Price raids a Liquidity Low -> Reverses with Displacement (FVG) -> Retraces to 62-79% Fibonacci Level.
+  - **Bearish:** Price raids a Liquidity High -> Reverses with Displacement -> Retraces to 62-79% Fibonacci Level.
+- **Exit Strategy:** Stop Loss at the recent Swing High/Low. Target the opposing liquidity pool.
+
+### 6. Bull Put Spreads (Income)
+*Best for: Generating Monthly Income (The Wheel / Spreads)*
+
+- **Description:** Scans the Option Chain for high-probability credit spreads.
+- **Time Frames:** N/A (Uses Option Chain).
+- **Entry Strategy:**
+  - **Trend:** Price > SMA 50 (Bullish).
+  - **Setup:** Sell ~30 Delta Put, Buy Put $5 Lower.
+  - **Expiration:** ~45 Days (DTE).
+- **Exit Strategy:** Manage at 50% Profit or 21 DTE.
+
+### 7. ISA Trend Follower
+*Best for: Long-Term Investing (ISA/SIPP/401k)*
+
+- **Description:** A "Set and Forget" style trend follower designed to keep you in major moves and out of bear markets.
+- **Time Frames:** Weekly / Daily.
+- **Entry Strategy:** Price > 200 SMA (Long Term Trend) AND Price breaks 50-Day High.
+- **Exit Strategy:**
+  - **Initial Stop:** 3 * ATR.
+  - **Trailing Stop:** Exit if Price closes below the **20-Day Low**.
+
+---
+
+## How to use the US Option Screeners
+
+The **Market Screener** is the primary tool for US Options traders.
+
+1.  **Select Region:** Choose "US Options" (default) or "S&P 500".
+2.  **Tastytrade Integration (Optional):**
+    -   Toggle "Tasty Data" to **ON**.
+    -   Enter your Tastytrade Refresh Token and Account ID (if prompted).
+    -   *Benefit:* This bypasses Yahoo Finance delay and fetches **Real-Time Price** and **IV Rank** directly from the exchange.
+3.  **Analyze Sectors:**
+    -   Results are grouped by Sector (Technology, Financials, etc.).
+    -   Look for "Green Light" signals in sectors that are performing well.
+4.  **Workflow:**
+    -   Identify a Bullish Stock (Green Light).
+    -   Check IV Rank. If IV Rank > 50, consider selling Premium (Short Puts/Verticals). If IV Rank < 20, consider buying Spreads/Calls.
+
 #### Installation
 Requires Python 3.9+.
 
