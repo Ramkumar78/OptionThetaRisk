@@ -2,6 +2,12 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+try:
+    from option_auditor.sp500_data import SP500_NAMES, get_sp500_tickers
+except ImportError:
+    # Fallback if file not found (e.g. during initial setup)
+    SP500_NAMES = {}
+    def get_sp500_tickers(): return []
 
 SECTOR_NAMES = {
     "XLC": "Communication Services",
@@ -453,6 +459,70 @@ TICKER_NAMES = {
     "AMGN": "Amgen Inc.",
 }
 
+# Update with S&P 500 Names
+TICKER_NAMES.update(SP500_NAMES)
+
+def _get_filtered_sp500(check_trend: bool = True) -> list:
+    """
+    Returns a filtered list of S&P 500 tickers based on Volume (>500k) and optionally Trend (>SMA200).
+    """
+    base_tickers = get_sp500_tickers()
+    if not base_tickers:
+        return []
+
+    # Batch download 6mo data for volume and sma
+    import yfinance as yf
+    import pandas_ta as ta
+
+    # We download '1y' to be safe for SMA 200
+    try:
+        data = yf.download(base_tickers, period="1y", interval="1d", group_by='ticker', threads=True, progress=False, auto_adjust=True)
+    except Exception:
+        # Fallback if batch fails completely
+        return base_tickers[:50]
+
+    filtered_list = []
+
+    for ticker in base_tickers:
+        try:
+            df = pd.DataFrame()
+            # Extract
+            if isinstance(data.columns, pd.MultiIndex):
+                if ticker in data.columns.get_level_values(0):
+                    df = data[ticker].copy()
+            else:
+                # Single ticker case (unlikely given base_tickers size)
+                df = data.copy()
+
+            # Check emptiness
+            df = df.dropna(how='all')
+            if df.empty or len(df) < 20: continue
+
+            # 1. Volume Filter (> 500k avg over last 20 days)
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+            if avg_vol < 500000:
+                continue
+
+            # 2. Trend Filter (> SMA 200)
+            if check_trend:
+                if len(df) < 200: continue
+                sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+                curr_price = df['Close'].iloc[-1]
+                if curr_price < sma_200:
+                    continue
+
+            filtered_list.append(ticker)
+
+        except Exception:
+            pass
+
+    # Always include the "High Interest" names if they are in S&P 500
+    # (Or just append them if missing? The prompt says "Keep your High Interest List: Always scan...")
+    # But this function returns S&P 500 filtered. The caller usually merges lists.
+    # We will return just the filtered subset.
+
+    return filtered_list
+
 def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str) -> list:
     """
     Internal helper to screen a list of tickers.
@@ -695,15 +765,32 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
     return results
 
-def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> dict:
+def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d", region: str = "us") -> dict:
     """
     Screens the market for stocks grouped by sector.
     Returns:
         Dict[str, List[dict]]: Keys are 'Sector Name (Ticker)', Values are lists of ticker results.
     """
     all_tickers = []
-    for t_list in SECTOR_COMPONENTS.values():
-        all_tickers.extend(t_list)
+
+    if region == "sp500":
+        # Apply Pre-Filter (Volume Only for Market Screener, as we might want oversold stocks < SMA200)
+        # But allow "High Interest" list to bypass filters?
+        # The prompt says: "Keep your High Interest List: Always scan... Add a Dynamic S&P 500 Scan... Filter 1 (Volume)..."
+
+        # 1. Get Filtered S&P 500 (Volume Only)
+        sp500_filtered = _get_filtered_sp500(check_trend=False)
+
+        # 2. Get Watch List
+        watch_list = SECTOR_COMPONENTS.get("WATCH", [])
+
+        # Merge unique
+        all_tickers = list(set(sp500_filtered + watch_list))
+
+    else:
+        # Default US Sector Components
+        for t_list in SECTOR_COMPONENTS.values():
+            all_tickers.extend(t_list)
 
     flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame)
 
@@ -712,22 +799,56 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
 
     grouped_results = {}
 
-    for sector_code, sector_name in SECTOR_NAMES.items():
-        if sector_code not in SECTOR_COMPONENTS:
-            continue
+    if region == "sp500":
+        # For S&P 500, we don't have explicit sector mapping in the input list.
+        # We return a single group "S&P 500" or try to map if we had sector data.
+        # Since we don't have sectors in sp500_data.py, we group all under "S&P 500".
+        # However, check if any tickers are already in SECTOR_COMPONENTS to categorize them?
+        # That would be nice but incomplete.
+        # Let's try to categorize what we can, and put rest in "Other".
 
-        display_name = f"{sector_name} ({sector_code})"
-        components = SECTOR_COMPONENTS[sector_code]
+        # Build reverse map for known sectors
+        ticker_to_sector = {}
+        for scode, sname in SECTOR_NAMES.items():
+            if scode in SECTOR_COMPONENTS:
+                for t in SECTOR_COMPONENTS[scode]:
+                    ticker_to_sector[t] = f"{sname} ({scode})"
 
-        sector_rows = []
-        for t in components:
-            if t in result_map:
-                sector_rows.append(result_map[t])
+        sp500_grouped = {}
+        uncategorized = []
 
-        if sector_rows:
-            grouped_results[display_name] = sector_rows
+        for r in flat_results:
+            t = r['ticker']
+            if t in ticker_to_sector:
+                sec = ticker_to_sector[t]
+                if sec not in sp500_grouped: sp500_grouped[sec] = []
+                sp500_grouped[sec].append(r)
+            else:
+                uncategorized.append(r)
 
-    return grouped_results
+        if uncategorized:
+            sp500_grouped["S&P 500 (Uncategorized)"] = uncategorized
+
+        return sp500_grouped
+
+    else:
+        # Default Sector Grouping
+        for sector_code, sector_name in SECTOR_NAMES.items():
+            if sector_code not in SECTOR_COMPONENTS:
+                continue
+
+            display_name = f"{sector_name} ({sector_code})"
+            components = SECTOR_COMPONENTS[sector_code]
+
+            sector_rows = []
+            for t in components:
+                if t in result_map:
+                    sector_rows.append(result_map[t])
+
+            if sector_rows:
+                grouped_results[display_name] = sector_rows
+
+        return grouped_results
 
 def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
     """
@@ -831,6 +952,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
     import pandas_ta as ta
     import pandas as pd
 
+    # If list is None, use default. If empty list passed, use empty.
     if ticker_list is None:
         ticker_list = [
             "SPY", "QQQ", "IWM", "GLD", "SLV", "USO", "TLT", # ETFs

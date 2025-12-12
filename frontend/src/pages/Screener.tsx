@@ -29,7 +29,8 @@ const Screener: React.FC<ScreenerProps> = () => {
     try {
       let data;
       if (activeTab === 'market') {
-        data = await runMarketScreener(ivRank, rsiThreshold, marketTimeFrame);
+        // We now pass 'region' to market screener too
+        data = await runMarketScreener(ivRank, rsiThreshold, marketTimeFrame, region);
       } else if (activeTab === 'turtle') {
         data = await runTurtleScreener(region, strategyTimeFrame);
       } else if (activeTab === 'ema') {
@@ -99,6 +100,18 @@ const Screener: React.FC<ScreenerProps> = () => {
           {activeTab === 'market' && (
             <>
               <div>
+                <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
+                <select
+                  id="region-select"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                >
+                  <option value="us">United States (Sectors)</option>
+                  <option value="sp500">S&P 500</option>
+                </select>
+              </div>
+              <div>
                 <label htmlFor="iv-rank-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min IV Rank</label>
                 <input
                   type="number"
@@ -148,6 +161,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   <option value="us">United States</option>
                   <option value="uk_euro">UK / Europe</option>
                   <option value="india">India</option>
+                  <option value="sp500">S&P 500</option>
                 </select>
               </div>
               <div>
@@ -186,7 +200,8 @@ const Screener: React.FC<ScreenerProps> = () => {
                       onChange={(e) => setRegion(e.target.value)}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                     >
-                      <option value="us">United States (Only)</option>
+                      <option value="us">United States (High Liquid)</option>
+                      <option value="sp500">S&P 500 (Filtered &gt; SMA200)</option>
                     </select>
                   </div>
                   <div className="flex items-center text-sm text-gray-500 italic mt-6">
