@@ -64,7 +64,7 @@ def test_dashboard_endpoint_with_portfolio(mock_refresh, mock_get_storage, clien
 @patch('webapp.app.screener.screen_market')
 @patch('webapp.app.screener.screen_sectors')
 def test_screen_market_endpoint(mock_sectors, mock_market, client):
-    mock_market.return_value = {"Tech": []}
+    mock_market.return_value = ({"Tech": []}, "success")
     mock_sectors.return_value = []
 
     response = client.post('/screen', data={'iv_rank': '20', 'rsi_threshold': '60'})
@@ -72,4 +72,4 @@ def test_screen_market_endpoint(mock_sectors, mock_market, client):
     data = response.get_json()
     assert 'results' in data
     assert 'sector_results' in data
-    mock_market.assert_called_with(20.0, 60.0, '1d')
+    mock_market.assert_called_with(20.0, 60.0, '1d', tasty_creds=None)

@@ -2,6 +2,26 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+try:
+    # Diagnostic check for httpx (dependency of tastytrade)
+    import httpx
+    import sys
+    print(f"DEBUG: httpx version: {getattr(httpx, '__version__', 'unknown')} at {getattr(httpx, '__file__', 'unknown')}", file=sys.stderr)
+    if not hasattr(httpx, 'AsyncClient'):
+        print(f"DEBUG: httpx is missing 'AsyncClient'. Dir: {dir(httpx)}", file=sys.stderr)
+except ImportError:
+    pass
+
+try:
+    from tastytrade import Session
+    from tastytrade.dxfeed import Quote
+    from tastytrade.metrics import get_market_metrics
+except ImportError as e:
+    import sys
+    print(f"DEBUG: Failed to import tastytrade: {e}", file=sys.stderr)
+    Session = None
+    Quote = None
+    get_market_metrics = None
 
 SECTOR_NAMES = {
     "XLC": "Communication Services",
@@ -453,21 +473,97 @@ TICKER_NAMES = {
     "AMGN": "Amgen Inc.",
 }
 
-def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str) -> list:
+def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str,
+                   tasty_creds: dict = None) -> tuple[list, str]:
     """
     Internal helper to screen a list of tickers.
+    Returns tuple: (results, tastytrade_status)
     """
+    # 1. Dependency Check
+    if tasty_creds and not Session:
+        return [], "failed: The 'tastytrade' library is missing. Run 'pip install tastytrade'"
+
     try:
         import pandas_ta as ta
     except ImportError as e:
         raise ImportError("The 'pandas_ta' library is required for the screener. Please install it with 'pip install pandas_ta'.") from e
 
+    # 2. Establish Tastytrade session
+    tasty_session = None
+    tasty_status = "skipped"
+    tasty_metrics_map = {}
+
+    if tasty_creds and Session:
+        print(f"🔐 Attempting Tastytrade Login...", flush=True)
+        try:
+            # Check for API Key / Token Auth (Production)
+            if tasty_creds.get('refresh_token') and tasty_creds.get('client_secret'):
+                tasty_session = Session(
+                    provider_secret=tasty_creds['client_secret'],
+                    refresh_token=tasty_creds['refresh_token']
+                )
+                tasty_status = "success"
+                print("✅ Tastytrade Login Success", flush=True)
+            # Legacy / Sandbox Auth (Username/Password)
+            elif tasty_creds.get('username') and tasty_creds.get('password'):
+                try:
+                    tasty_session = Session(tasty_creds['username'], tasty_creds['password'])
+                    tasty_status = "success"
+                    print("✅ Tastytrade Login Success (Legacy)", flush=True)
+                except TypeError:
+                    reason = "SDK v11+ requires Refresh Token + Client Secret. Username/Password not supported directly."
+                    print(f"❌ Tastytrade Handshake Failure: {reason}", flush=True)
+                    tasty_session = None
+                    tasty_status = "failed:sdk_version"
+            else:
+                print("❌ Tastytrade Handshake Failure: No valid credentials found", flush=True)
+                tasty_status = "failed:missing_creds"
+                return [], tasty_status
+
+            # Pre-fetch metrics (IV Rank) if successful
+            if tasty_session and get_market_metrics:
+                try:
+                    metrics_list = get_market_metrics(tasty_session, tickers)
+                    tasty_metrics_map = {m.symbol: m for m in metrics_list}
+                except Exception as e:
+                    print(f"⚠️ Tasty Metrics Fetch Error: {e}", flush=True)
+
+        except Exception as e:
+            print(f"❌ Tastytrade Login Error: {e}", flush=True)
+            return [], f"failed: {str(e)}"
+
+    # STRICT MODE CHECK
+    if tasty_creds and tasty_status.startswith("failed"):
+        print(f"❌ Handshake failed: {tasty_status}. Aborting strict mode.", flush=True)
+        return [], tasty_status
+
+    # 3. Data Fetching
+
+    # DETERMINE MODE: Pure Tasty (No YF) vs Hybrid
+    use_pure_tasty = (tasty_session is not None and tasty_status == "success")
+
+    # BATCH FETCH TASTY QUOTES (Optimization)
+    tasty_quotes_map = {}
+    if use_pure_tasty and Quote:
+        print("⚡ Fetching Real-time Quotes from Tastytrade...", flush=True)
+        try:
+            # Chunking just in case of limits, though DXFeed handles large lists usually
+            chunk_size = 50
+            for i in range(0, len(tickers), chunk_size):
+                chunk = tickers[i:i+chunk_size]
+                qs = Quote.get_quotes(tasty_session, chunk)
+                for q in qs:
+                    tasty_quotes_map[q.symbol] = q
+        except Exception as e:
+            print(f"⚠️ Tasty Batch Quote Error: {e}", flush=True)
+            # If batch fails, we might still try individually or fail strict
+            # For now, let's allow it to fall through to individual checks or fail
+            pass
+
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
     resample_rule = None
     is_intraday = False
-
-    # Default period
     period = "1y"
 
     if time_frame == "49m":
@@ -497,21 +593,72 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     # Batch download result container
     batch_data = None
 
-    # If daily, try batch download first (avoid for new multi-year/weekly intervals to be safe, or just allow it)
-    # yfinance batch download is usually fine for daily/weekly.
-    if not is_intraday and tickers:
+    # Only batch download from Yahoo if we are NOT in pure Tasty mode
+    if not use_pure_tasty and not is_intraday and tickers:
         try:
-            # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
-            # auto_adjust=True to suppress warning
+            # We still need YFinance for history even in Tasty Mode, as fetching history via Tasty API is complex/slow
+            # But we can suppress progress bar to reduce noise
             batch_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
         except Exception:
             batch_data = None
 
     def process_symbol(symbol):
         try:
+            # --- PURE TASTYTRADE MODE ---
+            if use_pure_tasty:
+                iv_rank_val = "N/A"
+                # IV Rank from Metrics
+                if symbol in tasty_metrics_map:
+                    metric = tasty_metrics_map[symbol]
+                    if metric.implied_volatility_index_rank:
+                        # Tasty gives 0.x, we usually show 0-100
+                        try:
+                            iv_rank_val = float(metric.implied_volatility_index_rank) * 100
+                        except: pass
+
+                # Price from Quotes
+                q = tasty_quotes_map.get(symbol)
+
+                # If not in batch, try single fetch? (Optional fallback)
+                if not q and Quote:
+                     try:
+                         qs = Quote.get_quotes(tasty_session, [symbol])
+                         if qs: q = qs[0]
+                     except: pass
+
+                if not q:
+                    return None # Strict Mode: Missing data = Skip
+
+                live_price = None
+                if q.bidPrice and q.askPrice:
+                    live_price = (q.bidPrice + q.askPrice) / 2
+                else:
+                    live_price = float(q.bidPrice or q.askPrice or 0.0)
+
+                if not live_price or live_price <= 0:
+                    return None
+
+                # Return Simplified Result (No Indicators)
+                return {
+                    "ticker": symbol,
+                    "company_name": TICKER_NAMES.get(symbol, symbol),
+                    "price": live_price,
+                    "pct_change_1d": None, # Could calculate if we had prev close from Quote
+                    "pct_change_1w": None,
+                    "rsi": -1, # Sentinel for "N/A"
+                    "sma_50": -1,
+                    "trend": "N/A",
+                    "signal": "WAIT",
+                    "is_green": False,
+                    "iv_rank": iv_rank_val,
+                    "atr": 0.0,
+                    "pe_ratio": "N/A"
+                }
+
+            # --- HYBRID / YFINANCE MODE ---
             df = pd.DataFrame()
 
-            # Fetch Data
+            # A. Fetch History (Always needed for RSI/SMA)
             # If batch data exists and has this symbol, use it
             if batch_data is not None and symbol in batch_data.columns.levels[0]:
                 df = batch_data[symbol].copy()
@@ -519,7 +666,10 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 # Sequential fetch (Intraday or Batch Fallback)
                 # auto_adjust=False for intraday to prevent KeyError(Timestamp) bug
                 # Use dedicated thread for this call via executor
-                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
+                try:
+                    df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
+                except Exception:
+                    pass
 
             # Clean NaNs
             df = df.dropna(how='all')
@@ -577,10 +727,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                             pct_change_1w = ((curr_close - week_close) / week_close) * 100
                     elif yf_interval == "1wk":
                          # For weekly, pct_change_1d is essentially 1W change
-                         # pct_change_1w (meaning a longer lookback) could be 1 month?
-                         # Let's keep logic simple: 1W change for weekly IS the 1D change
-                         # But to fill the UI column "1W %", we might copy it?
-                         # Let's leave pct_change_1w as None or try 4 weeks back?
                          if len(df) >= 5:
                              month_close = float(df['Close'].iloc[-5])
                              curr_close = float(df['Close'].iloc[-1])
@@ -672,7 +818,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "trend": trend,
                 "signal": signal,
                 "is_green": is_green,
-                "iv_rank": "N/A*",
+                "iv_rank": "N/A*", # YF doesn't provide easy IV Rank
                 "atr": current_atr,
                 "pe_ratio": pe_ratio
             }
@@ -693,19 +839,19 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             except Exception:
                 pass
 
-    return results
+    return results, tasty_status
 
-def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> dict:
+def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d", tasty_creds: dict = None) -> tuple[dict, str]:
     """
     Screens the market for stocks grouped by sector.
     Returns:
-        Dict[str, List[dict]]: Keys are 'Sector Name (Ticker)', Values are lists of ticker results.
+        tuple[Dict[str, List[dict]], str]: (Grouped Results, Tastytrade Status)
     """
     all_tickers = []
     for t_list in SECTOR_COMPONENTS.values():
         all_tickers.extend(t_list)
 
-    flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame)
+    flat_results, tasty_status = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame, tasty_creds=tasty_creds)
 
     # Index results by ticker for easy lookup
     result_map = {r['ticker']: r for r in flat_results}
@@ -727,14 +873,16 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
         if sector_rows:
             grouped_results[display_name] = sector_rows
 
-    return grouped_results
+    return grouped_results, tasty_status
 
 def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d") -> list:
     """
     Screens specific sectorial indices.
     """
-    sectors = list(SECTOR_NAMES.keys())
-    results = _screen_tickers(sectors, iv_rank_threshold, rsi_threshold, time_frame)
+    # Exclude "WATCH" (Custom List) from Sector Indices
+    sectors = [s for s in SECTOR_NAMES.keys() if s != "WATCH"]
+    # Note: Sector screening doesn't currently support tasty_creds override
+    results, _ = _screen_tickers(sectors, iv_rank_threshold, rsi_threshold, time_frame)
 
     # Enrich with full name
     for r in results:

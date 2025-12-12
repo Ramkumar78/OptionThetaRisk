@@ -98,13 +98,13 @@ def test_health_route(client):
 
 def test_screen_route_params(client):
     with patch('option_auditor.screener.screen_market') as mock_screen:
-        mock_screen.return_value = {}
+        mock_screen.return_value = ({}, "skipped")
         with patch('option_auditor.screener.screen_sectors') as mock_sectors:
              mock_sectors.return_value = []
 
              res = client.post('/screen', data={'iv_rank': '40', 'rsi_threshold': '60', 'time_frame': '1wk'})
              assert res.status_code == 200
-             mock_screen.assert_called_with(40.0, 60.0, '1wk')
+             mock_screen.assert_called_with(40.0, 60.0, '1wk', tasty_creds=None)
 
 def test_screen_routes_specific(client):
     # Test Turtle

@@ -62,7 +62,7 @@ class TestScreenerCoverageExtended:
 
         mock_download.return_value = batch_df
 
-        results = _screen_tickers(['AAPL'], 30, 50, "1d")
+        results, _ = _screen_tickers(['AAPL'], 30, 50, "1d")
         assert len(results) == 1
         assert results[0]['ticker'] == 'AAPL'
 
@@ -76,7 +76,7 @@ class TestScreenerCoverageExtended:
                 return create_mock_data(rows=60) # Succeed sequential
 
         mock_download.side_effect = side_effect
-        results = _screen_tickers(['AAPL'], 30, 50, "1d")
+        results, _ = _screen_tickers(['AAPL'], 30, 50, "1d")
         assert len(results) == 1
         assert results[0]['ticker'] == 'AAPL'
 
@@ -97,7 +97,7 @@ class TestScreenerCoverageExtended:
         mock_instance.info = {'trailingPE': 25.5}
         mock_ticker.return_value = mock_instance
 
-        results = _screen_tickers(['AAPL'], 30, 50, "1d")
+        results, _ = _screen_tickers(['AAPL'], 30, 50, "1d")
         # Ensure result is not filtered by some other logic
         # _screen_tickers requires indicators (RSI, SMA).
         # create_mock_data creates data that allows calculation.
@@ -107,7 +107,7 @@ class TestScreenerCoverageExtended:
 
         # Test Exception/Missing PE
         mock_instance.info = {}
-        results = _screen_tickers(['AAPL'], 30, 50, "1d")
+        results, _ = _screen_tickers(['AAPL'], 30, 50, "1d")
         assert results[0]['pe_ratio'] == "N/A"
 
     @patch('option_auditor.screener.yf.download')
@@ -120,7 +120,7 @@ class TestScreenerCoverageExtended:
         batch_df = pd.DataFrame(mock_df.values, index=mock_df.index, columns=columns)
         mock_download.return_value = batch_df
 
-        results = _screen_tickers(['AAPL'], 30, 50, "1d")
+        results, _ = _screen_tickers(['AAPL'], 30, 50, "1d")
         assert len(results) == 0
 
     @patch('option_auditor.screener.yf.download')
@@ -148,7 +148,7 @@ class TestScreenerCoverageExtended:
         batch_df = pd.DataFrame(mock_df.values, index=mock_df.index, columns=columns)
         mock_download.return_value = batch_df
 
-        results = _screen_tickers(['AAPL'], 30, 60, "1d")
+        results, _ = _screen_tickers(['AAPL'], 30, 60, "1d")
         assert len(results) == 1
         assert results[0]['trend'] == "BULLISH"
         # RSI might not be exactly in range, so check signal content loosely or debug
@@ -168,7 +168,7 @@ class TestScreenerCoverageExtended:
         batch_df_bear = pd.DataFrame(mock_df_bear.values, index=mock_df_bear.index, columns=columns_bear)
         mock_download.return_value = batch_df_bear
 
-        results = _screen_tickers(['AAPL'], 30, 60, "1d")
+        results, _ = _screen_tickers(['AAPL'], 30, 60, "1d")
         assert len(results) == 1
         assert results[0]['trend'] == "BEARISH"
         # Continuous drop -> RSI very low -> OVERSOLD
@@ -178,13 +178,16 @@ class TestScreenerCoverageExtended:
     def test_screen_market_grouping(self, mock_screen):
         """Test that screen_market groups results correctly."""
         # Mock _screen_tickers return
-        mock_screen.return_value = [
-            {'ticker': 'AAPL', 'signal': 'WAIT'}, # XLK
-            {'ticker': 'JPM', 'signal': 'WAIT'},  # XLF
-            {'ticker': 'UNKNOWN', 'signal': 'WAIT'} # Should be ignored
-        ]
+        mock_screen.return_value = (
+            [
+                {'ticker': 'AAPL', 'signal': 'WAIT'}, # XLK
+                {'ticker': 'JPM', 'signal': 'WAIT'},  # XLF
+                {'ticker': 'UNKNOWN', 'signal': 'WAIT'} # Should be ignored
+            ],
+            "skipped"
+        )
 
-        results = screen_market()
+        results, _ = screen_market()
 
         assert "Technology (XLK)" in results
         assert "Financials (XLF)" in results
@@ -194,7 +197,7 @@ class TestScreenerCoverageExtended:
     @patch('option_auditor.screener._screen_tickers')
     def test_screen_sectors(self, mock_screen):
         """Test screen_sectors logic."""
-        mock_screen.return_value = [{'ticker': 'XLK'}]
+        mock_screen.return_value = ([{'ticker': 'XLK'}], "skipped")
         results = screen_sectors()
         assert len(results) == 1
         assert results[0]['name'] == 'Technology'

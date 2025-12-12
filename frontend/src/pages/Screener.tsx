@@ -18,6 +18,15 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [rsiThreshold, setRsiThreshold] = useState(50);
   const [marketTimeFrame, setMarketTimeFrame] = useState('1d');
 
+  // Tastytrade Integration State
+  const [useTasty, setUseTasty] = useState(false);
+  const [tastyCreds, setTastyCreds] = useState({
+      client_id: '',
+      client_secret: '',
+      refresh_token: ''
+  });
+  const [showSettings, setShowSettings] = useState(false);
+
   // Turtle/EMA/Strategy Screener State
   const [region, setRegion] = useState('us');
   const [strategyTimeFrame, setStrategyTimeFrame] = useState('1d');
@@ -29,7 +38,16 @@ const Screener: React.FC<ScreenerProps> = () => {
     try {
       let data;
       if (activeTab === 'market') {
-        data = await runMarketScreener(ivRank, rsiThreshold, marketTimeFrame);
+        // Pass credentials if enabled (assumes API updated to accept optional creds object)
+        const creds = useTasty ? tastyCreds : undefined;
+        data = await runMarketScreener(ivRank, rsiThreshold, marketTimeFrame, creds);
+
+        // Handle Tastytrade Handshake Failure
+        if (useTasty && data.tasty_status && data.tasty_status.startsWith('failed')) {
+            setUseTasty(false);
+            const failureReason = data.tasty_status.split(':')[1] || 'Unknown Error';
+            setError(`Tastytrade Login Failed: ${failureReason}. Switching back to Yahoo Finance.`);
+        }
       } else if (activeTab === 'turtle') {
         data = await runTurtleScreener(region, strategyTimeFrame);
       } else if (activeTab === 'ema') {
@@ -71,8 +89,27 @@ const Screener: React.FC<ScreenerProps> = () => {
             </p>
           </div>
 
-          <div className="w-full md:w-auto">
-            <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto whitespace-nowrap no-scrollbar">
+          <div className="w-full md:w-auto flex flex-col items-end gap-2">
+            {/* Tastytrade Toggle (Visible only on Market Screener for now) */}
+            {activeTab === 'market' && (
+                <div className="flex items-center gap-2 mb-2">
+                    <label className="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={useTasty} onChange={(e) => setUseTasty(e.target.checked)} />
+                        <div className="relative w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+                        <span className="ms-2 text-xs font-medium text-gray-700 dark:text-gray-300">Tasty Data</span>
+                    </label>
+                    {useTasty && (
+                        <button onClick={() => setShowSettings(true)} className="text-gray-500 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                                <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                            </svg>
+                        </button>
+                    )}
+                </div>
+            )}
+
+            <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto whitespace-nowrap no-scrollbar w-full md:w-auto">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -93,6 +130,55 @@ const Screener: React.FC<ScreenerProps> = () => {
             </div>
           </div>
         </div>
+
+        {/* Credentials Modal */}
+        {showSettings && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-[28rem] border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Tastytrade Setup</h3>
+
+                    <p className="text-xs text-gray-500 mb-4 dark:text-gray-400">
+                        Use your <strong>Refresh Token (API Key)</strong> and <strong>Client Secret</strong> (Open API) to connect.
+                    </p>
+
+                    <div className="mb-3">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Refresh Token (API Key)</label>
+                        <input
+                            type="password"
+                            placeholder="JWT Token..."
+                            className="w-full p-2 border rounded text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            value={tastyCreds.refresh_token}
+                            onChange={e => setTastyCreds({ ...tastyCreds, refresh_token: e.target.value })}
+                        />
+                    </div>
+                    <div className="mb-3">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Client Secret</label>
+                        <input
+                            type="password"
+                            placeholder="Client Secret..."
+                            className="w-full p-2 border rounded text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            value={tastyCreds.client_secret}
+                            onChange={e => setTastyCreds({ ...tastyCreds, client_secret: e.target.value })}
+                        />
+                    </div>
+                    <div className="mb-4">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Client ID (Optional)</label>
+                        <input
+                            type="text"
+                            placeholder="Client ID..."
+                            className="w-full p-2 border rounded text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            value={tastyCreds.client_id}
+                            onChange={e => setTastyCreds({ ...tastyCreds, client_id: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                        <button onClick={() => setShowSettings(false)} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white">Close</button>
+                        <button onClick={() => setShowSettings(false)} className="px-4 py-2 bg-primary-600 text-white rounded text-sm hover:bg-primary-700">Save</button>
+                    </div>
+                </div>
+            </div>
+        )}
 
         {/* Controls */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
