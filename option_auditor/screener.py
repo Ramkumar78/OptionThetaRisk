@@ -2254,6 +2254,19 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
             # Position Sizing Logic (The 4% Rule)
             # This is calculated by caller or frontend, but we provide metrics.
+            # "Is this trade safe at 4% size?"
+            # Risk Exposure = (Dist to Stop %) * (Position Size %)
+            # Limit = 1% of Equity
+
+            position_size_pct = 0.04
+            risk_exposure = (dist_to_stop_pct / 100.0) * position_size_pct
+            safe_to_trade = risk_exposure <= 0.01
+
+            risk_msg = ""
+            if safe_to_trade:
+                risk_msg = f"Yes. Risk is {risk_exposure*100:.2f}% of Equity."
+            else:
+                risk_msg = f"No. Risk is {risk_exposure*100:.2f}% of Equity (Limit 1%)."
 
             volatility_pct = (atr_20 / curr_close) * 100
 
@@ -2326,7 +2339,9 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "atr_20": round(atr_20, 2),
                 "risk_per_share": round(risk_per_share, 2),
                 "dist_to_stop_pct": round(dist_to_stop_pct, 2),
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "safe_to_trade": safe_to_trade,
+                "risk_message": risk_msg
             })
 
         except Exception:
