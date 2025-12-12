@@ -26,9 +26,13 @@ export const runIsaTrendScreener = async () => {
     return response.data;
 };
 
-export const checkIsaStock = async (ticker: string) => {
+export const checkIsaStock = async (ticker: string, entryPrice?: string) => {
+    const params: any = { ticker };
+    if (entryPrice) {
+        params.entry_price = entryPrice;
+    }
     const response = await api.get('/screen/isa/check', {
-        params: { ticker }
+        params
     });
     return response.data;
 };

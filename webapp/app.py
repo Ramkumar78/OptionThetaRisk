@@ -308,6 +308,22 @@ def create_app(testing: bool = False) -> Flask:
                 result['pnl_pct'] = ((curr - entry_price) / entry_price) * 100
                 result['user_entry_price'] = entry_price
 
+                # Override verdict if user is in position
+                signal = result.get('signal', 'WAIT')
+                stop_exit = result.get('trailing_exit_20d', 0)
+
+                # 1. If signal is positive (Enter/Watch) but we are already in -> HOLD
+                if "ENTER" in signal or "WATCH" in signal:
+                     result['signal'] = "✅ HOLD (Trend Active)"
+
+                # 2. Strict Exit: Below Trailing Stop (20d Low)
+                if curr <= stop_exit:
+                    result['signal'] = "🛑 EXIT (Stop Hit)"
+
+                # 3. Strict Exit: Downtrend (Below 200 SMA)
+                if "SELL" in signal or "AVOID" in signal:
+                     result['signal'] = "🛑 EXIT (Downtrend)"
+
             return jsonify(result)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
