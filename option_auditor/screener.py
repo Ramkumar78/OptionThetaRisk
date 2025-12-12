@@ -2088,7 +2088,7 @@ def resolve_ticker(query: str) -> str:
     # 4. Fallback: Assume it is a valid ticker if no match found
     return query
 
-def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01) -> list:
+def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us") -> list:
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).
     Based on Seykota/Dennis (Breakouts) and Tharp (Risk).
@@ -2104,12 +2104,19 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
     # Default to a mix of US and UK liquid stocks if none provided
     if ticker_list is None:
-        # Combine S&P 500 (Filtered) and UK/Euro Tickers
-        sp500 = _get_filtered_sp500(check_trend=True) # Already checks > SMA200, but we re-check logic here
-        uk_euro = get_uk_euro_tickers()
-        # Add some high interest manually just in case
-        extras = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "META", "GOOGL", "TSLA"]
-        ticker_list = list(set(sp500 + uk_euro + extras))
+        if region == "uk_euro":
+            ticker_list = get_uk_euro_tickers()
+        elif region == "india":
+            ticker_list = get_indian_tickers()
+        elif region == "sp500":
+             # S&P 500 filtered
+             sp500 = _get_filtered_sp500(check_trend=True)
+             watch = SECTOR_COMPONENTS.get("WATCH", [])
+             ticker_list = list(set(sp500 + watch))
+        else: # us / combined default
+            sp500 = _get_filtered_sp500(check_trend=True)
+            watch = SECTOR_COMPONENTS.get("WATCH", [])
+            ticker_list = list(set(sp500 + watch))
 
     results = []
 
