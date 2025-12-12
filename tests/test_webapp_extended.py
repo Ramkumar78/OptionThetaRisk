@@ -138,9 +138,11 @@ def test_journal_routes(client, mock_storage):
     mock_storage.return_value.delete_journal_entry.assert_called_with(ANY, "123")
 
     # Import
+    mock_storage.return_value.save_journal_entries.return_value = 1
     res = client.post('/journal/import', json=[{"symbol": "AAPL", "pnl": 100}])
     assert res.status_code == 200
     assert res.json['count'] == 1
+    mock_storage.return_value.save_journal_entries.assert_called()
 
     # Analyze
     mock_storage.return_value.get_journal_entries.return_value = []
@@ -190,7 +192,8 @@ def test_download_route(client, mock_storage):
 def test_cleanup_job():
     # Test cleanup job logic (mock storage)
     app = create_app(testing=True)
-    with patch('webapp.app.get_storage_provider') as mock_storage_prov:
+    # Patch _get_storage_provider because cleanup_job calls it directly
+    with patch('webapp.app._get_storage_provider') as mock_storage_prov:
         with patch('time.sleep', side_effect=InterruptedError): # Break loop
             try:
                 # Import cleanup_job function locally to test

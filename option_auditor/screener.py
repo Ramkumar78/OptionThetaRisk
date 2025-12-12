@@ -782,6 +782,9 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
         sp500_filtered = _get_filtered_sp500(check_trend=False)
 
         # 2. Get Watch List
+        # Note: If running a dedicated S&P 500 scan, users might expect ONLY S&P 500.
+        # However, the requirement was "Keep your High Interest List: Always scan that list too".
+        # So we merge them.
         watch_list = SECTOR_COMPONENTS.get("WATCH", [])
 
         # Merge unique
@@ -2113,7 +2116,9 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
              # For S&P 500, we specifically return filtered S&P 500 stocks.
              # We might add Watch list as well if requested, but separation implies purity.
              sp500 = _get_filtered_sp500(check_trend=True)
-             ticker_list = sp500
+             # Also include WATCH list as per global logic "Always scan High Interest"
+             watch_list = SECTOR_COMPONENTS.get("WATCH", [])
+             ticker_list = list(set(sp500 + watch_list))
         else: # us / combined default
             # "US Market" = High Liquid Sector Components + Watch List
             all_tickers = []
