@@ -142,7 +142,7 @@ class TestScreenerCoverageExtended:
         close[-3:] = [190, 185, 180] # Still > SMA? SMA of last 50 is avg of 150-200 ~175. 180 > 175.
 
         data = {
-            'Open': close, 'High': close+5, 'Low': close-5, 'Close': close, 'Volume': [1000]*100
+            'Open': close, 'High': close+5, 'Low': close-5, 'Close': close, 'Volume': [1000000]*100
         }
         mock_df = pd.DataFrame(data, index=dates)
 
@@ -163,7 +163,7 @@ class TestScreenerCoverageExtended:
         # Falling for 100 days
         close_bear = np.linspace(200, 100, 100)
         data_bear = {
-            'Open': close_bear, 'High': close_bear+5, 'Low': close_bear-5, 'Close': close_bear, 'Volume': [1000]*100
+            'Open': close_bear, 'High': close_bear+5, 'Low': close_bear-5, 'Close': close_bear, 'Volume': [1000000]*100
         }
         mock_df_bear = pd.DataFrame(data_bear, index=dates)
         columns_bear = pd.MultiIndex.from_product([['AAPL'], mock_df_bear.columns])

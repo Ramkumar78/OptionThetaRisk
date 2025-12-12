@@ -604,6 +604,14 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 except Exception:
                     pass
 
+            # Gap 1: Volume Trap Fix
+            # If scanning daily/weekly (not intraday), skip illiquid stocks (< 500k avg volume)
+            # This prevents wasting CPU on stocks we can't trade and reduces risk of stale data issues.
+            if not is_intraday and len(df) >= 20:
+                avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+                if avg_vol < 500000:
+                    return None
+
             # Calculate % Change before resampling
             pct_change_1d = None
             pct_change_1w = None
@@ -747,7 +755,9 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "pe_ratio": pe_ratio
             }
 
-        except Exception:
+        except Exception as e:
+            # Gap 2: Error Visibility
+            print(f"Error processing {symbol}: {e}")
             return None
 
     results = []
@@ -2226,6 +2236,17 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
             risk_per_share = curr_close - stop_price
 
+            # Gap 3: Distance from Stop
+            # If entering, we look at Initial Stop (3 ATR).
+            # If holding, we look at Trailing Stop (20d Low).
+            effective_stop = stop_price
+            if "HOLD" in signal or "EXIT" in signal:
+                effective_stop = low_20
+
+            dist_to_stop_pct = 0.0
+            if curr_close > 0:
+                dist_to_stop_pct = ((curr_close - effective_stop) / curr_close) * 100
+
             # Position Sizing Logic (The 4% Rule)
             # This is calculated by caller or frontend, but we provide metrics.
 
@@ -2299,6 +2320,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "volatility_pct": round(volatility_pct, 2),
                 "atr_20": round(atr_20, 2),
                 "risk_per_share": round(risk_per_share, 2),
+                "dist_to_stop_pct": round(dist_to_stop_pct, 2),
                 "breakout_date": breakout_date
             })
 
