@@ -4,11 +4,12 @@ const api = axios.create({
   baseURL: '/', // Relative URL since we serve from the same origin
 });
 
-export const runMarketScreener = async (ivRank: number, rsiThreshold: number, timeFrame: string) => {
+export const runMarketScreener = async (ivRank: number, rsiThreshold: number, timeFrame: string, region: string) => {
   const formData = new FormData();
   formData.append('iv_rank', ivRank.toString());
   formData.append('rsi_threshold', rsiThreshold.toString());
   formData.append('time_frame', timeFrame);
+  formData.append('region', region);
   const response = await api.post('/screen', formData);
   return response.data;
 };

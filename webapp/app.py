@@ -220,18 +220,22 @@ def create_app(testing: bool = False) -> Flask:
             pass
 
         time_frame = request.form.get("time_frame", "1d")
-        cache_key = ("market", iv_rank, rsi_threshold, time_frame)
+        region = request.form.get("region", "us")
+        cache_key = ("market", iv_rank, rsi_threshold, time_frame, region)
         cached = get_cached_screener_result(cache_key)
         if cached:
             return jsonify(cached)
 
         try:
-            results = screener.screen_market(iv_rank, rsi_threshold, time_frame)
+            results = screener.screen_market(iv_rank, rsi_threshold, time_frame, region=region)
+            # Only run sector screen if region is us or explicitly requested?
+            # screen_sectors scans Sector ETFs (XLC, XLY...) which are US specific.
+            # If region is India/UK, it might not make sense, but for now we leave it as sidebar info.
             sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
             data = {
                 "results": results,
                 "sector_results": sector_results,
-                "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame}
+                "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame, "region": region}
             }
             cache_screener_result(cache_key, data)
             return jsonify(data)
@@ -254,6 +258,14 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_uk_euro_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "sp500":
+                # For Turtle, YES S&P 500. Use Filtered list (Trend + Volume)
+                # "Filter 2 (Trend): Only pass stocks to the heavy logic... if they are above 200 SMA."
+                # Turtle IS heavy logic/trend following.
+                filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
+                # Merge with WATCH list
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
             cache_screener_result(cache_key, results)
@@ -264,8 +276,6 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/bull_put", methods=["GET"])
     def screen_bull_put():
         try:
-            # Bull Put Spreads are mainly for liquid US stocks for now
-            # region param is accepted but we might just use default liquid list if us
             region = request.args.get("region", "us")
 
             cache_key = ("bull_put", region)
@@ -273,8 +283,16 @@ def create_app(testing: bool = False) -> Flask:
             if cached:
                 return jsonify(cached)
 
-            # Use default list in function for now unless specific requirement
-            results = screener.screen_bull_put_spreads()
+            ticker_list = None
+            if region == "sp500":
+                 # Bull Puts benefit from high volume.
+                 # Trend filter? Bull Puts are bullish strategies, so >200SMA makes sense.
+                 # Let's apply trend filter.
+                 filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
+                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                 ticker_list = list(set(filtered_sp500 + watch_list))
+
+            results = screener.screen_bull_put_spreads(ticker_list=ticker_list)
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
@@ -296,6 +314,11 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_uk_euro_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "sp500":
+                # For Darvas, YES S&P 500. Trend Following.
+                filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_darvas_box(ticker_list=ticker_list, time_frame=time_frame)
             cache_screener_result(cache_key, results)
@@ -319,6 +342,11 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_uk_euro_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "sp500":
+                # For EMA, YES S&P 500. Trend/Momentum.
+                filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
             cache_screener_result(cache_key, results)
@@ -342,6 +370,10 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_uk_euro_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "sp500":
+                # For OTE: NO. Stick to liquid names (Top 50 / WATCH list).
+                # Explicitly override SP500 to WATCH list only.
+                ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
 
             results = screener.screen_mms_ote_setups(ticker_list=ticker_list, time_frame=time_frame)
             cache_screener_result(cache_key, results)
