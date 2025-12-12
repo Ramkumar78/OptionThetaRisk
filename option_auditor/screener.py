@@ -1642,41 +1642,69 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
             # BULLISH SETUP (Market Maker Buy Model)
             # ---------------------------------------------------------
             if signal == "WAIT":
-                # 1. Find lowest point in last 40 bars
+                # 1. Find the lowest low (The "Turtle Soup" / Raid) in the last 40 bars
                 trough_idx = df['Low'].iloc[-40:].idxmin()
                 trough_low = df.loc[trough_idx, 'Low']
 
-                # 2. Find highest high AFTER trough (Displacement Up)
+                # 2. Find the Highest High *AFTER* that low (The Displacement High)
+                # We need a rally that has essentially "finished" and is now pulling back
                 after_trough = df.loc[trough_idx:]
-                if len(after_trough) >= 3:
+
+                if len(after_trough) >= 5: # Need enough data for Low -> High -> Pullback
                     peak_up_idx = after_trough['High'].idxmax()
                     peak_up_high = df.loc[peak_up_idx, 'High']
 
-                    # 3. Fibs (Low to High)
-                    # OTE is retracement DOWN to 62-79%
-                    range_up = peak_up_high - trough_low
-                    fib_62_up = trough_low + (range_up * 0.618)
-                    fib_79_up = trough_low + (range_up * 0.79)
+                    # 3. Valid Setup Check: The High must be significantly above the Low
+                    # and the *current* price must be below that High (Pullback phase)
+                    if peak_up_high > trough_low and curr_close < peak_up_high:
 
-                    # 4. Check FVG
-                    bullish_fvgs = [f for f in _detect_fvgs(after_trough) if f['type'] == "BULLISH"]
+                        # 4. Fibs (Low to High)
+                        range_up = peak_up_high - trough_low
+                        fib_62_up = trough_low + (range_up * 0.618)
+                        fib_79_up = trough_low + (range_up * 0.79)
 
-                    # 5. Check Zone
-                    if len(bullish_fvgs) > 0 and (fib_79_up <= curr_close <= fib_62_up):
-                        # 6. Check MSS (Did we break a prior High?)
-                        before_trough = df.loc[:trough_idx].iloc[:-1]
-                        if not before_trough.empty:
-                             prev_swing_highs = before_trough[before_trough['Swing_High'].notna()]
-                             if not prev_swing_highs.empty:
-                                 last_struct_high = prev_swing_highs['High'].iloc[-1]
+                        # 5. Check OTE Zone (Price is between 62% and 79% down from high)
+                        # Note: In bullish OTE, we buy when price drops TO these levels.
+                        # Price should be > 79% level (stop) and < 62% level (entry start)
+                        # Correct Logic: We want price to be LOW (near 79%), but not below 100%.
+                        # Usually OTE entry is defined as retracing *at least* 62%.
 
-                                 if peak_up_high > last_struct_high:
-                                     signal = "🐂 BULLISH OTE (Buy)"
-                                     setup_details = {
-                                         "stop": trough_low,
-                                         "entry_zone": f"{fib_79_up:.2f} - {fib_62_up:.2f}",
-                                         "target": peak_up_high + range_up
-                                     }
+                        # Current Price <= 61.8% Retracement Price (Cheap)
+                        # Current Price >= 79% Retracement Price (Not broken)
+
+                        # Fix the fib comparison logic:
+                        # 62% retracement means price dropped 0.62 of the range?
+                        # No, usually OTE means price is at the 0.618 to 0.786 retracement level.
+                        # So for Buy: Entry is at (Low + 0.382*Range) ??
+                        # ICT OTE is measured from Low to High.
+                        # Retracement down 62% = Price is at (High - 0.62*Range) = (Low + 0.38*Range)
+                        # WAIT! Standard Fib tool draws 0 at High, 1 at Low for pullbacks?
+                        # Let's stick to price levels:
+                        # We want a DEEP pullback.
+                        # Deep pullback means price is closer to Low than High.
+
+                        retracement_pct = (peak_up_high - curr_close) / range_up
+
+                        if 0.618 <= retracement_pct <= 0.79:
+                             # 6. Check MSS (Did we break a prior High?)
+                             # We look for a swing high *before* the trough that is LOWER than our new peak
+                             before_trough = df.loc[:trough_idx].iloc[:-1]
+                             valid_mss = False
+
+                             if not before_trough.empty:
+                                 # Find the most recent significant high before the crash
+                                 # Simply: Was the peak_up_high higher than the high immediately preceding the low?
+                                 last_pre_crash_high = before_trough['High'].tail(10).max()
+                                 if peak_up_high > last_pre_crash_high:
+                                     valid_mss = True
+
+                             if valid_mss:
+                                 signal = "🐂 BULLISH OTE (Buy)"
+                                 setup_details = {
+                                     "stop": trough_low,
+                                     "entry_zone": f"{fib_62_up:.2f} - {fib_79_up:.2f}",
+                                     "target": peak_up_high + range_up
+                                 }
 
             if signal != "WAIT":
                 return {
