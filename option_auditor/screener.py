@@ -866,6 +866,28 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
 
     return results
 
+import time
+import random
+
+def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, retries=3):
+    """
+    Fetches data from yfinance with exponential backoff retry logic.
+    """
+    for attempt in range(retries):
+        try:
+            df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=auto_adjust)
+            if not df.empty:
+                return df
+        except Exception as e:
+            # Check if it is a potentially transient error or just no data
+            pass
+
+        if attempt < retries - 1:
+            sleep_time = (2 ** attempt) + random.random()
+            time.sleep(sleep_time)
+
+    return pd.DataFrame()
+
 def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval, resample_rule, is_intraday):
     """Helper to prepare DataFrame for a single ticker."""
     import pandas as pd
@@ -887,12 +909,9 @@ def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interva
         else:
              df = data_source.copy()
 
-    # If empty, sequential fetch
+    # If empty, sequential fetch with retry
     if df.empty:
-         try:
-            df = yf.download(ticker, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
-         except Exception:
-            pass
+         df = fetch_data_with_retry(ticker, period=period, interval=yf_interval, auto_adjust=not is_intraday)
 
     # Clean NaNs
     df = df.dropna(how='all')
@@ -2062,37 +2081,48 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
     results = []
 
-    # 1. Fetch Data (1 Year required for 200 SMA)
-    # We use yf.download for speed on history
-    # Split into chunks if list is too huge to avoid errors?
-    # yfinance handles batching, but mixing .L and US tickers might be weird for auto_adjust?
-    # Let's try one big batch.
-
-    try:
-        # period="2y" to ensure we have enough for 200 SMA + 50d High
-        data = yf.download(ticker_list, period="2y", interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
-    except Exception:
-        return []
+    # 1. Fetch Data
+    # For single ticker (Check Stock mode), we use robust retry.
+    if len(ticker_list) == 1:
+        data = fetch_data_with_retry(ticker_list[0], period="2y", interval="1d", auto_adjust=True)
+        # Reformat single df to match loop expectation if needed, or just process directly
+        # The loop expects `data` to be a batch result usually.
+        # Let's just process it directly.
+        ticker = ticker_list[0]
+        df = data
+        # Check if single level
+        if isinstance(df.columns, pd.MultiIndex):
+             # Flatten if needed
+             try:
+                 df.columns = df.columns.get_level_values(0)
+             except: pass
+    else:
+        # Batch mode
+        try:
+            # period="2y" to ensure we have enough for 200 SMA + 50d High
+            data = yf.download(ticker_list, period="2y", interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
+        except Exception:
+            return []
 
     for ticker in ticker_list:
         try:
-            # Extract DataFrame for this ticker
-            df = pd.DataFrame()
-            if isinstance(data.columns, pd.MultiIndex):
-                try:
-                    # check if ticker is in level 0
-                    if ticker in data.columns.levels[0]:
-                        df = data.xs(ticker, axis=1, level=0).copy()
-                    # fallback check
-                    elif ticker in data.columns:
-                         df = data[ticker].copy()
-                except: continue
-            else:
-                 # If single ticker result (unlikely with list)
-                 if data.columns.nlevels == 1:
-                     df = data.copy()
-                 else:
+            if len(ticker_list) > 1:
+                # Extract DataFrame for this ticker from batch
+                df = pd.DataFrame()
+                if isinstance(data.columns, pd.MultiIndex):
+                    try:
+                        # check if ticker is in level 0
+                        if ticker in data.columns.levels[0]:
+                            df = data.xs(ticker, axis=1, level=0).copy()
+                        # fallback check
+                        elif ticker in data.columns:
+                             df = data[ticker].copy()
+                    except: continue
+                else:
                      continue
+
+            # If single ticker mode, df is already set above if successful, but we need to ensure it's not empty
+            if df.empty: continue
 
             # Clean and validate
             df = df.dropna(how='all')
