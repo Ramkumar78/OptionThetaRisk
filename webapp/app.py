@@ -8,12 +8,12 @@ import time
 import json
 from typing import Optional
 
-from flask import Flask, request, redirect, url_for, flash, send_file, session, jsonify, send_from_directory
+from flask import Flask, request, redirect, url_for, flash, send_file, session, jsonify, send_from_directory, g
 
 from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
 from datetime import datetime, timedelta
-from webapp.storage import get_storage_provider
+from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
 from dotenv import load_dotenv
 import sys
@@ -29,6 +29,22 @@ MAX_REPORT_AGE = 1200 # 20 minutes
 # Screener Cache
 SCREENER_CACHE = {}
 SCREENER_CACHE_TIMEOUT = 600  # 10 minutes
+
+# Cached storage provider singleton at application level (if appropriate)
+# Since we might rely on app context (e.g. SQLite path), we use Flask's `g` or memoize based on app instance.
+# But `get_storage_provider` in `storage.py` is a factory.
+# We will wrap it here to memoize within the app context or request.
+
+def get_storage_provider(app):
+    """
+    Wrapper to get storage provider.
+    Uses Flask 'g' to cache per-request, but since we refactored DatabaseStorage to cache engine internally,
+    creating a new DatabaseStorage object is cheap.
+    However, using 'g' is still better to avoid re-initializing the object repeatedly in one request.
+    """
+    if 'storage_provider' not in g:
+        g.storage_provider = _get_storage_provider(app)
+    return g.storage_provider
 
 def get_cached_screener_result(key):
     if key in SCREENER_CACHE:
@@ -99,7 +115,9 @@ def send_email_notification(subject, body):
 def cleanup_job(app):
     """Background thread to clean up old reports."""
     with app.app_context():
-        storage = get_storage_provider(app)
+        # Here we don't have 'g', so we call factory directly.
+        # But 'DatabaseStorage' now caches engine, so it's cheap.
+        storage = _get_storage_provider(app)
         while True:
             try:
                 storage.cleanup_old_reports(MAX_REPORT_AGE)
@@ -499,7 +517,7 @@ def create_app(testing: bool = False) -> Flask:
             return jsonify({"error": "Invalid data format. Expected list of trades."}), 400
 
         storage = get_storage_provider(app)
-        count = 0
+        journal_entries = []
         try:
             for trade in data:
                 # Map analysis trade object to journal entry
@@ -538,8 +556,10 @@ def create_app(testing: bool = False) -> Flask:
                     "notes": f"Imported Analysis. Legs: {trade.get('legs_desc', '')}. Description: {trade.get('description', '')}",
                     "created_at": time.time()
                 }
-                storage.save_journal_entry(journal_entry)
-                count += 1
+                journal_entries.append(journal_entry)
+
+            # Batch Insert
+            count = storage.save_journal_entries(journal_entries)
 
             return jsonify({"success": True, "count": count})
         except Exception as e:

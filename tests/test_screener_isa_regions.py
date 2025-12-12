@@ -18,7 +18,7 @@ def test_screen_isa_region_selection():
          patch('option_auditor.screener.get_uk_euro_tickers', mock_get_uk), \
          patch('option_auditor.screener.get_indian_tickers', mock_get_india), \
          patch('option_auditor.screener.yf.download') as mock_download, \
-         patch('option_auditor.screener.SECTOR_COMPONENTS', {"WATCH": ["WATCH1"]}):
+              patch('option_auditor.screener.SECTOR_COMPONENTS', {"WATCH": ["WATCH1", "SPY"]}):
 
          # Mock download response to avoid crash
          mock_download.return_value = MagicMock()

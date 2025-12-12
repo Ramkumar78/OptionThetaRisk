@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+import json
 from abc import ABC, abstractmethod
 import boto3
 from sqlalchemy import create_engine, Column, String, LargeBinary, Float, Integer, Text, text, inspect
@@ -96,6 +97,10 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
+    def save_journal_entries(self, entries: list) -> int:
+        pass
+
+    @abstractmethod
     def get_journal_entries(self, username: str) -> list:
         pass
 
@@ -109,36 +114,48 @@ class StorageProvider(ABC):
         pass
 
 class DatabaseStorage(StorageProvider):
+    # Class-level cache for engines to avoid re-creation (Singleton pattern for Engines)
+    _engines = {}
+
     def __init__(self, db_url: str):
-        self.engine = create_engine(db_url)
+        self.db_url = db_url
+        if db_url not in DatabaseStorage._engines:
+            engine = create_engine(db_url)
+            # Only perform migration checks on creation
+            DatabaseStorage._ensure_schema_migrations(engine)
+            DatabaseStorage._engines[db_url] = engine
+
+        self.engine = DatabaseStorage._engines[db_url]
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         self.is_sqlite = db_url.startswith("sqlite")
-        self._ensure_schema_migrations()
 
-    def _ensure_schema_migrations(self):
+    @staticmethod
+    def _ensure_schema_migrations(engine):
         """
         Check for missing columns and migrate if necessary.
         Specifically for journal_entries: entry_date, entry_time
         """
-        insp = inspect(self.engine)
-        if insp.has_table('journal_entries'):
-            columns = [c['name'] for c in insp.get_columns('journal_entries')]
+        try:
+            insp = inspect(engine)
+            if insp.has_table('journal_entries'):
+                columns = [c['name'] for c in insp.get_columns('journal_entries')]
 
-            with self.engine.connect() as conn:
-                if 'entry_date' not in columns:
-                    print("Migrating: Adding entry_date to journal_entries")
-                    # SQLite syntax vs Postgres syntax might differ but ADD COLUMN is standard
-                    conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_date VARCHAR'))
+                with engine.connect() as conn:
+                    if 'entry_date' not in columns:
+                        print("Migrating: Adding entry_date to journal_entries")
+                        conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_date VARCHAR'))
 
-                if 'entry_time' not in columns:
-                    print("Migrating: Adding entry_time to journal_entries")
-                    conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_time VARCHAR'))
+                    if 'entry_time' not in columns:
+                        print("Migrating: Adding entry_time to journal_entries")
+                        conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_time VARCHAR'))
 
-                if 'sentiment' not in columns:
-                    print("Migrating: Adding sentiment to journal_entries")
-                    conn.execute(text('ALTER TABLE journal_entries ADD COLUMN sentiment VARCHAR'))
-                conn.commit()
+                    if 'sentiment' not in columns:
+                        print("Migrating: Adding sentiment to journal_entries")
+                        conn.execute(text('ALTER TABLE journal_entries ADD COLUMN sentiment VARCHAR'))
+                    conn.commit()
+        except Exception as e:
+            print(f"Migration check failed: {e}")
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
         session = self.Session()
@@ -244,6 +261,46 @@ class DatabaseStorage(StorageProvider):
         finally:
             session.close()
 
+    def save_journal_entries(self, entries: list) -> int:
+        """Batch save multiple journal entries in a single transaction."""
+        if not entries:
+            return 0
+
+        session = self.Session()
+        try:
+            valid_keys = {c.name for c in JournalEntry.__table__.columns}
+            count = 0
+
+            # Prepare IDs if missing
+            for entry in entries:
+                if 'id' not in entry or not entry['id']:
+                    entry['id'] = str(uuid.uuid4())
+
+            # Identify existing entries to update vs insert
+            ids = [e['id'] for e in entries]
+            existing_records = session.query(JournalEntry).filter(JournalEntry.id.in_(ids)).all()
+            existing_map = {r.id: r for r in existing_records}
+
+            for entry in entries:
+                sanitized_entry = {k: v for k, v in entry.items() if k in valid_keys}
+
+                if entry['id'] in existing_map:
+                    # Update
+                    db_entry = existing_map[entry['id']]
+                    for k, v in sanitized_entry.items():
+                        if hasattr(db_entry, k):
+                            setattr(db_entry, k, v)
+                else:
+                    # Insert
+                    db_entry = JournalEntry(**sanitized_entry)
+                    session.add(db_entry)
+                count += 1
+
+            session.commit()
+            return count
+        finally:
+            session.close()
+
     def get_journal_entries(self, username: str) -> list:
         session = self.Session()
         try:
@@ -261,7 +318,8 @@ class DatabaseStorage(StorageProvider):
             session.close()
 
     def close(self) -> None:
-        self.engine.dispose()
+        # Do not dispose the engine here as it is cached at class level
+        pass
 
 class S3Storage(StorageProvider):
     def __init__(self, bucket_name: str, region_name: str = None):
@@ -395,6 +453,42 @@ class S3Storage(StorageProvider):
             return entry['id']
         except Exception:
             return None
+
+    def save_journal_entries(self, new_entries_list: list) -> int:
+        """Batch save for S3 (Naive implementation: Read-Modify-Write)."""
+        if not new_entries_list:
+            return 0
+
+        import json
+        # Assume all entries belong to same user for now, or group by user
+        # In current app usage, bulk import is per user.
+        username = new_entries_list[0]['username']
+        key = self._get_journal_s3_key(username)
+
+        # Load existing
+        current_entries = self.get_journal_entries(username)
+        current_map = {e['id']: i for i, e in enumerate(current_entries)}
+
+        for entry in new_entries_list:
+            if 'id' not in entry or not entry['id']:
+                entry['id'] = str(uuid.uuid4())
+
+            if entry['id'] in current_map:
+                idx = current_map[entry['id']]
+                current_entries[idx] = entry
+            else:
+                current_entries.append(entry)
+                current_map[entry['id']] = len(current_entries) - 1
+
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(current_entries).encode('utf-8')
+            )
+            return len(new_entries_list)
+        except Exception:
+            return 0
 
     def get_journal_entries(self, username: str) -> list:
         import json
