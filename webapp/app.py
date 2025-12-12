@@ -273,6 +273,20 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/isa", methods=["GET"])
+    def screen_isa():
+        try:
+            cache_key = ("isa_trend",)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            results = screener.screen_trend_followers_isa()
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/bull_put", methods=["GET"])
     def screen_bull_put():
         try:

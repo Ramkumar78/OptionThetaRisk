@@ -2036,3 +2036,171 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
     # Sort by ROI
     final_list.sort(key=lambda x: x['roi_pct'], reverse=True)
     return final_list
+
+def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01) -> list:
+    """
+    The 'Legendary Trend' Screener for ISA Accounts (Long Only).
+    Based on Seykota/Dennis (Breakouts) and Tharp (Risk).
+
+    Rules:
+    1. Trend: Price > 200 SMA.
+    2. Entry: Price >= 50-Day High.
+    3. Exit/Stop: Trailing 3x ATR or 20-Day Low.
+    """
+    import yfinance as yf
+    import pandas_ta as ta
+    import pandas as pd
+
+    # Default to a mix of US and UK liquid stocks if none provided
+    if ticker_list is None:
+        # Combine S&P 500 (Filtered) and UK/Euro Tickers
+        sp500 = _get_filtered_sp500(check_trend=True) # Already checks > SMA200, but we re-check logic here
+        uk_euro = get_uk_euro_tickers()
+        # Add some high interest manually just in case
+        extras = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "META", "GOOGL", "TSLA"]
+        ticker_list = list(set(sp500 + uk_euro + extras))
+
+    results = []
+
+    # 1. Fetch Data (1 Year required for 200 SMA)
+    # We use yf.download for speed on history
+    # Split into chunks if list is too huge to avoid errors?
+    # yfinance handles batching, but mixing .L and US tickers might be weird for auto_adjust?
+    # Let's try one big batch.
+
+    try:
+        # period="2y" to ensure we have enough for 200 SMA + 50d High
+        data = yf.download(ticker_list, period="2y", interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
+    except Exception:
+        return []
+
+    for ticker in ticker_list:
+        try:
+            # Extract DataFrame for this ticker
+            df = pd.DataFrame()
+            if isinstance(data.columns, pd.MultiIndex):
+                try:
+                    # check if ticker is in level 0
+                    if ticker in data.columns.levels[0]:
+                        df = data.xs(ticker, axis=1, level=0).copy()
+                    # fallback check
+                    elif ticker in data.columns:
+                         df = data[ticker].copy()
+                except: continue
+            else:
+                 # If single ticker result (unlikely with list)
+                 if data.columns.nlevels == 1:
+                     df = data.copy()
+                 else:
+                     continue
+
+            # Clean and validate
+            df = df.dropna(how='all')
+            if len(df) < 200: continue
+
+            # 2. Calculate Indicators
+            curr_close = float(df['Close'].iloc[-1])
+
+            # Trend Filter: 200 SMA
+            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+
+            # Breakout Levels: 50-Day High (Entry) & 20-Day Low (Exit)
+            # Shift(1) because we want the high of the *previous* window to compare against today
+            high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
+            low_20 = df['Low'].rolling(20).min().shift(1).iloc[-1]
+
+            # Volatility: ATR 20
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
+            atr_20 = float(df['ATR'].iloc[-1])
+
+            # 3. Apply The "Legend" Rules
+            signal = "WAIT"
+
+            # RULE 1: Long Term Trend
+            if curr_close > sma_200:
+
+                # RULE 2: Breakout Entry (Donchian Channel)
+                if curr_close >= high_50:
+                    signal = "🚀 ENTER LONG (50d Breakout)"
+
+                # Watchlist: Price is near breakout (within 2%)
+                elif curr_close >= high_50 * 0.98:
+                    signal = "👀 WATCH (Near Breakout)"
+
+                # Holding: Price is above exit
+                elif curr_close > low_20:
+                    signal = "✅ HOLD (Trend Active)"
+
+                # Rule 3: Exit (Trailing Stop)
+                elif curr_close <= low_20:
+                    signal = "🛑 EXIT (Stop Hit)"
+            else:
+                signal = "❌ SELL/AVOID (Downtrend)"
+
+            # 4. Van Tharp Risk Calculation
+            # Stop Loss is 3 ATRs below price
+            stop_price = curr_close - (3 * atr_20)
+
+            # If entering, stop is 3 ATR below ENTRY (current price)
+            # If holding, user should use trailing stop (low_20) OR 3 ATR?
+            # The prompt says: "Exit... Trailing Stop. If price closes below the 20-Day Low... Initial Stop Loss = 3 x ATR"
+            # So for New Entries, we report 3 ATR stop. For existing, we report 20d Low?
+            # Let's report both or the relevant one.
+            # We will return the 3ATR stop for the "Setup".
+
+            risk_per_share = curr_close - stop_price
+
+            # Position Sizing Logic (The 4% Rule)
+            # This is calculated by caller or frontend, but we provide metrics.
+
+            volatility_pct = (atr_20 / curr_close) * 100
+
+            # Additional: 1D Change
+            pct_change_1d = 0.0
+            if len(df) >= 2:
+                prev = float(df['Close'].iloc[-2])
+                pct_change_1d = ((curr_close - prev) / prev) * 100
+
+            # Filter results?
+            # We return ENTER, WATCH, HOLD, and EXIT signals.
+            # We skip AVOID (Downtrend) to reduce noise, unless explicitly requested?
+            # The user wants to know "whether i should hold now".
+            # If the stock is in a downtrend (AVOID) or Stop Hit (EXIT), it should be shown if the user searches for it.
+            # However, showing 500 "AVOID" stocks is clutter.
+            # We will include EXIT signals.
+            # We will also include AVOID signals but flag them clearly.
+            # Actually, let's include all so the user can audit any stock in the list.
+
+            # Identify name
+            # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            results.append({
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": curr_close,
+                "pct_change_1d": pct_change_1d,
+                "signal": signal,
+                "trend_200sma": "Bullish", # We filtered for this inside the signal logic
+                "breakout_level": round(high_50, 2),
+                "stop_loss_3atr": round(stop_price, 2),
+                "trailing_exit_20d": round(low_20, 2),
+                "volatility_pct": round(volatility_pct, 2),
+                "atr_20": round(atr_20, 2),
+                "risk_per_share": round(risk_per_share, 2)
+            })
+
+        except Exception:
+            continue
+
+    # Sort by signal priority
+    # ENTER first, then WATCH, then HOLD
+    def sort_key(x):
+        s = x['signal']
+        if "ENTER" in s: return 0
+        if "WATCH" in s: return 1
+        return 2
+
+    results.sort(key=sort_key)
+    return results

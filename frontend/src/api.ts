@@ -21,6 +21,11 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const runIsaTrendScreener = async () => {
+    const response = await api.get('/screen/isa');
+    return response.data;
+};
+
 export const runMmsScreener = async (region: string, timeFrame: string) => {
   const response = await api.get('/screen/mms', {
     params: { region, time_frame: timeFrame }

@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa';
 
 const Screener: React.FC<ScreenerProps> = () => {
   const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
@@ -21,6 +21,9 @@ const Screener: React.FC<ScreenerProps> = () => {
   // Turtle/EMA/Strategy Screener State
   const [region, setRegion] = useState('us');
   const [strategyTimeFrame, setStrategyTimeFrame] = useState('1d');
+
+  // ISA Specific State
+  const [isaAccountSize, setIsaAccountSize] = useState<number>(10000);
 
   const handleRunScreener = async () => {
     setLoading(true);
@@ -42,6 +45,8 @@ const Screener: React.FC<ScreenerProps> = () => {
       } else if (activeTab === 'bull_put') {
         // Bull Put usually implies US liquid, but we can pass region if we want to expand later
         data = await runBullPutScreener(region);
+      } else if (activeTab === 'isa') {
+        data = await runIsaTrendScreener();
       }
       setResults(data);
     } catch (err: any) {
@@ -56,6 +61,7 @@ const Screener: React.FC<ScreenerProps> = () => {
     { id: 'darvas', label: 'Darvas Box' },
     { id: 'mms', label: 'MMS / OTE', subLabel: 'SMC' },
     { id: 'ema', label: '5/13 & 5/21 EMA' },
+    { id: 'isa', label: 'ISA Trend Follower', subLabel: 'Long Only' },
     { id: 'bull_put', label: 'Bull Put Spreads', subLabel: 'Yield' },
     { id: 'market', label: 'Market Screener (RSI/IV)', subLabel: 'US Options Only' },
   ];
@@ -146,6 +152,30 @@ const Screener: React.FC<ScreenerProps> = () => {
                 </select>
               </div>
             </>
+          )}
+
+          {activeTab === 'isa' && (
+             <>
+                <div>
+                   <label htmlFor="isa-account-size" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account Cash</label>
+                   <div className="relative rounded-md shadow-sm">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <span className="text-gray-500 sm:text-sm">£</span>
+                        </div>
+                        <input
+                           type="number"
+                           id="isa-account-size"
+                           value={isaAccountSize}
+                           onChange={(e) => setIsaAccountSize(Number(e.target.value))}
+                           className="block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-primary-500 focus:ring-primary-500 sm:text-sm bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white py-2.5"
+                           placeholder="10000"
+                        />
+                   </div>
+                </div>
+                 <div className="col-span-2 flex items-center text-sm text-gray-500 italic mt-6">
+                      Strategy: Long Only Trend Following. Risk: 1% per trade. Position: 4% of Account.
+                  </div>
+             </>
           )}
 
           {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms') && (
@@ -270,9 +300,10 @@ const Screener: React.FC<ScreenerProps> = () => {
                          activeTab === 'darvas' ? 'Darvas Box Setups' :
                          activeTab === 'mms' ? 'Market Maker Models (OTE)' :
                          activeTab === 'bull_put' ? 'Bull Put Spreads' :
+                         activeTab === 'isa' ? 'Trend Follower (ISA)' :
                          '5/13 EMA Setups'}
                     </h3>
-                    <ScreenerTable data={results} type={activeTab} />
+                    <ScreenerTable data={results} type={activeTab} isaAccountSize={isaAccountSize} />
                 </div>
             )}
         </div>
@@ -286,7 +317,7 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, type }) => {
+const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; isaAccountSize?: number }> = ({ data, type, isaAccountSize }) => {
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
     const sortedData = useMemo(() => {
@@ -345,6 +376,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                 } else if (sortConfig.key === 'dte') {
                     aValue = a.dte;
                     bValue = b.dte;
+                } else if (sortConfig.key === 'volatility') {
+                    aValue = a.volatility_pct;
+                    bValue = b.volatility_pct;
+                } else if (sortConfig.key === 'risk_share') {
+                    aValue = a.risk_per_share;
+                    bValue = b.risk_per_share;
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -422,13 +459,23 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                         <HeaderCell label="52W High" sortKey="high_52w" align="right" />
                                     </>
                                 )}
-                                        {type === 'mms' && (
-                                            <>
-                                                <HeaderCell label="OTE Zone" sortKey="ote_zone" align="right" />
-                                                <HeaderCell label="Target" sortKey="target" align="right" />
-                                            </>
-                                        )}
-                                <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
+                                {type === 'mms' && (
+                                    <>
+                                        <HeaderCell label="OTE Zone" sortKey="ote_zone" align="right" />
+                                        <HeaderCell label="Target" sortKey="target" align="right" />
+                                    </>
+                                )}
+                                {type === 'isa' && (
+                                    <>
+                                        <HeaderCell label="Breakout" sortKey="breakout" align="right" />
+                                        <HeaderCell label="Stop (3ATR)" sortKey="stop_loss" align="right" />
+                                        <HeaderCell label="Exit (20L)" sortKey="breakout" align="right" />
+                                        <HeaderCell label="Vol %" sortKey="volatility" align="right" />
+                                        <HeaderCell label="Risk/Share" sortKey="risk_share" align="right" />
+                                        <HeaderCell label="Max Shares" sortKey="" align="right" />
+                                    </>
+                                )}
+                                {type !== 'isa' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
                             </>
                         )}
                         {type === 'bull_put' && (
@@ -530,9 +577,52 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                                 </td>
                                             </>
                                         )}
-                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
-                                            {formatCurrency(row.stop_loss, currency)}
-                                        </td>
+                                        {type === 'isa' ? (
+                                            <>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {formatCurrency(row.breakout_level, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-red-600 dark:text-red-400 font-bold">
+                                                    {formatCurrency(row.stop_loss_3atr, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-orange-600 dark:text-orange-400">
+                                                    {formatCurrency(row.trailing_exit_20d, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                    {row.volatility_pct}%
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                    {formatCurrency(row.risk_per_share, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-primary-600 font-bold bg-primary-50 dark:bg-primary-900/20">
+                                                    {isaAccountSize && row.risk_per_share > 0 ? (
+                                                        // 4% Position Sizing Rule
+                                                        // Max Position = Account * 0.04
+                                                        // Shares = Max Position / Price
+                                                        // Tharp Rule: Total Risk <= 1% Account
+                                                        // Total Risk = Shares * RiskPerShare
+                                                        // So Shares <= (Account * 0.01) / RiskPerShare
+                                                        // We take min of both?
+                                                        // Seykota: "Invest 4% of total account cash".
+                                                        // Tharp Adjustment: "If 3xATR stop > 1% risk to total equity, skip".
+                                                        // This implies Position Size is determined by 4% rule, but filtered by Risk rule.
+                                                        // If (PositionSize * RiskPerShare) > (Account * 0.01) -> Too Risky? No, RiskPerShare is per share.
+                                                        // If I buy N shares. Total Risk = N * RiskPerShare.
+                                                        // Constraint 1: N * Price <= Account * 0.04
+                                                        // Constraint 2: N * RiskPerShare <= Account * 0.01
+                                                        // So N = min( (Account*0.04)/Price, (Account*0.01)/RiskPerShare )
+                                                        Math.floor(Math.min(
+                                                            (isaAccountSize * 0.04) / price,
+                                                            (isaAccountSize * 0.01) / row.risk_per_share
+                                                        ))
+                                                    ) : '-'}
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                {formatCurrency(row.stop_loss, currency)}
+                                            </td>
+                                        )}
                                     </>
                                 )}
 
