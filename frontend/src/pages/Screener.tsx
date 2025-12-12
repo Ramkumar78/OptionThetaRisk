@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkIsaStock } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa';
 
 const Screener: React.FC<ScreenerProps> = () => {
   const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
@@ -22,10 +22,18 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [region, setRegion] = useState('us');
   const [strategyTimeFrame, setStrategyTimeFrame] = useState('1d');
 
+  // ISA Specific State
+  const [checkTicker, setCheckTicker] = useState('');
+  const [checkResult, setCheckResult] = useState<any>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [tableFilter, setTableFilter] = useState('');
+
   const handleRunScreener = async () => {
     setLoading(true);
     setError(null);
     setResults(null);
+    setTableFilter('');
     try {
       let data;
       if (activeTab === 'market') {
@@ -42,6 +50,8 @@ const Screener: React.FC<ScreenerProps> = () => {
       } else if (activeTab === 'bull_put') {
         // Bull Put usually implies US liquid, but we can pass region if we want to expand later
         data = await runBullPutScreener(region);
+      } else if (activeTab === 'isa') {
+        data = await runIsaTrendScreener();
       }
       setResults(data);
     } catch (err: any) {
@@ -51,11 +61,28 @@ const Screener: React.FC<ScreenerProps> = () => {
     }
   };
 
+  const handleCheckStock = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!checkTicker.trim()) return;
+      setCheckLoading(true);
+      setCheckResult(null);
+      setCheckError(null);
+      try {
+          const data = await checkIsaStock(checkTicker);
+          setCheckResult(data);
+      } catch (err: any) {
+          setCheckError(err.message || 'Check failed');
+      } finally {
+          setCheckLoading(false);
+      }
+  };
+
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
     { id: 'turtle', label: 'Turtle Trading' },
     { id: 'darvas', label: 'Darvas Box' },
     { id: 'mms', label: 'MMS / OTE', subLabel: 'SMC' },
     { id: 'ema', label: '5/13 & 5/21 EMA' },
+    { id: 'isa', label: 'ISA Trend Follower', subLabel: 'Long Only' },
     { id: 'bull_put', label: 'Bull Put Spreads', subLabel: 'Yield' },
     { id: 'market', label: 'Market Screener (RSI/IV)', subLabel: 'US Options Only' },
   ];
@@ -146,6 +173,62 @@ const Screener: React.FC<ScreenerProps> = () => {
                 </select>
               </div>
             </>
+          )}
+
+          {activeTab === 'isa' && (
+             <div className="col-span-1 md:col-span-3 space-y-4">
+                 <div className="flex items-end gap-4">
+                     <div className="flex-1">
+                        <label htmlFor="check-stock" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Check a Stock</label>
+                        <form onSubmit={handleCheckStock} className="flex gap-2">
+                            <input
+                                type="text"
+                                id="check-stock"
+                                value={checkTicker}
+                                onChange={(e) => setCheckTicker(e.target.value)}
+                                placeholder="Enter Ticker (e.g. AAPL, TSLA) or Name"
+                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                            />
+                            <button
+                                type="submit"
+                                disabled={checkLoading || !checkTicker.trim()}
+                                className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 font-medium rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                                {checkLoading ? 'Checking...' : 'Check'}
+                            </button>
+                        </form>
+                     </div>
+                 </div>
+                 {checkError && <div className="text-red-600 text-sm">{checkError}</div>}
+                 {checkResult && (
+                     <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                         <h4 className="text-md font-bold text-gray-900 dark:text-white mb-2">{checkResult.company_name} ({checkResult.ticker})</h4>
+                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Signal</span>
+                                 <span className={clsx("font-bold", checkResult.signal.includes('ENTER') ? "text-emerald-600" : checkResult.signal.includes('EXIT') ? "text-orange-600" : checkResult.signal.includes('SELL') ? "text-red-600" : "text-blue-600")}>
+                                     {checkResult.signal}
+                                 </span>
+                             </div>
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Price</span>
+                                 <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(checkResult.price, getCurrencySymbol(checkResult.ticker))}</span>
+                             </div>
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Stop Loss (3ATR)</span>
+                                 <span className="font-mono text-red-600 dark:text-red-400 font-bold">{formatCurrency(checkResult.stop_loss_3atr, getCurrencySymbol(checkResult.ticker))}</span>
+                             </div>
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Risk/Share</span>
+                                 <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(checkResult.risk_per_share, getCurrencySymbol(checkResult.ticker))}</span>
+                             </div>
+                         </div>
+                     </div>
+                 )}
+                 <div className="flex items-center text-sm text-gray-500 italic">
+                      Strategy: Long Only Trend Following. Risk: 1% per trade. Position: 4% of Account.
+                  </div>
+             </div>
           )}
 
           {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms') && (
@@ -265,14 +348,26 @@ const Screener: React.FC<ScreenerProps> = () => {
 
             {activeTab !== 'market' && (
                 <div className="p-6">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                        {activeTab === 'turtle' ? 'Turtle Breakouts' :
-                         activeTab === 'darvas' ? 'Darvas Box Setups' :
-                         activeTab === 'mms' ? 'Market Maker Models (OTE)' :
-                         activeTab === 'bull_put' ? 'Bull Put Spreads' :
-                         '5/13 EMA Setups'}
-                    </h3>
-                    <ScreenerTable data={results} type={activeTab} />
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                            {activeTab === 'turtle' ? 'Turtle Breakouts' :
+                            activeTab === 'darvas' ? 'Darvas Box Setups' :
+                            activeTab === 'mms' ? 'Market Maker Models (OTE)' :
+                            activeTab === 'bull_put' ? 'Bull Put Spreads' :
+                            activeTab === 'isa' ? 'Trend Follower (ISA)' :
+                            '5/13 EMA Setups'}
+                        </h3>
+                        {activeTab === 'isa' && (
+                            <input
+                                type="text"
+                                placeholder="Filter Results..."
+                                value={tableFilter}
+                                onChange={(e) => setTableFilter(e.target.value)}
+                                className="bg-white border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white w-48"
+                            />
+                        )}
+                    </div>
+                    <ScreenerTable data={results} type={activeTab} filter={tableFilter} />
                 </div>
             )}
         </div>
@@ -286,11 +381,19 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, type }) => {
+const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string }> = ({ data, type, filter }) => {
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
     const sortedData = useMemo(() => {
         let sortableItems = [...data];
+        if (filter) {
+            const lowerFilter = filter.toLowerCase();
+            sortableItems = sortableItems.filter(item => {
+                const ticker = (item.Ticker || item.ticker || item.symbol || "").toLowerCase();
+                const name = (item.Company || item.company_name || "").toLowerCase();
+                return ticker.includes(lowerFilter) || name.includes(lowerFilter);
+            });
+        }
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
                 // Map frontend sort keys to data keys
@@ -345,6 +448,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                 } else if (sortConfig.key === 'dte') {
                     aValue = a.dte;
                     bValue = b.dte;
+                } else if (sortConfig.key === 'volatility') {
+                    aValue = a.volatility_pct;
+                    bValue = b.volatility_pct;
+                } else if (sortConfig.key === 'risk_share') {
+                    aValue = a.risk_per_share;
+                    bValue = b.risk_per_share;
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -422,13 +531,22 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                         <HeaderCell label="52W High" sortKey="high_52w" align="right" />
                                     </>
                                 )}
-                                        {type === 'mms' && (
-                                            <>
-                                                <HeaderCell label="OTE Zone" sortKey="ote_zone" align="right" />
-                                                <HeaderCell label="Target" sortKey="target" align="right" />
-                                            </>
-                                        )}
-                                <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
+                                {type === 'mms' && (
+                                    <>
+                                        <HeaderCell label="OTE Zone" sortKey="ote_zone" align="right" />
+                                        <HeaderCell label="Target" sortKey="target" align="right" />
+                                    </>
+                                )}
+                                {type === 'isa' && (
+                                    <>
+                                        <HeaderCell label="Breakout" sortKey="breakout" align="right" />
+                                        <HeaderCell label="Stop (3ATR)" sortKey="stop_loss" align="right" />
+                                        <HeaderCell label="Exit (20L)" sortKey="breakout" align="right" />
+                                        <HeaderCell label="Vol %" sortKey="volatility" align="right" />
+                                        <HeaderCell label="Risk/Share" sortKey="risk_share" align="right" />
+                                    </>
+                                )}
+                                {type !== 'isa' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
                             </>
                         )}
                         {type === 'bull_put' && (
@@ -530,9 +648,29 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType }> = ({ data, ty
                                                 </td>
                                             </>
                                         )}
-                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
-                                            {formatCurrency(row.stop_loss, currency)}
-                                        </td>
+                                        {type === 'isa' ? (
+                                            <>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {formatCurrency(row.breakout_level, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-red-600 dark:text-red-400 font-bold">
+                                                    {formatCurrency(row.stop_loss_3atr, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-orange-600 dark:text-orange-400">
+                                                    {formatCurrency(row.trailing_exit_20d, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                    {row.volatility_pct}%
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                    {formatCurrency(row.risk_per_share, currency)}
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                {formatCurrency(row.stop_loss, currency)}
+                                            </td>
+                                        )}
                                     </>
                                 )}
 
