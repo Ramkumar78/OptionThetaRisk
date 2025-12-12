@@ -280,6 +280,15 @@ def create_app(testing: bool = False) -> Flask:
             if not query:
                 return jsonify({"error": "No ticker provided"}), 400
 
+            # Optional entry price for PnL
+            entry_price = None
+            entry_str = request.args.get("entry_price", "").strip()
+            if entry_str:
+                try:
+                    entry_price = float(entry_str)
+                except:
+                    pass
+
             ticker = screener.resolve_ticker(query)
             if not ticker:
                 # Should not happen given logic, but safe guard
@@ -291,7 +300,15 @@ def create_app(testing: bool = False) -> Flask:
             if not results:
                 return jsonify({"error": f"No data found for {ticker} or insufficient history."}), 404
 
-            return jsonify(results[0])
+            result = results[0]
+
+            if entry_price and result.get('price'):
+                curr = result['price']
+                result['pnl_value'] = curr - entry_price
+                result['pnl_pct'] = ((curr - entry_price) / entry_price) * 100
+                result['user_entry_price'] = entry_price
+
+            return jsonify(result)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
