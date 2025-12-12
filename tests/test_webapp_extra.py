@@ -72,4 +72,4 @@ def test_screen_market_endpoint(mock_sectors, mock_market, client):
     data = response.get_json()
     assert 'results' in data
     assert 'sector_results' in data
-    mock_market.assert_called_with(20.0, 60.0, '1d')
+    mock_market.assert_called_with(20.0, 60.0, '1d', region='us')

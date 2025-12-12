@@ -104,7 +104,7 @@ def test_screen_route_params(client):
 
              res = client.post('/screen', data={'iv_rank': '40', 'rsi_threshold': '60', 'time_frame': '1wk'})
              assert res.status_code == 200
-             mock_screen.assert_called_with(40.0, 60.0, '1wk')
+             mock_screen.assert_called_with(40.0, 60.0, '1wk', region='us')
 
 def test_screen_routes_specific(client):
     # Test Turtle
