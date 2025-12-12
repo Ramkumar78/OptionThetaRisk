@@ -5,6 +5,7 @@ import numpy as np
 from unittest.mock import patch, MagicMock
 from option_auditor.screener import _screen_tickers, screen_market, screen_sectors, screen_turtle_setups, screen_5_13_setups, screen_darvas_box, SECTOR_NAMES, SECTOR_COMPONENTS
 import sys
+import time
 
 # Helper to create mock yfinance data
 def create_mock_data(rows=100, price=100.0, trend=0):
@@ -50,7 +51,8 @@ class TestScreenerCoverageExtended:
         assert call_args['period'] == '5y'
 
     @patch('option_auditor.screener.yf.download')
-    def test_screen_tickers_batch_vs_sequential(self, mock_download):
+    @patch('time.sleep', return_value=None)
+    def test_screen_tickers_batch_vs_sequential(self, mock_sleep, mock_download):
         """Test logic switching between batch and sequential download."""
 
         # 1. Batch Success
