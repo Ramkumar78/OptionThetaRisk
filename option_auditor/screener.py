@@ -2056,6 +2056,38 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
     final_list.sort(key=lambda x: x['roi_pct'], reverse=True)
     return final_list
 
+def resolve_ticker(query: str) -> str:
+    """
+    Resolves a query (Ticker or Company Name) to a valid ticker symbol.
+    Uses TICKER_NAMES for lookup.
+    """
+    if not query: return ""
+    query = query.strip().upper()
+
+    # 1. Exact Ticker Match
+    if query in TICKER_NAMES:
+        return query
+
+    # 2. Check suffix variations (.L, .NS)
+    # If query has no suffix, check if query.L or query.NS exists in TICKER_NAMES
+    if "." not in query:
+        if f"{query}.L" in TICKER_NAMES: return f"{query}.L"
+        if f"{query}.NS" in TICKER_NAMES: return f"{query}.NS"
+
+    # 3. Name Search (Exact then Partial)
+    # Exact Name
+    for k, v in TICKER_NAMES.items():
+        if v.upper() == query:
+            return k
+
+    # Partial Name
+    for k, v in TICKER_NAMES.items():
+        if query in v.upper():
+            return k
+
+    # 4. Fallback: Assume it is a valid ticker if no match found
+    return query
+
 def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01) -> list:
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).

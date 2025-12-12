@@ -26,6 +26,13 @@ export const runIsaTrendScreener = async () => {
     return response.data;
 };
 
+export const checkIsaStock = async (ticker: string) => {
+    const response = await api.get('/screen/isa/check', {
+        params: { ticker }
+    });
+    return response.data;
+};
+
 export const runMmsScreener = async (region: string, timeFrame: string) => {
   const response = await api.get('/screen/mms', {
     params: { region, time_frame: timeFrame }

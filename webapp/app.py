@@ -273,6 +273,28 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/isa/check", methods=["GET"])
+    def check_isa_stock():
+        try:
+            query = request.args.get("ticker", "").strip()
+            if not query:
+                return jsonify({"error": "No ticker provided"}), 400
+
+            ticker = screener.resolve_ticker(query)
+            if not ticker:
+                # Should not happen given logic, but safe guard
+                ticker = query.upper()
+
+            # Run just for this ticker
+            results = screener.screen_trend_followers_isa(ticker_list=[ticker])
+
+            if not results:
+                return jsonify({"error": f"No data found for {ticker} or insufficient history."}), 404
+
+            return jsonify(results[0])
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/isa", methods=["GET"])
     def screen_isa():
         try:
