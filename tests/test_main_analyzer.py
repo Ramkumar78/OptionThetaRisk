@@ -5,6 +5,7 @@ from option_auditor.parsers import TastytradeParser, TastytradeFillsParser
 import option_auditor.main_analyzer as aud
 import io
 from datetime import datetime
+from unittest.mock import patch, MagicMock
 
 def make_tasty_df(rows):
     return pd.DataFrame(rows)
@@ -19,7 +20,8 @@ def test_detect_broker():
     df = make_tasty_df([{"Other": "Data"}])
     assert _detect_broker(df) is None
 
-def test_basic_analysis():
+@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+def test_basic_analysis(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 1.0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Call"},
         {"Time": "2025-01-05 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 1.0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Call"}
@@ -54,7 +56,8 @@ def test_no_options_trades():
     res = analyze_csv(csv_buffer)
     assert "error" in res
 
-def test_verdict_logic():
+@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+def test_verdict_logic(mock_fetch):
     # Case 1: Green Flag (need 10+ trades, all wins or mostly wins)
     rows1 = [
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "A", "Quantity": 1, "Action": "Sell to Open", "Price": 1.00, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 10, "Option Type": "Call"},
@@ -130,7 +133,8 @@ def test_verdict_logic():
     res2 = analyze_csv(csv_buffer, style="income")
     assert "Red Flag: Negative Income" in res2['verdict']
 
-def test_build_strategies_same_day_different_strategies():
+@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+def test_build_strategies_same_day_different_strategies(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 400, "Option Type": "Call"},
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Close", "Price": 1.1, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 400, "Option Type": "Call"},
@@ -155,7 +159,8 @@ def test_build_strategies_empty_df():
 def test_sym_desc_unknown_symbol():
     assert aud._sym_desc("UNKNOWN") == "Options on UNKNOWN"
 
-def test_buying_power_calculation():
+@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+def test_buying_power_calculation(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
     ])
@@ -169,7 +174,8 @@ def test_buying_power_calculation():
     res_zero = analyze_csv(csv_buffer, net_liquidity_now=0, buying_power_available_now=0)
     assert res_zero["buying_power_utilized_percent"] is None
 
-def test_rolling_trade_detection():
+@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+def test_rolling_trade_detection(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
         {"Time": "2025-01-05 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Close", "Price": 0.5, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
@@ -201,7 +207,8 @@ def test_group_contracts_with_open_empty_df():
     assert len(closed) == 0
     assert len(open) == 0
 
-def test_no_closed_trades():
+@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+def test_no_closed_trades(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0.10, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
     ])
