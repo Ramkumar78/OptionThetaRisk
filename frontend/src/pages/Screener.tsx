@@ -512,6 +512,13 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                 } else if (sortConfig.key === 'risk_share') {
                     aValue = a.risk_per_share;
                     bValue = b.risk_per_share;
+                } else if (sortConfig.key === 'tharp') {
+                    aValue = a.tharp_verdict;
+                    bValue = b.tharp_verdict;
+                } else if (sortConfig.key === 'max_size') {
+                    // Sort numerically if possible (remove %)
+                    aValue = parseFloat((a.max_position_size || "0").replace('%',''));
+                    bValue = parseFloat((b.max_position_size || "0").replace('%',''));
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -603,6 +610,8 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         <HeaderCell label="Exit (20L)" sortKey="trailing_exit" align="right" />
                                         <HeaderCell label="Vol %" sortKey="volatility" align="right" />
                                         <HeaderCell label="Risk/Share" sortKey="risk_share" align="right" />
+                                        <HeaderCell label="Tharp Verdict" sortKey="tharp" align="right" />
+                                        <HeaderCell label="Max Size" sortKey="max_size" align="right" />
                                     </>
                                 )}
                                 {type !== 'isa' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
@@ -726,6 +735,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
                                                     {formatCurrency(row.risk_per_share, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {row.tharp_verdict}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                                                    {row.max_position_size}
                                                 </td>
                                             </>
                                         ) : (

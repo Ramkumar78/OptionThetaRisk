@@ -2252,6 +2252,30 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
             if curr_close > 0:
                 dist_to_stop_pct = ((curr_close - effective_stop) / curr_close) * 100
 
+            # --- VAN THARP SIZING CHECK ---
+            # User Rule: Fixed 4% Position Sizing
+            position_size_pct = 0.04
+
+            # How much total equity is at risk?
+            # Risk = Position Size * Distance to Stop
+            risk_dist = max(0.0, dist_to_stop_pct)
+            total_equity_risk_pct = position_size_pct * (risk_dist / 100.0)
+
+            # Tharp's Limit: Never risk more than 1% of total equity on a trade
+            is_tharp_safe = total_equity_risk_pct <= 0.01
+
+            tharp_verdict = "✅ SAFE" if is_tharp_safe else f"⚠️ RISKY (Risks {total_equity_risk_pct*100:.1f}% Equity)"
+            if dist_to_stop_pct <= 0:
+                 tharp_verdict = "🛑 STOPPED OUT"
+
+            suggested_size_val = 0.0
+            if risk_dist > 0:
+                 suggested_size_val = min(4.0, 1.0 / (risk_dist / 100.0))
+            else:
+                 suggested_size_val = 4.0
+
+            max_position_size_str = f"{suggested_size_val:.1f}%"
+
             # Position Sizing Logic (The 4% Rule)
             # This is calculated by caller or frontend, but we provide metrics.
 
@@ -2326,6 +2350,8 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "atr_20": round(atr_20, 2),
                 "risk_per_share": round(risk_per_share, 2),
                 "dist_to_stop_pct": round(dist_to_stop_pct, 2),
+                "tharp_verdict": tharp_verdict,
+                "max_position_size": max_position_size_str,
                 "breakout_date": breakout_date
             })
 
