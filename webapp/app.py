@@ -331,12 +331,13 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/isa", methods=["GET"])
     def screen_isa():
         try:
-            cache_key = ("isa_trend",)
+            region = request.args.get("region", "us")
+            cache_key = ("isa_trend", region)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
-            results = screener.screen_trend_followers_isa()
+            results = screener.screen_trend_followers_isa(region=region)
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
