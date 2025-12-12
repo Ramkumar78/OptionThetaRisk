@@ -7,6 +7,44 @@ interface ScreenerProps {}
 
 type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa';
 
+const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
+  market: {
+    title: 'Market Screener',
+    subtitle: 'Volatility & RSI Scanner',
+    description: 'Scans for liquid US options with specific IV Rank and RSI thresholds. Ideal for finding mean-reversion setups (High IV/RSI) or value entries (Low RSI). Supports sector-based grouping.'
+  },
+  turtle: {
+    title: 'Turtle Trading',
+    subtitle: 'Trend Following Breakouts',
+    description: 'Based on the classic Turtle Trading experiment. Identifies 20-Day Breakouts (Donchian Channel) to catch major trends. Best used in trending markets.'
+  },
+  darvas: {
+    title: 'Darvas Box',
+    subtitle: 'Momentum Breakouts',
+    description: 'Identifies stocks consolidating near 52-week highs in a "box" pattern. Signals a buy when price breaks the "Ceiling" on high volume. A powerful momentum strategy.'
+  },
+  mms: {
+    title: 'MMS / OTE',
+    subtitle: 'Smart Money Concepts',
+    description: 'Market Maker Models & Optimal Trade Entry. Identifies structural shifts and retracements into premium/discount zones (62-79%). High precision entries.'
+  },
+  ema: {
+    title: 'EMA Crossovers',
+    subtitle: 'Moving Average Trend',
+    description: 'Scans for 5/13 and 5/21 Exponential Moving Average crossovers. "Fresh Breakouts" indicate new trends, while "Trending" signals ongoing momentum. Uses dynamic stops.'
+  },
+  bull_put: {
+    title: 'Bull Put Spreads',
+    subtitle: 'Income Generation',
+    description: 'Finds bullish setups (Price > SMA 50) suitable for selling credit spreads. Targets ~45 DTE, 30 Delta puts to generate theta income with defined risk.'
+  },
+  isa: {
+    title: 'ISA Trend Follower',
+    subtitle: 'Long-Term Growth',
+    description: 'A robust long-only strategy. Requires Price > 200 SMA and a breakout above the 50-day High. Exits when price closes below the 20-day Low. Ideal for portfolio growth.'
+  }
+};
+
 const Screener: React.FC<ScreenerProps> = () => {
   const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
   const [loading, setLoading] = useState(false);
@@ -90,36 +128,47 @@ const Screener: React.FC<ScreenerProps> = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-          <div>
-            <h2 id="screener-title" className="text-2xl font-bold text-gray-900 dark:text-white">Stock & Option Screener</h2>
-            <p id="screener-subtitle" className="text-sm text-gray-500 dark:text-gray-400">Find high-probability setups based on volatility and trend.</p>
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 max-w-2xl">
-              Use the <strong>Market Screener</strong> to scan for liquid US options with specific IV Rank and RSI thresholds. The <strong>Turtle Trading</strong>, <strong>Darvas Box</strong>, and <strong>EMA</strong> screeners are trend-following tools designed to identify breakout candidates across multiple regions (US, UK/Euro, India). The <strong>Bull Put Spreads</strong> screener finds income setups. Select a strategy tab above to begin.
-            </p>
-          </div>
 
-          <div className="w-full md:w-auto">
-            <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto whitespace-nowrap no-scrollbar">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  id={`tab-${tab.id}`}
-                  onClick={() => { setActiveTab(tab.id); setResults(null); }}
-                  className={clsx(
-                    "px-4 py-2 text-sm font-medium rounded-md transition-all flex flex-col items-center justify-center flex-shrink-0",
-                    activeTab === tab.id
-                      ? "bg-white dark:bg-gray-700 text-primary-600 dark:text-white shadow-sm"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",
-                    tab.id === 'market' && "text-gray-400 dark:text-gray-500 font-light"
-                  )}
-                >
-                  <span>{tab.label}</span>
-                  {tab.subLabel && <span className="text-[10px] uppercase tracking-wide opacity-75">{tab.subLabel}</span>}
-                </button>
-              ))}
+        {/* Header & Tabs */}
+        <div className="flex flex-col gap-6 mb-6">
+            <div>
+                <h2 id="screener-title" className="text-2xl font-bold text-gray-900 dark:text-white">Stock & Option Screener</h2>
+                <p id="screener-subtitle" className="text-sm text-gray-500 dark:text-gray-400">Find high-probability setups based on volatility and trend.</p>
             </div>
-          </div>
+
+            <div className="w-full">
+                <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto whitespace-nowrap no-scrollbar">
+                    {tabs.map((tab) => (
+                        <button
+                        key={tab.id}
+                        id={`tab-${tab.id}`}
+                        onClick={() => { setActiveTab(tab.id); setResults(null); }}
+                        className={clsx(
+                            "px-4 py-2 text-sm font-medium rounded-md transition-all flex flex-col items-center justify-center flex-shrink-0 min-w-[120px]",
+                            activeTab === tab.id
+                            ? "bg-white dark:bg-gray-700 text-primary-600 dark:text-white shadow-sm"
+                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",
+                            tab.id === 'market' && "text-gray-400 dark:text-gray-500 font-light"
+                        )}
+                        >
+                        <span>{tab.label}</span>
+                        {tab.subLabel && <span className="text-[10px] uppercase tracking-wide opacity-75">{tab.subLabel}</span>}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Dynamic Description Box */}
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg border border-gray-100 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center">
+                    {screenerInfo[activeTab].title}
+                    <span className="hidden sm:inline-block mx-2 text-gray-300 dark:text-gray-600">|</span>
+                    <span className="text-sm font-normal text-gray-500 dark:text-gray-400 block sm:inline">{screenerInfo[activeTab].subtitle}</span>
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
+                    {screenerInfo[activeTab].description}
+                </p>
+            </div>
         </div>
 
         {/* Controls */}
