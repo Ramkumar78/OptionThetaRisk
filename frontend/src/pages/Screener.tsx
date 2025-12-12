@@ -52,7 +52,7 @@ const Screener: React.FC<ScreenerProps> = () => {
         // Bull Put usually implies US liquid, but we can pass region if we want to expand later
         data = await runBullPutScreener(region);
       } else if (activeTab === 'isa') {
-        data = await runIsaTrendScreener();
+        data = await runIsaTrendScreener(region);
       }
       setResults(data);
     } catch (err: any) {
