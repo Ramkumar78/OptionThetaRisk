@@ -24,6 +24,7 @@ const Screener: React.FC<ScreenerProps> = () => {
 
   // ISA Specific State
   const [checkTicker, setCheckTicker] = useState('');
+  const [checkEntryPrice, setCheckEntryPrice] = useState('');
   const [checkResult, setCheckResult] = useState<any>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
   const [checkLoading, setCheckLoading] = useState(false);
@@ -68,7 +69,7 @@ const Screener: React.FC<ScreenerProps> = () => {
       setCheckResult(null);
       setCheckError(null);
       try {
-          const data = await checkIsaStock(checkTicker);
+          const data = await checkIsaStock(checkTicker, checkEntryPrice);
           setCheckResult(data);
       } catch (err: any) {
           setCheckError(err.message || 'Check failed');
@@ -187,7 +188,15 @@ const Screener: React.FC<ScreenerProps> = () => {
                                 value={checkTicker}
                                 onChange={(e) => setCheckTicker(e.target.value)}
                                 placeholder="Enter Ticker (e.g. AAPL, TSLA) or Name"
-                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                            />
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={checkEntryPrice}
+                                onChange={(e) => setCheckEntryPrice(e.target.value)}
+                                placeholder="Entry Price (Opt.)"
+                                className="w-32 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                             />
                             <button
                                 type="submit"
