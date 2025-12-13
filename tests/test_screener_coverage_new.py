@@ -167,7 +167,7 @@ def test_screen_mms_ote_bearish(mock_ticker_cls):
     # Current Close = 97.0
 
     periods = 60
-    dates = pd.date_range(end=datetime.now(), periods=periods, freq='H')
+    dates = pd.date_range(end=datetime.now(), periods=periods, freq='h')
 
     highs = np.full(periods, 95.0)
     lows = np.full(periods, 90.0)
