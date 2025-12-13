@@ -2272,29 +2272,27 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                  # Trend ends if Price crossed < Low20 (Stop).
                  # So we find the earliest 'Entry' signal in the current contiguous 'Safe' block.
 
-                 dates = df.index
-                 closes = df['Close'].values
-                 highs50 = df['High_50'].values
-                 lows20 = df['Low_20'].values
-
-                 found_date = None
-                 # Limit lookback (e.g. 400 days ~ 1.5 years max trend duration check for perf)
                  limit = min(len(df), 400)
+                 subset = df.iloc[-limit:].copy()
 
-                 for i in range(len(df)-1, len(df)-limit, -1):
-                     if pd.isna(lows20[i]) or pd.isna(highs50[i]): continue
+                 # Vectorized Masks
+                 is_breakout = subset['Close'] >= subset['High_50']
+                 is_broken = subset['Close'] <= subset['Low_20']
 
-                     if closes[i] <= lows20[i]:
-                         # Stop hit here. The current trend (if any) started AFTER this.
-                         break
+                 # 1. Find the LAST trend break (Reset Point)
+                 break_indices = subset.index[is_broken]
+                 last_break_idx = break_indices[-1] if not break_indices.empty else None
 
-                     if closes[i] >= highs50[i]:
-                         # This day was a breakout entry.
-                         # We record it, but keep looking back to see if there was an earlier one in this same run.
-                         found_date = dates[i]
+                 # 2. Find breakouts AFTER the last break
+                 breakout_indices = subset.index[is_breakout]
 
-                 if found_date:
-                     breakout_date = found_date.strftime("%Y-%m-%d")
+                 if last_break_idx is not None:
+                     valid_breakouts = breakout_indices[breakout_indices > last_break_idx]
+                 else:
+                     valid_breakouts = breakout_indices
+
+                 if not valid_breakouts.empty:
+                     breakout_date = valid_breakouts[0].strftime("%Y-%m-%d")
 
 
             # Filter results?
