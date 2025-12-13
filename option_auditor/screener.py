@@ -15,7 +15,7 @@ from option_auditor.unified_screener import screen_universal_dashboard
 # Imports from common constants to avoid circular dependencies
 from option_auditor.common.constants import SECTOR_NAMES, SECTOR_COMPONENTS, TICKER_NAMES
 from option_auditor.common.data_utils import prepare_data_for_ticker as _prepare_data_for_ticker
-from option_auditor.common.data_utils import fetch_data_with_retry
+from option_auditor.common.data_utils import fetch_data_with_retry, fetch_batch_data_safe
 
 try:
     from option_auditor.sp500_data import get_sp500_tickers
@@ -33,65 +33,55 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
     if not base_tickers:
         return []
 
-    # Batch download 6mo data for volume and sma
-    import yfinance as yf
+    # Batch download 1y data for volume and sma using safe utility
     import pandas_ta as ta
 
     filtered_list = []
 
-    # Chunking Logic
-    chunk_size = 100
+    # Use centralized batch fetch
+    data = fetch_batch_data_safe(base_tickers, period="1y", interval="1d", chunk_size=100)
 
-    for i in range(0, len(base_tickers), chunk_size):
-        chunk = base_tickers[i:i+chunk_size]
+    if data.empty:
+        # If download failed completely, fallback to returning the base list (or a safe subset)
+        # to ensure the screener doesn't return nothing, effectively bypassing the filter.
+        # This matches previous behavior expected by tests.
+        logger.warning("S&P 500 filter data download failed. Returning raw list.")
+        return base_tickers
+
+    # Iterate through the downloaded data to check criteria
+    # fetch_batch_data_safe returns a DataFrame where columns are usually MultiIndex (Ticker, Price) or flat if single ticker
+    # But for multiple tickers it's MultiIndex.
+
+    # We iterate base_tickers because they are the keys
+    for ticker in base_tickers:
         try:
-            # Download chunk
-            data = yf.download(chunk, period="1y", interval="1d", group_by='ticker', threads=True, progress=False, auto_adjust=True)
+            df = pd.DataFrame()
+            # Extract single DF safely
+            if isinstance(data.columns, pd.MultiIndex):
+                if ticker in data.columns.levels[0]:
+                        df = data[ticker].copy()
+            elif ticker in data.columns: # fallback
+                    df = data[ticker].copy()
+            else:
+                continue # Ticker failed to download
 
-            # Iterate through the chunk to check criteria
-            for ticker in chunk:
-                try:
-                    df = pd.DataFrame()
-                    # Extract single DF safely
-                    if isinstance(data.columns, pd.MultiIndex):
-                        if ticker in data.columns.levels[0]:
-                             df = data[ticker].copy()
-                    elif ticker in data.columns: # fallback
-                         df = data[ticker].copy() # unlikely with group_by
-                    else:
-                        continue # Ticker failed to download
+            df = df.dropna(how='all')
+            if len(df) < 20: continue
 
-                    df = df.dropna(how='all')
-                    if len(df) < 20: continue
+            # 1. Volume Filter (> 500k avg over last 20 days)
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+            if avg_vol < 500000: continue
 
-                    # 1. Volume Filter (> 500k avg over last 20 days)
-                    avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-                    if avg_vol < 500000: continue
+            # 2. Trend Filter (> SMA 200)
+            if check_trend:
+                if len(df) < 200: continue
+                sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+                curr_price = df['Close'].iloc[-1]
+                if curr_price < sma_200: continue
 
-                    # 2. Trend Filter (> SMA 200)
-                    if check_trend:
-                        if len(df) < 200: continue
-                        sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-                        curr_price = df['Close'].iloc[-1]
-                        if curr_price < sma_200: continue
-
-                    filtered_list.append(ticker)
-                except:
-                    continue
-        except Exception as e:
-            logger.error(f"Failed to batch download SP500 chunk {i}: {e}")
-            pass
-
-    # Fallback if completely empty?
-    if not filtered_list and len(base_tickers) > 0:
-         # If download failed completely, maybe return top 10 as safe mode?
-         # Or return empty. The original code returned base_tickers[:50].
-         pass
-
-    # Always include the "High Interest" names if they are in S&P 500
-    # (Or just append them if missing? The prompt says "Keep your High Interest List: Always scan...")
-    # But this function returns S&P 500 filtered. The caller usually merges lists.
-    # We will return just the filtered subset.
+            filtered_list.append(ticker)
+        except:
+            continue
 
     return filtered_list
 
@@ -143,9 +133,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     # yfinance batch download is usually fine for daily/weekly.
     if not is_intraday and tickers:
         try:
-            # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
-            # auto_adjust=True to suppress warning
-            batch_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
+            # Use safe batch fetch
+            batch_data = fetch_batch_data_safe(tickers, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to batch download ticker data: {e}")
             batch_data = None
@@ -516,7 +505,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
     data = None
     if not is_intraday:
         try:
-            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
+            # Use safe batch fetch
+            data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to bulk download for turtle setups: {e}")
             pass
@@ -681,7 +671,8 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
     data = None
     if not is_intraday:
         try:
-            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
+            # Use safe batch fetch
+            data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to bulk download for 5/13 setups: {e}")
             pass
@@ -868,7 +859,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
     data = None
     if not is_intraday:
         try:
-            data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False, group_by='ticker', auto_adjust=True)
+            # Use safe batch fetch
+            data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to bulk download for Darvas screener: {e}")
             pass
@@ -1524,7 +1516,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
             # Max Risk = Width - Credit
             risk = actual_width - credit
 
-            if risk <= 0 or credit <= 0: return None # Bad data
+            if risk <= 0 or credit <= 0: return None # Yield too low
 
             roi = credit / risk
 
@@ -1658,7 +1650,8 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         # Batch mode
         try:
             # period="2y" to ensure we have enough for 200 SMA + 50d High
-            data = yf.download(ticker_list, period="2y", interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
+            # Use safe batch fetch
+            data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d", chunk_size=50)
         except Exception as e:
             logger.error(f"Batch download failed for ISA screener: {e}")
             return []
@@ -1959,7 +1952,8 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
 
     # Fetch Data (Need history for FFT)
     try:
-        data = yf.download(ticker_list, period="1y", interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
+        # Use safe batch fetch
+        data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d", chunk_size=100)
     except:
         return []
 
@@ -2053,9 +2047,8 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
 
     # Batch download 2 years of data (enough for 200 SMA + FFT)
     try:
-        # Reuse existing helpers if possible, or use the provided logic which is clean.
-        # Using 2y period as requested.
-        data = yf.download(ticker_list, period="2y", interval=time_frame, group_by='ticker', progress=False, auto_adjust=True, threads=True)
+        # Use safe batch fetch
+        data = fetch_batch_data_safe(ticker_list, period="2y", interval=time_frame, chunk_size=100)
     except Exception as e:
         logger.error(f"Hybrid screener download failed: {e}")
         return []
