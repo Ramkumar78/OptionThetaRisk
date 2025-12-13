@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import FeedbackModal from './FeedbackModal';
+import { MindsetChecklist } from './MindsetChecklist';
+import axios from 'axios';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -14,7 +16,26 @@ const Layout: React.FC<LayoutProps> = () => {
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
   const location = useLocation();
+
+  const saveMindsetNote = async (note: string) => {
+    try {
+        await axios.post('/journal/add', {
+            entry_date: new Date().toISOString().split('T')[0],
+            entry_time: new Date().toTimeString().split(' ')[0].slice(0, 5),
+            symbol: "MINDSET", // Special tag
+            strategy: "PRE-TRADE",
+            sentiment: "Neutral",
+            pnl: 0,
+            notes: note
+        });
+        alert("Mindset Logged ✅");
+    } catch (e) {
+        console.error(e);
+        alert("Failed to log mindset.");
+    }
+  };
 
   useEffect(() => {
     if (isDark) {
@@ -64,6 +85,13 @@ const Layout: React.FC<LayoutProps> = () => {
           </div>
 
           <div className="flex md:order-2 space-x-3">
+              <button
+                  onClick={() => setShowChecklist(true)}
+                  className="hidden md:flex items-center px-3 py-1 bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors mr-2"
+              >
+                  <span className="mr-2">🧠</span> Pre-Flight
+              </button>
+
               <button
                 id="theme-toggle"
                 type="button"
@@ -143,6 +171,12 @@ const Layout: React.FC<LayoutProps> = () => {
       </footer>
 
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      {showChecklist && (
+        <MindsetChecklist
+            onClose={() => setShowChecklist(false)}
+            onSaveToJournal={saveMindsetNote}
+        />
+      )}
     </div>
   );
 };
