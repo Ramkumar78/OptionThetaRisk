@@ -7,465 +7,22 @@ import logging
 # Configure logger
 logger = logging.getLogger(__name__)
 
+# Import Unified Screener (Lazy import inside function to avoid circular dep if needed, or top level)
+# We will expose it via this module for backward compatibility/ease of use.
+from option_auditor.unified_screener import screen_universal_dashboard
+
+# Imports from common constants to avoid circular dependencies
+from option_auditor.common.constants import SECTOR_NAMES, SECTOR_COMPONENTS, TICKER_NAMES
+from option_auditor.common.data_utils import prepare_data_for_ticker as _prepare_data_for_ticker
+from option_auditor.common.data_utils import fetch_data_with_retry
+
 try:
-    from option_auditor.sp500_data import SP500_NAMES, get_sp500_tickers
+    from option_auditor.sp500_data import get_sp500_tickers
 except ImportError:
-    # Fallback if file not found (e.g. during initial setup)
-    SP500_NAMES = {}
     def get_sp500_tickers(): return []
 
-SECTOR_NAMES = {
-    "XLC": "Communication Services",
-    "XLY": "Consumer Discretionary",
-    "XLP": "Consumer Staples",
-    "XLE": "Energy",
-    "XLF": "Financials",
-    "XLV": "Health Care",
-    "XLI": "Industrials",
-    "XLK": "Technology",
-    "XLB": "Materials",
-    "XLRE": "Real Estate",
-    "XLU": "Utilities",
-}
-
-SECTOR_COMPONENTS = {
-    "XLC": ["META", "GOOGL", "GOOG", "NFLX", "TMUS", "DIS", "CMCSA", "VZ", "T", "CHTR"],
-    "XLY": ["AMZN", "TSLA", "HD", "MCD", "TJX", "BKNG", "LOW", "SBUX", "NKE", "MAR"],
-    "XLP": ["WMT", "PG", "COST", "KO", "PEP", "PM", "MDLZ", "MO", "CL", "TGT"],
-    "XLE": ["XOM", "CVX", "COP", "WMB", "MPC", "EOG", "SLB", "PSX", "VLO", "KMI"],
-    "XLF": ["BRK-B", "JPM", "V", "MA", "BAC", "WFC", "GS", "MS", "AXP", "C"],
-    "XLV": ["LLY", "JNJ", "ABBV", "UNH", "MRK", "ABT", "TMO", "ISRG", "AMGN", "BSX"],
-    "XLI": ["GE", "CAT", "RTX", "UBER", "GEV", "BA", "ETN", "UNP", "HON", "DE"],
-    "XLK": ["NVDA", "AAPL", "MSFT", "AVGO", "ORCL", "CRM", "ADBE", "AMD", "CSCO", "IBM"],
-    "XLB": ["LIN", "NEM", "SHW", "ECL", "FCX", "APD", "NUE", "MLM", "VMC", "CTVA"],
-    "XLRE": ["PLD", "AMT", "EQIX", "WELL", "PSA", "SPG", "DLR", "O", "CCI", "CBRE"],
-    "XLU": ["NEE", "SO", "DUK", "CEG", "AEP", "SRE", "VST", "PEG", "ED", "D"],
-    "WATCH": [
-        "PLTR", "SOFI", "MSTR", "COIN", "INTC", "MU", "QCOM", "AMAT", "TXN", "ARM",
-        "SMCI", "DELL", "HPQ", "PANW", "SNOW", "NOW", "SHOP", "PYPL", "SQ", "HOOD",
-        "DKNG", "RBLX", "SNAP", "PINS", "CVNA", "AFRM", "UPST", "AI", "MARA", "RIOT",
-        "CLSK", "F", "GM", "RIVN", "LCID", "TSM", "BABA", "PDD", "NIO", "JD",
-        "SPOT", "ABNB", "DASH", "CCL", "AAL", "PFE", "CVS", "GILD", "OXY", "LULU"
-    ]
-}
-
-SECTOR_NAMES["WATCH"] = "High Interest / Growth"
-
-TICKER_NAMES = {
-    "ECL": "Ecolab Inc.",
-    "PLTR": "Palantir Technologies Inc.",
-    "SOFI": "SoFi Technologies, Inc.",
-    "MSTR": "MicroStrategy Incorporated",
-    "COIN": "Coinbase Global, Inc.",
-    "INTC": "Intel Corporation",
-    "MU": "Micron Technology, Inc.",
-    "QCOM": "Qualcomm Incorporated",
-    "AMAT": "Applied Materials, Inc.",
-    "TXN": "Texas Instruments Incorporated",
-    "ARM": "Arm Holdings plc",
-    "SMCI": "Super Micro Computer, Inc.",
-    "DELL": "Dell Technologies Inc.",
-    "HPQ": "HP Inc.",
-    "PANW": "Palo Alto Networks, Inc.",
-    "SNOW": "Snowflake Inc.",
-    "NOW": "ServiceNow, Inc.",
-    "SHOP": "Shopify Inc.",
-    "PYPL": "PayPal Holdings, Inc.",
-    "SQ": "Block, Inc.",
-    "HOOD": "Robinhood Markets, Inc.",
-    "DKNG": "DraftKings Inc.",
-    "RBLX": "Roblox Corporation",
-    "SNAP": "Snap Inc.",
-    "PINS": "Pinterest, Inc.",
-    "CVNA": "Carvana Co.",
-    "AFRM": "Affirm Holdings, Inc.",
-    "UPST": "Upstart Holdings, Inc.",
-    "AI": "C3.ai, Inc.",
-    "MARA": "Marathon Digital Holdings, Inc.",
-    "RIOT": "Riot Platforms, Inc.",
-    "CLSK": "CleanSpark, Inc.",
-    "F": "Ford Motor Company",
-    "GM": "General Motors Company",
-    "RIVN": "Rivian Automotive, Inc.",
-    "LCID": "Lucid Group, Inc.",
-    "TSM": "Taiwan Semiconductor Manufacturing",
-    "BABA": "Alibaba Group Holding Limited",
-    "PDD": "PDD Holdings Inc.",
-    "NIO": "NIO Inc.",
-    "JD": "JD.com, Inc.",
-    "SPOT": "Spotify Technology S.A.",
-    "ABNB": "Airbnb, Inc.",
-    "DASH": "DoorDash, Inc.",
-    "CCL": "Carnival Corporation & plc",
-    "AAL": "American Airlines Group Inc.",
-    "PFE": "Pfizer Inc.",
-    "CVS": "CVS Health Corporation",
-    "GILD": "Gilead Sciences, Inc.",
-    "OXY": "Occidental Petroleum Corporation",
-    "LULU": "Lululemon Athletica Inc.",
-    "AZN": "AstraZeneca PLC",
-    "SHEL": "Shell plc",
-    "HSBA": "HSBC Holdings plc",
-    "ULVR": "Unilever PLC",
-    "BP": "BP p.l.c.",
-    "RIO": "Rio Tinto Group",
-    "REL": "RELX PLC",
-    "GSK": "GSK plc",
-    "DGE": "Diageo plc",
-    "LSEG": "London Stock Exchange Group plc",
-    "BATS": "British American Tobacco p.l.c.",
-    "GLEN": "Glencore plc",
-    "BA": "BAE Systems plc",
-    "CNA": "Centrica plc",
-    "NG": "National Grid plc",
-    "LLOY": "Lloyds Banking Group plc",
-    "RR": "Rolls-Royce Holdings plc",
-    "BARC": "Barclays PLC",
-    "CPG": "Compass Group PLC",
-    "NWG": "NatWest Group plc",
-    "RKT": "Reckitt Benckiser Group plc",
-    "VOD": "Vodafone Group Plc",
-    "AAL": "Anglo American plc",
-    "SGE": "Sage Group plc",
-    "HLN": "Haleon plc",
-    "EXR": "Exor N.V.",
-    "TSCO": "Tesco PLC",
-    "SSE": "SSE plc",
-    "MNG": "M&G plc",
-    "ADM": "Admiral Group plc",
-    "III": "3i Group plc",
-    "ANTO": "Antofagasta plc",
-    "SPX": "Spirax-Sarco Engineering plc",
-    "STAN": "Standard Chartered PLC",
-    "IMB": "Imperial Brands PLC",
-    "WTB": "Whitbread PLC",
-    "SVT": "Severn Trent Plc",
-    "AUTO": "Auto Trader Group plc",
-    "SN": "Smith & Nephew plc",
-    "CRDA": "Croda International Plc",
-    "WPP": "WPP plc",
-    "SMIN": "Smiths Group plc",
-    "DCC": "DCC plc",
-    "AV": "Aviva plc",
-    "LGEN": "Legal & General Group Plc",
-    "KGF": "Kingfisher plc",
-    "SBRY": "J Sainsbury plc",
-    "MKS": "Marks and Spencer Group plc",
-    "LAND": "Land Securities Group PLC",
-    "PSON": "Pearson plc",
-    "JD": "JD Sports Fashion plc",
-    "IAG": "International Consolidated Airlines Group S.A.",
-    "EZJ": "easyJet plc",
-    "TUI": "TUI AG",
-    "AML": "Aston Martin Lagonda Global Holdings plc",
-    "IDS": "International Distributions Services plc",
-    "DLG": "Direct Line Insurance Group plc",
-    "ITM": "ITM Power Plc",
-    "CINE": "Cineworld Group plc",
-    "PFC": "Petrofac Limited",
-    "FRES": "Fresnillo plc",
-    "KAP": "Kazatomprom",
-    "BOO": "boohoo group plc",
-    "ASOS": "ASOS Plc",
-    "HBR": "Harbour Energy plc",
-    "ENOG": "Energean plc",
-    "TLW": "Tullow Oil plc",
-    "CWR": "Ceres Power Holdings plc",
-    "GNC": "Greencore Group plc",
-    "THG": "THG plc",
-    "DARK": "Darktrace plc",
-    "CURY": "Currys plc",
-    "DOM": "Domino's Pizza Group plc",
-    "WKB": "Warhammer (Games Workshop Group PLC)",
-    "SFOR": "S4 Capital plc",
-    "QINET": "QinetiQ Group plc",
-    "GREG": "Greggs plc",
-    "PETS": "Pets at Home Group Plc",
-    "VMUK": "Virgin Money UK PLC",
-    "MRO": "Melrose Industries PLC",
-    "INVP": "Investec plc",
-    "OCDO": "Ocado Group plc",
-    "IGG": "IG Group Holdings plc",
-    "CMC": "CMC Markets plc",
-    "PLUS": "Plus500 Ltd",
-    "EMG": "Man Group plc",
-    "HWDN": "Howden Joinery Group Plc",
-    "COST": "Costain Group PLC",
-    "BEZ": "Beazley plc",
-    "SGRO": "Segro Plc",
-    "BDEV": "Barratt Developments plc",
-    "PSN": "Persimmon Plc",
-    "TW": "Taylor Wimpey plc",
-    "RDW": "Redrow plc",
-    "VISTRY": "Vistry Group PLC",
-    "BYG": "Big Yellow Group PLC",
-    "SAFE": "Safestore Holdings plc",
-    "UTG": "Unite Group plc",
-    "BBOX": "Tritax Big Box REIT plc",
-    "GRG": "Greggs plc",
-    "ASML": "ASML Holding N.V.",
-    "MC": "LVMH Moët Hennessy - Louis Vuitton, SE",
-    "SAP": "SAP SE",
-    "RMS": "Hermès International",
-    "TTE": "TotalEnergies SE",
-    "SIE": "Siemens AG",
-    "CDI": "Christian Dior SE",
-    "AIR": "Airbus SE",
-    "SAN": "Banco Santander, S.A.",
-    "IBE": "Iberdrola, S.A.",
-    "OR": "L'Oréal S.A.",
-    "ALV": "Allianz SE",
-    "SU": "Schneider Electric S.E.",
-    "EL": "EssilorLuxottica",
-    "AI": "Air Liquide S.A.",
-    "BNP": "BNP Paribas S.A.",
-    "DTE": "Deutsche Telekom AG",
-    "ENEL": "Enel S.p.A.",
-    "DG": "Vinci S.A.",
-    "BBVA": "Banco Bilbao Vizcaya Argentaria, S.A.",
-    "CS": "AXA S.A.",
-    "BAS": "BASF SE",
-    "ADS": "adidas AG",
-    "MUV2": "Münchener Rückversicherungs-Gesellschaft",
-    "IFX": "Infineon Technologies AG",
-    "SAF": "Safran S.A.",
-    "ENI": "Eni S.p.A.",
-    "INGA": "ING Groep N.V.",
-    "ISP": "Intesa Sanpaolo S.p.A.",
-    "KER": "Kering S.A.",
-    "STLA": "Stellantis N.V.",
-    "AD": "Koninklijke Ahold Delhaize N.V.",
-    "VOW3": "Volkswagen AG",
-    "BMW": "Bayerische Motoren Werke AG",
-    "MBG": "Mercedes-Benz Group AG",
-    "BAYN": "Bayer AG",
-    "DB1": "Deutsche Börse AG",
-    "BN": "Danone S.A.",
-    "RI": "Pernod Ricard S.A.",
-    "CRH": "CRH plc",
-    "G": "Assicurazioni Generali S.p.A.",
-    "PHIA": "Koninklijke Philips N.V.",
-    "AH": "Koninklijke Ahold Delhaize N.V.",
-    "NOKIA": "Nokia Oyj",
-    "VIV": "Vivendi SE",
-    "ORANGE": "Orange S.A.",
-    "KNEBV": "Kone Oyj",
-    "UMG": "Universal Music Group N.V.",
-    "HEIA": "Heineken N.V.",
-    "ABI": "Anheuser-Busch InBev SA/NV",
-    "RELIANCE": "Reliance Industries Limited",
-    "TCS": "Tata Consultancy Services Limited",
-    "HDFCBANK": "HDFC Bank Limited",
-    "BHARTIARTL": "Bharti Airtel Limited",
-    "ICICIBANK": "ICICI Bank Limited",
-    "INFY": "Infosys Limited",
-    "HINDUNILVR": "Hindustan Unilever Limited",
-    "SBIN": "State Bank of India",
-    "ITC": "ITC Limited",
-    "LTIM": "LTIMindtree Limited",
-    "LT": "Larsen & Toubro Limited",
-    "HCLTECH": "HCL Technologies Limited",
-    "BAJFINANCE": "Bajaj Finance Limited",
-    "AXISBANK": "Axis Bank Limited",
-    "MARUTI": "Maruti Suzuki India Limited",
-    "ULTRACEMCO": "UltraTech Cement Limited",
-    "SUNPHARMA": "Sun Pharmaceutical Industries Limited",
-    "M&M": "Mahindra & Mahindra Limited",
-    "TITAN": "Titan Company Limited",
-    "KOTAKBANK": "Kotak Mahindra Bank Limited",
-    "ADANIENT": "Adani Enterprises Limited",
-    "TATAMOTORS": "Tata Motors Limited",
-    "NTPC": "NTPC Limited",
-    "TATASTEEL": "Tata Steel Limited",
-    "POWERGRID": "Power Grid Corporation of India Limited",
-    "ASIANPAINT": "Asian Paints Limited",
-    "JSWSTEEL": "JSW Steel Limited",
-    "BAJAJFINSV": "Bajaj Finserv Limited",
-    "NESTLEIND": "Nestlé India Limited",
-    "GRASIM": "Grasim Industries Limited",
-    "ONGC": "Oil and Natural Gas Corporation Limited",
-    "TECHM": "Tech Mahindra Limited",
-    "HINDALCO": "Hindalco Industries Limited",
-    "ADANIPORTS": "Adani Ports and Special Economic Zone Limited",
-    "CIPLA": "Cipla Limited",
-    "WIPRO": "Wipro Limited",
-    "SBILIFE": "SBI Life Insurance Company Limited",
-    "DRREDDY": "Dr. Reddy's Laboratories Limited",
-    "BRITANNIA": "Britannia Industries Limited",
-    "TATACONSUM": "Tata Consumer Products Limited",
-    "COALINDIA": "Coal India Limited",
-    "APOLLOHOSP": "Apollo Hospitals Enterprise Limited",
-    "EICHERMOT": "Eicher Motors Limited",
-    "INDUSINDBK": "IndusInd Bank Limited",
-    "DIVISLAB": "Divi's Laboratories Limited",
-    "BAJAJ-AUTO": "Bajaj Auto Limited",
-    "HDFCLIFE": "HDFC Life Insurance Company Limited",
-    "HEROMOTOCO": "Hero MotoCorp Limited",
-    "BEL": "Bharat Electronics Limited",
-    "SHRIRAMFIN": "Shriram Finance Limited",
-    "LICI": "Life Insurance Corporation of India",
-    "HAL": "Hindustan Aeronautics Limited",
-    "ADANIPOWER": "Adani Power Limited",
-    "DMART": "Avenue Supermarts Limited",
-    "VBL": "Varun Beverages Limited",
-    "JIOFIN": "Jio Financial Services Limited",
-    "SIEMENS": "Siemens Limited",
-    "TRENT": "Trent Limited",
-    "ZOMATO": "Zomato Limited",
-    "ADANIGREEN": "Adani Green Energy Limited",
-    "IOC": "Indian Oil Corporation Limited",
-    "DLF": "DLF Limited",
-    "VEDL": "Vedanta Limited",
-    "BANKBARODA": "Bank of Baroda",
-    "GAIL": "GAIL (India) Limited",
-    "AMBUJACEM": "Ambuja Cements Limited",
-    "CHOLAFIN": "Cholamandalam Investment and Finance Company Limited",
-    "HAVELLS": "Havells India Limited",
-    "ABB": "ABB India Limited",
-    "PIDILITIND": "Pidilite Industries Limited",
-    "GODREJCP": "Godrej Consumer Products Limited",
-    "DABUR": "Dabur India Limited",
-    "SHREECEM": "Shree Cement Limited",
-    "PNB": "Punjab National Bank",
-    "BPCL": "Bharat Petroleum Corporation Limited",
-    "SBICARD": "SBI Cards and Payment Services Limited",
-    "SRF": "SRF Limited",
-    "MOTHERSON": "Samvardhana Motherson International Limited",
-    "ICICIPRULI": "ICICI Prudential Life Insurance Company Limited",
-    "MARICO": "Marico Limited",
-    "BERGEPAINT": "Berger Paints India Limited",
-    "ICICIGI": "ICICI Lombard General Insurance Company Limited",
-    "TVSMOTOR": "TVS Motor Company Limited",
-    "NAUKRI": "Info Edge (India) Limited",
-    "LODHA": "Macrotech Developers Limited",
-    "BOSCHLTD": "Bosch Limited",
-    "INDIGO": "InterGlobe Aviation Limited",
-    "CANBK": "Canara Bank",
-    "UNITDSPR": "United Spirits Limited",
-    "TORNTPHARM": "Torrent Pharmaceuticals Limited",
-    "PIIND": "PI Industries Limited",
-    "UPL": "UPL Limited",
-    "JINDALSTEL": "Jindal Steel & Power Limited",
-    "ALKEM": "Alkem Laboratories Limited",
-    "ZYDUSLIFE": "Zydus Lifesciences Limited",
-    "COLPAL": "Colgate-Palmolive (India) Limited",
-    "BAJAJHLDNG": "Bajaj Holdings & Investment Limited",
-    "TATAPOWER": "The Tata Power Company Limited",
-    "IRCTC": "Indian Railway Catering and Tourism Corporation Limited",
-    "MUTHOOTFIN": "Muthoot Finance Limited",
-    "LLY": "Eli Lilly and Company",
-    "SPG": "Simon Property Group, Inc.",
-    "CVX": "Chevron Corporation",
-    "AVGO": "Broadcom Inc.",
-    "SBUX": "Starbucks Corporation",
-    "PEG": "Public Service Enterprise Group",
-    "DLR": "Digital Realty Trust, Inc.",
-    "MA": "Mastercard Incorporated",
-    "APD": "Air Products and Chemicals, Inc",
-    "AMD": "Advanced Micro Devices, Inc.",
-    "MO": "Altria Group, Inc.",
-    "CBRE": "CBRE Group Inc",
-    "NUE": "Nucor Corporation",
-    "JPM": "JP Morgan Chase & Co.",
-    "ADBE": "Adobe Inc.",
-    "PEP": "Pepsico, Inc.",
-    "ABT": "Abbott Laboratories",
-    "AMZN": "Amazon.com, Inc.",
-    "EQIX": "Equinix, Inc.",
-    "TGT": "Target Corporation",
-    "NEM": "Newmont Corporation",
-    "DIS": "Walt Disney Company (The)",
-    "MDLZ": "Mondelez International, Inc.",
-    "PG": "Procter & Gamble Company (The)",
-    "TSLA": "Tesla, Inc.",
-    "UNP": "Union Pacific Corporation",
-    "V": "Visa Inc.",
-    "VST": "Vistra Corp.",
-    "DE": "Deere & Company",
-    "TJX": "TJX Companies, Inc. (The)",
-    "VZ": "Verizon Communications Inc.",
-    "PSA": "Public Storage",
-    "O": "Realty Income Corporation",
-    "PLD": "Prologis, Inc.",
-    "MS": "Morgan Stanley",
-    "COST": "Costco Wholesale Corporation",
-    "HD": "Home Depot, Inc. (The)",
-    "SO": "Southern Company (The)",
-    "BA": "Boeing Company (The)",
-    "LOW": "Lowe's Companies, Inc.",
-    "RTX": "RTX Corporation",
-    "DUK": "Duke Energy Corporation (Holdin",
-    "AMT": "American Tower Corporation (REI",
-    "AXP": "American Express Company",
-    "GE": "GE Aerospace",
-    "TMUS": "T-Mobile US, Inc.",
-    "UNH": "UnitedHealth Group Incorporated",
-    "WFC": "Wells Fargo & Company",
-    "KO": "Coca-Cola Company (The)",
-    "AEP": "American Electric Power Company",
-    "BKNG": "Booking Holdings Inc. Common St",
-    "NFLX": "Netflix, Inc.",
-    "MPC": "Marathon Petroleum Corporation",
-    "ISRG": "Intuitive Surgical, Inc.",
-    "FCX": "Freeport-McMoRan, Inc.",
-    "GS": "Goldman Sachs Group, Inc. (The)",
-    "GOOG": "Alphabet Inc.",
-    "BSX": "Boston Scientific Corporation",
-    "GOOGL": "Alphabet Inc.",
-    "MRK": "Merck & Company, Inc.",
-    "CRM": "Salesforce, Inc.",
-    "CTVA": "Corteva, Inc.",
-    "PSX": "Phillips 66",
-    "CCI": "Crown Castle Inc.",
-    "MAR": "Marriott International",
-    "AAPL": "Apple Inc.",
-    "COP": "ConocoPhillips",
-    "WMB": "Williams Companies, Inc. (The)",
-    "CMCSA": "Comcast Corporation",
-    "CL": "Colgate-Palmolive Company",
-    "PM": "Philip Morris International Inc",
-    "WELL": "Welltower Inc.",
-    "MLM": "Martin Marietta Materials, Inc.",
-    "NEE": "NextEra Energy, Inc.",
-    "MSFT": "Microsoft Corporation",
-    "NVDA": "NVIDIA Corporation",
-    "GEV": "GE Vernova Inc.",
-    "CHTR": "Charter Communications, Inc.",
-    "EOG": "EOG Resources, Inc.",
-    "VMC": "Vulcan Materials Company (Holdi",
-    "BAC": "Bank of America Corporation",
-    "WMT": "Walmart Inc.",
-    "UBER": "Uber Technologies, Inc.",
-    "MCD": "McDonald's Corporation",
-    "LIN": "Linde plc",
-    "SHW": "Sherwin-Williams Company (The)",
-    "CSCO": "Cisco Systems, Inc.",
-    "T": "AT&T Inc.",
-    "VLO": "Valero Energy Corporation",
-    "TMO": "Thermo Fisher Scientific Inc",
-    "SLB": "SLB Limited",
-    "IBM": "International Business Machines",
-    "BRK-B": "Berkshire Hathaway Inc. New",
-    "JNJ": "Johnson & Johnson",
-    "CAT": "Caterpillar, Inc.",
-    "XOM": "Exxon Mobil Corporation",
-    "CEG": "Constellation Energy Corporatio",
-    "ABBV": "AbbVie Inc.",
-    "HON": "Honeywell International Inc.",
-    "D": "Dominion Energy, Inc.",
-    "C": "Citigroup, Inc.",
-    "NKE": "Nike, Inc.",
-    "ETN": "Eaton Corporation, PLC",
-    "KMI": "Kinder Morgan, Inc.",
-    "META": "Meta Platforms, Inc.",
-    "ED": "Consolidated Edison, Inc.",
-    "ORCL": "Oracle Corporation",
-    "SRE": "DBA Sempra",
-    "AMGN": "Amgen Inc.",
-}
-
-# Update with S&P 500 Names
-TICKER_NAMES.update(SP500_NAMES)
+# Update with S&P 500 Names if available in constants?
+# Constants.py updates TICKER_NAMES with SP500_NAMES already.
 
 def _get_filtered_sp500(check_trend: bool = True) -> list:
     """
@@ -587,31 +144,10 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
     def process_symbol(symbol):
         try:
-            df = pd.DataFrame()
+            # Use shared helper
+            df = _prepare_data_for_ticker(symbol, batch_data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            # Fetch Data
-            # If batch data exists and has this symbol, use it
-            if batch_data is not None and symbol in batch_data.columns.levels[0]:
-                df = batch_data[symbol].copy()
-            else:
-                # Sequential fetch (Intraday or Batch Fallback)
-                # auto_adjust=False for intraday to prevent KeyError(Timestamp) bug
-                # Use dedicated thread for this call via executor
-                df = yf.download(symbol, period=period, interval=yf_interval, progress=False, auto_adjust=not is_intraday)
-
-            # Clean NaNs
-            df = df.dropna(how='all')
-
-            if df.empty:
-                return None
-
-            # Flatten multi-index columns if present (yfinance update)
-            if isinstance(df.columns, pd.MultiIndex):
-                try:
-                    df.columns = df.columns.get_level_values(0)
-                except Exception as e:
-                    logger.debug(f"Error flattening columns for {symbol}: {e}")
-                    pass
+            if df is None: return None
 
             # Volume Filter: If scanning daily/weekly (not intraday), skip illiquid stocks (< 500k avg volume)
             # This prevents wasting CPU on stocks we can't trade and reduces risk of stale data issues.
@@ -678,19 +214,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 logger.debug(f"Error calculating % change for {symbol}: {e}")
                 pass
 
-            # Resample if needed
-            if resample_rule:
-                agg_dict = {
-                    'Open': 'first',
-                    'High': 'max',
-                    'Low': 'min',
-                    'Close': 'last',
-                    'Volume': 'sum'
-                }
-                agg_dict = {k: v for k, v in agg_dict.items() if k in df.columns}
-
-                df = df.resample(resample_rule).agg(agg_dict)
-                df = df.dropna()
+            # Resample is handled in helper if resample_rule passed, but let's double check logic.
+            # _prepare_data_for_ticker does resampling.
 
             # 3. Calculate Indicators
             # Check length for SMA 50
@@ -749,6 +274,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             company_name = TICKER_NAMES.get(symbol, symbol)
 
             # Rate limiting sleep
+            import time
             time.sleep(0.1)
 
             return {
@@ -880,6 +406,9 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
     Screens specific sectorial indices.
     """
     sectors = list(SECTOR_NAMES.keys())
+    # remove WATCH
+    if "WATCH" in sectors: sectors.remove("WATCH")
+
     results = _screen_tickers(sectors, iv_rank_threshold, rsi_threshold, time_frame)
 
     # Enrich with full name
@@ -890,81 +419,6 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
             r['company_name'] = SECTOR_NAMES[code]
 
     return results
-
-import time
-import random
-
-def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, retries=3):
-    """
-    Fetches data from yfinance with exponential backoff retry logic.
-    """
-    for attempt in range(retries):
-        try:
-            df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=auto_adjust)
-            if not df.empty:
-                return df
-        except Exception as e:
-            # Check if it is a potentially transient error or just no data
-            logger.warning(f"Retry {attempt+1}/{retries} for {ticker} failed: {e}")
-            pass
-
-        if attempt < retries - 1:
-            sleep_time = (2 ** attempt) + random.random()
-            time.sleep(sleep_time)
-
-    return pd.DataFrame()
-
-def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval, resample_rule, is_intraday):
-    """Helper to prepare DataFrame for a single ticker."""
-    import pandas as pd
-    import yfinance as yf
-
-    df = pd.DataFrame()
-
-    # Extract from batch if available
-    if data_source is not None:
-        if isinstance(data_source.columns, pd.MultiIndex):
-            try:
-                 # Check Level 1 (standard) or Level 0 (group_by='ticker')
-                if ticker in data_source.columns.get_level_values(1):
-                    df = data_source.xs(ticker, axis=1, level=1).copy()
-                elif ticker in data_source.columns.get_level_values(0):
-                    df = data_source.xs(ticker, axis=1, level=0).copy()
-            except Exception as e:
-                logger.debug(f"Error slicing multi-index for {ticker}: {e}")
-                pass
-        else:
-             df = data_source.copy()
-
-    # If empty, sequential fetch with retry
-    if df.empty:
-         df = fetch_data_with_retry(ticker, period=period, interval=yf_interval, auto_adjust=not is_intraday)
-
-    # Clean NaNs
-    df = df.dropna(how='all')
-    if df.empty:
-        return None
-
-    # Flatten if needed
-    if isinstance(df.columns, pd.MultiIndex):
-        try:
-            df.columns = df.columns.get_level_values(0)
-        except Exception as e:
-            logger.debug(f"Error flattening cols for {ticker}: {e}")
-            pass
-
-    # Resample if needed
-    if resample_rule:
-        agg_dict = {'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}
-        agg_dict = {k: v for k, v in agg_dict.items() if k in df.columns}
-        try:
-            df = df.resample(resample_rule).agg(agg_dict)
-            df = df.dropna()
-        except Exception as e:
-            logger.error(f"Error resampling {ticker}: {e}")
-            pass
-
-    return df
 
 UK_EURO_TICKERS = [
     # Top 50 FTSE (UK)
@@ -2646,6 +2100,18 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
                     cycle_state = "TOP"
                 else:
                     cycle_state = "MID"
+
+            # Volume Filter (Anti-Double-Tap Fix):
+            # If scanning daily (1d), ensure we aren't wasting time on illiquid stocks (<500k avg vol).
+            # Skip this check for WATCH list items (High Interest).
+            if time_frame == "1d":
+                watch_list = SECTOR_COMPONENTS.get("WATCH", [])
+                if ticker not in watch_list:
+                    # Calculate 20-day Avg Volume
+                    if 'Volume' in df.columns:
+                        avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+                        if avg_vol < 500000:
+                            continue
 
             # --- STEP 3: SAFETY CHECKS (The "Anti-Falling Knife" Logic) ---
 
