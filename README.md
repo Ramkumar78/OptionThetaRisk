@@ -11,101 +11,60 @@ groups options trades into round-trips (entry → exit), computes key metrics, a
 - **Risk Management & Compliance Module:** Employs a sophisticated "Over-leveraged" heuristic, benchmarked against a configurable account size, to flag high-risk trading behavior.
 - **Multi-Format Reporting Suite:** Generates a variety of outputs, including an executive summary for the console, a detailed CSV for further analysis, and a presentation-ready Markdown report.
 
-## Strategy Reference Guide
+## 📊 Strategy & Screener Compendium
 
-This application includes a suite of quantitative screeners designed to identify trading setups across different timeframes and styles.
+A curated collection of quantitative scanners designed to assist traders in identifying high-probability setups across various market conditions. This educational tool aims to highlight potential opportunities—from income generation to trend following—while emphasizing the importance of risk management.
 
-### 1. Market Screener (The "Traffic Light")
-*Best for: General Market Overview, Swing Trading*
+### 🌟 The "Holy Grail" & Trend Strategies
 
-- **Description:** A sector-based scanner that categorizes stocks by trend and momentum. It acts as a "Traffic Light" system for your watchlist.
-- **Time Frames:** Daily (1D), Intraday (49m/98m), Weekly (1W).
-- **Entry Strategy:**
-  - **Trend:** Bullish if Price > SMA 50.
-  - **Signal:** "🟢 GREEN LIGHT" (Buy Dip) triggers when a Bullish stock pulls back to an RSI between 30 and 50 (or user defined).
-- **Exit Strategy:** Sell when RSI becomes Overbought (>70) or Price closes below SMA 50 (Trend Reversal).
+| Strategy | Goal | Key Rules | Risk Management (Stop/Target) |
+| :--- | :--- | :--- | :--- |
+| **Hybrid (Trend + Cycle)**<br>_(The "Holy Grail")_ | **High Confidence**<br>Dip in Uptrend | **Trend:** Bullish (>200 SMA)<br>**Cycle:** Bottom Phase (Fourier)<br>**Signal:** "🚀 PERFECT BUY" | **Stop:** 3x ATR<br>**Target:** 2x ATR<br>_High R/R Setup_ |
+| **ISA Trend Follower**<br>_(The "Legend")_ | **Long Term Wealth**<br>Set & Forget | **Trend:** Price > 200 SMA<br>**Entry:** Break 50-Day High<br>**Hold:** Above 20-Day Low | **Initial Stop:** 3x ATR<br>**Trailing Stop:** 20-Day Low<br>**Size:** Max 1% Equity Risk |
+| **Turtle Trading** | **Trend Capture**<br>Big Moves | **Buy:** Break 20-Day High<br>**Short:** Break 20-Day Low | **Stop:** 2x ATR<br>**Target:** 4x ATR<br>**Trail:** 10-Day Low |
 
-### 2. Turtle Trading
-*Best for: Trend Following, Catching big moves*
+### ⚡ Momentum & Swing Strategies
 
-- **Description:** Based on the classic Richard Dennis "Turtle" rules.
-- **Time Frames:** Daily (1D).
-- **Entry Strategy:** Buy on a **20-Day Breakout** (Price > 20-Day High).
-- **Exit Strategy:**
-  - **Stop Loss:** 2 * ATR below entry price.
-  - **Profit Target:** 4 * ATR above entry (2:1 Risk/Reward).
-  - **Trailing Stop:** Exit if Price falls below the 10-Day Low.
+| Strategy | Goal | Key Rules | Risk Management (Stop/Target) |
+| :--- | :--- | :--- | :--- |
+| **5/13 & 5/21 EMA** | **Momentum**<br>Crypto/Growth | **Breakout:** 5 EMA crosses 13/21 EMA<br>**Trend:** 5 > 13 > 21 | **Stop:** Close below Slow EMA (13 or 21)<br>**Signal:** "🚀 FRESH BREAKOUT" |
+| **Darvas Box** | **Explosive Growth**<br>ATH Breakouts | **Setup:** Consolidating near 52w High<br>**Trigger:** Break "Box Ceiling" w/ Vol | **Stop:** Box Floor<br>**Target:** Breakout + Box Height |
+| **Harmonic Cycles**<br>_(Fourier Analysis)_ | **Mean Reversion**<br>Swing Trading | **Math:** FFT Cycle Detection<br>**Buy:** Cycle Bottom (-1.0)<br>**Sell:** Cycle Top (+1.0) | **Timing Tool**<br>Use with Price Action |
 
-### 3. EMA Momentum (5/13 & 5/21)
-*Best for: Active Swing Trading, Crypto, High Momentum Stocks*
+### 🧠 Smart Money & Income Strategies
 
-- **Description:** A fast-moving crossover strategy using Exponential Moving Averages (EMA).
-- **Time Frames:** 1H, 4H, Daily.
-- **Entry Strategy:**
-  - **Fresh Breakout:** 5 EMA crosses above 13 EMA or 21 EMA.
-  - **Trend:** 5 EMA > 21 EMA indicates a strong ongoing trend.
-- **Exit Strategy:**
-  - **Stop Loss:** Close below the "Slow" EMA (13 or 21).
-  - **Signal:** "❌ DUMP" when 5 EMA crosses below the Slow EMA.
-
-### 4. Darvas Box
-*Best for: Explosive Growth Stocks*
-
-- **Description:** Identifies stocks consolidating near 52-week highs that break out of a defined "Box" with volume.
-- **Time Frames:** Daily (1D).
-- **Entry Strategy:** Buy when Price breaks above the "Box Ceiling" (a confirmed resistance level) with above-average volume.
-- **Exit Strategy:**
-  - **Stop Loss:** "Box Floor" (Support level) or Ceiling - 2*ATR.
-  - **Target:** Price Projection = Breakout Level + Box Height.
-
-### 5. MMS / OTE (Smart Money Concepts)
-*Best for: Day Trading, Precision Entries*
-
-- **Description:** Implements ICT (Inner Circle Trader) concepts to find "Market Maker Models" and "Optimal Trade Entries" (OTE).
-- **Time Frames:** Intraday (15m, 1H).
-- **Entry Strategy:**
-  - **Bullish:** Price raids a Liquidity Low -> Reverses with Displacement (FVG) -> Retraces to 62-79% Fibonacci Level.
-  - **Bearish:** Price raids a Liquidity High -> Reverses with Displacement -> Retraces to 62-79% Fibonacci Level.
-- **Exit Strategy:** Stop Loss at the recent Swing High/Low. Target the opposing liquidity pool.
-
-### 6. Bull Put Spreads (Income)
-*Best for: Generating Monthly Income (The Wheel / Spreads)*
-
-- **Description:** Scans the Option Chain for high-probability credit spreads.
-- **Time Frames:** N/A (Uses Option Chain).
-- **Entry Strategy:**
-  - **Trend:** Price > SMA 50 (Bullish).
-  - **Setup:** Sell ~30 Delta Put, Buy Put $5 Lower.
-  - **Expiration:** ~45 Days (DTE).
-- **Exit Strategy:** Manage at 50% Profit or 21 DTE.
-
-### 7. ISA Trend Follower
-*Best for: Long-Term Investing (ISA/SIPP/401k)*
-
-- **Description:** A "Set and Forget" style trend follower designed to keep you in major moves and out of bear markets.
-- **Time Frames:** Weekly / Daily.
-- **Entry Strategy:** Price > 200 SMA (Long Term Trend) AND Price breaks 50-Day High.
-- **Exit Strategy:**
-  - **Initial Stop:** 3 * ATR.
-  - **Trailing Stop:** Exit if Price closes below the **20-Day Low**.
+| Strategy | Goal | Key Rules | Risk Management (Stop/Target) |
+| :--- | :--- | :--- | :--- |
+| **MMS / OTE**<br>_(ICT Concepts)_ | **Precision Entry**<br>Day Trading | **Setup:** Liquidity Raid + Displacement<br>**Trigger:** Retrace to 62-79% Fib (OTE) | **Stop:** Recent Swing High/Low<br>**Target:** Opposing Liquidity |
+| **Bull Put Spreads** | **Income**<br>Monthly Cashflow | **Trend:** Bullish (>50 SMA)<br>**Setup:** Sell 30 Delta Put (45 DTE)<br>**Hedge:** Buy Put $5 Lower | **Risk:** Width - Credit<br>**Exit:** 50% Profit or 21 DTE |
+| **Market Screener**<br>_(Traffic Light)_ | **Market Overview**<br>Sector Rotation | **Bull:** RSI 30-50 in Uptrend ("🟢 GREEN")<br>**Bear:** RSI > 70 or Downtrend | **Exit:** RSI Overbought or Trend Break |
 
 ---
 
-## How to use the US Option Screeners
+## 🚀 How to Use: The Workflow
 
-The **Market Screener** is the primary tool for US Options traders.
+This tool is designed to serve as an **Automated Risk Manager** and analysis companion. Below is a suggested workflow to utilize the screeners effectively, keeping in mind that markets are probabilistic.
 
-1.  **Select Region:** Choose "US Options" (default) or "S&P 500".
-2.  **Tastytrade Integration (Optional):**
-    -   Toggle "Tasty Data" to **ON**.
-    -   Enter your Tastytrade Refresh Token and Account ID (if prompted).
-    -   *Benefit:* This bypasses Yahoo Finance delay and fetches **Real-Time Price** and **IV Rank** directly from the exchange.
-3.  **Analyze Sectors:**
-    -   Results are grouped by Sector (Technology, Financials, etc.).
-    -   Look for "Green Light" signals in sectors that are performing well.
-4.  **Workflow:**
-    -   Identify a Bullish Stock (Green Light).
-    -   Check IV Rank. If IV Rank > 50, consider selling Premium (Short Puts/Verticals). If IV Rank < 20, consider buying Spreads/Calls.
+1.  **Assess the Landscape (Market Screener):**
+    *   Start here to gauge general market health.
+    *   Look for **Sector Rotation**: Are Financials (XLF) green while Tech (XLK) is red?
+    *   _Objective:_ Identify which way the wind is blowing.
+
+2.  **Seek High-Quality Setups (The "Holy Grail"):**
+    *   Navigate to the **Hybrid Screener**.
+    *   Scan for **"🚀 PERFECT BUY"** signals. These rare setups occur when a long-term uptrend (ISA) aligns with a short-term cycle low (Fourier).
+    *   _Discipline:_ If no signals appear, it may be prudent to wait.
+
+3.  **Refine & Execute:**
+    *   For precision, cross-reference with **MMS / OTE** to find an optimal entry point on a lower timeframe.
+    *   Alternatively, use **Bull Put Spreads** to generate income on the bullish tickers identified.
+    *   **Always** respect the mechanical stops and targets provided by the screener.
+
+4.  **Audit & Review:**
+    *   After trading, upload your logs to the **Audit** tab.
+    *   Review your **PnL**, **Win Rate**, and check for behavioral risks like "Revenge Trading".
+
+> **Disclaimer:** This software is for educational purposes only. Past performance does not guarantee future results.
 
 #### Installation
 Requires Python 3.9+.
