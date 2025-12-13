@@ -145,6 +145,17 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
     # Sort by Buy Confluence
     results.sort(key=lambda x: x['confluence_score'], reverse=True)
 
+    # --- NEW: Enrich only the output ---
+    from option_auditor.screener import enrich_with_fundamentals
+
+    # Only enrich the top 30 results to keep UI snappy
+    top_results = results[:30]
+    remaining = results[30:]
+
+    enriched_top = enrich_with_fundamentals(top_results)
+
+    results = enriched_top + remaining
+
     # --- OPTIMIZATION STEP ---
     # 1. Identify "BUY" candidates for optimization
     buy_candidates = []
