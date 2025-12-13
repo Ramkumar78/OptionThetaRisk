@@ -625,8 +625,11 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                     aValue = a.breakout_level;
                     bValue = b.breakout_level;
                 } else if (sortConfig.key === 'target') {
-                    aValue = a.target_price;
-                    bValue = b.target_price;
+                    aValue = a.target || a.target_price;
+                    bValue = b.target || b.target_price;
+                } else if (sortConfig.key === 'rr_ratio') {
+                    aValue = parseFloat((a.rr_ratio || "0").split(' ')[0]);
+                    bValue = parseFloat((b.rr_ratio || "0").split(' ')[0]);
                 } else if (sortConfig.key === 'high_52w') {
                     aValue = a.high_52w;
                     bValue = b.high_52w;
@@ -777,6 +780,9 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         <HeaderCell label="Cycle" sortKey="cycle" align="center" />
                                         <HeaderCell label="Period" sortKey="cycle_period" align="right" />
                                         <HeaderCell label="Score" sortKey="score" align="right" />
+                                        <HeaderCell label="Stop" sortKey="stop_loss" align="right" />
+                                        <HeaderCell label="Target" sortKey="target" align="right" />
+                                        <HeaderCell label="R/R" sortKey="rr_ratio" align="right" />
                                     </>
                                 )}
                                 {type !== 'isa' && type !== 'fourier' && type !== 'hybrid' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
@@ -933,6 +939,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
                                                     {row.score}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-red-600 dark:text-red-400 font-bold">
+                                                    {formatCurrency(row.stop_loss, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                                                    {formatCurrency(row.target, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {row.rr_ratio}
                                                 </td>
                                             </>
                                         ) : (
