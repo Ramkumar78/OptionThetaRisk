@@ -37,7 +37,8 @@ class TestScreenerIntervals(unittest.TestCase):
     @patch('option_auditor.screener.yf.download')
     def test_screen_tickers_monthly(self, mock_download):
         # Mock Data for Monthly: 5 years of monthly data
-        dates = pd.date_range(start='2019-01-01', end='2024-01-01', freq='ME')
+        # 'ME' alias is not available in pandas < 2.2, use 'M'
+        dates = pd.date_range(start='2019-01-01', end='2024-01-01', freq='M')
         data = {
             ('TEST', 'Open'): [100.0 + i for i in range(len(dates))],
             ('TEST', 'High'): [105.0 + i for i in range(len(dates))],
