@@ -356,8 +356,33 @@ def create_app(testing: bool = False) -> Flask:
                 return jsonify(cached)
 
             results = screener.screen_trend_followers_isa(region=region)
-            cache_screener_result(cache_key, results)
-            return jsonify(results)
+
+            # Market Regime Analysis
+            bearish_count = 0
+            total_count = len(results)
+            suggestion = None
+
+            if total_count > 0:
+                for r in results:
+                    sig = r.get('signal', '')
+                    if "SELL" in sig or "AVOID" in sig or "EXIT" in sig:
+                        bearish_count += 1
+
+                bearish_ratio = bearish_count / total_count
+
+                if bearish_ratio > 0.5:
+                    suggestion = {
+                        "type": "bearish",
+                        "message": f"⚠️ Market appears Bearish/Choppy ({bearish_ratio*100:.0f}% Negative). Consider using 'Harmonic Cycles' (Fourier) for Mean Reversion opportunities instead of Trend Following."
+                    }
+
+            response_data = {
+                "results": results,
+                "regime_suggestion": suggestion
+            }
+
+            cache_screener_result(cache_key, response_data)
+            return jsonify(response_data)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -472,6 +497,20 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/fourier", methods=["GET"])
     def screen_fourier():
         try:
+            # Check for Single Ticker mode
+            query = request.args.get("ticker", "").strip()
+            if query:
+                ticker = screener.resolve_ticker(query)
+                if not ticker:
+                    ticker = query.upper()
+
+                # Run single analysis (bypass cache or use specific key if needed, usually live is better for single check)
+                # But Fourier is heavy calculation? No, it's fast enough for one.
+                results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame="1d") # Default to 1d for single check
+                if not results:
+                     return jsonify({"error": f"No cycle data found for {ticker}"}), 404
+                return jsonify(results[0])
+
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
 
