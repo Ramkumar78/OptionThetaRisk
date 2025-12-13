@@ -39,9 +39,14 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
     chunks = [unique_tickers[i:i + chunk_size] for i in range(0, len(unique_tickers), chunk_size)]
 
     data_frames = []
+    logger.info(f"Fetching {len(unique_tickers)} tickers in {len(chunks)} batches...")
 
     for i, chunk in enumerate(chunks):
         try:
+            # Randomize sleep slightly to look more human if needed
+            if i > 0:
+                time.sleep(1.0 + random.random() * 0.5)
+
             # yf.download can be flaky, try/except the batch
             batch = yf.download(
                 chunk,
@@ -55,9 +60,6 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
 
             if not batch.empty:
                 data_frames.append(batch)
-
-            # Rate limit protection
-            time.sleep(0.5)
 
         except Exception as e:
             logger.error(f"Batch {i} download failed: {e}")
