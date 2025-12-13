@@ -167,12 +167,16 @@ def test_screen_trend_followers_isa_single_ticker(mock_yf_download):
         # Create valid DF
         dates = pd.date_range("2023-01-01", periods=250, freq="D")
         df = pd.DataFrame({
-            "Open": [100]*250, "High": [110]*250, "Low": [90]*250,
-            "Close": [105]*250, "Volume": [1000]*250
+            "Open": [100.0]*250, "High": [110.0]*250, "Low": [90.0]*250,
+            "Close": [105.0]*250, "Volume": [10000000]*250
         }, index=dates)
         # Ensure trend > 200 SMA (200 SMA of 105 is 105)
         # Make price slightly higher to trigger entry or hold
-        df.loc[dates[-1], "Close"] = 120
+        df.loc[dates[-1], "Close"] = 120.0
+        # Increase Volume to pass liquidity filter (> 5,000,000 dollar vol)
+        # Price 100 * Volume 1000 = 100,000 < 5M. Need more volume.
+        # Set Volume to 100,000
+        df["Volume"] = 100000
 
         mock_fetch.return_value = df
 

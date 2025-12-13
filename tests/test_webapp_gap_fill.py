@@ -72,7 +72,8 @@ def test_cleanup_job():
     app.app_context.return_value.__enter__.return_value = None
 
     mock_storage = MagicMock()
-    with patch("webapp.app.get_storage_provider", return_value=mock_storage):
+    # We must patch _get_storage_provider because cleanup_job calls it directly
+    with patch("webapp.app._get_storage_provider", return_value=mock_storage):
         with patch("time.sleep", side_effect=InterruptedError): # Break loop
             try:
                 cleanup_job(app)
@@ -277,6 +278,7 @@ def test_journal_routes(client_with_mock_storage):
 
 def test_journal_import_trades(client_with_mock_storage):
     client, mock_storage = client_with_mock_storage
+    mock_storage.save_journal_entries.return_value = 1
 
     # Invalid data
     res = client.post("/journal/import", json={})
@@ -288,7 +290,7 @@ def test_journal_import_trades(client_with_mock_storage):
     ]
     res = client.post("/journal/import", json=trades)
     assert res.status_code == 200
-    mock_storage.save_journal_entry.assert_called()
+    mock_storage.save_journal_entries.assert_called()
 
 def test_analyze_route(client_with_mock_storage):
     client, mock_storage = client_with_mock_storage

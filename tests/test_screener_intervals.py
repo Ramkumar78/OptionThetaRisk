@@ -14,7 +14,7 @@ class TestScreenerIntervals(unittest.TestCase):
             ('TEST', 'High'): [105.0 + i for i in range(len(dates))],
             ('TEST', 'Low'): [95.0 + i for i in range(len(dates))],
             ('TEST', 'Close'): [102.0 + i for i in range(len(dates))],
-            ('TEST', 'Volume'): [1000 for _ in range(len(dates))]
+            ('TEST', 'Volume'): [1000000 for _ in range(len(dates))]
         }
         # Create MultiIndex DataFrame
         df = pd.DataFrame(data, index=dates)
@@ -43,7 +43,7 @@ class TestScreenerIntervals(unittest.TestCase):
             ('TEST', 'High'): [105.0 + i for i in range(len(dates))],
             ('TEST', 'Low'): [95.0 + i for i in range(len(dates))],
             ('TEST', 'Close'): [102.0 + i for i in range(len(dates))],
-            ('TEST', 'Volume'): [1000 for _ in range(len(dates))]
+            ('TEST', 'Volume'): [1000000 for _ in range(len(dates))]
         }
         # Create MultiIndex DataFrame
         df = pd.DataFrame(data, index=dates)

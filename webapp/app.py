@@ -469,6 +469,34 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/fourier", methods=["GET"])
+    def screen_fourier():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            region = request.args.get("region", "us")
+
+            cache_key = ("fourier", region, time_frame)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+            elif region == "sp500":
+                # S&P 500
+                filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(filtered_sp500 + watch_list))
+
+            results = screener.screen_fourier_cycles(ticker_list=ticker_list, time_frame=time_frame)
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     # API Routes for Journal
     @app.route("/journal", methods=["GET"])
     def journal_get_entries():
