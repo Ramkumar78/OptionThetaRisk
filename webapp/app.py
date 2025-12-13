@@ -512,9 +512,10 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
                 # For Hybrid, YES S&P 500. Trend + Cycle.
-                filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
+                # NEW FIX: Get raw list, let the screener handle data fetching once to avoid rate limits.
+                raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-                ticker_list = list(set(filtered_sp500 + watch_list))
+                ticker_list = list(set(raw_sp500 + watch_list))
 
             results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=time_frame)
             cache_screener_result(cache_key, results)
@@ -559,6 +560,38 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_fourier_cycles(ticker_list=ticker_list, time_frame=time_frame)
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/screen/universal", methods=["GET"])
+    def screen_universal():
+        try:
+            region = request.args.get("region", "us")
+            # Unified Dashboard implies a broad look, but we can respect region.
+
+            cache_key = ("universal", region)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+            elif region == "sp500":
+                # Raw list is fine for universal as it does its own heavy filtering?
+                # Actually, 500 tickers * 3 strategies might be heavy.
+                # Let's use the trend-filtered list to be safe for now, or just raw if we trust the universal logic.
+                # Universal downloads 2y data. Doing that for 500 stocks is heavy but okay once.
+                # Let's use get_sp500_tickers() directly as per the Hybrid fix philosophy.
+                raw_sp500 = screener.get_sp500_tickers()
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(raw_sp500 + watch_list))
+
+            results = screener.screen_universal_dashboard(ticker_list=ticker_list)
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
