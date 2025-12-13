@@ -26,6 +26,57 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
 
     return pd.DataFrame()
 
+def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=50) -> pd.DataFrame:
+    """
+    Downloads data for a list of tickers in chunks to avoid Rate Limiting.
+    Returns a combined DataFrame or Empty DataFrame on total failure.
+    """
+    if not tickers:
+        return pd.DataFrame()
+
+    # Deduplicate
+    unique_tickers = list(set(tickers))
+    chunks = [unique_tickers[i:i + chunk_size] for i in range(0, len(unique_tickers), chunk_size)]
+
+    data_frames = []
+
+    for i, chunk in enumerate(chunks):
+        try:
+            # yf.download can be flaky, try/except the batch
+            batch = yf.download(
+                chunk,
+                period=period,
+                interval=interval,
+                group_by='ticker',
+                progress=False,
+                auto_adjust=True,
+                threads=True
+            )
+
+            if not batch.empty:
+                data_frames.append(batch)
+
+            # Rate limit protection
+            time.sleep(0.5)
+
+        except Exception as e:
+            logger.error(f"Batch {i} download failed: {e}")
+
+    if not data_frames:
+        return pd.DataFrame()
+
+    try:
+        if len(data_frames) == 1:
+            return data_frames[0]
+        else:
+            # axis=1 because yfinance returns columns like (Price, Ticker) with group_by='ticker'
+            # Wait, when group_by='ticker', column levels are (Ticker, Price).
+            # If we concat multiple batches, we are appending new tickers (columns).
+            return pd.concat(data_frames, axis=1)
+    except Exception as e:
+        logger.error(f"Failed to concat batches: {e}")
+        return pd.DataFrame()
+
 def prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval, resample_rule, is_intraday):
     """Helper to prepare DataFrame for a single ticker."""
     df = pd.DataFrame()
