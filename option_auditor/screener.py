@@ -1420,9 +1420,19 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
             time.sleep(0.1)
 
             if signal != "WAIT":
+                # Calculate % Change
+                pct_change_1d = None
+                if len(df) >= 2:
+                    try:
+                        prev_close_px = float(df['Close'].iloc[-2])
+                        pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
+                    except Exception:
+                        pass
+
                 return {
                     "ticker": ticker,
                     "price": curr_close,
+                    "pct_change_1d": pct_change_1d,
                     "signal": signal,
                     "stop_loss": setup_details['stop'],
                     "ote_zone": setup_details['entry_zone'],
@@ -1608,9 +1618,19 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
             # Rate limiting sleep
             time.sleep(0.1)
 
+            # Calculate % Change
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((curr_price - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
             return {
                 "ticker": ticker,
                 "price": curr_price,
+                "pct_change_1d": pct_change_1d,
                 "strategy": "Bull Put Spread",
                 "expiry": best_date,
                 "dte": actual_dte,
@@ -2068,6 +2088,16 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
 
             period, rel_pos = cycle_data
 
+            # Calculate % Change
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    curr_close = float(df['Close'].iloc[-1])
+                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
             # Interpret Result
             # Period: Length of cycle (e.g., 14.2 days)
             # Rel Pos: -1.0 (Bottom) to 1.0 (Top)
@@ -2099,6 +2129,7 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
                 "ticker": ticker,
                 "company_name": company_name,
                 "price": float(closes[-1]),
+                "pct_change_1d": pct_change_1d,
                 "signal": signal,
                 "cycle_period": f"{period} Days",
                 "cycle_position": f"{rel_pos:.2f} (-1 Low, +1 High)",
@@ -2328,6 +2359,15 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
             # Don't buy if we made a lower low than yesterday and closed near it
             is_making_lower_lows = curr_close < yesterday_low
 
+            # Calculate % Change
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
             # --- STEP 4: SYNTHESIZE VERDICT ---
             final_signal = "WAIT"
             color = "gray"
@@ -2409,6 +2449,7 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
                 "score": score,
                 "color": color,
                 "signal": final_signal, # For frontend compatibility with 'signal' key
+                "pct_change_1d": pct_change_1d,
                 "stop_loss": round(stop_loss_price, 2),   # <--- THE STOP
                 "target": round(target_price, 2),         # <--- THE TARGET
                 "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})", # <--- IS IT WORTH IT?
@@ -2502,6 +2543,16 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
             elif score == 2: final_verdict = "✅ BUY"
             elif isa_trend == "BEARISH" and fourier == "TOP": final_verdict = "📉 STRONG SELL"
 
+            # Calculate % Change
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    curr_close = float(df['Close'].iloc[-1])
+                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
             # Identify name
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
@@ -2510,6 +2561,7 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
                 "ticker": ticker,
                 "company_name": company_name,
                 "price": df['Close'].iloc[-1],
+                "pct_change_1d": pct_change_1d,
                 "isa_trend": isa_trend,
                 "fourier": f"{fourier} ({f_score:.2f})",
                 "momentum": momentum,
