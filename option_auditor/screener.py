@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+import time
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -274,7 +275,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             company_name = TICKER_NAMES.get(symbol, symbol)
 
             # Rate limiting sleep
-            import time
             time.sleep(0.1)
 
             return {

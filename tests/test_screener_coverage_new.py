@@ -270,7 +270,10 @@ def test_hybrid_strategy_branches(mock_download):
         mock_cycle.return_value = (20.0, -0.9) # Period 20, Rel Pos -0.9 (Bottom)
 
         # Setup download return
-        df = pd.DataFrame({'Close': closes, 'High': closes+5, 'Low': closes-5, 'Open': closes, 'Volume': 1000}, index=dates)
+        # Ensure Green Candle (Close > Open) for "PERFECT BUY"
+        opens = closes - 1.0
+        # Volume must be > 500k to pass filter for non-WATCH tickers
+        df = pd.DataFrame({'Close': closes, 'High': closes+5, 'Low': closes-5, 'Open': opens, 'Volume': 600000}, index=dates)
         mock_download.return_value = df
 
         results = screener.screen_hybrid_strategy(["HYBRID"])
