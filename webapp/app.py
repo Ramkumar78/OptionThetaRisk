@@ -494,6 +494,34 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/hybrid", methods=["GET"])
+    def screen_hybrid():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            region = request.args.get("region", "us")
+
+            cache_key = ("hybrid", region, time_frame)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+            elif region == "sp500":
+                # For Hybrid, YES S&P 500. Trend + Cycle.
+                filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(filtered_sp500 + watch_list))
+
+            results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=time_frame)
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/fourier", methods=["GET"])
     def screen_fourier():
         try:
