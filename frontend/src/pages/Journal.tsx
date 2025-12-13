@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import clsx from 'clsx';
+import { DailyDebriefModal } from '../components/DailyDebriefModal';
 
 interface JournalEntry {
   id: string;
@@ -31,6 +32,7 @@ const Journal: React.FC = () => {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [showDebrief, setShowDebrief] = useState(false);
 
   // Form State
   const [symbol, setSymbol] = useState('');
@@ -98,12 +100,40 @@ const Journal: React.FC = () => {
     }
   };
 
+  const handleSaveDebrief = async (q1: string, q2: string, q3: string) => {
+    const combinedNotes = `DAILY DEBRIEF\n\n1. Strategy Execution:\n${q1}\n\n2. Emotional State:\n${q2}\n\n3. Improvement:\n${q3}`;
+
+    try {
+        await axios.post('/journal/add', {
+            entry_date: new Date().toISOString().split('T')[0],
+            entry_time: new Date().toTimeString().split(' ')[0].slice(0, 5),
+            symbol: "REVIEW", // Special tag
+            strategy: "PSYCHOLOGY",
+            sentiment: "Neutral",
+            pnl: 0,
+            notes: combinedNotes
+        });
+        fetchEntries();
+    } catch (e) {
+        console.error(e);
+        alert("Failed to save debrief.");
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       {/* Input Form */}
       <div className="lg:col-span-1">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sticky top-24">
-           <h3 id="journal-form-title" className="text-xl font-bold text-gray-900 dark:text-white mb-2">New Journal Entry</h3>
+           <div className="flex justify-between items-center mb-2">
+               <h3 id="journal-form-title" className="text-xl font-bold text-gray-900 dark:text-white">New Journal Entry</h3>
+                <button
+                    onClick={() => setShowDebrief(true)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg flex items-center text-sm transition-colors shadow-sm"
+                >
+                    <span className="mr-1">🌙</span> Daily Debrief
+                </button>
+           </div>
            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
              Consistent journaling is the key to trading mastery. Log your trades here with notes on sentiment and strategy. Over time, use the 'Analyze Habits' feature to detect patterns in your behavior, such as emotional trading or strategy drift.
            </p>
@@ -335,6 +365,7 @@ const Journal: React.FC = () => {
             )}
          </div>
       </div>
+      {showDebrief && <DailyDebriefModal onClose={() => setShowDebrief(false)} onSave={handleSaveDebrief} />}
     </div>
   );
 };
