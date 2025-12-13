@@ -270,10 +270,41 @@ def test_hybrid_strategy_branches(mock_download):
         mock_cycle.return_value = (20.0, -0.9) # Period 20, Rel Pos -0.9 (Bottom)
 
         # Setup download return
-        df = pd.DataFrame({'Close': closes, 'High': closes+5, 'Low': closes-5, 'Open': closes, 'Volume': 1000}, index=dates)
+        df = pd.DataFrame({'Close': closes, 'High': closes+5, 'Low': closes-5, 'Open': closes, 'Volume': 1000000}, index=dates)
         mock_download.return_value = df
 
         results = screener.screen_hybrid_strategy(["HYBRID"])
 
         assert len(results) == 1
-        assert "PERFECT BUY" in results[0]['verdict']
+        # Should be WATCHING because Open == Close (no green candle)
+        assert "WATCHING" in results[0]['verdict']
+
+    @patch('option_auditor.screener.yf.download')
+    def test_hybrid_strategy_perfect_buy(mock_download):
+        # Test "PERFECT BUY" scenario: Bullish Trend + Cycle Bottom + Green Candle
+
+        # Mock DF
+        periods = 200
+        dates = pd.date_range(end=datetime.now(), periods=periods, freq='D')
+
+        # Uptrend
+        closes = np.linspace(100, 200, periods)
+        # Cycle: Add sine wave
+        # Period 20 days.
+        x = np.arange(periods)
+        cycle = 10 * np.sin(2 * np.pi * x / 20)
+        closes = closes + cycle
+
+        # We mock _calculate_dominant_cycle to force "BOTTOM" state
+        with patch('option_auditor.screener._calculate_dominant_cycle') as mock_cycle:
+            mock_cycle.return_value = (20.0, -0.9) # Period 20, Rel Pos -0.9 (Bottom)
+
+            # Setup download return
+            # Ensure Open < Close for Green Candle (Required for PERFECT BUY)
+            df = pd.DataFrame({'Close': closes, 'High': closes+5, 'Low': closes-5, 'Open': closes - 1.0, 'Volume': 1000000}, index=dates)
+            mock_download.return_value = df
+
+            results = screener.screen_hybrid_strategy(["HYBRID"])
+
+            assert len(results) == 1
+            assert "PERFECT BUY" in results[0]['verdict']
