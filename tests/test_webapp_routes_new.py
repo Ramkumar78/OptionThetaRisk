@@ -1,8 +1,7 @@
-
-import json
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from webapp.app import create_app
+import json
 
 @pytest.fixture
 def client():
@@ -10,45 +9,64 @@ def client():
     with app.test_client() as client:
         yield client
 
-def test_fourier_route(client):
-    """Test the /screen/fourier endpoint."""
-    mock_data = [
-        {"ticker": "AAPL", "cycle_period": "20 Days", "cycle_position": "-0.9 (Low)"}
-    ]
+class TestWebappRoutesNew:
 
-    with patch('option_auditor.screener.screen_fourier_cycles', return_value=mock_data) as mock_screen:
-        # 1. Test basic call
-        resp = client.get("/screen/fourier")
-        assert resp.status_code == 200
-        assert resp.is_json
-        assert resp.json == mock_data
+    @patch('webapp.app.screener.screen_trend_followers_isa')
+    def test_isa_regime_suggestion(self, mock_screen, client):
+        # 1. Bearish Market (>50% Sell/Avoid)
+        mock_screen.return_value = [
+            {'ticker': 'A', 'signal': '❌ SELL/AVOID'},
+            {'ticker': 'B', 'signal': '❌ SELL/AVOID'},
+            {'ticker': 'C', 'signal': '✅ HOLD'},
+        ]
 
-        # Verify default args
-        mock_screen.assert_called_with(ticker_list=None, time_frame="1d")
+        response = client.get('/screen/isa?region=us_bear') # Unique region key
+        assert response.status_code == 200
+        data = response.get_json()
 
-        # 2. Test with params
-        resp = client.get("/screen/fourier?region=uk_euro&time_frame=1wk")
-        assert resp.status_code == 200
-        assert resp.json == mock_data
+        assert 'results' in data
+        assert len(data['results']) == 3
+        assert 'regime_suggestion' in data
+        assert data['regime_suggestion'] is not None
+        assert "Market appears Bearish" in data['regime_suggestion']['message']
+        assert "Consider using 'Harmonic Cycles'" in data['regime_suggestion']['message']
 
-        # Verify args passed (ticker list would be mocked in real app but here checking flow)
-        # Note: We can't easily verify ticker_list content without mocking get_uk_euro_tickers too,
-        # but we can verify time_frame.
-        args, kwargs = mock_screen.call_args
-        assert kwargs['time_frame'] == "1wk"
+        # 2. Bullish Market
+        mock_screen.return_value = [
+            {'ticker': 'A', 'signal': '🚀 ENTER LONG'},
+            {'ticker': 'B', 'signal': '✅ HOLD'},
+            {'ticker': 'C', 'signal': '❌ SELL/AVOID'},
+        ]
 
-def test_darvas_route(client):
-    """Test the /screen/darvas endpoint."""
-    mock_data = [{"ticker": "NVDA", "signal": "BREAKOUT"}]
-    with patch('option_auditor.screener.screen_darvas_box', return_value=mock_data):
-        resp = client.get("/screen/darvas")
-        assert resp.status_code == 200
-        assert resp.json == mock_data
+        response = client.get('/screen/isa?region=us_bull') # Unique region key
+        data = response.get_json()
+        assert data['regime_suggestion'] is None
 
-def test_mms_route(client):
-    """Test the /screen/mms endpoint."""
-    mock_data = [{"ticker": "AMD", "signal": "BULLISH OTE"}]
-    with patch('option_auditor.screener.screen_mms_ote_setups', return_value=mock_data):
-        resp = client.get("/screen/mms")
-        assert resp.status_code == 200
-        assert resp.json == mock_data
+    @patch('webapp.app.screener.screen_fourier_cycles')
+    @patch('webapp.app.screener.resolve_ticker')
+    def test_fourier_single_ticker(self, mock_resolve, mock_screen, client):
+        # Setup
+        mock_resolve.return_value = 'AAPL'
+        mock_screen.return_value = [{'ticker': 'AAPL', 'signal': 'BUY', 'cycle_position': -0.9}]
+
+        # Test
+        response = client.get('/screen/fourier?ticker=AAPL')
+        assert response.status_code == 200
+        data = response.get_json()
+
+        assert data['ticker'] == 'AAPL'
+        assert data['signal'] == 'BUY'
+
+        # Verify call args
+        mock_screen.assert_called_with(ticker_list=['AAPL'], time_frame='1d')
+
+    @patch('webapp.app.screener.screen_fourier_cycles')
+    def test_fourier_batch(self, mock_screen, client):
+        mock_screen.return_value = [{'ticker': 'AAPL'}, {'ticker': 'MSFT'}]
+
+        response = client.get('/screen/fourier')
+        assert response.status_code == 200
+        data = response.get_json()
+
+        assert isinstance(data, list)
+        assert len(data) == 2

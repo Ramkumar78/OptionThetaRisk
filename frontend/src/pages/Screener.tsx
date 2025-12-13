@@ -55,6 +55,7 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [regimeSuggestion, setRegimeSuggestion] = useState<any>(null);
 
   // Market Screener State
   const [ivRank, setIvRank] = useState(30);
@@ -73,10 +74,17 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [checkLoading, setCheckLoading] = useState(false);
   const [tableFilter, setTableFilter] = useState('');
 
+  // Fourier Specific State
+  const [fourierTicker, setFourierTicker] = useState('');
+  const [fourierCheckResult, setFourierCheckResult] = useState<any>(null);
+  const [fourierCheckError, setFourierCheckError] = useState<string | null>(null);
+  const [fourierCheckLoading, setFourierCheckLoading] = useState(false);
+
   const handleRunScreener = async () => {
     setLoading(true);
     setError(null);
     setResults(null);
+    setRegimeSuggestion(null);
     setTableFilter('');
     try {
       let data;
@@ -95,7 +103,13 @@ const Screener: React.FC<ScreenerProps> = () => {
         // Bull Put usually implies US liquid, but we can pass region if we want to expand later
         data = await runBullPutScreener(region);
       } else if (activeTab === 'isa') {
-        data = await runIsaTrendScreener(region);
+        const response = await runIsaTrendScreener(region);
+        if (response.results) {
+            data = response.results;
+            setRegimeSuggestion(response.regime_suggestion);
+        } else {
+            data = response; // Fallback if API changed format
+        }
       } else if (activeTab === 'fourier') {
         data = await runFourierScreener(region, strategyTimeFrame);
       }
@@ -120,6 +134,30 @@ const Screener: React.FC<ScreenerProps> = () => {
           setCheckError(err.message || 'Check failed');
       } finally {
           setCheckLoading(false);
+      }
+  };
+
+  const handleCheckFourier = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!fourierTicker.trim()) return;
+      setFourierCheckLoading(true);
+      setFourierCheckResult(null);
+      setFourierCheckError(null);
+      try {
+          // Re-use runFourierScreener but via a specific API call if needed,
+          // or assume we updated the API to accept ticker.
+          // Since frontend API helper 'runFourierScreener' takes (region, timeframe),
+          // we might need to modify api.ts or just fetch directly here.
+          // Let's assume we can pass ticker as query param.
+          // The cleanest way is to use `fetch`.
+          const response = await fetch(`/screen/fourier?ticker=${encodeURIComponent(fourierTicker)}`);
+          if (!response.ok) throw new Error("Not found or error");
+          const data = await response.json();
+          setFourierCheckResult(data);
+      } catch (err: any) {
+          setFourierCheckError(err.message || 'Check failed');
+      } finally {
+          setFourierCheckLoading(false);
       }
   };
 
@@ -297,6 +335,62 @@ const Screener: React.FC<ScreenerProps> = () => {
              </div>
           )}
 
+          {activeTab === 'fourier' && (
+             <div className="col-span-1 md:col-span-3 space-y-4">
+                 <div className="flex items-end gap-4">
+                     <div className="flex-1">
+                        <label htmlFor="check-fourier" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Analyze Cycles</label>
+                        <form onSubmit={handleCheckFourier} className="flex gap-2">
+                            <input
+                                type="text"
+                                id="check-fourier"
+                                value={fourierTicker}
+                                onChange={(e) => setFourierTicker(e.target.value)}
+                                placeholder="Enter Ticker (e.g. AAPL)"
+                                className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                            />
+                            <button
+                                type="submit"
+                                disabled={fourierCheckLoading || !fourierTicker.trim()}
+                                className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 font-medium rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                                {fourierCheckLoading ? 'Analyzing...' : 'Analyze'}
+                            </button>
+                        </form>
+                     </div>
+                 </div>
+                 {fourierCheckError && <div className="text-red-600 text-sm">{fourierCheckError}</div>}
+                 {fourierCheckResult && (
+                     <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                         <h4 className="text-md font-bold text-gray-900 dark:text-white mb-2">{fourierCheckResult.company_name} ({fourierCheckResult.ticker})</h4>
+                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Signal</span>
+                                 <span className={clsx("font-bold", fourierCheckResult.signal.includes('Buy') ? "text-emerald-600" : fourierCheckResult.signal.includes('Sell') ? "text-red-600" : "text-gray-600")}>
+                                     {fourierCheckResult.signal}
+                                 </span>
+                             </div>
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Cycle Position</span>
+                                 <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{fourierCheckResult.cycle_position}</span>
+                             </div>
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Period</span>
+                                 <span className="font-mono text-gray-900 dark:text-white">{fourierCheckResult.cycle_period}</span>
+                             </div>
+                             <div>
+                                 <span className="text-gray-500 dark:text-gray-400 block">Price</span>
+                                 <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(fourierCheckResult.price, getCurrencySymbol(fourierCheckResult.ticker))}</span>
+                             </div>
+                         </div>
+                     </div>
+                 )}
+                 <div className="flex items-center text-sm text-gray-500 italic bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-100 dark:border-blue-800">
+                      ℹ️ Fourier Analysis decomposes price action into sine waves to find the dominant cycle. Buy at Troughs (-1.0), Sell at Peaks (+1.0). Best for range-bound markets.
+                  </div>
+             </div>
+          )}
+
           {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier') && (
              <>
               <div>
@@ -385,6 +479,30 @@ const Screener: React.FC<ScreenerProps> = () => {
           </div>
         )}
       </div>
+
+      {/* Market Regime Suggestion Banner */}
+      {activeTab === 'isa' && regimeSuggestion && (
+          <div className="bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500 p-4 rounded-r-lg shadow-sm">
+              <div className="flex">
+                  <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-orange-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                  </div>
+                  <div className="ml-3">
+                      <p className="text-sm text-orange-700 dark:text-orange-200">
+                          {regimeSuggestion.message}
+                          <button
+                              onClick={() => { setActiveTab('fourier'); setResults(null); setRegimeSuggestion(null); }}
+                              className="ml-2 font-bold underline hover:text-orange-800 dark:hover:text-orange-100"
+                          >
+                              Switch to Fourier
+                          </button>
+                      </p>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* Results Section */}
       {results && (

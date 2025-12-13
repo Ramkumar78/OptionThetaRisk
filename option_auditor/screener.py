@@ -748,6 +748,9 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             # Use TICKER_NAMES if available
             company_name = TICKER_NAMES.get(symbol, symbol)
 
+            # Rate limiting sleep
+            time.sleep(0.1)
+
             return {
                 "ticker": symbol,
                 "company_name": company_name,
@@ -771,7 +774,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     results = []
 
     # Use ThreadPoolExecutor for parallel processing
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         future_to_symbol = {executor.submit(process_symbol, sym): sym for sym in tickers}
         for future in as_completed(future_to_symbol):
             try:
@@ -1579,6 +1582,9 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
 
+            # Rate limiting sleep
+            time.sleep(0.1)
+
             return {
                 "ticker": ticker,
                 "company_name": company_name,
@@ -1597,7 +1603,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
             logger.error(f"Error processing Darvas for {ticker}: {e}")
             return None
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         future_to_symbol = {executor.submit(_process_darvas, sym): sym for sym in ticker_list}
         for future in as_completed(future_to_symbol):
             try:
@@ -1880,6 +1886,9 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
                                      "target": peak_up_high + range_up
                                  }
 
+            # Rate limiting sleep
+            time.sleep(0.1)
+
             if signal != "WAIT":
                 return {
                     "ticker": ticker,
@@ -1897,7 +1906,7 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
         return None
 
     # Threaded execution
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         future_to_symbol = {executor.submit(_process_ote, sym): sym for sym in ticker_list}
         for future in as_completed(future_to_symbol):
             try:
@@ -2060,6 +2069,9 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
 
             if roi < min_roi: return None # Yield too low
 
+            # Rate limiting sleep
+            time.sleep(0.1)
+
             return {
                 "ticker": ticker,
                 "price": curr_price,
@@ -2082,7 +2094,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
     # Multi-threaded Execution
     import concurrent.futures
     final_list = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         futures = {executor.submit(_process_spread, t): t for t in ticker_list}
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
