@@ -2565,3 +2565,146 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
     # Sort: Buys first
     results.sort(key=lambda x: x['cycle_position'])
     return results
+
+def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> list:
+    """
+    Combines ISA Trend Following with Fourier Cycle Analysis.
+    Goal: Find 'Buy the Dip' opportunities in strong uptrends.
+    """
+    import yfinance as yf
+    import pandas_ta as ta
+    import pandas as pd
+    import numpy as np
+
+    # Default list if None
+    if ticker_list is None:
+        # Use your existing ISA list or Watchlist
+        # Integrating with existing logic: If no list provided, fallback to standard behavior or user specific list
+        # But for now, using the list from the prompt or integrating with region selection in caller.
+        # This function accepts ticker_list, so caller should provide it.
+        # Fallback to WATCH list if absolutely nothing.
+        if "WATCH" in SECTOR_COMPONENTS:
+             ticker_list = SECTOR_COMPONENTS["WATCH"]
+        else:
+             ticker_list = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "TSLA", "AMD", "COIN"]
+
+    results = []
+
+    # Batch download 2 years of data (enough for 200 SMA + FFT)
+    try:
+        # Reuse existing helpers if possible, or use the provided logic which is clean.
+        # Using 2y period as requested.
+        data = yf.download(ticker_list, period="2y", interval=time_frame, group_by='ticker', progress=False, auto_adjust=True, threads=True)
+    except Exception as e:
+        logger.error(f"Hybrid screener download failed: {e}")
+        return []
+
+    for ticker in ticker_list:
+        try:
+            # 1. Prepare Data
+            df = pd.DataFrame()
+            if isinstance(data.columns, pd.MultiIndex):
+                if ticker in data.columns.levels[0]:
+                    df = data[ticker].copy()
+            else:
+                df = data.copy()
+
+            df = df.dropna(how='all')
+            if len(df) < 200: continue
+
+            curr_close = float(df['Close'].iloc[-1])
+            closes = df['Close'].tolist()
+
+            # --- STEP 1: ISA TREND ANALYSIS ---
+            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+            high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
+
+            trend_verdict = "NEUTRAL"
+            if curr_close > sma_200:
+                trend_verdict = "BULLISH"
+            else:
+                trend_verdict = "BEARISH"
+
+            # Check Breakout status
+            is_breakout = curr_close >= high_50
+
+            # --- STEP 2: FOURIER CYCLE ANALYSIS ---
+            cycle_data = _calculate_dominant_cycle(closes) # Re-using your helper
+
+            cycle_state = "NEUTRAL"
+            cycle_score = 0.0 # -1.0 (Low) to 1.0 (High)
+            period = 0
+
+            if cycle_data:
+                period, rel_pos = cycle_data
+                cycle_score = rel_pos
+
+                # Define Cycle States
+                if rel_pos <= -0.7:
+                    cycle_state = "BOTTOM"
+                elif rel_pos >= 0.7:
+                    cycle_state = "TOP"
+                else:
+                    cycle_state = "MID"
+
+            # --- STEP 3: SYNTHESIZE VERDICT ---
+            final_signal = "WAIT"
+            color = "gray"
+            score = 0 # 0 to 100 confidence
+
+            # Scenario A: Bullish Trend + Cycle Bottom (The "Holy Grail" Setup)
+            if trend_verdict == "BULLISH" and cycle_state == "BOTTOM":
+                final_signal = "🚀 PERFECT BUY (Dip in Uptrend)"
+                color = "green"
+                score = 95
+
+            # Scenario B: Bullish Trend + Breakout (Momentum Buy)
+            elif trend_verdict == "BULLISH" and is_breakout:
+                # If breakout but cycle is TOP, it's risky but still a buy
+                if cycle_state == "TOP":
+                    final_signal = "⚠️ MOMENTUM BUY (Cycle High)"
+                    color = "orange"
+                    score = 75
+                else:
+                    final_signal = "✅ BREAKOUT BUY"
+                    color = "green"
+                    score = 85
+
+            # Scenario C: Bearish Trend + Cycle Top (Perfect Short)
+            elif trend_verdict == "BEARISH" and cycle_state == "TOP":
+                final_signal = "📉 PERFECT SHORT (Rally in Downtrend)"
+                color = "red"
+                score = 90
+
+            # Scenario D: Conflicts
+            elif trend_verdict == "BULLISH" and cycle_state == "TOP":
+                final_signal = "🛑 WAIT (Extended)"
+                color = "yellow"
+            elif trend_verdict == "BEARISH" and cycle_state == "BOTTOM":
+                final_signal = "🛑 WAIT (Oversold Downtrend)"
+                color = "yellow"
+
+            # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            results.append({
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": curr_close,
+                "verdict": final_signal,
+                "trend": trend_verdict,
+                "cycle": f"{cycle_state} ({cycle_score:.2f})",
+                "period_days": period,
+                "score": score,
+                "color": color,
+                "signal": final_signal # For frontend compatibility with 'signal' key
+            })
+
+        except Exception as e:
+            # logger.debug(f"Hybrid screener error for {ticker}: {e}")
+            continue
+
+    # Sort by 'Score' descending (best setups first)
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return results

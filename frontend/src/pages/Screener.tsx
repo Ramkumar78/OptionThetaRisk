@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkIsaStock, runFourierScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkIsaStock, runFourierScreener, runHybridScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid';
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
   market: {
@@ -47,6 +47,11 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
     title: 'Harmonic Cycles',
     subtitle: 'Fourier Analysis',
     description: 'Deconstructs price action into waves to identify dominant time cycles. Signals entries at cyclical bottoms (troughs). Best for swing trading in chopping or sideways markets.'
+  },
+  hybrid: {
+    title: 'Hybrid (Trend + Cycle)',
+    subtitle: 'The Holy Grail Setup',
+    description: 'Combines ISA Trend (Direction) with Fourier Cycles (Timing). Finds "Buy the Dip" setups where a strong uptrend meets a cyclical bottom. High probability, high reward.'
   }
 };
 
@@ -112,6 +117,8 @@ const Screener: React.FC<ScreenerProps> = () => {
         }
       } else if (activeTab === 'fourier') {
         data = await runFourierScreener(region, strategyTimeFrame);
+      } else if (activeTab === 'hybrid') {
+        data = await runHybridScreener(region, strategyTimeFrame);
       }
       setResults(data);
     } catch (err: any) {
@@ -162,9 +169,10 @@ const Screener: React.FC<ScreenerProps> = () => {
   };
 
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
+    { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'Holy Grail' },
     { id: 'turtle', label: 'Turtle Trading' },
     { id: 'darvas', label: 'Darvas Box' },
-    { id: 'fourier', label: 'Harmonic Cycles', subLabel: 'New' },
+    { id: 'fourier', label: 'Harmonic Cycles' },
     { id: 'mms', label: 'MMS / OTE', subLabel: 'SMC' },
     { id: 'ema', label: '5/13 & 5/21 EMA' },
     { id: 'isa', label: 'ISA Trend Follower', subLabel: 'Long Only' },
@@ -391,7 +399,7 @@ const Screener: React.FC<ScreenerProps> = () => {
              </div>
           )}
 
-          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier') && (
+          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid') && (
              <>
               <div>
                 <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -540,6 +548,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                             activeTab === 'bull_put' ? 'Bull Put Spreads' :
                             activeTab === 'isa' ? 'Trend Follower (ISA)' :
                             activeTab === 'fourier' ? 'Harmonic Cycle (Fourier)' :
+                            activeTab === 'hybrid' ? 'Hybrid (Trend + Cycle)' :
                             '5/13 EMA Setups'}
                         </h3>
                         {activeTab === 'isa' && (
@@ -652,6 +661,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                 } else if (sortConfig.key === 'cycle_pos') {
                     aValue = parseFloat((a.cycle_position || "0").split(' ')[0]);
                     bValue = parseFloat((b.cycle_position || "0").split(' ')[0]);
+                } else if (sortConfig.key === 'score') {
+                    aValue = a.score;
+                    bValue = b.score;
+                } else if (sortConfig.key === 'trend') {
+                    aValue = a.trend;
+                    bValue = b.trend;
+                } else if (sortConfig.key === 'cycle') {
+                    aValue = a.cycle;
+                    bValue = b.cycle;
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -711,7 +729,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         <HeaderCell label="Symbol" sortKey="symbol" />
                         {type === 'market' && <HeaderCell label="Company" sortKey="company" />}
                         <HeaderCell label="Price" sortKey="price" align="right" />
-                        {type !== 'bull_put' && <HeaderCell label="Change" sortKey="change" align="right" />}
+                        {type !== 'bull_put' && type !== 'hybrid' && <HeaderCell label="Change" sortKey="change" align="right" />}
                         {type === 'market' && (
                             <>
                                 <HeaderCell label="RSI" sortKey="rsi" align="right" />
@@ -753,7 +771,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         <HeaderCell label="Cycle Position" sortKey="cycle_pos" align="right" />
                                     </>
                                 )}
-                                {type !== 'isa' && type !== 'fourier' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
+                                {type === 'hybrid' && (
+                                    <>
+                                        <HeaderCell label="Trend" sortKey="trend" align="center" />
+                                        <HeaderCell label="Cycle" sortKey="cycle" align="center" />
+                                        <HeaderCell label="Period" sortKey="cycle_period" align="right" />
+                                        <HeaderCell label="Score" sortKey="score" align="right" />
+                                    </>
+                                )}
+                                {type !== 'isa' && type !== 'fourier' && type !== 'hybrid' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
                             </>
                         )}
                         {type === 'bull_put' && (
@@ -792,7 +818,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     {formatCurrency(price, currency)}
                                 </td>
 
-                                {type !== 'bull_put' && (
+                                {type !== 'bull_put' && type !== 'hybrid' && (
                                   <td className={clsx("px-4 py-3 text-right font-bold", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
                                       {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
                                   </td>
@@ -825,8 +851,9 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     <>
                                         <td className="px-4 py-3 text-center">
                                              <span className={clsx("px-2 py-1 rounded text-xs font-bold",
-                                                signal && (signal.includes('Long') || signal.includes('Buy') || signal.includes('BREAKOUT')) ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                signal && (signal.includes('Short') || signal.includes('Sell') || signal.includes('DUMP')) ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                                                signal && (signal.includes('Long') || signal.includes('Buy') || signal.includes('BUY') || signal.includes('BREAKOUT') || signal.includes('PERFECT BUY')) ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
+                                                signal && (signal.includes('Short') || signal.includes('SHORT') || signal.includes('Sell') || signal.includes('DUMP')) ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                                                signal && (signal.includes('WAIT')) ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" :
                                                 "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                                              )}>
                                                 {signal}
@@ -889,6 +916,23 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">
                                                     {row.cycle_position}
+                                                </td>
+                                            </>
+                                        ) : type === 'hybrid' ? (
+                                            <>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className={clsx("font-bold text-xs", row.trend === 'BULLISH' ? "text-emerald-600 dark:text-emerald-400" : row.trend === 'BEARISH' ? "text-red-600 dark:text-red-400" : "text-gray-500")}>
+                                                        {row.trend}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-center font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {row.cycle}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                                    {row.period_days}d
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                                    {row.score}
                                                 </td>
                                             </>
                                         ) : (
