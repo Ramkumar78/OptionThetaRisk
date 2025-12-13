@@ -2188,6 +2188,12 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
             # 2. Calculate Indicators
             curr_close = float(df['Close'].iloc[-1])
 
+            # Liquidity Filter: Average Daily Dollar Volume > $5M
+            # (Simons says: Liquidity First)
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+            if (avg_vol * curr_close) < 5_000_000:
+                continue
+
             # Trend Filter: 200 SMA
             sma_200 = df['Close'].rolling(200).mean().iloc[-1]
 
