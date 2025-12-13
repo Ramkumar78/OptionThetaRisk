@@ -37,49 +37,56 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
     import yfinance as yf
     import pandas_ta as ta
 
-    # We download '1y' to be safe for SMA 200
-    try:
-        data = yf.download(base_tickers, period="1y", interval="1d", group_by='ticker', threads=True, progress=False, auto_adjust=True)
-    except Exception as e:
-        logger.error(f"Failed to batch download SP500 data: {e}")
-        # Fallback if batch fails completely
-        return base_tickers[:50]
-
     filtered_list = []
 
-    for ticker in base_tickers:
+    # Chunking Logic
+    chunk_size = 100
+
+    for i in range(0, len(base_tickers), chunk_size):
+        chunk = base_tickers[i:i+chunk_size]
         try:
-            df = pd.DataFrame()
-            # Extract
-            if isinstance(data.columns, pd.MultiIndex):
-                if ticker in data.columns.get_level_values(0):
-                    df = data[ticker].copy()
-            else:
-                # Single ticker case (unlikely given base_tickers size)
-                df = data.copy()
+            # Download chunk
+            data = yf.download(chunk, period="1y", interval="1d", group_by='ticker', threads=True, progress=False, auto_adjust=True)
 
-            # Check emptiness
-            df = df.dropna(how='all')
-            if df.empty or len(df) < 20: continue
+            # Iterate through the chunk to check criteria
+            for ticker in chunk:
+                try:
+                    df = pd.DataFrame()
+                    # Extract single DF safely
+                    if isinstance(data.columns, pd.MultiIndex):
+                        if ticker in data.columns.levels[0]:
+                             df = data[ticker].copy()
+                    elif ticker in data.columns: # fallback
+                         df = data[ticker].copy() # unlikely with group_by
+                    else:
+                        continue # Ticker failed to download
 
-            # 1. Volume Filter (> 500k avg over last 20 days)
-            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-            if avg_vol < 500000:
-                continue
+                    df = df.dropna(how='all')
+                    if len(df) < 20: continue
 
-            # 2. Trend Filter (> SMA 200)
-            if check_trend:
-                if len(df) < 200: continue
-                sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-                curr_price = df['Close'].iloc[-1]
-                if curr_price < sma_200:
+                    # 1. Volume Filter (> 500k avg over last 20 days)
+                    avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+                    if avg_vol < 500000: continue
+
+                    # 2. Trend Filter (> SMA 200)
+                    if check_trend:
+                        if len(df) < 200: continue
+                        sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+                        curr_price = df['Close'].iloc[-1]
+                        if curr_price < sma_200: continue
+
+                    filtered_list.append(ticker)
+                except:
                     continue
-
-            filtered_list.append(ticker)
-
         except Exception as e:
-            logger.debug(f"Error filtering S&P500 ticker {ticker}: {e}")
+            logger.error(f"Failed to batch download SP500 chunk {i}: {e}")
             pass
+
+    # Fallback if completely empty?
+    if not filtered_list and len(base_tickers) > 0:
+         # If download failed completely, maybe return top 10 as safe mode?
+         # Or return empty. The original code returned base_tickers[:50].
+         pass
 
     # Always include the "High Interest" names if they are in S&P 500
     # (Or just append them if missing? The prompt says "Keep your High Interest List: Always scan...")
