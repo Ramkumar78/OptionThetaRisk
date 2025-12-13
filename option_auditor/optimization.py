@@ -14,6 +14,16 @@ class PortfolioOptimizer:
         self.cov_matrix = None
         self.mean_returns = None
 
+    def set_data(self, df):
+        """Use already downloaded data to avoid API calls."""
+        if df is None or df.empty:
+            return
+
+        try:
+            self._process_data(df)
+        except Exception as e:
+            logger.error(f"Error setting data in PortfolioOptimizer: {e}")
+
     def fetch_data(self, period="1y"):
         """Fetches historical data to calculate covariance and returns."""
         if not self.tickers:
@@ -23,15 +33,24 @@ class PortfolioOptimizer:
             # Fetch data
             # Use 'threads=True' for parallel download
             data = yf.download(self.tickers, period=period, interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
+            self._process_data(data)
+        except Exception as e:
+            logger.error(f"Error in PortfolioOptimizer.fetch_data: {e}")
 
+    def _process_data(self, data):
+        """Internal helper to process downloaded data into returns matrix."""
+        try:
             # Extract closes
             close_prices = pd.DataFrame()
 
             for ticker in self.tickers:
                 if isinstance(data.columns, pd.MultiIndex):
                     if ticker in data.columns.levels[0]:
-                        series = data[ticker]['Close']
-                        close_prices[ticker] = series
+                        # Handle potential multi-level (Ticker, Price) or just Ticker[Close]
+                        if 'Close' in data[ticker].columns:
+                             series = data[ticker]['Close']
+                             close_prices[ticker] = series
+                        # Fallback if structure is different
                 else:
                     # Single ticker or flat structure case
                     if ticker in data.columns:
@@ -41,7 +60,7 @@ class PortfolioOptimizer:
                          close_prices[self.tickers[0]] = data['Close']
 
             if close_prices.empty:
-                logger.warning("PortfolioOptimizer: No price data fetched.")
+                logger.warning("PortfolioOptimizer: No price data extracted.")
                 return
 
             # Calculate Daily Returns
@@ -56,9 +75,8 @@ class PortfolioOptimizer:
 
             # Mean Returns (Annualized) - Simple historical mean as fallback
             self.mean_returns = self.returns_df.mean() * 252
-
         except Exception as e:
-            logger.error(f"Error in PortfolioOptimizer.fetch_data: {e}")
+            logger.error(f"Error processing data in PortfolioOptimizer: {e}")
 
     def optimize_weights(self, expected_returns_map: dict = None, target_return: float = None) -> dict:
         """

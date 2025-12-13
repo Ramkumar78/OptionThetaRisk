@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkIsaStock, runFourierScreener, runHybridScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
+// Import Chart.js (already in package) for Pie Chart if needed, or simple visual
 
 interface ScreenerProps {}
 
@@ -55,9 +56,47 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
   }
 };
 
+// Summary Card Component
+const StatCard = ({ title, value, color, subValue }: { title: string, value: string | number, color?: string, subValue?: string }) => (
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center justify-center text-center">
+        <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">{title}</span>
+        <span className={clsx("text-2xl font-bold mt-1", color ? color : "text-gray-900 dark:text-white")}>
+            {value}
+        </span>
+        {subValue && <span className="text-xs text-gray-400 mt-1">{subValue}</span>}
+    </div>
+);
+
+// Progress Bar Component
+const ProgressBar = ({ message, progress }: { message: string, progress: number }) => (
+    <div className="w-full max-w-md mx-auto py-8 text-center space-y-4">
+        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+            <span>Initiating</span>
+            <span>Fetching</span>
+            <span>Analyzing</span>
+            <span>Optimizing</span>
+            <span>Done</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 overflow-hidden relative">
+             <div
+                className="bg-primary-600 h-2.5 rounded-full transition-all duration-500 ease-out relative"
+                style={{ width: `${progress}%` }}
+             >
+                  {/* Shimmer effect */}
+                  <div className="absolute top-0 left-0 bottom-0 right-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer w-full h-full" style={{backgroundSize: '200% 100%'}}></div>
+             </div>
+        </div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 animate-pulse">{message}</p>
+    </div>
+);
+
+
 const Screener: React.FC<ScreenerProps> = () => {
-  const [activeTab, setActiveTab] = useState<ScreenerType>('turtle'); // Default to Turtle or EMA first
+  const [activeTab, setActiveTab] = useState<ScreenerType>('turtle');
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState(0); // 0-100
+  const [loadingMessage, setLoadingMessage] = useState("");
+
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [regimeSuggestion, setRegimeSuggestion] = useState<any>(null);
@@ -67,7 +106,7 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [rsiThreshold, setRsiThreshold] = useState(50);
   const [marketTimeFrame, setMarketTimeFrame] = useState('1d');
 
-  // Turtle/EMA/Strategy Screener State
+  // Strategy Screener State
   const [region, setRegion] = useState('us');
   const [strategyTimeFrame, setStrategyTimeFrame] = useState('1d');
 
@@ -85,6 +124,35 @@ const Screener: React.FC<ScreenerProps> = () => {
   const [fourierCheckError, setFourierCheckError] = useState<string | null>(null);
   const [fourierCheckLoading, setFourierCheckLoading] = useState(false);
 
+  // Fake Loading Progress Logic
+  useEffect(() => {
+    let interval: any;
+    if (loading) {
+        setLoadingStage(0);
+        const stages = [
+            { pct: 10, msg: "Connecting to Exchange..." },
+            { pct: 30, msg: "Fetching Batch Data..." },
+            { pct: 50, msg: "Processing Price Action..." },
+            { pct: 70, msg: "Running Algorithms..." },
+            { pct: 90, msg: "Finalizing Report..." }
+        ];
+
+        let step = 0;
+        setLoadingMessage(stages[0].msg);
+
+        interval = setInterval(() => {
+            step++;
+            if (step < stages.length) {
+                setLoadingStage(stages[step].pct);
+                setLoadingMessage(stages[step].msg);
+            }
+        }, 800); // Update every 800ms
+    } else {
+        setLoadingStage(100);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
+
   const handleRunScreener = async () => {
     setLoading(true);
     setError(null);
@@ -94,7 +162,6 @@ const Screener: React.FC<ScreenerProps> = () => {
     try {
       let data;
       if (activeTab === 'market') {
-        // We now pass 'region' to market screener too
         data = await runMarketScreener(ivRank, rsiThreshold, marketTimeFrame, region);
       } else if (activeTab === 'turtle') {
         data = await runTurtleScreener(region, strategyTimeFrame);
@@ -105,7 +172,6 @@ const Screener: React.FC<ScreenerProps> = () => {
       } else if (activeTab === 'mms') {
         data = await runMmsScreener(region, strategyTimeFrame);
       } else if (activeTab === 'bull_put') {
-        // Bull Put usually implies US liquid, but we can pass region if we want to expand later
         data = await runBullPutScreener(region);
       } else if (activeTab === 'isa') {
         const response = await runIsaTrendScreener(region);
@@ -113,7 +179,7 @@ const Screener: React.FC<ScreenerProps> = () => {
             data = response.results;
             setRegimeSuggestion(response.regime_suggestion);
         } else {
-            data = response; // Fallback if API changed format
+            data = response;
         }
       } else if (activeTab === 'fourier') {
         data = await runFourierScreener(region, strategyTimeFrame);
@@ -151,12 +217,6 @@ const Screener: React.FC<ScreenerProps> = () => {
       setFourierCheckResult(null);
       setFourierCheckError(null);
       try {
-          // Re-use runFourierScreener but via a specific API call if needed,
-          // or assume we updated the API to accept ticker.
-          // Since frontend API helper 'runFourierScreener' takes (region, timeframe),
-          // we might need to modify api.ts or just fetch directly here.
-          // Let's assume we can pass ticker as query param.
-          // The cleanest way is to use `fetch`.
           const response = await fetch(`/screen/fourier?ticker=${encodeURIComponent(fourierTicker)}`);
           if (!response.ok) throw new Error("Not found or error");
           const data = await response.json();
@@ -167,6 +227,48 @@ const Screener: React.FC<ScreenerProps> = () => {
           setFourierCheckLoading(false);
       }
   };
+
+  // Compute stats for Summary Cards
+  const stats = useMemo(() => {
+      if (!results) return null;
+
+      let items: any[] = [];
+      if (activeTab === 'market' && results.results) {
+          // Flatten sector results
+          Object.values(results.results).forEach((arr: any) => items.push(...arr));
+      } else if (Array.isArray(results)) {
+          items = results;
+      }
+
+      if (items.length === 0) return null;
+
+      const total = items.length;
+      let bullish = 0;
+      let bearish = 0;
+      let neutral = 0;
+      let bestPerformer = { ticker: '-', change: -999 };
+
+      items.forEach(i => {
+          const sig = (i.Signal || i.signal || "").toLowerCase();
+          const change = i['1D %'] !== undefined ? i['1D %'] : (i.pct_change_1d || 0);
+
+          if (sig.includes('buy') || sig.includes('long') || sig.includes('breakout') || sig.includes('enter') || sig.includes('green')) bullish++;
+          else if (sig.includes('sell') || sig.includes('short') || sig.includes('dump') || sig.includes('exit') || sig.includes('red')) bearish++;
+          else neutral++;
+
+          if (change > bestPerformer.change) {
+              bestPerformer = { ticker: i.Ticker || i.ticker || i.symbol, change };
+          }
+      });
+
+      return {
+          total,
+          bullish,
+          bearish,
+          neutral,
+          bestPerformer
+      };
+  }, [results, activeTab]);
 
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
     { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
@@ -462,24 +564,17 @@ const Screener: React.FC<ScreenerProps> = () => {
           )}
         </div>
 
-        <button
-          id="run-screener-btn"
-          onClick={handleRunScreener}
-          disabled={loading}
-          className="w-full md:w-auto px-6 py-3 text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-medium rounded-lg text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <span className="flex items-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Scanning Market...
-            </span>
-          ) : (
-            'Run Screener'
-          )}
-        </button>
+        {loading ? (
+             <ProgressBar message={loadingMessage} progress={loadingStage} />
+        ) : (
+            <button
+                id="run-screener-btn"
+                onClick={handleRunScreener}
+                className="w-full md:w-auto px-6 py-3 text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-medium rounded-lg text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Run Screener
+            </button>
+        )}
 
         {error && (
           <div id="screener-error" className="mt-4 p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
@@ -510,6 +605,16 @@ const Screener: React.FC<ScreenerProps> = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* Summary Stats Cards (Results loaded) */}
+      {results && stats && (
+         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fadeIn">
+            <StatCard title="Total Scanned" value={stats.total} />
+            <StatCard title="Bullish Signals" value={stats.bullish} color="text-emerald-600 dark:text-emerald-400" />
+            <StatCard title="Bearish Signals" value={stats.bearish} color="text-red-600 dark:text-red-400" />
+            <StatCard title="Top Mover" value={stats.bestPerformer.change > -999 ? `${stats.bestPerformer.change > 0 ? '+' : ''}${stats.bestPerformer.change.toFixed(2)}%` : '-'} subValue={stats.bestPerformer.ticker} color={stats.bestPerformer.change >= 0 ? "text-emerald-600" : "text-red-600"} />
+         </div>
       )}
 
       {/* Results Section */}

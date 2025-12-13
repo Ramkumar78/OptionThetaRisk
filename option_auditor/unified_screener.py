@@ -34,48 +34,16 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
         # For now, let's assume this is a Daily Dashboard tool as described in "Morning Meeting".
         pass
 
-    # 1. Download Data in Chunks
-    chunk_size = 50
-    chunks = [ticker_list[i:i + chunk_size] for i in range(0, len(ticker_list), chunk_size)]
+    # 1. Download Data in Chunks using robust fetcher
+    from option_auditor.common.data_utils import fetch_batch_data_safe
 
-    data_frames = []
-    # print(f"Processing {len(ticker_list)} tickers in {len(chunks)} batches...")
-
-    for i, chunk in enumerate(chunks):
-        try:
-            # Download chunk
-            batch_data = yf.download(
-                chunk,
-                period=period,
-                interval=yf_interval,
-                group_by='ticker',
-                progress=False,
-                auto_adjust=True,
-                threads=True
-            )
-
-            if not batch_data.empty:
-                data_frames.append(batch_data)
-
-            # Sleep briefly to be nice to the API
-            time.sleep(1.0)
-
-        except Exception as e:
-            logger.error(f"Batch {i} download failed: {e}")
-
-    if not data_frames:
+    try:
+        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval, chunk_size=50)
+    except Exception as e:
+        logger.error(f"Universal dashboard data fetch failed: {e}")
         return []
 
-    # Combine all chunks
-    try:
-        if len(data_frames) == 1:
-            data = data_frames[0]
-        else:
-            # Axis=1 because yfinance returns columns like (Price, Ticker) or (Ticker, Price)
-            # When group_by='ticker', the top level columns are Tickers.
-            data = pd.concat(data_frames, axis=1)
-    except Exception as e:
-        logger.error(f"Failed to concat batches: {e}")
+    if data.empty:
         return []
 
     results = []
@@ -203,7 +171,8 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
     if len(buy_candidates) >= 2:
         try:
             optimizer = PortfolioOptimizer(buy_candidates)
-            optimizer.fetch_data(period="1y")
+            # Reuse existing data to avoid double download
+            optimizer.set_data(data)
 
             # Maximize Sharpe Ratio
             allocations = optimizer.optimize_weights(expected_returns_map=expected_returns)
