@@ -25,6 +25,60 @@ except ImportError:
 # Update with S&P 500 Names if available in constants?
 # Constants.py updates TICKER_NAMES with SP500_NAMES already.
 
+def enrich_with_fundamentals(results_list: list) -> list:
+    """
+    Fetches PE Ratio and Sector data ONLY for the stocks that passed the screener.
+    significantly faster than fetching for the whole universe.
+    """
+    import yfinance as yf
+
+    for item in results_list:
+        # Only enrich valid signals to save time
+        # We look for "BUY", "SHORT", "GREEN", "BREAKOUT", "ENTER"
+        signal = item.get('signal', '').upper()
+        verdict = item.get('verdict', '').upper() # Hybrid uses verdict
+
+        is_interesting = False
+        if any(x in signal for x in ["BUY", "SELL", "SHORT", "ENTER", "BREAKOUT", "HOLD"]):
+             is_interesting = True
+        if any(x in verdict for x in ["BUY", "SELL", "SHORT"]):
+             is_interesting = True
+
+        if not is_interesting and "WAIT" in signal:
+             item['pe_ratio'] = "-"
+             continue
+
+        try:
+            ticker = item['ticker']
+            # Fast fetch
+            info = yf.Ticker(ticker).info
+
+            pe = info.get('trailingPE', None)
+            f_pe = info.get('forwardPE', None)
+            sector = info.get('sector', 'Unknown')
+
+            # Logic: Use Forward PE if Trailing is missing (growth stocks)
+            final_pe = pe if pe else f_pe
+
+            item['pe_ratio'] = f"{final_pe:.2f}" if final_pe else "N/A"
+            item['sector'] = sector
+
+            # Optional: Add "Overvalued" warning
+            if final_pe:
+                if final_pe > 50:
+                    item['value_verdict'] = "EXPENSIVE"
+                elif final_pe < 15:
+                    item['value_verdict'] = "CHEAP"
+                else:
+                    item['value_verdict'] = "FAIR"
+            else:
+                 item['value_verdict'] = "N/A"
+
+        except Exception:
+            item['pe_ratio'] = "Err"
+
+    return results_list
+
 def _get_filtered_sp500(check_trend: bool = True) -> list:
     """
     Returns a filtered list of S&P 500 tickers based on Volume (>500k) and optionally Trend (>SMA200).
@@ -234,6 +288,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             current_atr = atr_series.iloc[-1] if atr_series is not None and not atr_series.empty else 0.0
 
             current_price = float(df['Close'].iloc[-1])
+            volatility_pct = (current_atr / current_price * 100) if current_price > 0 else 0.0
             current_rsi = float(df['RSI'].iloc[-1])
             current_sma = float(df['SMA_50'].iloc[-1])
 
@@ -286,6 +341,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "is_green": is_green,
                 "iv_rank": "N/A*",
                 "atr": current_atr,
+                "atr_value": round(current_atr, 2),
+                "volatility_pct": round(volatility_pct, 2),
                 "pe_ratio": pe_ratio
             }
 
@@ -552,6 +609,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
             prev_high_10 = float(df['10_High'].iloc[-1]) if not pd.isna(df['10_High'].iloc[-1]) else prev_high
             prev_low_10 = float(df['10_Low'].iloc[-1]) if not pd.isna(df['10_Low'].iloc[-1]) else prev_low
 
+            volatility_pct = (atr / curr_close) * 100 if curr_close > 0 else 0.0
+
             signal = "WAIT"
             buy_price = 0.0
             stop_loss = 0.0
@@ -594,6 +653,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                     "stop_loss": stop_loss,
                     "target": target,
                     "atr": atr,
+                    "atr_value": round(atr, 2),
+                    "volatility_pct": round(volatility_pct, 2),
                     "risk_per_share": abs(buy_price - stop_loss)
                 })
 
@@ -689,6 +750,10 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
             df['EMA_13'] = ta.ema(df['Close'], length=13)
             df['EMA_21'] = ta.ema(df['Close'], length=21)
 
+            # ATR for standard reporting
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+
             # Current & Previous values
             curr_5 = df['EMA_5'].iloc[-1]
             curr_13 = df['EMA_13'].iloc[-1]
@@ -699,6 +764,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
             prev_21 = df['EMA_21'].iloc[-2]
 
             curr_close = float(df['Close'].iloc[-1])
+            volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
             signal = "WAIT"
             status_color = "gray"
@@ -782,6 +848,8 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                     "ema_21": curr_21,
                     # Stop Loss usually strictly below the slow EMA line
                     "stop_loss": stop_loss,
+                    "atr_value": round(current_atr, 2),
+                    "volatility_pct": round(volatility_pct, 2),
                     "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100
                 })
 
@@ -1026,6 +1094,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
                  pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
 
             atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1]
+            volatility_pct = (atr / curr_close * 100) if curr_close > 0 else 0.0
 
             stop_loss = floor if floor else (ceiling - 2*atr if ceiling else curr_close * 0.95)
             # Target = Breakout + Box Height
@@ -1049,6 +1118,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
                 "stop_loss": stop_loss,
                 "target_price": target,
                 "high_52w": period_high,
+                "atr_value": round(atr, 2),
+                "volatility_pct": round(volatility_pct, 2),
                 "volume_ratio": (curr_volume / np.mean(volumes[-21:-1])) if len(volumes) > 21 else 1.0
             }
 
@@ -1194,6 +1265,12 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
                 df.columns = df.columns.get_level_values(0)
 
             curr_close = float(df['Close'].iloc[-1])
+
+            # Calc ATR
+            import pandas_ta as ta
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
             # 2. Identify Structure (Swings)
             df = _identify_swings(df, lookback=3)
@@ -1350,7 +1427,9 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
                     "stop_loss": setup_details['stop'],
                     "ote_zone": setup_details['entry_zone'],
                     "target": setup_details['target'],
-                    "fvg_detected": "Yes"
+                    "fvg_detected": "Yes",
+                    "atr_value": round(current_atr, 2),
+                    "volatility_pct": round(volatility_pct, 2)
                 }
 
         except Exception as e:
@@ -1434,6 +1513,10 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
 
             curr_price = float(df['Close'].iloc[-1])
             sma_50 = df['Close'].rolling(50).mean().iloc[-1]
+
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
 
             # Trend Check: Only sell puts if stock is above SMA 50 (Bullish/Neutral)
             if curr_price < sma_50:
@@ -1537,7 +1620,9 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
                 "credit": round(credit, 2),
                 "max_risk": round(risk, 2),
                 "roi_pct": round(roi * 100, 1),
-                "trend": "Bullish (>SMA50)"
+                "trend": "Bullish (>SMA50)",
+                "atr_value": round(current_atr, 2),
+                "volatility_pct": round(volatility_pct, 2)
             }
 
         except Exception as e:
@@ -1847,6 +1932,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "trailing_exit_20d": round(low_20, 2),
                 "volatility_pct": round(volatility_pct, 2),
                 "atr_20": round(atr_20, 2),
+                "atr_value": round(atr_20, 2),
                 "risk_per_share": round(risk_per_share, 2),
                 "dist_to_stop_pct": round(dist_to_stop_pct, 2),
                 "tharp_verdict": tharp_verdict,
@@ -1971,6 +2057,11 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
 
             closes = df['Close'].tolist()
 
+            import pandas_ta as ta
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            volatility_pct = (current_atr / float(closes[-1]) * 100) if float(closes[-1]) > 0 else 0.0
+
             # --- FOURIER CALC ---
             cycle_data = _calculate_dominant_cycle(closes)
             if not cycle_data: continue
@@ -2011,7 +2102,9 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
                 "signal": signal,
                 "cycle_period": f"{period} Days",
                 "cycle_position": f"{rel_pos:.2f} (-1 Low, +1 High)",
-                "verdict_color": verdict_color
+                "verdict_color": verdict_color,
+                "atr_value": round(current_atr, 2),
+                "volatility_pct": round(volatility_pct, 2)
             })
 
         except Exception:
@@ -2226,6 +2319,8 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
                  current_atr = df['ATR'].iloc[-1]
             if pd.isna(current_atr): current_atr = 0.0
 
+            volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
+
             daily_range = df['High'].iloc[-1] - df['Low'].iloc[-1]
             is_panic_selling = daily_range > (2.0 * current_atr) if current_atr > 0 else False
 
@@ -2316,7 +2411,9 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
                 "signal": final_signal, # For frontend compatibility with 'signal' key
                 "stop_loss": round(stop_loss_price, 2),   # <--- THE STOP
                 "target": round(target_price, 2),         # <--- THE TARGET
-                "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})" # <--- IS IT WORTH IT?
+                "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})", # <--- IS IT WORTH IT?
+                "atr_value": round(current_atr, 2),
+                "volatility_pct": round(volatility_pct, 2)
             })
 
         except Exception as e:
@@ -2375,6 +2472,12 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
             df = df.dropna(how='all')
             if len(df) < 200: continue
 
+            # ATR Calc
+            import pandas_ta as ta
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            volatility_pct = (current_atr / float(df['Close'].iloc[-1]) * 100) if float(df['Close'].iloc[-1]) > 0 else 0.0
+
             # --- RUN ALL STRATEGIES ---
             analyzer = StrategyAnalyzer(df)
 
@@ -2412,7 +2515,9 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
                 "momentum": momentum,
                 "confluence_score": score,
                 "verdict": final_verdict,
-                "signals": ", ".join(signals)
+                "signals": ", ".join(signals),
+                "atr_value": round(current_atr, 2),
+                "volatility_pct": round(volatility_pct, 2)
             })
 
         except Exception: continue
