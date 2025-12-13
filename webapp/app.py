@@ -523,6 +523,22 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/master", methods=["GET"])
+    def screen_master():
+        try:
+            region = request.args.get("region", "us")
+            # Cache for 20 minutes as this is a heavy scan
+            cache_key = ("master_convergence", region)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            results = screener.screen_master_convergence(region=region)
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/fourier", methods=["GET"])
     def screen_fourier():
         try:
