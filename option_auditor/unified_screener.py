@@ -8,6 +8,7 @@ from option_auditor.strategies.turtle import TurtleStrategy
 from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.strategies.fourier import FourierStrategy
 from option_auditor.common.constants import TICKER_NAMES, SECTOR_COMPONENTS
+from option_auditor.optimization import PortfolioOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -137,4 +138,48 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
 
     # Sort by Buy Confluence
     results.sort(key=lambda x: x['confluence_score'], reverse=True)
+
+    # --- OPTIMIZATION STEP ---
+    # 1. Identify "BUY" candidates for optimization
+    buy_candidates = []
+    expected_returns = {}
+
+    for r in results:
+        # Extract signal counts
+        buy_count = int(r['confluence_score'].split('/')[0])
+
+        # Simple Logic: Only optimize allocation for Strong Buys (2/3 or 3/3)
+        if buy_count >= 2:
+            ticker = r['ticker']
+            buy_candidates.append(ticker)
+
+            # Map Confluence to Expected Return (Heuristic)
+            # 3/3 = 40% Annualized Exp Return
+            # 2/3 = 20% Annualized Exp Return
+            if buy_count == 3:
+                expected_returns[ticker] = 0.40
+            else:
+                expected_returns[ticker] = 0.20
+
+    # 2. Run Optimizer if we have candidates
+    if len(buy_candidates) >= 2:
+        try:
+            optimizer = PortfolioOptimizer(buy_candidates)
+            optimizer.fetch_data(period="1y")
+
+            # Maximize Sharpe Ratio
+            allocations = optimizer.optimize_weights(expected_returns_map=expected_returns)
+
+            # 3. Enrich Results with Allocation
+            for r in results:
+                t = r['ticker']
+                if t in allocations:
+                    weight = allocations[t]
+                    r['optimized_weight'] = f"{weight*100:.1f}%"
+                    r['allocation_note'] = "Optimal MVO"
+                elif t in buy_candidates:
+                    r['optimized_weight'] = "0.0%" # Optimized out
+        except Exception as e:
+            logger.error(f"Portfolio Optimization failed in Dashboard: {e}")
+
     return results
