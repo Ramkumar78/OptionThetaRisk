@@ -112,27 +112,27 @@ const Audit: React.FC = () => {
                    <label htmlFor="account-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Balance</label>
                    <div className="mt-1 relative rounded-md shadow-sm">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">$</span>
+                        <span className="text-gray-500 text-base">$</span>
                       </div>
-                      <input type="number" id="account-start" value={accountSizeStart} onChange={e => setAccountSizeStart(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 sm:text-sm border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" placeholder="Optional" />
+                      <input type="number" id="account-start" value={accountSizeStart} onChange={e => setAccountSizeStart(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 text-base py-3 border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" placeholder="Optional" />
                    </div>
                 </div>
                 <div>
                    <label htmlFor="net-liq" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Net Liq (Now)</label>
                    <div className="mt-1 relative rounded-md shadow-sm">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">$</span>
+                        <span className="text-gray-500 text-base">$</span>
                       </div>
-                      <input type="number" id="net-liq" value={netLiquidityNow} onChange={e => setNetLiquidityNow(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 sm:text-sm border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" placeholder="Required for Drawdown" />
+                      <input type="number" id="net-liq" value={netLiquidityNow} onChange={e => setNetLiquidityNow(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 text-base py-3 border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" placeholder="Required for Drawdown" />
                    </div>
                 </div>
                 <div>
                    <label htmlFor="buying-power" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Buying Power</label>
                    <div className="mt-1 relative rounded-md shadow-sm">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">$</span>
+                        <span className="text-gray-500 text-base">$</span>
                       </div>
-                      <input type="number" id="buying-power" value={buyingPowerAvailableNow} onChange={e => setBuyingPowerAvailableNow(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 sm:text-sm border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" placeholder="Required for Usage %" />
+                      <input type="number" id="buying-power" value={buyingPowerAvailableNow} onChange={e => setBuyingPowerAvailableNow(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 text-base py-3 border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" placeholder="Required for Usage %" />
                    </div>
                 </div>
              </div>
@@ -140,7 +140,7 @@ const Audit: React.FC = () => {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Trading Style</label>
-                   <select id="style-select" value={style} onChange={e => setStyle(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+                   <select id="style-select" value={style} onChange={e => setStyle(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                       <option value="income">Income (Selling Premium)</option>
                       <option value="speculation">Speculation (Buying Premium)</option>
                    </select>
@@ -149,9 +149,9 @@ const Audit: React.FC = () => {
                    <label htmlFor="fee-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Est. Fee per Trade</label>
                    <div className="mt-1 relative rounded-md shadow-sm">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">$</span>
+                        <span className="text-gray-500 text-base">$</span>
                       </div>
-                      <input type="number" id="fee-input" value={feePerTrade} onChange={e => setFeePerTrade(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 sm:text-sm border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" step="0.01" />
+                      <input type="number" id="fee-input" value={feePerTrade} onChange={e => setFeePerTrade(e.target.value)} className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-7 text-base py-3 border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" step="0.01" />
                    </div>
                 </div>
              </div>
@@ -175,37 +175,37 @@ const Audit: React.FC = () => {
                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-800">
                          <tr>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Expiry</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Strike</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                            <th className="px-3 py-2"></th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Date</th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Symbol</th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Action</th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Qty</th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Price</th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Expiry</th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Strike</th>
+                            <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase">Type</th>
+                            <th className="px-3 py-3"></th>
                          </tr>
                       </thead>
                       <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                          {manualRows.map((row) => (
                            <tr key={row.id}>
-                              <td className="px-2 py-2"><input type="date" value={row.date} onChange={e => handleManualChange(row.id, 'date', e.target.value)} className="text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
-                              <td className="px-2 py-2"><input type="text" value={row.symbol} onChange={e => handleManualChange(row.id, 'symbol', e.target.value.toUpperCase())} className="w-20 text-xs border-gray-300 rounded uppercase dark:bg-gray-800 dark:border-gray-600" /></td>
-                              <td className="px-2 py-2">
-                                <select value={row.action} onChange={e => handleManualChange(row.id, 'action', e.target.value)} className="text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
+                              <td className="px-2 py-3"><input type="date" value={row.date} onChange={e => handleManualChange(row.id, 'date', e.target.value)} className="text-sm py-2 h-10 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
+                              <td className="px-2 py-3"><input type="text" value={row.symbol} onChange={e => handleManualChange(row.id, 'symbol', e.target.value.toUpperCase())} className="w-28 text-sm py-2 h-10 border-gray-300 rounded uppercase dark:bg-gray-800 dark:border-gray-600" /></td>
+                              <td className="px-2 py-3">
+                                <select value={row.action} onChange={e => handleManualChange(row.id, 'action', e.target.value)} className="text-sm py-2 h-10 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
                                    <option>BTO</option><option>STO</option><option>BTC</option><option>STC</option>
                                 </select>
                               </td>
-                              <td className="px-2 py-2"><input type="number" value={row.qty} onChange={e => handleManualChange(row.id, 'qty', parseInt(e.target.value))} className="w-16 text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
-                              <td className="px-2 py-2"><input type="number" value={row.price} onChange={e => handleManualChange(row.id, 'price', parseFloat(e.target.value))} className="w-20 text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" step="0.01" /></td>
-                              <td className="px-2 py-2"><input type="date" value={row.expiry} onChange={e => handleManualChange(row.id, 'expiry', e.target.value)} className="text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
-                              <td className="px-2 py-2"><input type="number" value={row.strike} onChange={e => handleManualChange(row.id, 'strike', e.target.value)} className="w-20 text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
-                              <td className="px-2 py-2">
-                                <select value={row.opt} onChange={e => handleManualChange(row.id, 'opt', e.target.value)} className="text-xs border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
+                              <td className="px-2 py-3"><input type="number" value={row.qty} onChange={e => handleManualChange(row.id, 'qty', parseInt(e.target.value))} className="w-20 text-sm py-2 h-10 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
+                              <td className="px-2 py-3"><input type="number" value={row.price} onChange={e => handleManualChange(row.id, 'price', parseFloat(e.target.value))} className="w-28 text-sm py-2 h-10 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" step="0.01" /></td>
+                              <td className="px-2 py-3"><input type="date" value={row.expiry} onChange={e => handleManualChange(row.id, 'expiry', e.target.value)} className="text-sm py-2 h-10 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
+                              <td className="px-2 py-3"><input type="number" value={row.strike} onChange={e => handleManualChange(row.id, 'strike', e.target.value)} className="w-28 text-sm py-2 h-10 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600" /></td>
+                              <td className="px-2 py-3">
+                                <select value={row.opt} onChange={e => handleManualChange(row.id, 'opt', e.target.value)} className="text-sm py-2 h-10 border-gray-300 rounded dark:bg-gray-800 dark:border-gray-600">
                                    <option>Call</option><option>Put</option><option>Stock</option>
                                 </select>
                               </td>
-                              <td className="px-2 py-2">
+                              <td className="px-2 py-3">
                                  <button type="button" onClick={() => removeRow(row.id)} className="text-red-500 hover:text-red-700">x</button>
                               </td>
                            </tr>

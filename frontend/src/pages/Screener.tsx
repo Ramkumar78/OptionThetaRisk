@@ -182,7 +182,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   id="region-select"
                   value={region}
                   onChange={(e) => setRegion(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 >
                   <option value="us">United States (Sectors)</option>
                   <option value="sp500">S&P 500</option>
@@ -195,7 +195,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   id="iv-rank-input"
                   value={ivRank}
                   onChange={(e) => setIvRank(Number(e.target.value))}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 />
               </div>
               <div>
@@ -205,7 +205,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   id="rsi-input"
                   value={rsiThreshold}
                   onChange={(e) => setRsiThreshold(Number(e.target.value))}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 />
               </div>
               <div>
@@ -214,7 +214,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   id="market-timeframe"
                   value={marketTimeFrame}
                   onChange={(e) => setMarketTimeFrame(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 >
                   <option value="1d">Daily (1d)</option>
                   <option value="1wk">Weekly (1wk)</option>
@@ -237,7 +237,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                                 value={checkTicker}
                                 onChange={(e) => setCheckTicker(e.target.value)}
                                 placeholder="Enter Ticker (e.g. AAPL, TSLA) or Name"
-                                className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                             />
                             <input
                                 type="number"
@@ -245,7 +245,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                                 value={checkEntryPrice}
                                 onChange={(e) => setCheckEntryPrice(e.target.value)}
                                 placeholder="Entry Price (Opt.)"
-                                className="w-32 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                className="w-32 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                             />
                             <button
                                 type="submit"
@@ -297,7 +297,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   id="region-select"
                   value={region}
                   onChange={(e) => setRegion(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 >
                   <option value="us">United States</option>
                   <option value="uk_euro">UK / Europe</option>
@@ -311,7 +311,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                   id="strategy-timeframe"
                   value={strategyTimeFrame}
                   onChange={(e) => setStrategyTimeFrame(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                 >
                   {activeTab === 'mms' ? (
                       <>
@@ -339,7 +339,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                       id="region-select"
                       value={region}
                       onChange={(e) => setRegion(e.target.value)}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                     >
                       <option value="us">United States (High Liquid)</option>
                       <option value="sp500">S&P 500 (Filtered &gt; SMA200)</option>
