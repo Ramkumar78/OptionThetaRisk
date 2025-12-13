@@ -2,6 +2,11 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
+
+# Configure logger
+logger = logging.getLogger(__name__)
+
 try:
     from option_auditor.sp500_data import SP500_NAMES, get_sp500_tickers
 except ImportError:
@@ -477,7 +482,8 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
     # We download '1y' to be safe for SMA 200
     try:
         data = yf.download(base_tickers, period="1y", interval="1d", group_by='ticker', threads=True, progress=False, auto_adjust=True)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to batch download SP500 data: {e}")
         # Fallback if batch fails completely
         return base_tickers[:50]
 
@@ -513,7 +519,8 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
 
             filtered_list.append(ticker)
 
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Error filtering S&P500 ticker {ticker}: {e}")
             pass
 
     # Always include the "High Interest" names if they are in S&P 500
@@ -574,7 +581,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             # group_by='ticker' ensures we get a MultiIndex with Ticker as level 0
             # auto_adjust=True to suppress warning
             batch_data = yf.download(tickers, period=period, interval=yf_interval, group_by='ticker', threads=True, progress=False, auto_adjust=True)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to batch download ticker data: {e}")
             batch_data = None
 
     def process_symbol(symbol):
@@ -601,7 +609,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             if isinstance(df.columns, pd.MultiIndex):
                 try:
                     df.columns = df.columns.get_level_values(0)
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Error flattening columns for {symbol}: {e}")
                     pass
 
             # Gap 1: Volume Trap Fix
@@ -666,7 +675,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                     elif yf_interval == "1mo":
                         # For monthly, pct_change_1d is 1 Month change
                         pass
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Error calculating % change for {symbol}: {e}")
                 pass
 
             # Resample if needed
@@ -757,7 +767,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
         except Exception as e:
             # Gap 2: Error Visibility
-            print(f"Error processing {symbol}: {e}")
+            logger.error(f"Error processing {symbol}: {e}")
             return None
 
     results = []
@@ -770,8 +780,9 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 data = future.result()
                 if data:
                     results.append(data)
-            except Exception:
-                pass
+            except Exception as e:
+                 logger.error(f"Thread execution error for {future_to_symbol[future]}: {e}")
+                 pass
 
     return results
 
@@ -893,6 +904,7 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
                 return df
         except Exception as e:
             # Check if it is a potentially transient error or just no data
+            logger.warning(f"Retry {attempt+1}/{retries} for {ticker} failed: {e}")
             pass
 
         if attempt < retries - 1:
@@ -917,7 +929,8 @@ def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interva
                     df = data_source.xs(ticker, axis=1, level=1).copy()
                 elif ticker in data_source.columns.get_level_values(0):
                     df = data_source.xs(ticker, axis=1, level=0).copy()
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Error slicing multi-index for {ticker}: {e}")
                 pass
         else:
              df = data_source.copy()
@@ -935,7 +948,8 @@ def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interva
     if isinstance(df.columns, pd.MultiIndex):
         try:
             df.columns = df.columns.get_level_values(0)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Error flattening cols for {ticker}: {e}")
             pass
 
     # Resample if needed
@@ -945,7 +959,8 @@ def _prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interva
         try:
             df = df.resample(resample_rule).agg(agg_dict)
             df = df.dropna()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error resampling {ticker}: {e}")
             pass
 
     return df
@@ -1040,7 +1055,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
     if not is_intraday:
         try:
             data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to bulk download for turtle setups: {e}")
             pass
 
     for ticker in ticker_list:
@@ -1071,7 +1087,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                     prev_close_px = float(df['Close'].iloc[-2])
                     pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
                 except Exception as e:
-                    print(f"Error calc % change for {ticker}: {e}")
+                    logger.debug(f"Error calc % change for {ticker}: {e}")
 
             if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
                 continue
@@ -1129,7 +1145,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                     "risk_per_share": abs(buy_price - stop_loss)
                 })
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error processing turtle setup for {ticker}: {e}")
             continue
 
     return results
@@ -1203,7 +1220,8 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
     if not is_intraday:
         try:
             data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to bulk download for 5/13 setups: {e}")
             pass
 
     for ticker in ticker_list:
@@ -1240,7 +1258,8 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                 try:
                     prev_close_px = float(df['Close'].iloc[-2])
                     pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Error calculating pct change for {ticker}: {e}")
                     pass
 
             # Logic Priority:
@@ -1313,7 +1332,8 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                     "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100
                 })
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error processing 5/13 setup for {ticker}: {e}")
             continue
 
     # Sort by "Freshness" (Breakouts first)
@@ -1387,7 +1407,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
     if not is_intraday:
         try:
             data = yf.download(ticker_list, period=period, interval=yf_interval, progress=False, group_by='ticker', auto_adjust=True)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to bulk download for Darvas screener: {e}")
             pass
 
     def _process_darvas(ticker):
@@ -1575,7 +1596,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
             }
 
         except Exception as e:
-            # print(f"Error processing {ticker}: {e}")
+            logger.error(f"Error processing Darvas for {ticker}: {e}")
             return None
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -1585,7 +1606,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
                 data = future.result()
                 if data:
                     results.append(data)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Darvas thread error for {future_to_symbol[future]}: {e}")
                 pass
 
     return results
@@ -1872,6 +1894,7 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
                 }
 
         except Exception as e:
+            logger.error(f"Error processing OTE for {ticker}: {e}")
             return None
         return None
 
@@ -1883,7 +1906,8 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
                 data = future.result()
                 if data:
                     results.append(data)
-            except Exception:
+            except Exception as e:
+                logger.error(f"OTE thread error for {future_to_symbol[future]}: {e}")
                 pass
 
     return results
@@ -2054,6 +2078,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
             }
 
         except Exception as e:
+            logger.error(f"Error processing bull put spread for {ticker}: {e}")
             return None
 
     # Multi-threaded Execution
@@ -2115,6 +2140,11 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     import pandas_ta as ta
     import pandas as pd
 
+    # Input Validation: Ensure risk_per_trade_pct is within sane bounds (0.1% to 10%)
+    if not (0.001 <= risk_per_trade_pct <= 0.10):
+        logger.warning(f"risk_per_trade_pct {risk_per_trade_pct} out of bounds (0.001-0.1). Resetting to 0.01.")
+        risk_per_trade_pct = 0.01
+
     # Default to a mix of US and UK liquid stocks if none provided
     if ticker_list is None:
         if region == "uk_euro":
@@ -2158,7 +2188,8 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         try:
             # period="2y" to ensure we have enough for 200 SMA + 50d High
             data = yf.download(ticker_list, period="2y", interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Batch download failed for ISA screener: {e}")
             return []
 
     for ticker in ticker_list:
@@ -2360,7 +2391,8 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "safe_to_trade": is_tharp_safe
             })
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"ISA screener error for {ticker}: {e}")
             continue
 
     # Sort by signal priority
