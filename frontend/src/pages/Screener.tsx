@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkIsaStock } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkIsaStock, runFourierScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier';
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
   market: {
@@ -42,6 +42,11 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
     title: 'ISA Trend Follower',
     subtitle: 'Long-Term Growth',
     description: 'A robust long-only strategy. Requires Price > 200 SMA and a breakout above the 50-day High. Exits when price closes below the 20-day Low. Ideal for portfolio growth.'
+  },
+  fourier: {
+    title: 'Harmonic Cycles',
+    subtitle: 'Fourier Analysis',
+    description: 'Deconstructs price action into waves to identify dominant time cycles. Signals entries at cyclical bottoms (troughs). Best for swing trading in chopping or sideways markets.'
   }
 };
 
@@ -91,6 +96,8 @@ const Screener: React.FC<ScreenerProps> = () => {
         data = await runBullPutScreener(region);
       } else if (activeTab === 'isa') {
         data = await runIsaTrendScreener(region);
+      } else if (activeTab === 'fourier') {
+        data = await runFourierScreener(region, strategyTimeFrame);
       }
       setResults(data);
     } catch (err: any) {
@@ -119,6 +126,7 @@ const Screener: React.FC<ScreenerProps> = () => {
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
     { id: 'turtle', label: 'Turtle Trading' },
     { id: 'darvas', label: 'Darvas Box' },
+    { id: 'fourier', label: 'Harmonic Cycles', subLabel: 'New' },
     { id: 'mms', label: 'MMS / OTE', subLabel: 'SMC' },
     { id: 'ema', label: '5/13 & 5/21 EMA' },
     { id: 'isa', label: 'ISA Trend Follower', subLabel: 'Long Only' },
@@ -289,7 +297,7 @@ const Screener: React.FC<ScreenerProps> = () => {
              </div>
           )}
 
-          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa') && (
+          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier') && (
              <>
               <div>
                 <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -413,6 +421,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                             activeTab === 'mms' ? 'Market Maker Models (OTE)' :
                             activeTab === 'bull_put' ? 'Bull Put Spreads' :
                             activeTab === 'isa' ? 'Trend Follower (ISA)' :
+                            activeTab === 'fourier' ? 'Harmonic Cycle (Fourier)' :
                             '5/13 EMA Setups'}
                         </h3>
                         {activeTab === 'isa' && (
@@ -519,6 +528,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                     // Sort numerically if possible (remove %)
                     aValue = parseFloat((a.max_position_size || "0").replace('%',''));
                     bValue = parseFloat((b.max_position_size || "0").replace('%',''));
+                } else if (sortConfig.key === 'cycle_period') {
+                    aValue = parseFloat((a.cycle_period || "0").split(' ')[0]);
+                    bValue = parseFloat((b.cycle_period || "0").split(' ')[0]);
+                } else if (sortConfig.key === 'cycle_pos') {
+                    aValue = parseFloat((a.cycle_position || "0").split(' ')[0]);
+                    bValue = parseFloat((b.cycle_position || "0").split(' ')[0]);
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -614,7 +629,13 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         <HeaderCell label="Max Size" sortKey="max_size" align="right" />
                                     </>
                                 )}
-                                {type !== 'isa' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
+                                {type === 'fourier' && (
+                                    <>
+                                        <HeaderCell label="Cycle Period" sortKey="cycle_period" align="right" />
+                                        <HeaderCell label="Cycle Position" sortKey="cycle_pos" align="right" />
+                                    </>
+                                )}
+                                {type !== 'isa' && type !== 'fourier' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
                             </>
                         )}
                         {type === 'bull_put' && (
@@ -741,6 +762,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
                                                     {row.max_position_size}
+                                                </td>
+                                            </>
+                                        ) : type === 'fourier' ? (
+                                            <>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
+                                                    {row.cycle_period}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">
+                                                    {row.cycle_position}
                                                 </td>
                                             </>
                                         ) : (

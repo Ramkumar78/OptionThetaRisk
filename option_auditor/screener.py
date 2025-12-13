@@ -2405,3 +2405,153 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
     results.sort(key=sort_key)
     return results
+
+# -------------------------------------------------------------------------
+#  FOURIER / CYCLE ANALYSIS HELPERS
+# -------------------------------------------------------------------------
+import numpy as np
+
+def _calculate_dominant_cycle(prices):
+    """
+    Uses FFT to find the dominant cycle period (in days) of a price series.
+    Returns: (period_days, current_phase_position)
+
+    current_phase_position:
+       0.0 = Bottom (Trough) -> Ideal Buy
+       0.5 = Top (Peak)      -> Ideal Sell
+       (Approximate sine wave mapping)
+    """
+    # 1. Prepare Data
+    # We need a fixed window. Let's look at the last 64 or 128 days (power of 2 is faster for FFT)
+    N = len(prices)
+    if N < 64: return None
+
+    # Use most recent 64 days for cycle detection (short-term cycles)
+    # or 128/256 for longer cycles.
+    window_size = 64
+    y = np.array(prices[-window_size:])
+    x = np.arange(window_size)
+
+    # 2. Detrend (Remove the linear trend so we just see waves)
+    # Simple linear regression detrending
+    p = np.polyfit(x, y, 1)
+    trend = np.polyval(p, x)
+    detrended = y - trend
+
+    # Apply a window function (Hanning) to reduce edge leakage
+    windowed = detrended * np.hanning(window_size)
+
+    # 3. FFT
+    fft_output = np.fft.rfft(windowed)
+    frequencies = np.fft.rfftfreq(window_size)
+
+    # 4. Find Dominant Frequency (ignore DC component at index 0)
+    # We look for the peak amplitude
+    amplitudes = np.abs(fft_output)
+
+    # Skip low frequencies (trends) and very high frequencies (noise)
+    # We want cycles between 3 days and 30 days usually.
+    # Index 0 is trend.
+    peak_idx = np.argmax(amplitudes[1:]) + 1
+
+    dominant_freq = frequencies[peak_idx]
+    period = 1.0 / dominant_freq if dominant_freq > 0 else 0
+
+    # 5. Determine Phase (Where are we now?)
+    # Reconstruct the dominant wave
+    # Sine wave: A * sin(2*pi*f*t + phase)
+    # We check the phase of the last point (t = window_size - 1)
+
+    # Simple Heuristic: Check the detrended value relative to recent range
+    # If detrended[-1] is near the minimum of the last cycle, we are at trough.
+
+    current_val = detrended[-1]
+    cycle_range = np.max(detrended) - np.min(detrended)
+
+    # Normalized position (-1.0 to 1.0)
+    rel_pos = current_val / (cycle_range / 2.0) if cycle_range > 0 else 0
+
+    return round(period, 1), rel_pos
+
+def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> list:
+    """
+    Screens for stocks at the BOTTOM of their dominant time cycle (Fourier).
+    Best for 'Swing Trading' in sideways or gently trending markets.
+    """
+    import yfinance as yf
+    import pandas as pd
+
+    if ticker_list is None:
+        ticker_list = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "TSLA", "AMD", "NVDA", "AMZN", "GOOGL"]
+
+    results = []
+
+    # Fetch Data (Need history for FFT)
+    try:
+        data = yf.download(ticker_list, period="1y", interval="1d", group_by='ticker', progress=False, auto_adjust=True, threads=True)
+    except:
+        return []
+
+    for ticker in ticker_list:
+        try:
+            df = pd.DataFrame()
+            if isinstance(data.columns, pd.MultiIndex):
+                if ticker in data.columns.levels[0]:
+                    df = data[ticker].copy()
+            else:
+                df = data.copy()
+
+            df = df.dropna(how='all')
+            if len(df) < 100: continue
+
+            closes = df['Close'].tolist()
+
+            # --- FOURIER CALC ---
+            cycle_data = _calculate_dominant_cycle(closes)
+            if not cycle_data: continue
+
+            period, rel_pos = cycle_data
+
+            # Interpret Result
+            # Period: Length of cycle (e.g., 14.2 days)
+            # Rel Pos: -1.0 (Bottom) to 1.0 (Top)
+
+            signal = "WAIT"
+            verdict_color = "gray"
+
+            # Trading Rules:
+            # 1. Cycle must be actionable (e.g., 5 to 40 days).
+            #    If period is 2 days, it's noise. If 200 days, it's a trend.
+            if 5 <= period <= 60:
+                if rel_pos <= -0.8:
+                    signal = "🌊 CYCLICAL LOW (Buy)"
+                    verdict_color = "green"
+                elif rel_pos >= 0.8:
+                    signal = "🏔️ CYCLICAL HIGH (Sell)"
+                    verdict_color = "red"
+                elif -0.2 <= rel_pos <= 0.2:
+                    signal = "➡️ MID-CYCLE (Neutral)"
+            else:
+                # Cycle is too short (noise) or too long (trend) to trade as a cycle
+                continue
+
+            # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            results.append({
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": float(closes[-1]),
+                "signal": signal,
+                "cycle_period": f"{period} Days",
+                "cycle_position": f"{rel_pos:.2f} (-1 Low, +1 High)",
+                "verdict_color": verdict_color
+            })
+
+        except Exception:
+            continue
+
+    # Sort: Buys first
+    results.sort(key=lambda x: x['cycle_position'])
+    return results
