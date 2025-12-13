@@ -20,7 +20,7 @@ def verify_hybrid_screener(page: Page):
     hybrid_tab.click()
 
     # 4. Assert: Check if the description changed to Hybrid
-    expect(page.get_by_text("The Holy Grail Setup")).to_be_visible()
+    expect(page.get_by_text("High Probability Setup")).to_be_visible()
 
     # 5. Run the screener
     run_btn = page.locator("#run-screener-btn")

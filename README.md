@@ -15,11 +15,11 @@ groups options trades into round-trips (entry → exit), computes key metrics, a
 
 A curated collection of quantitative scanners designed to assist traders in identifying high-probability setups across various market conditions. This educational tool aims to highlight potential opportunities—from income generation to trend following—while emphasizing the importance of risk management.
 
-### 🌟 The "Holy Grail" & Trend Strategies
+### 🌟 High Probability & Trend Strategies
 
 | Strategy | Goal | Key Rules | Risk Management (Stop/Target) |
 | :--- | :--- | :--- | :--- |
-| **Hybrid (Trend + Cycle)**<br>_(The "Holy Grail")_ | **High Confidence**<br>Dip in Uptrend | **Trend:** Bullish (>200 SMA)<br>**Cycle:** Bottom Phase (Fourier)<br>**Signal:** "🚀 PERFECT BUY" | **Stop:** 3x ATR<br>**Target:** 2x ATR<br>_High R/R Setup_ |
+| **Hybrid (Trend + Cycle)**<br>_(High Probability)_ | **High Confidence**<br>Dip in Uptrend | **Trend:** Bullish (>200 SMA)<br>**Cycle:** Bottom Phase (Fourier)<br>**Signal:** "🚀 PERFECT BUY" | **Stop:** 3x ATR<br>**Target:** 2x ATR<br>_High R/R Setup_ |
 | **ISA Trend Follower**<br>_(The "Legend")_ | **Long Term Wealth**<br>Set & Forget | **Trend:** Price > 200 SMA<br>**Entry:** Break 50-Day High<br>**Hold:** Above 20-Day Low | **Initial Stop:** 3x ATR<br>**Trailing Stop:** 20-Day Low<br>**Size:** Max 1% Equity Risk |
 | **Turtle Trading** | **Trend Capture**<br>Big Moves | **Buy:** Break 20-Day High<br>**Short:** Break 20-Day Low | **Stop:** 2x ATR<br>**Target:** 4x ATR<br>**Trail:** 10-Day Low |
 
@@ -50,7 +50,7 @@ This tool is designed to serve as an **Automated Risk Manager** and analysis com
     *   Look for **Sector Rotation**: Are Financials (XLF) green while Tech (XLK) is red?
     *   _Objective:_ Identify which way the wind is blowing.
 
-2.  **Seek High-Quality Setups (The "Holy Grail"):**
+2.  **Seek High-Quality Setups (High Probability):**
     *   Navigate to the **Hybrid Screener**.
     *   Scan for **"🚀 PERFECT BUY"** signals. These rare setups occur when a long-term uptrend (ISA) aligns with a short-term cycle low (Fourier).
     *   _Discipline:_ If no signals appear, it may be prudent to wait.

@@ -2647,45 +2647,74 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
                 else:
                     cycle_state = "MID"
 
-            # --- STEP 3: SYNTHESIZE VERDICT ---
-            final_signal = "WAIT"
-            color = "gray"
-            score = 0 # 0 to 100 confidence
+            # --- STEP 3: SAFETY CHECKS (The "Anti-Falling Knife" Logic) ---
 
-            # --- STEP 4: CALCULATE EXITS (The "Holy Grail" Safety Net) ---
+            # 1. Get Price Action Data
+            today_open = float(df['Open'].iloc[-1])
+            yesterday_close = float(df['Close'].iloc[-2])
+            yesterday_low = float(df['Low'].iloc[-2])
 
-            # 1. Volatility Stop (Van Tharp)
-            # We calculate ATR on the fly if not already in df
+            # 2. Falling Knife Guards
+            # Guard 1: The "Green Candle" Rule (Buyers must step in)
+            is_green_candle = curr_close > today_open
+
+            # Guard 2: The "Panic" Rule (ATR)
+            # If today's range is huge (> 2x ATR), it's a crash/panic.
+            # Ensure ATR is calculated first
             if 'ATR' not in df.columns:
                 df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
 
-            # Safe access to ATR
             current_atr = 0.0
             if 'ATR' in df.columns and not df['ATR'].empty:
                  current_atr = df['ATR'].iloc[-1]
             if pd.isna(current_atr): current_atr = 0.0
 
+            daily_range = df['High'].iloc[-1] - df['Low'].iloc[-1]
+            is_panic_selling = daily_range > (2.0 * current_atr) if current_atr > 0 else False
+
+            # Guard 3: Momentum Hook
+            # Don't buy if we made a lower low than yesterday and closed near it
+            is_making_lower_lows = curr_close < yesterday_low
+
+            # --- STEP 4: SYNTHESIZE VERDICT ---
+            final_signal = "WAIT"
+            color = "gray"
+            score = 0 # 0 to 100 confidence
+
+            # --- STEP 5: CALCULATE EXITS (Risk Management) ---
+
             stop_loss_price = curr_close - (3 * current_atr) # 3 ATR below entry
 
-            # 2. Cycle Target (Projected)
-            # A full cycle usually moves price from Lower Band to Upper Band.
-            # Conservative Estimate: Current Price + (2 * ATR) or projected cycle amplitude
-            # We will use 2x ATR as a conservative "Cycle Peak" price target for the swing.
+            # Cycle Target (Projected)
             target_price = curr_close + (2 * current_atr)
 
-            # 3. Risk/Reward Ratio Check
+            # Risk/Reward Ratio Check
             potential_reward = target_price - curr_close
             potential_risk = curr_close - stop_loss_price
             rr_ratio = potential_reward / potential_risk if potential_risk > 0 else 0
 
-            # Filter: Only show setups with R/R > 1.5? (Optional, maybe just flag them)
             rr_verdict = "✅ GOOD" if rr_ratio >= 1.5 else "⚠️ POOR R/R"
 
-            # Scenario A: Bullish Trend + Cycle Bottom (The "Holy Grail" Setup)
+            # Scenario A: Bullish Trend + Cycle Bottom (High Probability Setup)
             if trend_verdict == "BULLISH" and cycle_state == "BOTTOM":
-                final_signal = "🚀 PERFECT BUY (Dip in Uptrend)"
-                color = "green"
-                score = 95
+                # Apply Safety Checks
+                if is_panic_selling:
+                    final_signal = "🛑 CRASH DETECTED (High Volatility) - WAIT"
+                    color = "red"
+                    score = 20
+                elif is_making_lower_lows:
+                    final_signal = "⚠️ WAIT (Falling Knife - Making Lower Lows)"
+                    color = "orange"
+                    score = 40
+                elif not is_green_candle:
+                    final_signal = "⏳ WATCHING (Waiting for Green Candle)"
+                    color = "yellow"
+                    score = 60
+                else:
+                    # Confirmed Turn
+                    final_signal = "🚀 PERFECT BUY (Confirmed Turn)"
+                    color = "green"
+                    score = 95
 
             # Scenario B: Bullish Trend + Breakout (Momentum Buy)
             elif trend_verdict == "BULLISH" and is_breakout:
