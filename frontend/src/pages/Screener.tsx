@@ -50,7 +50,7 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
   },
   hybrid: {
     title: 'Hybrid (Trend + Cycle)',
-    subtitle: 'The Holy Grail Setup',
+    subtitle: 'High Probability Setup',
     description: 'Combines ISA Trend (Direction) with Fourier Cycles (Timing). Finds "Buy the Dip" setups where a strong uptrend meets a cyclical bottom. High probability, high reward.'
   }
 };
@@ -169,7 +169,7 @@ const Screener: React.FC<ScreenerProps> = () => {
   };
 
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
-    { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'Holy Grail' },
+    { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
     { id: 'turtle', label: 'Turtle Trading' },
     { id: 'darvas', label: 'Darvas Box' },
     { id: 'fourier', label: 'Harmonic Cycles' },

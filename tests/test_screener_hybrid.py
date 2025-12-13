@@ -13,11 +13,16 @@ class TestScreenerHybrid(unittest.TestCase):
         # Create dummy data for 2 years (approx 500 days)
         dates = pd.date_range(end='2023-01-01', periods=500)
 
+        # Need to ensure Green Candle to satisfy safety check
+        # Last close (200) > Last open.
+        opens = np.linspace(100, 200, 500)
+        opens[-1] = 199.0 # Ensure close (200) > open (199)
+
         df = pd.DataFrame({
             'Close': np.linspace(100, 200, 500), # Uptrend
             'High': np.linspace(105, 205, 500),
             'Low': np.linspace(95, 195, 500),
-            'Open': np.linspace(100, 200, 500),
+            'Open': opens,
             'Volume': np.random.randint(1000000, 2000000, 500)
         }, index=dates)
 
