@@ -2652,6 +2652,35 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
             color = "gray"
             score = 0 # 0 to 100 confidence
 
+            # --- STEP 4: CALCULATE EXITS (The "Holy Grail" Safety Net) ---
+
+            # 1. Volatility Stop (Van Tharp)
+            # We calculate ATR on the fly if not already in df
+            if 'ATR' not in df.columns:
+                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+
+            # Safe access to ATR
+            current_atr = 0.0
+            if 'ATR' in df.columns and not df['ATR'].empty:
+                 current_atr = df['ATR'].iloc[-1]
+            if pd.isna(current_atr): current_atr = 0.0
+
+            stop_loss_price = curr_close - (3 * current_atr) # 3 ATR below entry
+
+            # 2. Cycle Target (Projected)
+            # A full cycle usually moves price from Lower Band to Upper Band.
+            # Conservative Estimate: Current Price + (2 * ATR) or projected cycle amplitude
+            # We will use 2x ATR as a conservative "Cycle Peak" price target for the swing.
+            target_price = curr_close + (2 * current_atr)
+
+            # 3. Risk/Reward Ratio Check
+            potential_reward = target_price - curr_close
+            potential_risk = curr_close - stop_loss_price
+            rr_ratio = potential_reward / potential_risk if potential_risk > 0 else 0
+
+            # Filter: Only show setups with R/R > 1.5? (Optional, maybe just flag them)
+            rr_verdict = "✅ GOOD" if rr_ratio >= 1.5 else "⚠️ POOR R/R"
+
             # Scenario A: Bullish Trend + Cycle Bottom (The "Holy Grail" Setup)
             if trend_verdict == "BULLISH" and cycle_state == "BOTTOM":
                 final_signal = "🚀 PERFECT BUY (Dip in Uptrend)"
@@ -2698,7 +2727,10 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
                 "period_days": period,
                 "score": score,
                 "color": color,
-                "signal": final_signal # For frontend compatibility with 'signal' key
+                "signal": final_signal, # For frontend compatibility with 'signal' key
+                "stop_loss": round(stop_loss_price, 2),   # <--- THE STOP
+                "target": round(target_price, 2),         # <--- THE TARGET
+                "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})" # <--- IS IT WORTH IT?
             })
 
         except Exception as e:

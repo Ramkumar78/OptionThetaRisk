@@ -13,20 +13,6 @@ class TestScreenerHybrid(unittest.TestCase):
         # Create dummy data for 2 years (approx 500 days)
         dates = pd.date_range(end='2023-01-01', periods=500)
 
-        # Bullish Trend: Price > 200 SMA. Last price high.
-        # Cycle Bottom: _calculate_dominant_cycle will run on 'Close'.
-        # We need to construct data such that _calculate_dominant_cycle returns BOTTOM.
-        # This is tricky without mocking _calculate_dominant_cycle, but let's try to mock the helper or just the result.
-
-        # Actually, let's just mock yf.download to return a DataFrame that triggers the logic in the function.
-        # The function logic:
-        # 1. Downloads data.
-        # 2. Checks length > 200.
-        # 3. Calc SMA 200, High 50.
-        # 4. Calls _calculate_dominant_cycle(closes).
-
-        # Let's mock _calculate_dominant_cycle to ensure we hit the scenarios.
-
         df = pd.DataFrame({
             'Close': np.linspace(100, 200, 500), # Uptrend
             'High': np.linspace(105, 205, 500),
@@ -38,8 +24,6 @@ class TestScreenerHybrid(unittest.TestCase):
         # Mock download return
         mock_download.return_value = df
 
-        # We need to handle the fact that screen_hybrid_strategy calls _calculate_dominant_cycle.
-        # We can patch it in the module.
         with patch('option_auditor.screener._calculate_dominant_cycle') as mock_cycle:
             # Scenario A: Bullish (Price > SMA200) + Bottom (Rel pos <= -0.7)
             # Our data is strictly uptrend, so Price (200) > SMA200 (approx 150).
@@ -55,6 +39,23 @@ class TestScreenerHybrid(unittest.TestCase):
             self.assertIn("BOTTOM", r['cycle'])
             self.assertIn("PERFECT BUY", r['verdict'])
             self.assertEqual(r['score'], 95)
+
+            # Verify new fields
+            self.assertIn('stop_loss', r)
+            self.assertIn('target', r)
+            self.assertIn('rr_ratio', r)
+
+            # Check values roughly
+            # ATR approx (High-Low) = 10 (constant in my simple mock)
+            # Actually pandas_ta atr uses True Range.
+            # Here High-Low = 10. Close-PrevClose ~ 0.2.
+            # So ATR should be close to 10.
+            # Stop = Close - 3*ATR = 200 - 30 = 170
+            # Target = Close + 2*ATR = 200 + 20 = 220
+
+            self.assertTrue(160 < r['stop_loss'] < 180, f"Stop loss {r['stop_loss']} not near expected 170")
+            self.assertTrue(210 < r['target'] < 230, f"Target {r['target']} not near expected 220")
+
 
     @patch('option_auditor.screener.yf.download')
     def test_screen_hybrid_strategy_bearish_top(self, mock_download):
