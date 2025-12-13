@@ -2769,3 +2769,56 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
     # Sort by 'Score' descending (best setups first)
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
+
+def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 100):
+    """
+    Project stock price 30 days out using Monte Carlo (GBM).
+    Useful for seeing if a 'Short Put' strike is safe.
+    """
+    import numpy as np
+    import yfinance as yf
+
+    try:
+        # Get historical volatility
+        df = yf.download(ticker, period="1y", progress=False)
+        if df.empty or len(df) < 30: return None
+
+        # Flatten MultiIndex if present
+        if isinstance(df.columns, pd.MultiIndex):
+            try:
+                if ticker in df.columns.levels[0]:
+                    df = df[ticker].copy()
+                else:
+                    df.columns = df.columns.get_level_values(0)
+            except: pass
+
+        returns = df['Close'].pct_change().dropna()
+        if returns.empty: return None
+
+        last_price = float(df['Close'].iloc[-1])
+
+        # Calculate daily drift and volatility
+        mu = returns.mean()
+        sigma = returns.std()
+
+        # Simulation
+        # Price_t = Price_0 * exp( (mu - 0.5*sigma^2)t + sigma * W_t )
+        # Generate random paths
+        # Shape: (days, sims)
+        daily_returns = np.random.normal(mu, sigma, (days, sims)) + 1
+        price_paths = last_price * daily_returns.cumprod(axis=0)
+
+        # Outcomes
+        final_prices = price_paths[-1]
+        prob_below_90pct = np.mean(final_prices < (last_price * 0.90)) * 100
+
+        return {
+            "ticker": ticker,
+            "current": last_price,
+            "median_forecast": np.median(final_prices),
+            "prob_drop_10pct": f"{prob_below_90pct:.1f}%",
+            "volatility_annual": f"{sigma * np.sqrt(252) * 100:.1f}%"
+        }
+    except Exception as e:
+        logger.debug(f"Monte Carlo forecast error for {ticker}: {e}")
+        return None
