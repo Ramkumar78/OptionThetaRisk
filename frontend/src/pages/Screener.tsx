@@ -255,12 +255,18 @@ const Screener: React.FC<ScreenerProps> = () => {
       let bearish = 0;
       let neutral = 0;
       let bestPerformer = { ticker: '-', change: -999 };
+      let bullishTickers: string[] = [];
 
       items.forEach(i => {
           const sig = (i.Signal || i.signal || "").toLowerCase();
           const change = i['1D %'] !== undefined ? i['1D %'] : (i.pct_change_1d || 0);
 
-          if (sig.includes('buy') || sig.includes('long') || sig.includes('breakout') || sig.includes('enter') || sig.includes('green')) bullish++;
+          const isBullish = sig.includes('buy') || sig.includes('long') || sig.includes('breakout') || sig.includes('enter') || sig.includes('green');
+
+          if (isBullish) {
+              bullish++;
+              bullishTickers.push(i.Ticker || i.ticker || i.symbol);
+          }
           else if (sig.includes('sell') || sig.includes('short') || sig.includes('dump') || sig.includes('exit') || sig.includes('red')) bearish++;
           else neutral++;
 
@@ -274,7 +280,8 @@ const Screener: React.FC<ScreenerProps> = () => {
           bullish,
           bearish,
           neutral,
-          bestPerformer
+          bestPerformer,
+          bullishTickers
       };
   }, [results, activeTab]);
 
@@ -624,6 +631,16 @@ const Screener: React.FC<ScreenerProps> = () => {
             <StatCard title="Bearish Signals" value={stats.bearish} color="text-red-600 dark:text-red-400" />
             <StatCard title="Top Mover" value={stats.bestPerformer.change > -999 ? `${stats.bestPerformer.change > 0 ? '+' : ''}${stats.bestPerformer.change.toFixed(2)}%` : '-'} subValue={stats.bestPerformer.ticker} color={stats.bestPerformer.change >= 0 ? "text-emerald-600" : "text-red-600"} />
          </div>
+      )}
+
+      {/* Bullish Tickers List */}
+      {results && stats && stats.bullishTickers.length > 0 && (
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 animate-fadeIn">
+              <span className="font-bold text-emerald-800 dark:text-emerald-200 text-sm">Bullish Candidates: </span>
+              <span className="text-emerald-700 dark:text-emerald-300 text-sm break-words">
+                  {stats.bullishTickers.join(', ')}
+              </span>
+          </div>
       )}
 
       {/* Results Section */}
