@@ -6,9 +6,14 @@ import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps {}
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master';
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
+  master: {
+    title: 'Master Convergence',
+    subtitle: 'Multi-Strategy Collation',
+    description: 'Runs ISA Trend, Fourier Cycles, and Momentum checks simultaneously. Finds the highest probability setups where multiple strategies agree (Confluence).'
+  },
   market: {
     title: 'Market Screener',
     subtitle: 'Volatility & RSI Scanner',
@@ -185,6 +190,9 @@ const Screener: React.FC<ScreenerProps> = () => {
         data = await runFourierScreener(region, strategyTimeFrame);
       } else if (activeTab === 'hybrid') {
         data = await runHybridScreener(region, strategyTimeFrame);
+      } else if (activeTab === 'master') {
+        const res = await fetch(`/screen/master?region=${region}`);
+        data = await res.json();
       }
       setResults(data);
     } catch (err: any) {
@@ -271,6 +279,7 @@ const Screener: React.FC<ScreenerProps> = () => {
   }, [results, activeTab]);
 
   const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
+    { id: 'master', label: '⚡ Master Convergence', subLabel: 'Best of All' },
     { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
     { id: 'turtle', label: 'Turtle Trading' },
     { id: 'darvas', label: 'Darvas Box' },
@@ -501,7 +510,7 @@ const Screener: React.FC<ScreenerProps> = () => {
              </div>
           )}
 
-          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid') && (
+          {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid' || activeTab === 'master') && (
              <>
               <div>
                 <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -845,7 +854,16 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
                             </>
                         )}
-                        {type !== 'market' && type !== 'bull_put' && (
+                        {type === 'master' && (
+                            <>
+                                <HeaderCell label="Verdict" sortKey="verdict" align="center" />
+                                <HeaderCell label="Score" sortKey="confluence_score" align="center" />
+                                <HeaderCell label="ISA Trend" sortKey="isa_trend" align="center" />
+                                <HeaderCell label="Fourier" sortKey="fourier" align="right" />
+                                <HeaderCell label="Momentum" sortKey="momentum" align="right" />
+                            </>
+                        )}
+                        {type !== 'market' && type !== 'bull_put' && type !== 'master' && (
                             <>
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
                                 {type === 'darvas' && (
@@ -960,16 +978,40 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
 
                                 {type !== 'market' && type !== 'bull_put' && (
                                     <>
-                                        <td className="px-4 py-3 text-center">
-                                             <span className={clsx("px-2 py-1 rounded text-xs font-bold",
-                                                signal && (signal.includes('Long') || signal.includes('Buy') || signal.includes('BUY') || signal.includes('BREAKOUT') || signal.includes('PERFECT BUY')) ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                signal && (signal.includes('Short') || signal.includes('SHORT') || signal.includes('Sell') || signal.includes('DUMP')) ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
-                                                signal && (signal.includes('WAIT')) ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" :
-                                                "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                                             )}>
-                                                {signal}
-                                             </span>
-                                        </td>
+                                        {type === 'master' ? (
+                                            <>
+                                                <td className="px-4 py-3 text-center font-bold">
+                                                    <span className={clsx("px-2 py-1 rounded text-xs",
+                                                        (row.verdict || "").includes('STRONG') ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                                        (row.verdict || "").includes('SELL') ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300")}>
+                                                        {row.verdict}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                                                    {row.confluence_score}/3
+                                                </td>
+                                                <td className="px-4 py-3 text-center text-xs text-gray-900 dark:text-gray-300">
+                                                    {row.isa_trend === 'BULLISH' ? '🟢 UP' : '🔴 DOWN'}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs text-gray-500">
+                                                    {row.fourier}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs text-gray-500">
+                                                    {row.momentum}
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <td className="px-4 py-3 text-center">
+                                                 <span className={clsx("px-2 py-1 rounded text-xs font-bold",
+                                                    signal && (signal.includes('Long') || signal.includes('Buy') || signal.includes('BUY') || signal.includes('BREAKOUT') || signal.includes('PERFECT BUY')) ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
+                                                    signal && (signal.includes('Short') || signal.includes('SHORT') || signal.includes('Sell') || signal.includes('DUMP')) ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                                                    signal && (signal.includes('WAIT')) ? "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" :
+                                                    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                                 )}>
+                                                    {signal}
+                                                 </span>
+                                            </td>
+                                        )}
                                         {type === 'darvas' && (
                                             <>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">

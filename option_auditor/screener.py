@@ -2021,8 +2021,72 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
     results.sort(key=lambda x: x['cycle_position'])
     return results
 
+class StrategyAnalyzer:
+    """
+    Runs multiple strategies on a single dataframe to verify confluence.
+    """
+    def __init__(self, df):
+        self.df = df
+        try:
+            self.close = df['Close'].iloc[-1]
+            self.len = len(df)
+        except Exception:
+            self.len = 0
+
+    def check_isa_trend(self):
+        if self.len < 200: return "N/A"
+        try:
+            sma_200 = self.df['Close'].rolling(200).mean().iloc[-1]
+            return "BULLISH" if self.close > sma_200 else "BEARISH"
+        except Exception:
+            return "N/A"
+
+    def check_fourier(self):
+        if self.len < 64: return "N/A", 0.0
+        try:
+            # Use the existing helper function
+            cycle_data = _calculate_dominant_cycle(self.df['Close'].tolist())
+            if not cycle_data: return "N/A", 0.0
+            period, rel_pos = cycle_data
+
+            if rel_pos <= -0.8: return "BOTTOM", rel_pos
+            if rel_pos >= 0.8: return "TOP", rel_pos
+            return "NEUTRAL", rel_pos
+        except Exception:
+            return "N/A", 0.0
+
+    def check_momentum(self):
+        if self.len < 14: return "NEUTRAL"
+        # Simple RSI check
+        import pandas_ta as ta
+        # Check if RSI column exists, if not calculate
+        # We need to be careful not to modify the original df if it is used elsewhere without copying
+        # But here we pass a copy usually.
+
+        # Check if 'RSI_14' or 'RSI' exists
+        rsi_val = None
+        if 'RSI_14' in self.df.columns:
+             rsi_val = self.df['RSI_14'].iloc[-1]
+        elif 'RSI' in self.df.columns:
+             rsi_val = self.df['RSI'].iloc[-1]
+        else:
+             try:
+                 # Calculate temp
+                 rsi_s = ta.rsi(self.df['Close'], length=14)
+                 if rsi_s is not None and not rsi_s.empty:
+                    rsi_val = rsi_s.iloc[-1]
+             except Exception:
+                 pass
+
+        if rsi_val is None or pd.isna(rsi_val): return "NEUTRAL"
+
+        if rsi_val < 30: return "OVERSOLD"
+        if rsi_val > 70: return "OVERBOUGHT"
+        return "NEUTRAL"
+
 def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> list:
     """
+    Robust Hybrid Screener with CHUNKING to prevent API Timeouts.
     Combines ISA Trend Following with Fourier Cycle Analysis.
     Goal: Find 'Buy the Dip' opportunities in strong uptrends.
     """
@@ -2031,37 +2095,64 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
     import pandas as pd
     import numpy as np
 
-    # Default list if None
     if ticker_list is None:
-        # Use your existing ISA list or Watchlist
-        # Integrating with existing logic: If no list provided, fallback to standard behavior or user specific list
-        # But for now, using the list from the prompt or integrating with region selection in caller.
-        # This function accepts ticker_list, so caller should provide it.
-        # Fallback to WATCH list if absolutely nothing.
         if "WATCH" in SECTOR_COMPONENTS:
              ticker_list = SECTOR_COMPONENTS["WATCH"]
         else:
              ticker_list = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "TSLA", "AMD", "COIN"]
 
     results = []
+    all_data = pd.DataFrame()
 
-    # Batch download 2 years of data (enough for 200 SMA + FFT)
-    try:
-        # Use safe batch fetch
-        data = fetch_batch_data_safe(ticker_list, period="2y", interval=time_frame, chunk_size=100)
-    except Exception as e:
-        logger.error(f"Hybrid screener download failed: {e}")
-        return []
+    # --- FIX: CHUNKING LOGIC ---
+    CHUNK_SIZE = 50
+    chunks = [ticker_list[i:i + CHUNK_SIZE] for i in range(0, len(ticker_list), CHUNK_SIZE)]
 
-    for ticker in ticker_list:
+    for i, chunk in enumerate(chunks):
         try:
-            # 1. Prepare Data
-            df = pd.DataFrame()
-            if isinstance(data.columns, pd.MultiIndex):
-                if ticker in data.columns.levels[0]:
-                    df = data[ticker].copy()
+            logger.info(f"Downloading chunk {i+1}/{len(chunks)}...")
+            # Threads=False inside chunks often more stable for mass downloads
+            # Using threads=True inside chunks is also fine if small chunks. User snippet used threads=True.
+            chunk_data = yf.download(chunk, period="2y", interval=time_frame, group_by='ticker', progress=False, auto_adjust=True, threads=True)
+
+            if all_data.empty:
+                all_data = chunk_data
             else:
-                df = data.copy()
+                # Merge columns. verify axis=1 for MultiIndex
+                all_data = pd.concat([all_data, chunk_data], axis=1)
+
+            # Polite sleep between chunks to avoid rate limit
+            time.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Chunk download failed: {e}")
+            continue
+
+    # Process Data
+    # Get list of successfully downloaded tickers
+    if isinstance(all_data.columns, pd.MultiIndex):
+        valid_tickers = all_data.columns.levels[0].intersection(ticker_list)
+    else:
+        # Fallback if only 1 ticker in list or flat structure
+        if not all_data.empty:
+             # If flat and we requested multiple, it might be weird.
+             # But if we requested 1 ticker, it is flat.
+             # If we requested multiple and only 1 came back, it might be flat or multi.
+             # yfinance usually returns MultiIndex for >1 ticker.
+             # If only 1 ticker in the list passed to download, it returns flat.
+             # Here we accumulate.
+             valid_tickers = ticker_list if len(ticker_list) == 1 else []
+        else:
+             valid_tickers = []
+
+    for ticker in valid_tickers:
+        try:
+            df = pd.DataFrame()
+            if isinstance(all_data.columns, pd.MultiIndex):
+                if ticker in all_data.columns.levels[0]:
+                    df = all_data[ticker].copy()
+            else:
+                # If only one ticker was requested/returned
+                df = all_data.copy()
 
             df = df.dropna(how='all')
             if len(df) < 200: continue
@@ -2234,6 +2325,99 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
 
     # Sort by 'Score' descending (best setups first)
     results.sort(key=lambda x: x['score'], reverse=True)
+    return results
+
+def screen_master_convergence(ticker_list: list = None, region: str = "us") -> list:
+    """
+    Runs ALL strategies on the dataset to find CONFLUENCE.
+    """
+    # 1. Determine Ticker List
+    if ticker_list is None:
+        if region == "sp500":
+             ticker_list = _get_filtered_sp500(check_trend=False) # Get all liquid sp500
+        else:
+             ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
+
+    # 2. Download in Chunks (Reuse logic)
+    import yfinance as yf
+    import pandas as pd
+
+    all_data = pd.DataFrame()
+    CHUNK_SIZE = 50
+    chunks = [ticker_list[i:i + CHUNK_SIZE] for i in range(0, len(ticker_list), CHUNK_SIZE)]
+
+    for i, chunk in enumerate(chunks):
+        try:
+            # Polite sleep between chunks
+            time.sleep(0.5)
+            # logger.info(f"Downloading master chunk {i+1}...")
+            chunk_data = yf.download(chunk, period="2y", interval="1d", group_by='ticker', progress=False, auto_adjust=True)
+            if all_data.empty: all_data = chunk_data
+            else: all_data = pd.concat([all_data, chunk_data], axis=1)
+        except: pass
+
+    results = []
+
+    if isinstance(all_data.columns, pd.MultiIndex):
+        valid_tickers = all_data.columns.levels[0]
+    else:
+        valid_tickers = ticker_list if not all_data.empty else []
+
+    for ticker in valid_tickers:
+        try:
+            df = pd.DataFrame()
+            if isinstance(all_data.columns, pd.MultiIndex):
+                if ticker in all_data.columns.levels[0]:
+                    df = all_data[ticker].copy()
+            else:
+                df = all_data.copy()
+
+            df = df.dropna(how='all')
+            if len(df) < 200: continue
+
+            # --- RUN ALL STRATEGIES ---
+            analyzer = StrategyAnalyzer(df)
+
+            isa_trend = analyzer.check_isa_trend()
+            fourier, f_score = analyzer.check_fourier()
+            momentum = analyzer.check_momentum()
+
+            # Confluence Score
+            score = 0
+            signals = []
+
+            if isa_trend == "BULLISH": score += 1
+            if fourier == "BOTTOM":
+                score += 2
+                signals.append("Cycle Bottom")
+            if momentum == "OVERSOLD" and isa_trend == "BULLISH":
+                score += 1
+                signals.append("Dip Buy")
+
+            final_verdict = "WAIT"
+            if score >= 3: final_verdict = "🔥 STRONG BUY"
+            elif score == 2: final_verdict = "✅ BUY"
+            elif isa_trend == "BEARISH" and fourier == "TOP": final_verdict = "📉 STRONG SELL"
+
+            # Identify name
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            results.append({
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": df['Close'].iloc[-1],
+                "isa_trend": isa_trend,
+                "fourier": f"{fourier} ({f_score:.2f})",
+                "momentum": momentum,
+                "confluence_score": score,
+                "verdict": final_verdict,
+                "signals": ", ".join(signals)
+            })
+
+        except Exception: continue
+
+    results.sort(key=lambda x: x['confluence_score'], reverse=True)
     return results
 
 def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 100):
