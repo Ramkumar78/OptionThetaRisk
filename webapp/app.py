@@ -512,7 +512,7 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
                 # For Hybrid, YES S&P 500. Trend + Cycle.
-                # NEW FIX: Get raw list, let the screener handle data fetching once to avoid rate limits.
+                # Hybrid strategy handles data fetching internally to avoid double-tap rate limits.
                 raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                 ticker_list = list(set(raw_sp500 + watch_list))
