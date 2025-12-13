@@ -2268,7 +2268,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
             total_equity_risk_pct = position_size_pct * (risk_dist / 100.0)
 
             # Tharp's Limit: Never risk more than 1% of total equity on a trade
-            is_tharp_safe = total_equity_risk_pct <= 0.01
+            is_tharp_safe = bool(total_equity_risk_pct <= 0.01)
 
             tharp_verdict = "✅ SAFE" if is_tharp_safe else f"⚠️ RISKY (Risks {total_equity_risk_pct*100:.1f}% Equity)"
             if dist_to_stop_pct <= 0:
@@ -2356,7 +2356,8 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "dist_to_stop_pct": round(dist_to_stop_pct, 2),
                 "tharp_verdict": tharp_verdict,
                 "max_position_size": max_position_size_str,
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "safe_to_trade": is_tharp_safe
             })
 
         except Exception:
