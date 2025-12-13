@@ -231,8 +231,8 @@ class TestScreenerImprovements:
         assert len(results) == 1
         assert "BULLISH OTE" in results[0]['signal']
 
-    @patch('option_auditor.screener.time.sleep')
-    @patch('option_auditor.screener.yf.download')
+    @patch('option_auditor.common.data_utils.time.sleep')
+    @patch('option_auditor.common.data_utils.yf.download')
     def test_fetch_data_retry(self, mock_download, mock_sleep):
         """Test retry logic."""
         # Fail twice, succeed third
