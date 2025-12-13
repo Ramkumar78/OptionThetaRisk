@@ -613,8 +613,7 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                     logger.debug(f"Error flattening columns for {symbol}: {e}")
                     pass
 
-            # Gap 1: Volume Trap Fix
-            # If scanning daily/weekly (not intraday), skip illiquid stocks (< 500k avg volume)
+            # Volume Filter: If scanning daily/weekly (not intraday), skip illiquid stocks (< 500k avg volume)
             # This prevents wasting CPU on stocks we can't trade and reduces risk of stale data issues.
             if not is_intraday and len(df) >= 20:
                 avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
@@ -766,7 +765,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             }
 
         except Exception as e:
-            # Gap 2: Error Visibility
             logger.error(f"Error processing {symbol}: {e}")
             return None
 
@@ -2278,7 +2276,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
             risk_per_share = curr_close - stop_price
 
-            # Gap 3: Distance from Stop
+            # Distance from Stop
             # If entering, we look at Initial Stop (3 ATR).
             # If holding, we look at Trailing Stop (20d Low).
             effective_stop = stop_price
