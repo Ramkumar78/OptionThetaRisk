@@ -2467,20 +2467,29 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
     # 1. Determine Ticker List
     if ticker_list is None:
         if region == "sp500":
-             # Use the filtered S&P 500 list
-             ticker_list = _get_filtered_sp500(check_trend=False)
+             # OPTIMIZATION: Avoid _get_filtered_sp500 as it triggers a synchronous download.
+             # Instead, get ALL S&P 500 tickers and rely on get_cached_market_data to serve from cache.
+             # Filtering will happen inside the loop below.
+             base_tickers = get_sp500_tickers()
+
              # Also include WATCH list
              watch_list = SECTOR_COMPONENTS.get("WATCH", [])
-             ticker_list = list(set(ticker_list + watch_list))
+             ticker_list = list(set(base_tickers + watch_list))
         else:
              ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
 
     # 2. Download Data (CACHE IMPLEMENTATION)
     # Using 'market_scan_v1' cache ensures we reuse the data fetched by the background worker
-    cache_name = "market_scan_v1" if region == "sp500" else "watchlist_scan"
+    # Logic update: Use list length or region
+    is_large = len(ticker_list) > 100 or region == "sp500"
+    cache_name = "market_scan_v1" if is_large else "watchlist_scan"
 
     try:
         # This replaces the entire slow "chunking" loop you had before
+        # Note: If region=sp500, we are requesting ~500 tickers.
+        # get_cached_market_data will check cache "market_scan_v1".
+        # This cache is populated by refresh_cache.py with get_sp500_tickers().
+        # So it should be a hit.
         all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     except Exception as e:
         logger.error(f"Master screener data fetch failed: {e}")
@@ -2494,9 +2503,12 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
 
     # 3. Process Data (Existing Logic)
     if isinstance(all_data.columns, pd.MultiIndex):
-        valid_tickers = all_data.columns.levels[0]
+        # Intersect with ticker_list to ensure we only process what we asked for
+        valid_tickers = [t for t in ticker_list if t in all_data.columns.levels[0]]
     else:
         valid_tickers = ticker_list if not all_data.empty else []
+
+    watch_list = SECTOR_COMPONENTS.get("WATCH", [])
 
     for ticker in valid_tickers:
         try:
@@ -2509,6 +2521,14 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
 
             df = df.dropna(how='all')
             if len(df) < 200: continue
+
+            # Volume Filter (Optimization):
+            # If region is S&P 500, we skipped pre-filtering. So we filter here.
+            # Skip for WATCH list items.
+            if region == "sp500" and ticker not in watch_list:
+                if 'Volume' in df.columns:
+                     avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+                     if avg_vol < 500000: continue
 
             # --- RUN ALL STRATEGIES ---
             analyzer = StrategyAnalyzer(df)
@@ -2542,10 +2562,20 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
             curr_price = df['Close'].iloc[-1]
             if pd.isna(curr_price): continue
 
+            # Calculate % Change
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((curr_price - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
             results.append({
                 "ticker": ticker,
                 "company_name": company_name,
                 "price": float(curr_price),
+                "pct_change_1d": pct_change_1d,
                 "isa_trend": isa_trend,
                 "fourier": f"{fourier} ({f_score:.2f})",
                 "momentum": momentum,
