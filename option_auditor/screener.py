@@ -25,6 +25,58 @@ except ImportError:
 # Update with S&P 500 Names if available in constants?
 # Constants.py updates TICKER_NAMES with SP500_NAMES already.
 
+def _calculate_trend_breakout_date(df: pd.DataFrame) -> str:
+    """
+    Calculates the start date of the current trend (ISA Logic: Breakout > 50d High, Exit < 20d Low).
+    Returns "N/A" if not in a trend.
+    """
+    try:
+        # Ensure we have enough data
+        if df.empty or len(df) < 50: return "N/A"
+
+        # Calculate indicators if missing
+        # Work on a copy/slice to avoid modifying original if needed, but adding columns is fine
+        subset = df.copy()
+
+        if 'High_50' not in subset.columns:
+            subset['High_50'] = subset['High'].rolling(50).max().shift(1)
+        if 'Low_20' not in subset.columns:
+            subset['Low_20'] = subset['Low'].rolling(20).min().shift(1)
+
+        curr_close = subset['Close'].iloc[-1]
+        low_20 = subset['Low_20'].iloc[-1]
+
+        # Check if currently in a trend state
+        # The ISA logic defines a trend as "Safe" if Close > Low_20.
+        # If currently stopped out (Close <= Low_20), then no active trend.
+        if pd.isna(curr_close) or pd.isna(low_20) or curr_close <= low_20:
+            return "N/A"
+
+        # Search backwards
+        limit = min(len(subset), 400)
+        subset = subset.iloc[-limit:]
+
+        is_breakout = subset['Close'] >= subset['High_50']
+        is_broken = subset['Close'] <= subset['Low_20']
+
+        break_indices = subset.index[is_broken]
+        last_break_idx = break_indices[-1] if not break_indices.empty else None
+
+        breakout_indices = subset.index[is_breakout]
+
+        if last_break_idx is not None:
+             valid_breakouts = breakout_indices[breakout_indices > last_break_idx]
+        else:
+             valid_breakouts = breakout_indices
+
+        if not valid_breakouts.empty:
+             return valid_breakouts[0].strftime("%Y-%m-%d")
+
+        return "N/A"
+    except Exception:
+        return "N/A"
+
+
 def enrich_with_fundamentals(results_list: list) -> list:
     """
     Fetches PE Ratio and Sector data ONLY for the stocks that passed the screener.
@@ -356,6 +408,9 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             # Use TICKER_NAMES if available
             company_name = TICKER_NAMES.get(symbol, symbol)
 
+            # Calculate Breakout Date (Trend Age)
+            breakout_date = _calculate_trend_breakout_date(df)
+
             # Rate limiting sleep
             time.sleep(0.1)
 
@@ -374,7 +429,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "atr": current_atr,
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
-                "pe_ratio": pe_ratio
+                "pe_ratio": pe_ratio,
+                "breakout_date": breakout_date
             }
 
         except Exception as e:
@@ -682,6 +738,9 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                 stop_loss = prev_high - (2 * atr)
                 target = prev_high + (4 * atr)
 
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             if signal != "WAIT":
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
@@ -698,7 +757,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
                     "atr": atr,
                     "atr_value": round(atr, 2),
                     "volatility_pct": round(volatility_pct, 2),
-                    "risk_per_share": abs(buy_price - stop_loss)
+                    "risk_per_share": abs(buy_price - stop_loss),
+                    "breakout_date": breakout_date
                 })
 
         except Exception as e:
@@ -886,6 +946,9 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                 ema_slow = curr_21
                 stop_loss = curr_21 * 1.01
 
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             if signal != "WAIT":
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
@@ -904,7 +967,8 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
                     "stop_loss": stop_loss,
                     "atr_value": round(current_atr, 2),
                     "volatility_pct": round(volatility_pct, 2),
-                    "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100
+                    "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100,
+                    "breakout_date": breakout_date
                 })
 
         except Exception as e:
@@ -1169,6 +1233,9 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
 
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             # Rate limiting sleep
             time.sleep(0.1)
 
@@ -1185,7 +1252,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
                 "high_52w": period_high,
                 "atr_value": round(atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
-                "volume_ratio": (curr_volume / np.mean(volumes[-21:-1])) if len(volumes) > 21 else 1.0
+                "volume_ratio": (curr_volume / np.mean(volumes[-21:-1])) if len(volumes) > 21 else 1.0,
+                "breakout_date": breakout_date
             }
 
         except Exception as e:
@@ -1484,6 +1552,9 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
             # Rate limiting sleep
             time.sleep(0.1)
 
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             if signal != "WAIT":
                 # Calculate % Change
                 pct_change_1d = None
@@ -1504,7 +1575,8 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
                     "target": setup_details['target'],
                     "fvg_detected": "Yes",
                     "atr_value": round(current_atr, 2),
-                    "volatility_pct": round(volatility_pct, 2)
+                    "volatility_pct": round(volatility_pct, 2),
+                    "breakout_date": breakout_date
                 }
 
         except Exception as e:
@@ -1692,6 +1764,9 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
                 except Exception:
                     pass
 
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             return {
                 "ticker": ticker,
                 "price": curr_price,
@@ -1707,7 +1782,8 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
                 "roi_pct": round(roi * 100, 1),
                 "trend": "Bullish (>SMA50)",
                 "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2)
+                "volatility_pct": round(volatility_pct, 2),
+                "breakout_date": breakout_date
             }
 
         except Exception as e:
@@ -1959,35 +2035,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 pct_change_1d = ((curr_close - prev) / prev) * 100
 
             # --- Breakout Date Logic ---
-            breakout_date = "N/A"
-            # Only relevant if we are in a valid Trend or Breaking out.
-            if "ENTER" in signal or "WATCH" in signal or "HOLD" in signal:
-                 # Search backwards to find the start of this trend.
-                 # Trend starts when Price crossed > High50.
-                 # Trend ends if Price crossed < Low20 (Stop).
-                 # So we find the earliest 'Entry' signal in the current contiguous 'Safe' block.
-
-                 limit = min(len(df), 400)
-                 subset = df.iloc[-limit:].copy()
-
-                 # Vectorized Masks
-                 is_breakout = subset['Close'] >= subset['High_50']
-                 is_broken = subset['Close'] <= subset['Low_20']
-
-                 # 1. Find the LAST trend break (Reset Point)
-                 break_indices = subset.index[is_broken]
-                 last_break_idx = break_indices[-1] if not break_indices.empty else None
-
-                 # 2. Find breakouts AFTER the last break
-                 breakout_indices = subset.index[is_breakout]
-
-                 if last_break_idx is not None:
-                     valid_breakouts = breakout_indices[breakout_indices > last_break_idx]
-                 else:
-                     valid_breakouts = breakout_indices
-
-                 if not valid_breakouts.empty:
-                     breakout_date = valid_breakouts[0].strftime("%Y-%m-%d")
+            breakout_date = _calculate_trend_breakout_date(df)
 
 
             # Filter results?
@@ -2190,6 +2238,9 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             results.append({
                 "ticker": ticker,
                 "company_name": company_name,
@@ -2200,7 +2251,8 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
                 "cycle_position": f"{rel_pos:.2f} (-1 Low, +1 High)",
                 "verdict_color": verdict_color,
                 "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2)
+                "volatility_pct": round(volatility_pct, 2),
+                "breakout_date": breakout_date
             })
 
         except Exception:
@@ -2497,6 +2549,9 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             results.append({
                 "ticker": ticker,
                 "company_name": company_name,
@@ -2513,7 +2568,8 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
                 "target": round(target_price, 2),         # <--- THE TARGET
                 "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})", # <--- IS IT WORTH IT?
                 "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2)
+                "volatility_pct": round(volatility_pct, 2),
+                "breakout_date": breakout_date
             })
 
         except Exception as e:
@@ -2636,6 +2692,15 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
                 except Exception:
                     pass
 
+            # Calculate ATR for reporting
+            import pandas_ta as ta
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
+
+            # Calculate Trend Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
             results.append({
                 "ticker": ticker,
                 "company_name": company_name,
@@ -2646,7 +2711,10 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
                 "momentum": momentum,
                 "confluence_score": score,
                 "verdict": final_verdict,
-                "signals": ", ".join(signals)
+                "signals": ", ".join(signals),
+                "atr_value": round(current_atr, 2),
+                "volatility_pct": round(volatility_pct, 2),
+                "breakout_date": breakout_date
             })
 
         except Exception: continue
