@@ -99,15 +99,22 @@ def test_screen_market_integration(mock_yf_download, sample_daily_df):
     # We also need to mock pandas_ta inside the function, or rely on installed lib
     # Since we can't easily mock imports inside function, we assume pandas_ta is installed (it is)
 
-    results = screen_market(iv_rank_threshold=30, rsi_threshold=70, time_frame='1d')
+    # Patch SECTOR_COMPONENTS to ensure AAPL/MSFT are mapped to XLK (Technology)
+    # Otherwise test environment might not have the mapping
+    with patch('option_auditor.screener.SECTOR_COMPONENTS', {"XLK": ["AAPL", "MSFT"]}):
+        results = screen_market(iv_rank_threshold=30, rsi_threshold=70, time_frame='1d')
 
-    # Should return a dict of sectors
-    assert isinstance(results, dict)
-    # Check if AAPL or MSFT appear in Technology
-    tech_key = [k for k in results.keys() if "Technology" in k][0]
-    assert tech_key
-    tickers = [r['ticker'] for r in results[tech_key]]
-    assert 'AAPL' in tickers or 'MSFT' in tickers
+        # Should return a dict of sectors
+        assert isinstance(results, dict)
+        # Check if AAPL or MSFT appear in Technology
+        # Note: SECTOR_NAMES["XLK"] is "Technology" in constants.py.
+        # But we didn't patch SECTOR_NAMES, so it should be there.
+        # But if constants are imported, patching 'option_auditor.screener.SECTOR_COMPONENTS' updates the dict used in screener.py
+
+        tech_key = [k for k in results.keys() if "Technology" in k][0]
+        assert tech_key
+        tickers = [r['ticker'] for r in results[tech_key]]
+        assert 'AAPL' in tickers or 'MSFT' in tickers
 
 def test_screen_sectors(mock_yf_download, sample_daily_df):
     # Mock data for sector ETF

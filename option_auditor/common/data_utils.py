@@ -84,7 +84,7 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
         return pd.DataFrame()
 
     # Deduplicate
-    unique_tickers = list(set(tickers))
+    unique_tickers = sorted(list(set(tickers)))
     chunks = [unique_tickers[i:i + chunk_size] for i in range(0, len(unique_tickers), chunk_size)]
 
     data_frames = []
