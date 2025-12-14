@@ -2462,26 +2462,37 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
 def screen_master_convergence(ticker_list: list = None, region: str = "us") -> list:
     """
     Runs ALL strategies on the dataset to find CONFLUENCE.
+    Uses Caching to prevent timeouts on S&P 500 scans.
     """
     # 1. Determine Ticker List
     if ticker_list is None:
         if region == "sp500":
-             ticker_list = _get_filtered_sp500(check_trend=False) # Get all liquid sp500
+             # Use the filtered S&P 500 list
+             ticker_list = _get_filtered_sp500(check_trend=False)
+             # Also include WATCH list
+             watch_list = SECTOR_COMPONENTS.get("WATCH", [])
+             ticker_list = list(set(ticker_list + watch_list))
         else:
              ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
 
-    # 2. Use Cache-First Architecture
-    import yfinance as yf
-    import pandas as pd
+    # 2. Download Data (CACHE IMPLEMENTATION)
+    # Using 'market_scan_v1' cache ensures we reuse the data fetched by the background worker
+    cache_name = "market_scan_v1" if region == "sp500" else "watchlist_scan"
 
-    # Determine cache key based on list size
-    cache_name = "market_scan_v1" if len(ticker_list) > 100 else "watchlist_scan"
-
-    # Use cached data fetcher (handles chunking/saving/loading)
-    all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+    try:
+        # This replaces the entire slow "chunking" loop you had before
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+    except Exception as e:
+        logger.error(f"Master screener data fetch failed: {e}")
+        return []
 
     results = []
 
+    # Handle empty data
+    if all_data.empty:
+        return []
+
+    # 3. Process Data (Existing Logic)
     if isinstance(all_data.columns, pd.MultiIndex):
         valid_tickers = all_data.columns.levels[0]
     else:
@@ -2498,12 +2509,6 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
 
             df = df.dropna(how='all')
             if len(df) < 200: continue
-
-            # ATR Calc
-            import pandas_ta as ta
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-            volatility_pct = (current_atr / float(df['Close'].iloc[-1]) * 100) if float(df['Close'].iloc[-1]) > 0 else 0.0
 
             # --- RUN ALL STRATEGIES ---
             analyzer = StrategyAnalyzer(df)
@@ -2529,33 +2534,24 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
             elif score == 2: final_verdict = "✅ BUY"
             elif isa_trend == "BEARISH" and fourier == "TOP": final_verdict = "📉 STRONG SELL"
 
-            # Calculate % Change
-            pct_change_1d = None
-            if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    curr_close = float(df['Close'].iloc[-1])
-                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
-
             # Identify name
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
+            # Extract price safely
+            curr_price = df['Close'].iloc[-1]
+            if pd.isna(curr_price): continue
+
             results.append({
                 "ticker": ticker,
                 "company_name": company_name,
-                "price": df['Close'].iloc[-1],
-                "pct_change_1d": pct_change_1d,
+                "price": float(curr_price),
                 "isa_trend": isa_trend,
                 "fourier": f"{fourier} ({f_score:.2f})",
                 "momentum": momentum,
                 "confluence_score": score,
                 "verdict": final_verdict,
-                "signals": ", ".join(signals),
-                "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2)
+                "signals": ", ".join(signals)
             })
 
         except Exception: continue
