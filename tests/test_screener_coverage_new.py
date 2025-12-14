@@ -64,13 +64,14 @@ def test_get_filtered_sp500_success(mock_download, mock_get_tickers):
     assert "MSFT" not in result
 
 @patch('option_auditor.screener.get_sp500_tickers')
-@patch('option_auditor.screener.yf.download')
-def test_get_filtered_sp500_batch_fail(mock_download, mock_get_tickers):
+@patch('option_auditor.screener.get_cached_market_data')
+def test_get_filtered_sp500_batch_fail(mock_get_cached, mock_get_tickers):
     mock_get_tickers.return_value = ["AAPL", "MSFT"]
-    mock_download.side_effect = Exception("Batch failed")
+    # Simulate cache fetch failure or empty return (download fail)
+    mock_get_cached.return_value = pd.DataFrame()
 
     result = screener._get_filtered_sp500()
-    # Should fallback to returning first 50 tickers
+    # Should fallback to returning base list
     assert len(result) == 2
     assert "AAPL" in result
 

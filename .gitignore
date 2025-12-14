@@ -136,3 +136,4 @@ venv.bak/
 .dmypy.json
 dmypy.json
 webapp/static/react_build/
+cache_data/
