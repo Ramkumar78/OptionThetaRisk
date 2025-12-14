@@ -15,7 +15,7 @@ from option_auditor.unified_screener import screen_universal_dashboard
 # Imports from common constants to avoid circular dependencies
 from option_auditor.common.constants import SECTOR_NAMES, SECTOR_COMPONENTS, TICKER_NAMES
 from option_auditor.common.data_utils import prepare_data_for_ticker as _prepare_data_for_ticker
-from option_auditor.common.data_utils import fetch_data_with_retry, fetch_batch_data_safe
+from option_auditor.common.data_utils import fetch_data_with_retry, fetch_batch_data_safe, get_cached_market_data
 
 try:
     from option_auditor.sp500_data import get_sp500_tickers
@@ -2226,30 +2226,24 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
              ticker_list = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "TSLA", "AMD", "COIN"]
 
     results = []
+
+    # Use Cache-First Architecture for S&P 500 or large lists
     all_data = pd.DataFrame()
 
-    # --- FIX: CHUNKING LOGIC ---
-    CHUNK_SIZE = 50
-    chunks = [ticker_list[i:i + CHUNK_SIZE] for i in range(0, len(ticker_list), CHUNK_SIZE)]
+    # Check if this is a large scan (e.g., S&P 500)
+    is_large_scan = len(ticker_list) > 100
+    cache_name = "market_scan_v1" if is_large_scan else "watchlist_scan"
 
-    for i, chunk in enumerate(chunks):
+    # Only use cache for daily timeframe (intraday needs fresh data)
+    if time_frame == "1d":
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+    else:
+        # Fallback to direct download for intraday
         try:
-            logger.info(f"Downloading chunk {i+1}/{len(chunks)}...")
-            # Threads=False inside chunks often more stable for mass downloads
-            # Using threads=True inside chunks is also fine if small chunks. User snippet used threads=True.
-            chunk_data = yf.download(chunk, period="2y", interval=time_frame, group_by='ticker', progress=False, auto_adjust=True, threads=True)
-
-            if all_data.empty:
-                all_data = chunk_data
-            else:
-                # Merge columns. verify axis=1 for MultiIndex
-                all_data = pd.concat([all_data, chunk_data], axis=1)
-
-            # Polite sleep between chunks to avoid rate limit
-            time.sleep(0.5)
+            # Safe batch fetch
+            all_data = fetch_batch_data_safe(ticker_list, period="2y", interval=time_frame, chunk_size=50)
         except Exception as e:
-            logger.error(f"Chunk download failed: {e}")
-            continue
+            logger.error(f"Data fetch failed: {e}")
 
     # Process Data
     # Get list of successfully downloaded tickers
@@ -2476,23 +2470,15 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
         else:
              ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
 
-    # 2. Download in Chunks (Reuse logic)
+    # 2. Use Cache-First Architecture
     import yfinance as yf
     import pandas as pd
 
-    all_data = pd.DataFrame()
-    CHUNK_SIZE = 50
-    chunks = [ticker_list[i:i + CHUNK_SIZE] for i in range(0, len(ticker_list), CHUNK_SIZE)]
+    # Determine cache key based on list size
+    cache_name = "market_scan_v1" if len(ticker_list) > 100 else "watchlist_scan"
 
-    for i, chunk in enumerate(chunks):
-        try:
-            # Polite sleep between chunks
-            time.sleep(0.5)
-            # logger.info(f"Downloading master chunk {i+1}...")
-            chunk_data = yf.download(chunk, period="2y", interval="1d", group_by='ticker', progress=False, auto_adjust=True)
-            if all_data.empty: all_data = chunk_data
-            else: all_data = pd.concat([all_data, chunk_data], axis=1)
-        except: pass
+    # Use cached data fetcher (handles chunking/saving/loading)
+    all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
 
     results = []
 
