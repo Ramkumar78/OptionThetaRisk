@@ -6,7 +6,7 @@ from option_auditor.screener import screen_hybrid_strategy
 
 class TestScreenerHybrid(unittest.TestCase):
 
-    @patch('option_auditor.screener.yf.download')
+    @patch('option_auditor.screener.get_cached_market_data')
     @patch('option_auditor.screener.SECTOR_COMPONENTS', {"WATCH": ["AAPL"]})
     def test_screen_hybrid_strategy_bullish_bottom(self, mock_download):
         """Test Scenario A: Bullish Trend + Cycle Bottom"""
@@ -62,7 +62,7 @@ class TestScreenerHybrid(unittest.TestCase):
             self.assertTrue(210 < r['target'] < 230, f"Target {r['target']} not near expected 220")
 
 
-    @patch('option_auditor.screener.yf.download')
+    @patch('option_auditor.screener.get_cached_market_data')
     def test_screen_hybrid_strategy_bearish_top(self, mock_download):
         """Test Scenario C: Bearish Trend + Cycle Top"""
         dates = pd.date_range(end='2023-01-01', periods=500)
@@ -91,7 +91,7 @@ class TestScreenerHybrid(unittest.TestCase):
             self.assertIn("PERFECT SHORT", r['verdict'])
             self.assertEqual(r['color'], "red")
 
-    @patch('option_auditor.screener.yf.download')
+    @patch('option_auditor.screener.get_cached_market_data')
     def test_screen_hybrid_strategy_momentum_buy(self, mock_download):
         """Test Scenario B: Bullish + Breakout (High > 50d High)"""
         dates = pd.date_range(end='2023-01-01', periods=500)

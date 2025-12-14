@@ -241,7 +241,7 @@ def test_fetch_data_retry():
             assert df.empty
             assert mock_dl.call_count == 2
 
-@patch('option_auditor.screener.yf.download')
+@patch('option_auditor.screener.get_cached_market_data')
 def test_hybrid_strategy_branches(mock_download):
     # Test "PERFECT BUY" scenario
     # Bullish Trend + Cycle Bottom
