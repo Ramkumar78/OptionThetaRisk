@@ -1,10 +1,59 @@
+import os
 import pandas as pd
 import yfinance as yf
+from datetime import datetime, timedelta
 import logging
 import time
 import random
 
 logger = logging.getLogger(__name__)
+
+CACHE_DIR = "cache_data"
+
+def get_cached_market_data(ticker_list, period="2y", cache_name="sp500"):
+    """
+    Retrieves data from disk cache if valid (<4 hours old).
+    Otherwise, downloads fresh data, saves it, and returns it.
+    """
+    # Ensure cache directory exists
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
+
+    file_path = os.path.join(CACHE_DIR, f"{cache_name}.parquet")
+
+    # 1. Check if Cache is Valid
+    is_valid = False
+    if os.path.exists(file_path):
+        try:
+            file_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(file_path))
+            if file_age < timedelta(hours=4): # Cache for 4 hours
+                is_valid = True
+        except Exception as e:
+            logger.warning(f"Error checking cache validity: {e}")
+
+    # 2. FAST PATH: Return Cache
+    if is_valid:
+        try:
+            logger.info(f"🚀 Loading {cache_name} from cache...")
+            return pd.read_parquet(file_path)
+        except Exception:
+            logger.warning("Cache corrupted, re-downloading.")
+
+    # 3. SLOW PATH: Download & Save
+    logger.info(f"⏳ Downloading fresh data for {len(ticker_list)} tickers...")
+
+    # Use safe batch fetch
+    all_data = fetch_batch_data_safe(ticker_list, period=period, interval="1d", chunk_size=50)
+
+    # 4. Save to Disk (The Fix)
+    if not all_data.empty:
+        try:
+            all_data.to_parquet(file_path)
+            logger.info(f"✅ Saved {cache_name} to disk.")
+        except Exception as e:
+            logger.error(f"Failed to save cache: {e}")
+
+    return all_data
 
 def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, retries=3):
     """

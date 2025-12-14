@@ -13,3 +13,9 @@ services:
       # Resend API Configuration for Feedback Emails
       - RESEND_API_KEY=${RESEND_API_KEY:-re_ZyvLRhL6_CDNzYkCtd7dxShpeoCUCdv5v}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-shriram2222@gmail.com}
+
+  cache_worker:
+    build: .
+    command: python refresh_cache.py
+    volumes:
+      - .:/app
