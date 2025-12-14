@@ -92,14 +92,18 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
 
     filtered_list = []
 
-    # Use centralized batch fetch
-    data = fetch_batch_data_safe(base_tickers, period="1y", interval="1d", chunk_size=100)
+    # Use CACHED data to prevent timeouts and redundant downloads.
+    # We use "market_scan_v1" which contains 2y data for S&P 500.
+    # If the cache is missing, this will download it (heavy), but future calls will be instant.
+    try:
+        data = get_cached_market_data(base_tickers, period="2y", cache_name="market_scan_v1")
+    except Exception as e:
+        logger.error(f"Failed to get S&P 500 cache: {e}")
+        data = pd.DataFrame()
 
     if data.empty:
-        # If download failed completely, fallback to returning the base list (or a safe subset)
-        # to ensure the screener doesn't return nothing, effectively bypassing the filter.
-        # This matches previous behavior expected by tests.
-        logger.warning("S&P 500 filter data download failed. Returning raw list.")
+        # Fallback to returning the base list if data unavailable, to allow scanning to proceed (albeit unfiltered)
+        logger.warning("S&P 500 filter data unavailable. Returning raw list.")
         return base_tickers
 
     # Iterate through the downloaded data to check criteria
@@ -183,12 +187,39 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     # Batch download result container
     batch_data = None
 
-    # If daily, try batch download first (avoid for new multi-year/weekly intervals to be safe, or just allow it)
-    # yfinance batch download is usually fine for daily/weekly.
+    # If daily, try batch download first
     if not is_intraday and tickers:
         try:
-            # Use safe batch fetch
-            batch_data = fetch_batch_data_safe(tickers, period=period, interval=yf_interval)
+            # Optimization: Try to load from "market_scan_v1" cache ONLY if the list is likely the S&P 500 set.
+            # Blindly using it for any list > 50 is risky if the user scans e.g. Russell 2000 subset.
+            # However, since we don't know the intent, we can check intersection coverage?
+            # For now, we only use it if the cache covers the request.
+            # But calculating coverage requires loading the cache.
+            # Safe heuristics: If list > 400 (likely full scan) OR if we can verify coverage.
+
+            # Revised Strategy:
+            # 1. Try loading master cache if list is large.
+            # 2. If loaded, check if it contains our tickers.
+            # 3. If coverage is poor, discard and download fresh.
+
+            if len(tickers) > 100:
+                cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
+                if not cached.empty:
+                    # Check coverage
+                    # MultiIndex columns (Ticker, Price)
+                    if isinstance(cached.columns, pd.MultiIndex):
+                        available_tickers = cached.columns.levels[0]
+                        # If more than 80% of requested tickers are in cache, use it
+                        intersection = len(set(tickers).intersection(available_tickers))
+                        if intersection / len(tickers) > 0.8:
+                            batch_data = cached
+                    else:
+                        # Flat cache (single ticker?) unlikely for market_scan
+                        pass
+
+            # If no cache or cache empty/insufficient, fetch fresh
+            if batch_data is None:
+                batch_data = fetch_batch_data_safe(tickers, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to batch download ticker data: {e}")
             batch_data = None
@@ -562,8 +593,20 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
     data = None
     if not is_intraday:
         try:
-            # Use safe batch fetch
-            data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
+            # Optimization: Check Master Cache coverage
+            if len(ticker_list) > 100:
+                 cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
+                 if not cached.empty:
+                     # Verify coverage
+                     if isinstance(cached.columns, pd.MultiIndex):
+                         available = cached.columns.levels[0]
+                         intersection = len(set(ticker_list).intersection(available))
+                         if intersection / len(ticker_list) > 0.8:
+                             data = cached
+
+            if data is None:
+                # Use safe batch fetch
+                data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to bulk download for turtle setups: {e}")
             pass
@@ -732,8 +775,19 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
     data = None
     if not is_intraday:
         try:
-            # Use safe batch fetch
-            data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
+            # Optimization: Check Master Cache coverage
+            if len(ticker_list) > 100:
+                 cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
+                 if not cached.empty:
+                     if isinstance(cached.columns, pd.MultiIndex):
+                         available = cached.columns.levels[0]
+                         intersection = len(set(ticker_list).intersection(available))
+                         if intersection / len(ticker_list) > 0.8:
+                             data = cached
+
+            if data is None:
+                # Use safe batch fetch
+                data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to bulk download for 5/13 setups: {e}")
             pass
@@ -927,8 +981,19 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
     data = None
     if not is_intraday:
         try:
-            # Use safe batch fetch
-            data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
+            # Optimization: Check Master Cache coverage
+            if len(ticker_list) > 100:
+                 cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
+                 if not cached.empty:
+                     if isinstance(cached.columns, pd.MultiIndex):
+                         available = cached.columns.levels[0]
+                         intersection = len(set(ticker_list).intersection(available))
+                         if intersection / len(ticker_list) > 0.8:
+                             data = cached
+
+            if data is None:
+                # Use safe batch fetch
+                data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
         except Exception as e:
             logger.error(f"Failed to bulk download for Darvas screener: {e}")
             pass

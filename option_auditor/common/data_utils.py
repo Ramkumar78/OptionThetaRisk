@@ -10,10 +10,17 @@ logger = logging.getLogger(__name__)
 
 CACHE_DIR = "cache_data"
 
-def get_cached_market_data(ticker_list, period="2y", cache_name="sp500"):
+def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp500", force_refresh: bool = False, lookup_only: bool = False):
     """
-    Retrieves data from disk cache if valid (<4 hours old).
-    Otherwise, downloads fresh data, saves it, and returns it.
+    Retrieves data from disk cache if valid (<24 hours for market scans).
+
+    Args:
+        ticker_list: List of tickers to download if cache is missing.
+        period: Data period (e.g. "2y").
+        cache_name: Filename for the cache.
+        force_refresh: If True, ignore cache and re-download.
+        lookup_only: If True, do NOT download if cache is missing/invalid. Return empty DataFrame.
+                     Useful for screeners checking if "master" data is available.
     """
     # Ensure cache directory exists
     if not os.path.exists(CACHE_DIR):
@@ -21,31 +28,68 @@ def get_cached_market_data(ticker_list, period="2y", cache_name="sp500"):
 
     file_path = os.path.join(CACHE_DIR, f"{cache_name}.parquet")
 
-    # 1. Check if Cache is Valid
+    # Determine Validity Duration
+    # For heavy market scans (S&P 500), we allow 24 hours validity to prevent timeouts.
+    # For smaller lists, 4 hours is fine.
+    validity_hours = 24 if "market_scan" in cache_name else 4
+
+    # Check if Cache Exists and Age
+    file_exists = os.path.exists(file_path)
+    file_age = None
     is_valid = False
-    if os.path.exists(file_path):
+    is_stale_but_usable = False
+
+    if file_exists and not force_refresh:
         try:
-            file_age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(file_path))
-            if file_age < timedelta(hours=4): # Cache for 4 hours
+            mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
+            file_age = datetime.now() - mtime
+
+            if file_age < timedelta(hours=validity_hours):
                 is_valid = True
+            elif file_age < timedelta(hours=48):
+                # If cache is between 24h and 48h old, we consider it "stale but usable"
+                # to prevent blocking the user with a massive download (Timeout).
+                # The background worker should eventually refresh it.
+                is_stale_but_usable = True
         except Exception as e:
             logger.warning(f"Error checking cache validity: {e}")
 
-    # 2. FAST PATH: Return Cache
+    # 1. Return Valid Cache
     if is_valid:
         try:
-            logger.info(f"🚀 Loading {cache_name} from cache...")
+            logger.info(f"🚀 Loading {cache_name} from cache (Age: {file_age})...")
             return pd.read_parquet(file_path)
         except Exception:
-            logger.warning("Cache corrupted, re-downloading.")
+            logger.warning("Cache corrupted, will re-download.")
 
-    # 3. SLOW PATH: Download & Save
-    logger.info(f"⏳ Downloading fresh data for {len(ticker_list)} tickers...")
+    # 2. Return Stale Cache (if allowed)
+    if is_stale_but_usable and not force_refresh:
+        try:
+            logger.warning(f"⚠️  Cache {cache_name} is stale ({file_age}). Returning to prevent timeout.")
+            return pd.read_parquet(file_path)
+        except Exception:
+             pass
+
+    # 3. Lookup Only Mode
+    if lookup_only:
+        # If we reached here, cache is missing or too old (>48h) or force_refresh is True (which shouldn't happen with lookup_only usually)
+        # But if force_refresh is True, we proceed to download.
+        # If force_refresh is False, we return empty.
+        if not force_refresh:
+            return pd.DataFrame()
+
+    # 4. SLOW PATH: Download & Save
+    if not ticker_list:
+        logger.warning("No ticker list provided for download.")
+        return pd.DataFrame()
+
+    logger.info(f"⏳ Downloading fresh data for {len(ticker_list)} tickers (Chunked)...")
 
     # Use safe batch fetch
-    all_data = fetch_batch_data_safe(ticker_list, period=period, interval="1d", chunk_size=50)
+    # Chunk size reduced to 30 to prevent timeouts
+    all_data = fetch_batch_data_safe(ticker_list, period=period, interval="1d", chunk_size=30)
 
-    # 4. Save to Disk (The Fix)
+    # 5. Save to Disk
     if not all_data.empty:
         try:
             all_data.to_parquet(file_path)
@@ -75,7 +119,7 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
 
     return pd.DataFrame()
 
-def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=50) -> pd.DataFrame:
+def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=30) -> pd.DataFrame:
     """
     Downloads data for a list of tickers in chunks to avoid Rate Limiting.
     Returns a combined DataFrame or Empty DataFrame on total failure.
