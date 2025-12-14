@@ -804,6 +804,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                 } else if (sortConfig.key === 'cycle') {
                     aValue = a.cycle;
                     bValue = b.cycle;
+                } else if (sortConfig.key === 'atr') {
+                    aValue = a.atr_value;
+                    bValue = b.atr_value;
+                } else if (sortConfig.key === 'breakout_date') {
+                    aValue = a.breakout_date;
+                    bValue = b.breakout_date;
                 }
 
                 if (aValue === undefined || aValue === null) return 1;
@@ -864,6 +870,8 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         {type === 'market' && <HeaderCell label="Company" sortKey="company" />}
                         <HeaderCell label="Price" sortKey="price" align="right" />
                         {type !== 'bull_put' && type !== 'hybrid' && <HeaderCell label="Change" sortKey="change" align="right" />}
+                        <HeaderCell label="ATR" sortKey="atr" align="right" />
+                        <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />
                         {type === 'market' && (
                             <>
                                 <HeaderCell label="RSI" sortKey="rsi" align="right" />
@@ -898,7 +906,6 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 )}
                                 {type === 'isa' && (
                                     <>
-                                        <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />
                                         <HeaderCell label="Breakout Level" sortKey="breakout" align="right" />
                                         <HeaderCell label="Stop (3ATR)" sortKey="stop_loss" align="right" />
                                         <HeaderCell label="Exit (20L)" sortKey="trailing_exit" align="right" />
@@ -969,6 +976,13 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                       {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
                                   </td>
                                 )}
+
+                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                    {row.atr_value ? formatCurrency(row.atr_value, currency) : '-'}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                    {row.breakout_date || '-'}
+                                </td>
 
                                 {type === 'market' && (
                                     <>
@@ -1054,9 +1068,6 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         )}
                                         {type === 'isa' ? (
                                             <>
-                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
-                                                    {row.breakout_date || "N/A"}
-                                                </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-900 dark:text-gray-300">
                                                     {formatCurrency(row.breakout_level, currency)}
                                                 </td>
