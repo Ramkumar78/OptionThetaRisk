@@ -1362,8 +1362,10 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     if ticker_list is None:
-        # Default to liquid lists + Forex proxies
-        ticker_list = ["SPY", "QQQ", "IWM", "GLD", "FXE", "FXY", "MSFT", "AAPL", "NVDA", "TSLA", "AMD", "AMZN", "META", "GOOGL"]
+        # Default to liquid lists + Forex proxies + Watchlist
+        base = ["SPY", "QQQ", "IWM", "GLD", "FXE", "FXY", "MSFT", "AAPL", "NVDA", "TSLA", "AMD", "AMZN", "META", "GOOGL"]
+        watch = SECTOR_COMPONENTS.get("WATCH", [])
+        ticker_list = list(set(base + watch))
 
     # For OTE, we usually want Intraday data to see the displacement clearly.
     # 1h (60m) is a good balance for Swing Trading this model.
@@ -1380,22 +1382,26 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
         period = "1y"
         is_intraday = False
 
+    resample_rule = None
+
+    # Bulk download
+    data = None
+    try:
+        # Use safe batch fetch
+        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
+    except Exception as e:
+        logger.error(f"Failed to batch download for OTE: {e}")
+        return []
+
     results = []
 
     def _process_ote(ticker):
         try:
-            # 1. Fetch Data
-            # We need standard data preparation
-            import yfinance as yf
-            t = yf.Ticker(ticker)
-            df = t.history(period=period, interval=yf_interval, auto_adjust=True)
+            # Prepare data from batch
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            if df.empty or len(df) < 50:
+            if df is None or len(df) < 50:
                 return None
-
-            # Flatten columns if MultiIndex (yfinance fix)
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
 
             curr_close = float(df['Close'].iloc[-1])
 
@@ -1858,6 +1864,9 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     if ticker_list is None:
         if region == "uk_euro":
             ticker_list = get_uk_euro_tickers()
+        elif region == "uk":
+            from option_auditor.uk_stock_data import get_uk_tickers
+            ticker_list = get_uk_tickers()
         elif region == "india":
             ticker_list = get_indian_tickers()
         elif region == "sp500":
