@@ -1880,49 +1880,34 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     results = []
 
     # 1. Fetch Data
-    # For single ticker (Check Stock mode), we use robust retry.
-    if len(ticker_list) == 1:
-        data = fetch_data_with_retry(ticker_list[0], period="2y", interval="1d", auto_adjust=True)
-        # Reformat single df to match loop expectation if needed, or just process directly
-        # The loop expects `data` to be a batch result usually.
-        # Let's just process it directly.
-        ticker = ticker_list[0]
-        df = data
-        # Check if single level
-        if isinstance(df.columns, pd.MultiIndex):
-             # Flatten if needed
-             try:
-                 df.columns = df.columns.get_level_values(0)
-             except: pass
-    else:
-        # Batch mode
-        try:
-            # period="2y" to ensure we have enough for 200 SMA + 50d High
-            # Use safe batch fetch
-            data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d", chunk_size=50)
-        except Exception as e:
-            logger.error(f"Batch download failed for ISA screener: {e}")
-            return []
+    # Use cached loader with region-specific key to prevent bans (especially India)
+    cache_key = f"market_scan_{region}"
+    data = pd.DataFrame()
+
+    try:
+        if len(ticker_list) > 50:
+            # Use robust cached loader for large lists (handles chunking/sleep)
+            data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_key)
+        else:
+            # Small lists can go direct, ensuring threads=True and grouping
+            data = yf.download(ticker_list, period="2y", progress=False, threads=True, auto_adjust=True, group_by='ticker')
+
+    except Exception as e:
+        logger.error(f"Failed to load data for {region}: {e}")
+        return []
+    
+    if data.empty:
+        # Only log error if list wasn't empty to begin with
+        if ticker_list:
+            logger.error("❌ Yahoo returned NO DATA. You might be rate limited.")
+        return []
 
     for ticker in ticker_list:
         try:
-            if len(ticker_list) > 1:
-                # Extract DataFrame for this ticker from batch
-                df = pd.DataFrame()
-                if isinstance(data.columns, pd.MultiIndex):
-                    try:
-                        # check if ticker is in level 0
-                        if ticker in data.columns.levels[0]:
-                            df = data.xs(ticker, axis=1, level=0).copy()
-                        # fallback check
-                        elif ticker in data.columns:
-                             df = data[ticker].copy()
-                    except: continue
-                else:
-                     continue
+            # Robust extraction using shared utility
+            df = _prepare_data_for_ticker(ticker, data, "1d", "2y", "1d", None, False)
 
-            # If single ticker mode, df is already set above if successful, but we need to ensure it's not empty
-            if df.empty: continue
+            if df is None or df.empty: continue
 
             # Clean and validate
             df = df.dropna(how='all')
@@ -2327,7 +2312,7 @@ class StrategyAnalyzer:
         if rsi_val > 70: return "OVERBOUGHT"
         return "NEUTRAL"
 
-def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> list:
+def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
     Robust Hybrid Screener with CHUNKING to prevent API Timeouts.
     Combines ISA Trend Following with Fourier Cycle Analysis.
@@ -2339,10 +2324,16 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
     import numpy as np
 
     if ticker_list is None:
-        if "WATCH" in SECTOR_COMPONENTS:
+        if region == "india":
+             ticker_list = get_indian_tickers() # Assuming this is available in scope (imported)
+        elif "WATCH" in SECTOR_COMPONENTS:
              ticker_list = SECTOR_COMPONENTS["WATCH"]
         else:
              ticker_list = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "TSLA", "AMD", "COIN"]
+        
+        # Merge if using US default to include standard list? 
+        # Actually existing logic was "If list None, check WATCH or default".
+        # If region is India, we want JUST India probably.
 
     results = []
 
@@ -2351,7 +2342,14 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d") -> 
 
     # Check if this is a large scan (e.g., S&P 500)
     is_large_scan = len(ticker_list) > 100
-    cache_name = "market_scan_v1" if is_large_scan else "watchlist_scan"
+    
+    # Determine cache key based on region OR list size
+    if region == "india":
+         cache_name = "market_scan_india"
+    elif is_large_scan:
+         cache_name = "market_scan_v1"
+    else:
+         cache_name = "watchlist_scan"
 
     # Only use cache for daily timeframe (intraday needs fresh data)
     if time_frame == "1d":

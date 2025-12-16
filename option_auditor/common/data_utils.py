@@ -85,9 +85,16 @@ def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp
 
     logger.info(f"⏳ Downloading fresh data for {len(ticker_list)} tickers (Chunked)...")
 
+    # Detect Indian tickers for logging/tuning
+    use_threads = True
+    if ticker_list and len(ticker_list) > 0 and isinstance(ticker_list[0], str):
+        if ticker_list[0].endswith('.NS') or ticker_list[0].endswith('.BO'):
+             logger.info("🇮🇳 Indian tickers detected. Using chunking with sleep for safety.")
+             # Optionally set use_threads = False if needed, but current sleep seems sufficient.
+             
     # Use safe batch fetch
     # Chunk size reduced to 30 to prevent timeouts
-    all_data = fetch_batch_data_safe(ticker_list, period=period, interval="1d", chunk_size=30)
+    all_data = fetch_batch_data_safe(ticker_list, period=period, interval="1d", chunk_size=30, threads=use_threads)
 
     # 5. Save to Disk
     if not all_data.empty:
@@ -119,7 +126,7 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
 
     return pd.DataFrame()
 
-def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=30) -> pd.DataFrame:
+def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=30, threads=True) -> pd.DataFrame:
     """
     Downloads data for a list of tickers in chunks to avoid Rate Limiting.
     Returns a combined DataFrame or Empty DataFrame on total failure.
@@ -137,6 +144,7 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
     for i, chunk in enumerate(chunks):
         try:
             # Randomize sleep slightly to look more human if needed
+            # For India/NSE, a sleep is critical.
             if i > 0:
                 time.sleep(1.0 + random.random() * 0.5)
 
@@ -148,7 +156,7 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
                 group_by='ticker',
                 progress=False,
                 auto_adjust=True,
-                threads=True
+                threads=threads
             )
 
             if not batch.empty:
