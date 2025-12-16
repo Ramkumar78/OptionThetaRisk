@@ -141,7 +141,8 @@ def test_get_storage_provider_sqlite():
         # Ensure AWS/DB env vars are missing
         with patch("webapp.storage.DatabaseStorage") as mock_db:
             get_storage_provider(app)
-            mock_db.assert_called_with("sqlite:////tmp/reports.db")
+            expected_path = os.path.join(app.instance_path, "reports.db")
+            mock_db.assert_called_with(f"sqlite:///{expected_path}")
 
 # --- Database Schema Migration Coverage ---
 
