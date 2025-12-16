@@ -11,19 +11,24 @@ logger = logging.getLogger(__name__)
 def job():
     logger.info("🔄 Background Job: Refreshing S&P 500 Cache...")
     try:
-        tickers = get_sp500_tickers()
-        # Also include WATCH list logic if needed, but the primary big data is SP500.
-        # The prompt says: "Run this script automatically every 4 hours...".
-        # It calls get_cached_market_data with cache_name="market_scan_v1".
-        # We need to make sure we use the same cache_name as in screener.py (sp500 -> market_scan_v1).
+        # 1. S&P 500 (US)
+        tickers_sp500 = get_sp500_tickers()
+        logger.info(f"Refreshing S&P 500 ({len(tickers_sp500)} tickers)...")
+        get_cached_market_data(tickers_sp500, period="2y", cache_name="market_scan_v1", force_refresh=True)
 
-        # The screener logic uses "market_scan_v1" for list > 100.
-        # Since sp500 is > 100, we use "market_scan_v1".
+        # 2. UK 350 (LSE)
+        from option_auditor.uk_stock_data import get_uk_tickers
+        tickers_uk = get_uk_tickers()
+        logger.info(f"Refreshing UK 350 ({len(tickers_uk)} tickers)...")
+        get_cached_market_data(tickers_uk, period="2y", cache_name="market_scan_uk", force_refresh=True)
 
-        # Force refresh logic:
-        # We set force_refresh=True to ensure we download fresh data regardless of cache age.
-        get_cached_market_data(tickers, period="2y", cache_name="market_scan_v1", force_refresh=True)
-        logger.info("✅ Cache Updated.")
+        # 3. UK/Euro (Diversified/Legacy)
+        from option_auditor.screener import get_uk_euro_tickers
+        tickers_euro = get_uk_euro_tickers()
+        logger.info(f"Refreshing UK/Euro ({len(tickers_euro)} tickers)...")
+        get_cached_market_data(tickers_euro, period="2y", cache_name="market_scan_europe", force_refresh=True)
+
+        logger.info("✅ All Caches Updated Successfully.")
     except Exception as e:
         logger.error(f"Cache refresh failed: {e}")
 

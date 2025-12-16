@@ -97,9 +97,13 @@ def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp
     # Detect Indian tickers for logging/tuning
     use_threads = True
     if ticker_list and len(ticker_list) > 0 and isinstance(ticker_list[0], str):
-        if ticker_list[0].endswith('.NS') or ticker_list[0].endswith('.BO'):
+        first = ticker_list[0]
+        if first.endswith('.NS') or first.endswith('.BO'):
              logger.info("🇮🇳 Indian tickers detected. Using chunking with sleep for safety.")
              # Optionally set use_threads = False if needed, but current sleep seems sufficient.
+        elif any(first.endswith(s) for s in ['.L', '.AS', '.DE', '.PA', '.MC', '.MI', '.HE']):
+             logger.info("🇬🇧/🇪🇺 UK/Euro tickers detected. Disabling threads to prevent connection drop.")
+             use_threads = False
              
     # Use safe batch fetch
     # Chunk size reduced to 30 to prevent timeouts

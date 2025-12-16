@@ -2324,15 +2324,25 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     if ticker_list is None:
         if region == "india":
              ticker_list = get_indian_tickers() # Assuming this is available in scope (imported)
+        elif region == "uk" or region == "uk_euro": # Map both to UK/Euro logic or separate?
+             # If "uk", use the new 350 list. If "uk_euro", use the manual one or same?
+             # User asked for "UK 350". Let's map "uk" to that.
+             # Note: "uk_euro" was the previous task. Let's keep it for backward compat or explicit request.
+             if region == "uk":
+                 from option_auditor.uk_stock_data import get_uk_tickers
+                 ticker_list = get_uk_tickers()
+             else:
+                 # diverse list of top UK/EU stocks (Legacy/Fallback)
+                 ticker_list = [
+                     "ASML.AS", "SAP.DE", "MC.PA", "OR.PA", "SIE.DE", "AIR.PA", "TTE.PA", 
+                     "SHEL.L", "AZN.L", "HSBA.L", "LIN.DE", "ULVR.L", "BP.L", "GSK.L", 
+                     "DIAGEO.L", "RIO.L", "DGE.L", "RMS.PA", "AI.PA"
+                 ]
         elif "WATCH" in SECTOR_COMPONENTS:
              ticker_list = SECTOR_COMPONENTS["WATCH"]
         else:
              ticker_list = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "TSLA", "AMD", "COIN"]
         
-        # Merge if using US default to include standard list? 
-        # Actually existing logic was "If list None, check WATCH or default".
-        # If region is India, we want JUST India probably.
-
     results = []
 
     # Use Cache-First Architecture for S&P 500 or large lists
@@ -2344,6 +2354,10 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     # Determine cache key based on region OR list size
     if region == "india":
          cache_name = "market_scan_india"
+    elif region == "uk":
+         cache_name = "market_scan_uk"
+    elif region == "uk_euro":
+         cache_name = "market_scan_europe"
     elif is_large_scan:
          cache_name = "market_scan_v1"
     else:
