@@ -155,47 +155,34 @@ def sqlite_storage():
     yield storage
     storage.close()
 
-def test_schema_migration_logic():
+def test_schema_migration_logic(tmp_path):
     # We want to test the _ensure_schema_migrations logic.
-    # It checks if columns exist and adds them.
-    # Since we create tables with full schema in __init__, columns already exist.
-    # We need to simulate a state where columns are missing.
-
-    # 1. Create DB with limited schema manually?
-    engine = create_engine("sqlite:///:memory:")
-    with engine.connect() as conn:
-        conn.execute(text("CREATE TABLE journal_entries (id TEXT PRIMARY KEY, username TEXT)"))
-        conn.commit()
-
-    # 2. Initialize DatabaseStorage with this engine's URL?
-    # Impossible to share memory DB across engines easily without shared cache?
-    # Actually, for file-based sqlite we can do it.
-
-    db_file = "test_migration.db"
-    if os.path.exists(db_file): os.remove(db_file)
-
+    # Use tmp_path for the DB file to avoid "PermissionError" on cleanup.
+    db_file = tmp_path / "test_migration.db"
+    
+    url = f"sqlite:///{str(db_file)}"
+    engine = create_engine(url)
     try:
-        url = f"sqlite:///{db_file}"
-        engine = create_engine(url)
         with engine.connect() as conn:
              # Create incomplete table
              conn.execute(text("CREATE TABLE journal_entries (id TEXT PRIMARY KEY, username TEXT)"))
              conn.commit()
+    finally:
         engine.dispose()
 
-        # Now init Storage, which should migrate
-        storage = DatabaseStorage(url)
+    # Now init Storage, which should migrate
+    storage = DatabaseStorage(url)
 
+    try:
         # Verify columns exist
         insp = inspect(storage.engine)
         cols = [c['name'] for c in insp.get_columns('journal_entries')]
         assert 'entry_date' in cols
         assert 'entry_time' in cols
         assert 'sentiment' in cols
-
-        storage.close()
+    
     finally:
-        if os.path.exists(db_file): os.remove(db_file)
+        storage.close()
 
 # --- Imports for types ---
 from datetime import datetime, timedelta

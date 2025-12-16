@@ -6,15 +6,17 @@ from unittest.mock import patch, MagicMock
 from option_auditor.common.data_utils import get_cached_market_data, CACHE_DIR
 
 @pytest.fixture
-def clean_cache():
-    if os.path.exists(CACHE_DIR):
-        shutil.rmtree(CACHE_DIR)
-    yield
-    if os.path.exists(CACHE_DIR):
-        shutil.rmtree(CACHE_DIR)
+def mock_cache_dir(tmp_path):
+    # Patch the CACHE_DIR in the module to point to a temporary directory
+    d = tmp_path / "cache_test"
+    d.mkdir()
+    
+    with patch("option_auditor.common.data_utils.CACHE_DIR", str(d)):
+        yield str(d)
 
-def test_get_cached_market_data_creates_cache(clean_cache):
+def test_get_cached_market_data_creates_cache(mock_cache_dir):
     tickers = ["AAPL", "MSFT"]
+    cache_path = os.path.join(mock_cache_dir, "test_cache.parquet")
 
     # Mock fetch_batch_data_safe to return dummy data
     with patch("option_auditor.common.data_utils.fetch_batch_data_safe") as mock_fetch:
@@ -23,8 +25,6 @@ def test_get_cached_market_data_creates_cache(clean_cache):
             "Close": [100.0, 101.0],
             "Volume": [1000, 2000]
         }, index=pd.to_datetime(["2023-01-01", "2023-01-02"]))
-        # Make it look like a multi-index result if needed, or just flat
-        # get_cached_market_data just returns what fetch returns.
         mock_fetch.return_value = df
 
         # 1. First Call: Should fetch and save
@@ -32,7 +32,7 @@ def test_get_cached_market_data_creates_cache(clean_cache):
 
         assert not result1.empty
         assert mock_fetch.call_count == 1
-        assert os.path.exists(os.path.join(CACHE_DIR, "test_cache.parquet"))
+        assert os.path.exists(cache_path)
 
         # 2. Second Call: Should load from cache (fetch not called again)
         result2 = get_cached_market_data(tickers, cache_name="test_cache")

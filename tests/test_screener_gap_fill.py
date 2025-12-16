@@ -160,26 +160,31 @@ def test_resolve_ticker():
 
 def test_screen_trend_followers_isa_single_ticker(mock_yf_download):
     # Test single ticker path
-    mock_yf_download.return_value = pd.DataFrame() # Mock logic is handled inside fetch_data_with_retry mostly
+    # Create valid DF (Mocking yf.download result directly)
+    dates = pd.date_range("2023-01-01", periods=250, freq="D")
+    df = pd.DataFrame({
+        "Open": [100.0]*250, "High": [110.0]*250, "Low": [90.0]*250,
+        "Close": [105.0]*250, "Volume": [10000000]*250
+    }, index=dates)
+    # Ensure trend > 200 SMA (200 SMA of 105 is 105)
+    # Make price slightly higher to trigger entry or hold
+    df.loc[dates[-1], "Close"] = 120.0
+    # Increase Volume to pass liquidity filter (> 5,000,000 dollar vol)
+    # Price 100 * Volume 1000 = 100,000 < 5M. Need more volume.
+    # Set Volume to 100,000
+    df["Volume"] = 100000 
+    
+    # yfinance often returns MultiIndex if group_by='ticker' is used (which it is for single ticker too in my code now)
+    # or if we mocked it to match my new implementation which calls yf.download(..., group_by='ticker')
+    # Let's verify what screener.py does.
+    # For small lists, it calls: `yf.download(ticker_list, ..., group_by='ticker')`
+    # Even for 1 ticker, if group_by='ticker', it returns MultiIndex (Ticker, OHLC).
+    # Construct MultiIndex for robustness
+    cols = pd.MultiIndex.from_product([["AAPL"], df.columns])
+    df.columns = cols
+    
+    mock_yf_download.return_value = df
 
-    # Mock fetch_data_with_retry for single ticker
-    with patch("option_auditor.screener.fetch_data_with_retry") as mock_fetch:
-        # Create valid DF
-        dates = pd.date_range("2023-01-01", periods=250, freq="D")
-        df = pd.DataFrame({
-            "Open": [100.0]*250, "High": [110.0]*250, "Low": [90.0]*250,
-            "Close": [105.0]*250, "Volume": [10000000]*250
-        }, index=dates)
-        # Ensure trend > 200 SMA (200 SMA of 105 is 105)
-        # Make price slightly higher to trigger entry or hold
-        df.loc[dates[-1], "Close"] = 120.0
-        # Increase Volume to pass liquidity filter (> 5,000,000 dollar vol)
-        # Price 100 * Volume 1000 = 100,000 < 5M. Need more volume.
-        # Set Volume to 100,000
-        df["Volume"] = 100000
-
-        mock_fetch.return_value = df
-
-        res = screen_trend_followers_isa(["AAPL"])
-        assert len(res) == 1
-        assert res[0]['ticker'] == "AAPL"
+    res = screen_trend_followers_isa(["AAPL"])
+    assert len(res) == 1
+    assert res[0]['ticker'] == "AAPL"

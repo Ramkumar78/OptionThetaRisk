@@ -2,18 +2,40 @@ import unittest
 from unittest.mock import patch, MagicMock
 import json
 import io
+import os
+import shutil
+import tempfile
 from webapp.app import create_app
 import pytest
 
 class TestWebappCoverageNew(unittest.TestCase):
     def setUp(self):
+        # Create a temp dir for static files
+        self.test_static_dir = tempfile.mkdtemp()
+        
+        # Patch create_app or config to use this static dir?
+        # Flask static_folder is set at creation.
+        # We can pass static_folder to Flask constructor if create_app allows.
+        # But create_app usually hardcodes it or uses default.
+        # We can patch os.path.join or similar if needed, OR mock self.app.static_folder AFTER creation (for some uses).
+        # But `send_from_directory` uses the app's config or passed path.
+        
+        # In test_static_files: `build_dir = os.path.join(self.app.static_folder, "react_build")`
+        # We can just MonkeyPatch self.app.static_folder!
+        
         self.app = create_app(testing=True)
         self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app.static_folder = self.test_static_dir # Override for test safety
+        
         self.client = self.app.test_client()
 
         # Setup session
         with self.client.session_transaction() as sess:
             sess['username'] = 'testuser'
+
+    def tearDown(self):
+        # Cleanup temp dir
+        shutil.rmtree(self.test_static_dir, ignore_errors=True)
 
     def test_health_check(self):
         response = self.client.get('/health')
@@ -88,18 +110,24 @@ class TestWebappCoverageNew(unittest.TestCase):
 
     def test_static_files(self):
         # Setup dummy file in static/react_build
-        import os
+        # Using self.app.static_folder which is now a temp dir
         build_dir = os.path.join(self.app.static_folder, "react_build")
         os.makedirs(build_dir, exist_ok=True)
-        with open(os.path.join(build_dir, "test.txt"), "w") as f:
+        
+        file_path = os.path.join(build_dir, "test.txt")
+        with open(file_path, "w") as f:
             f.write("static content")
 
+        # Flask test client static file serving depends on static_url_path (usually /static)
+        # But if we request /test.txt, it might be served if configured as root? 
+        # Or if we use send_from_directory manually in route.
+        # Assuming the app has a route serving from static:
+        
+        # Check if previous test used '/test.txt'. Yes.
+        # This implies a route like `@app.route('/<path:path>')` serving from static.
         response = self.client.get('/test.txt')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, b"static content")
-
-        # Clean up
-        os.remove(os.path.join(build_dir, "test.txt"))
 
     def test_catch_all_route(self):
         # Should return index.html for unknown routes (React Router)
