@@ -22,11 +22,6 @@ try:
 except ImportError:
     def get_sp500_tickers(): return []
 
-try:
-    from option_auditor.india_stock_data import get_indian_tickers_list
-except ImportError:
-    def get_indian_tickers_list(): return []
-
 # Update with S&P 500 Names if available in constants?
 # Constants.py updates TICKER_NAMES with SP500_NAMES already.
 
@@ -578,14 +573,17 @@ def get_uk_euro_tickers():
     """Returns normalized UK/Euro tickers list."""
     return list(set(UK_EURO_TICKERS))
 
+INDIAN_TICKERS = [
+    # Nifty 50
+    "RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK", "INFY", "HINDUNILVR", "SBIN", "ITC", "LTIM", "LT", "HCLTECH", "BAJFINANCE", "AXISBANK", "MARUTI", "ULTRACEMCO", "SUNPHARMA", "M&M", "TITAN", "KOTAKBANK", "ADANIENT", "TATAMOTORS", "NTPC", "TATASTEEL", "POWERGRID", "ASIANPAINT", "JSWSTEEL", "BAJAJFINSV", "NESTLEIND", "GRASIM", "ONGC", "TECHM", "HINDALCO", "ADANIPORTS", "CIPLA", "WIPRO", "SBILIFE", "DRREDDY", "BRITANNIA", "TATACONSUM", "COALINDIA", "APOLLOHOSP", "EICHERMOT", "INDUSINDBK", "DIVISLAB", "BAJAJ-AUTO", "HDFCLIFE", "HEROMOTOCO", "BEL", "SHRIRAMFIN",
+    # Nifty Next 50
+    "LICI", "HAL", "ADANIPOWER", "DMART", "VBL", "JIOFIN", "SIEMENS", "TRENT", "ZOMATO", "ADANIGREEN", "IOC", "DLF", "VEDL", "BANKBARODA", "GAIL", "AMBUJACEM", "CHOLAFIN", "HAVELLS", "ABB", "PIDILITIND", "GODREJCP", "DABUR", "SHREECEM", "PNB", "BPCL", "SBICARD", "SRF", "MOTHERSON", "ICICIPRULI", "MARICO", "BERGEPAINT", "ICICIGI", "TVSMOTOR", "NAUKRI", "LODHA", "BOSCHLTD", "INDIGO", "CANBK", "UNITDSPR", "TORNTPHARM", "PIIND", "UPL", "JINDALSTEL", "ALKEM", "ZYDUSLIFE", "COLPAL", "BAJAJHLDNG", "TATAPOWER", "IRCTC", "MUTHOOTFIN"
+]
+
 def get_indian_tickers():
     """Returns normalized Indian tickers list."""
     # Append .NS for NSE
-    tickers = get_indian_tickers_list()
-    # Fallback if list is empty
-    if not tickers:
-        return []
-    return [t + ".NS" for t in tickers]
+    return [t + ".NS" for t in INDIAN_TICKERS]
 
 def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
     """
