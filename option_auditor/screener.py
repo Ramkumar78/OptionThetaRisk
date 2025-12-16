@@ -2345,13 +2345,13 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
         
     results = []
 
-    # Use Cache-First Architecture for S&P 500 or large lists
-    all_data = pd.DataFrame()
+    # Sort out Cache Logic
+    is_large_scan = False
+    if ticker_list and len(ticker_list) > 100: is_large_scan = True
 
-    # Check if this is a large scan (e.g., S&P 500)
-    is_large_scan = len(ticker_list) > 100
-    
-    # Determine cache key based on region OR list size
+    print(f"DEBUG: screen_hybrid_strategy region={region} ticker_len={len(ticker_list) if ticker_list else 0}", flush=True)
+
+    cache_name = "watchlist_scan"
     if region == "india":
          cache_name = "market_scan_india"
     elif region == "uk":
@@ -2360,19 +2360,22 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
          cache_name = "market_scan_europe"
     elif is_large_scan:
          cache_name = "market_scan_v1"
-    else:
-         cache_name = "watchlist_scan"
+
+    print(f"DEBUG: using cache_name={cache_name}", flush=True)
 
     # Only use cache for daily timeframe (intraday needs fresh data)
     if time_frame == "1d":
         all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     else:
-        # Fallback to direct download for intraday
-        try:
-            # Safe batch fetch
-            all_data = fetch_batch_data_safe(ticker_list, period="2y", interval=time_frame, chunk_size=50)
-        except Exception as e:
-            logger.error(f"Data fetch failed: {e}")
+        # Intraday
+        all_data = fetch_batch_data_safe(ticker_list, period="5d", interval=time_frame)
+
+    print(f"DEBUG: all_data type={type(all_data)} empty={all_data.empty if isinstance(all_data, pd.DataFrame) else 'N/A'}", flush=True)
+    if isinstance(all_data, pd.DataFrame):
+         print(f"DEBUG: all_data columns={all_data.columns}", flush=True)
+
+    # Logic cleaned up - duplicate block removed
+    # Logic cleaned up - duplicate block removed
 
     # Process Data
     # Get list of successfully downloaded tickers

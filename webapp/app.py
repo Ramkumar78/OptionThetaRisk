@@ -12,6 +12,8 @@ from flask import Flask, request, redirect, url_for, flash, send_file, session, 
 
 from option_auditor import analyze_csv, screener, journal_analyzer
 from option_auditor.main_analyzer import refresh_dashboard_data
+from option_auditor.uk_stock_data import get_uk_tickers
+from option_auditor.uk_stock_data import get_uk_tickers
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
@@ -274,6 +276,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
@@ -397,7 +401,11 @@ def create_app(testing: bool = False) -> Flask:
                 return jsonify(cached)
 
             ticker_list = None
-            if region == "sp500":
+            if region == "uk_euro":
+                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                 ticker_list = get_uk_tickers()
+            elif region == "sp500":
                  # Bull Puts benefit from high volume.
                  # Trend filter? Bull Puts are bullish strategies, so >200SMA makes sense.
                  # Let's apply trend filter.
@@ -425,6 +433,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
@@ -453,6 +463,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
@@ -481,6 +493,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
@@ -497,6 +511,7 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/hybrid", methods=["GET"])
     def screen_hybrid():
         try:
+            print(f"DEBUG APP: url={request.url} args={request.args}", flush=True)
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
 
@@ -508,6 +523,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
@@ -517,7 +534,7 @@ def create_app(testing: bool = False) -> Flask:
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                 ticker_list = list(set(raw_sp500 + watch_list))
 
-            results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=time_frame)
+            results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=time_frame, region=region)
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
@@ -567,6 +584,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
@@ -595,6 +614,8 @@ def create_app(testing: bool = False) -> Flask:
             ticker_list = None
             if region == "uk_euro":
                 ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
