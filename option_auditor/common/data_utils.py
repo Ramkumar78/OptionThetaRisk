@@ -10,6 +10,15 @@ logger = logging.getLogger(__name__)
 
 CACHE_DIR = "cache_data"
 
+# Fix for yfinance TzCache permission issues in Docker
+try:
+    tz_cache_path = os.path.join(CACHE_DIR, "tk_cache")
+    if not os.path.exists(tz_cache_path):
+        os.makedirs(tz_cache_path, exist_ok=True)
+    yf.set_tz_cache_location(tz_cache_path)
+except Exception as e:
+    logger.warning(f"Failed to set yfinance cache location: {e}")
+
 def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp500", force_refresh: bool = False, lookup_only: bool = False):
     """
     Retrieves data from disk cache if valid (<24 hours for market scans).

@@ -12,4 +12,5 @@ INDIAN_TICKERS_RAW = [
 def get_indian_tickers_list():
     # Remove duplicates
     unique = sorted(list(set(INDIAN_TICKERS_RAW)))
-    return unique
+    # Reduce to 250 to avoid silent bans during debugging
+    return unique[:250]
