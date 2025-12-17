@@ -36,21 +36,35 @@ export const runFourierScreener = async (region: string, timeFrame: string) => {
 };
 
 export const runIsaTrendScreener = async (region: string) => {
-    const response = await api.get('/screen/isa', {
-        params: { region }
-    });
-    return response.data;
+  const response = await api.get('/screen/isa', {
+    params: { region }
+  });
+  return response.data;
 };
 
 export const checkIsaStock = async (ticker: string, entryPrice?: string) => {
-    const params: any = { ticker };
-    if (entryPrice) {
-        params.entry_price = entryPrice;
-    }
-    const response = await api.get('/screen/isa/check', {
-        params
-    });
-    return response.data;
+  const params: any = { ticker };
+  if (entryPrice) {
+    params.entry_price = entryPrice;
+  }
+  const response = await api.get('/screen/isa/check', {
+    params
+  });
+  return response.data;
+};
+
+export const checkUnifiedStock = async (ticker: string, strategy: string, timeFrame: string, entryPrice?: string, entryDate?: string) => {
+  const params: any = { ticker, strategy, time_frame: timeFrame };
+  if (entryPrice) {
+    params.entry_price = entryPrice;
+  }
+  if (entryDate) {
+    params.entry_date = entryDate;
+  }
+  const response = await api.get('/screen/check', {
+    params
+  });
+  return response.data;
 };
 
 export const runMmsScreener = async (region: string, timeFrame: string) => {

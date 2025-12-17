@@ -8,6 +8,7 @@ import time
 import json
 from typing import Optional
 
+import yfinance as yf
 from flask import Flask, request, redirect, url_for, flash, send_file, session, jsonify, send_from_directory, g
 
 from option_auditor import analyze_csv, screener, journal_analyzer
@@ -631,6 +632,142 @@ def create_app(testing: bool = False) -> Flask:
             results = screener.screen_universal_dashboard(ticker_list=ticker_list)
             cache_screener_result(cache_key, results)
             return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/screen/check", methods=["GET"])
+    def check_unified_stock():
+        try:
+            ticker_query = request.args.get("ticker", "").strip()
+            strategy = request.args.get("strategy", "isa").lower()
+            time_frame = request.args.get("time_frame", "1d")
+            entry_price_str = request.args.get("entry_price", "").strip()
+            entry_date_str = request.args.get("entry_date", "").strip()
+            
+            if not ticker_query:
+                return jsonify({"error": "No ticker provided"}), 400
+
+            # Resolve ticker
+            ticker = screener.resolve_ticker(ticker_query)
+            if not ticker:
+                ticker = ticker_query.upper()
+
+            # Parse entry price
+            entry_price = None
+            if entry_price_str:
+                try:
+                    entry_price = float(entry_price_str)
+                except:
+                    pass
+            
+            # If no price but date provided, fetch close
+            if entry_price is None and entry_date_str:
+                 try:
+                     dt = datetime.strptime(entry_date_str, "%Y-%m-%d")
+                     # Fetch history: Use yfinance directly or helper
+                     # Start date is inclusive, fetch a few days to ensure we hit a trading day
+                     hist = yf.download(ticker, start=dt, end=dt + timedelta(days=5), progress=False)
+                     if not hist.empty:
+                        # Use the first available Close (closest to subsequent days if holiday)
+                        # Accessing 'Close' which might be multi-index if multi-ticker, but here single ticker
+                        try:
+                            # yfinance>=0.2 returns columns (Price, Ticker) sometimes?
+                            # Usually simple dataframe for single ticker
+                            val = hist['Close'].iloc[0]
+                            # If val is Series (multi-ticker), take it, but we requested one ticker
+                            if hasattr(val, 'item'):
+                                entry_price = float(val.item())
+                            else:
+                                entry_price = float(val)
+                        except Exception as inner:
+                            print(f"Error accessing Close price: {inner}")
+                            pass
+                 except Exception as e:
+                     print(f"Error fetching historical price for {ticker} on {entry_date_str}: {e}")
+                     pass
+
+            # Dispatch Strategy
+            results = []
+            if strategy == "isa":
+                results = screener.screen_trend_followers_isa(ticker_list=[ticker])
+            elif strategy == "turtle":
+                results = screener.screen_turtle_setups(ticker_list=[ticker], time_frame=time_frame)
+            elif strategy == "darvas":
+                results = screener.screen_darvas_box(ticker_list=[ticker], time_frame=time_frame)
+            elif strategy == "ema":
+                results = screener.screen_5_13_setups(ticker_list=[ticker], time_frame=time_frame)
+            elif strategy == "bull_put":
+                results = screener.screen_bull_put_spreads(ticker_list=[ticker])
+            elif strategy == "hybrid":
+                results = screener.screen_hybrid_strategy(ticker_list=[ticker], time_frame=time_frame)
+            elif strategy == "mms":
+                # MMS/OTE
+                results = screener.screen_mms_ote_setups(ticker_list=[ticker], time_frame=time_frame)
+            elif strategy == "fourier":
+                 results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame=time_frame)
+            elif strategy == "master":
+                 # Master convergence might not support single ticker easily if it relies on huge pre-load?
+                 # But commonly it just intersects others.
+                 # Let's try calling it or fallback.
+                 # Currently screen_master_convergence loads sector components. 
+                 # We'd need to refactor it to accept list or just run it and filter.
+                 # For now, return error or not supported.
+                 return jsonify({"error": "Master strategy does not support single stock check yet."}), 400
+            else:
+                return jsonify({"error": f"Unknown strategy: {strategy}"}), 400
+
+            if not results:
+                 return jsonify({"error": f"No data returned for {ticker} with strategy {strategy}."}), 404
+
+            result = results[0]
+
+            # Enrich with PnL if Entry Price Provided
+            if entry_price and result.get('price'):
+                curr = result['price']
+                result['pnl_value'] = curr - entry_price
+                result['pnl_pct'] = ((curr - entry_price) / entry_price) * 100
+                result['user_entry_price'] = entry_price
+
+                # Logic: If user is holding, provide context
+                signal = str(result.get('signal', 'WAIT')).upper()
+                
+                # Check specifics
+                if strategy == "isa":
+                    stop_exit = result.get('trailing_exit_20d', 0)
+                    if curr <= stop_exit:
+                         result['user_verdict'] = "🛑 EXIT (Stop Hit - Below 20d Low)"
+                    elif "SELL" in signal or "AVOID" in signal:
+                         result['user_verdict'] = "🛑 EXIT (Trend Reversed)"
+                    else:
+                         result['user_verdict'] = "✅ HOLD (Trend Valid)"
+                
+                elif strategy == "turtle":
+                    # Turtle has stop loss in result usually
+                    sl = result.get('stop_loss', 0)
+                    if curr < sl:
+                         result['user_verdict'] = "🛑 EXIT (Stop Loss Hit)"
+                    else:
+                         result['user_verdict'] = "✅ HOLD (Above Stop)"
+
+                elif strategy == "ema":
+                    # 5/13 Cross? 
+                    # If signal is SELL, exit.
+                    if "SELL" in signal:
+                         result['user_verdict'] = "🛑 EXIT (Bearish Cross)"
+                    else:
+                         result['user_verdict'] = "✅ HOLD (Momentum)"
+
+                # Fallback
+                if 'user_verdict' not in result:
+                    if "BUY" in signal or "GREEN" in signal or "BREAKOUT" in signal:
+                         result['user_verdict'] = "✅ HOLD (Signal Active)"
+                    elif "SELL" in signal or "SHORT" in signal:
+                         result['user_verdict'] = "🛑 EXIT (Signal Bearish)"
+                    else:
+                         result['user_verdict'] = "👀 WATCH (Neutral)"
+            
+            return jsonify(result)
+
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 

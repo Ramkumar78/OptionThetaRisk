@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkIsaStock, runFourierScreener, runHybridScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkUnifiedStock, runFourierScreener, runHybridScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 // Import Chart.js (already in package) for Pie Chart if needed, or simple visual
@@ -119,8 +119,8 @@ const Screener: React.FC<ScreenerProps> = () => {
     const [checkTicker, setCheckTicker] = useState('');
     const [checkEntryPrice, setCheckEntryPrice] = useState('');
     const [checkResult, setCheckResult] = useState<any>(null);
-    const [checkError, setCheckError] = useState<string | null>(null);
     const [checkLoading, setCheckLoading] = useState(false);
+    const [checkEntryDate, setCheckEntryDate] = useState('');
     const [tableFilter, setTableFilter] = useState('');
 
     // Fourier Specific State
@@ -209,7 +209,10 @@ const Screener: React.FC<ScreenerProps> = () => {
         setCheckResult(null);
         setCheckError(null);
         try {
-            const data = await checkIsaStock(checkTicker, checkEntryPrice);
+            // Use activeTab as strategy
+            const strategy = activeTab;
+            // Use checkUnifiedStock
+            const data = await checkUnifiedStock(checkTicker, strategy, strategyTimeFrame, checkEntryPrice, checkEntryDate);
             setCheckResult(data);
         } catch (err: any) {
             setCheckError(err.message || 'Check failed');
@@ -397,18 +400,18 @@ const Screener: React.FC<ScreenerProps> = () => {
                         </>
                     )}
 
-                    {activeTab === 'isa' && (
+                    {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier'].includes(activeTab) && (
                         <div className="col-span-1 md:col-span-3 space-y-4">
                             <div className="flex items-end gap-4">
                                 <div className="flex-1">
-                                    <label htmlFor="check-stock" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Check a Stock</label>
+                                    <label htmlFor="check-stock" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Check Individual Stock</label>
                                     <form onSubmit={handleCheckStock} className="flex gap-2">
                                         <input
                                             type="text"
                                             id="check-stock"
                                             value={checkTicker}
                                             onChange={(e) => setCheckTicker(e.target.value)}
-                                            placeholder="Enter Ticker (e.g. AAPL, TSLA) or Name"
+                                            placeholder="Enter Ticker (e.g. AAPL)"
                                             className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                                         />
                                         <input
@@ -418,6 +421,13 @@ const Screener: React.FC<ScreenerProps> = () => {
                                             onChange={(e) => setCheckEntryPrice(e.target.value)}
                                             placeholder="Entry Price (Opt.)"
                                             className="w-32 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                        />
+                                        <input
+                                            type="date"
+                                            value={checkEntryDate}
+                                            onChange={(e) => setCheckEntryDate(e.target.value)}
+                                            placeholder="Entry Date"
+                                            className="w-40 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                                         />
                                         <button
                                             type="submit"
@@ -433,89 +443,46 @@ const Screener: React.FC<ScreenerProps> = () => {
                             {checkResult && (
                                 <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                     <h4 className="text-md font-bold text-gray-900 dark:text-white mb-2">{checkResult.company_name} ({checkResult.ticker})</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                                         <div>
                                             <span className="text-gray-500 dark:text-gray-400 block">Signal</span>
-                                            <span className={clsx("font-bold", checkResult.signal.includes('ENTER') ? "text-emerald-600" : checkResult.signal.includes('EXIT') ? "text-orange-600" : checkResult.signal.includes('SELL') ? "text-red-600" : "text-blue-600")}>
-                                                {checkResult.signal}
+                                            <span className={clsx("font-bold", (checkResult.signal || "").toString().toUpperCase().includes('ENTER') || (checkResult.signal || "").toString().toUpperCase().includes('BUY') ? "text-emerald-600" : (checkResult.signal || "").toString().toUpperCase().includes('EXIT') || (checkResult.signal || "").toString().toUpperCase().includes('SELL') ? "text-red-600" : "text-blue-600")}>
+                                                {checkResult.signal || "N/A"}
                                             </span>
                                         </div>
                                         <div>
                                             <span className="text-gray-500 dark:text-gray-400 block">Price</span>
-                                            <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(checkResult.price, getCurrencySymbol(checkResult.ticker))}</span>
+                                            <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(checkResult.price || checkResult.Close, getCurrencySymbol(checkResult.ticker))}</span>
                                         </div>
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Stop Loss (3ATR)</span>
-                                            <span className="font-mono text-red-600 dark:text-red-400 font-bold">{formatCurrency(checkResult.stop_loss_3atr, getCurrencySymbol(checkResult.ticker))}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Risk/Share</span>
-                                            <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(checkResult.risk_per_share, getCurrencySymbol(checkResult.ticker))}</span>
-                                        </div>
+                                        {checkResult.pnl_value !== undefined && (
+                                            <div>
+                                                <span className="text-gray-500 dark:text-gray-400 block">PnL</span>
+                                                <span className={clsx("font-mono font-bold", checkResult.pnl_value >= 0 ? "text-emerald-600" : "text-red-600")}>
+                                                    {checkResult.pnl_value >= 0 ? "+" : ""}{formatCurrency(checkResult.pnl_value, getCurrencySymbol(checkResult.ticker))} ({parseFloat(checkResult.pnl_pct).toFixed(2)}%)
+                                                </span>
+                                            </div>
+                                        )}
+                                        {checkResult.user_verdict && (
+                                            <div>
+                                                <span className="text-gray-500 dark:text-gray-400 block">Verdict</span>
+                                                <span className="font-bold text-gray-900 dark:text-white">{checkResult.user_verdict}</span>
+                                            </div>
+                                        )}
                                     </div>
+                                    {checkResult.cycle_position && (
+                                        <div className="mt-2 text-xs text-gray-500">
+                                            Cycle: {checkResult.cycle_position} ({checkResult.cycle_period})
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <div className="flex items-center text-sm text-gray-500 italic">
-                                Strategy: Long Only Trend Following. Risk: 1% per trade. Position: 4% of Account.
+                                Strategy: {screenerInfo[activeTab]?.title || activeTab}.
                             </div>
                         </div>
                     )}
 
-                    {activeTab === 'fourier' && (
-                        <div className="col-span-1 md:col-span-3 space-y-4">
-                            <div className="flex items-end gap-4">
-                                <div className="flex-1">
-                                    <label htmlFor="check-fourier" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Analyze Cycles</label>
-                                    <form onSubmit={handleCheckFourier} className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            id="check-fourier"
-                                            value={fourierTicker}
-                                            onChange={(e) => setFourierTicker(e.target.value)}
-                                            placeholder="Enter Ticker (e.g. AAPL)"
-                                            className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={fourierCheckLoading || !fourierTicker.trim()}
-                                            className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 font-medium rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                        >
-                                            {fourierCheckLoading ? 'Analyzing...' : 'Analyze'}
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                            {fourierCheckError && <div className="text-red-600 text-sm">{fourierCheckError}</div>}
-                            {fourierCheckResult && (
-                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <h4 className="text-md font-bold text-gray-900 dark:text-white mb-2">{fourierCheckResult.company_name} ({fourierCheckResult.ticker})</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Signal</span>
-                                            <span className={clsx("font-bold", fourierCheckResult.signal.includes('Buy') ? "text-emerald-600" : fourierCheckResult.signal.includes('Sell') ? "text-red-600" : "text-gray-600")}>
-                                                {fourierCheckResult.signal}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Cycle Position</span>
-                                            <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{fourierCheckResult.cycle_position}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Period</span>
-                                            <span className="font-mono text-gray-900 dark:text-white">{fourierCheckResult.cycle_period}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Price</span>
-                                            <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(fourierCheckResult.price, getCurrencySymbol(fourierCheckResult.ticker))}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="flex items-center text-sm text-gray-500 italic bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-100 dark:border-blue-800">
-                                ℹ️ Fourier Analysis decomposes price action into sine waves to find the dominant cycle. Buy at Troughs (-1.0), Sell at Peaks (+1.0). Best for range-bound markets.
-                            </div>
-                        </div>
-                    )}
+
 
                     {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid' || activeTab === 'master') && (
                         <>
