@@ -662,7 +662,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                                                     activeTab === 'isa' ? 'Trend Follower (ISA)' :
                                                         activeTab === 'fourier' ? 'Harmonic Cycle (Fourier)' :
                                                             activeTab === 'hybrid' ? 'Hybrid (Trend + Cycle)' :
-                                                                activeTab === 'market' ? 'Master Convergence' :
+                                                                activeTab === 'master' ? 'Master Convergence' :
                                                                     '5/13 EMA Setups'}
                                 </h3>
                                 <input
