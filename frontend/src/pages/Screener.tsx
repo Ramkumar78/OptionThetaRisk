@@ -122,12 +122,7 @@ const Screener: React.FC<ScreenerProps> = () => {
     const [checkLoading, setCheckLoading] = useState(false);
     const [checkEntryDate, setCheckEntryDate] = useState('');
     const [tableFilter, setTableFilter] = useState('');
-
-    // Fourier Specific State
-    const [fourierTicker, setFourierTicker] = useState('');
-    const [fourierCheckResult, setFourierCheckResult] = useState<any>(null);
-    const [fourierCheckError, setFourierCheckError] = useState<string | null>(null);
-    const [fourierCheckLoading, setFourierCheckLoading] = useState(false);
+    const [checkError, setCheckError] = useState<string | null>(null);
 
     // Fake Loading Progress Logic
     useEffect(() => {
@@ -218,24 +213,6 @@ const Screener: React.FC<ScreenerProps> = () => {
             setCheckError(err.message || 'Check failed');
         } finally {
             setCheckLoading(false);
-        }
-    };
-
-    const handleCheckFourier = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!fourierTicker.trim()) return;
-        setFourierCheckLoading(true);
-        setFourierCheckResult(null);
-        setFourierCheckError(null);
-        try {
-            const response = await fetch(`/screen/fourier?ticker=${encodeURIComponent(fourierTicker)}`);
-            if (!response.ok) throw new Error("Not found or error");
-            const data = await response.json();
-            setFourierCheckResult(data);
-        } catch (err: any) {
-            setFourierCheckError(err.message || 'Check failed');
-        } finally {
-            setFourierCheckLoading(false);
         }
     };
 
