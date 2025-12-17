@@ -73,6 +73,7 @@ class TastytradeParser(TransactionParser):
         out["asset_type"] = np.where(is_stock, "STOCK", "OPT")
 
         # Clean up 'right' for stock
+        out["right"] = out["right"].astype(object)
         out.loc[out["asset_type"] == "STOCK", "right"] = ""
 
         # Price & Proceeds
@@ -263,6 +264,7 @@ class ManualInputParser(TransactionParser):
         out["asset_type"] = np.where(is_opt, "OPT", "STOCK")
 
         # Reset right for stock
+        out["right"] = out["right"].astype(object)
         out.loc[~is_opt, "right"] = ""
 
         multiplier = np.where(out["asset_type"] == "STOCK", 1.0, 100.0)
@@ -354,6 +356,7 @@ class IBKRParser(TransactionParser):
             out["asset_type"] = np.where(out["right"].isin(["C", "P"]), "OPT", "STOCK")
 
         # Ensure 'right' is empty for STOCK
+        out["right"] = out["right"].astype(object)
         out.loc[out["asset_type"] == "STOCK", "right"] = ""
 
         if proceeds_col:
