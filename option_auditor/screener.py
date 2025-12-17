@@ -681,7 +681,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
         try:
             df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            if df is None or len(df) < 21:
+            min_length = 21 if check_mode else 21 # Turtle needs 20 bars for Donchian
+            if df is None or len(df) < min_length:
                 continue
 
             # --- TURTLE & DARVAS CALCULATIONS ---
@@ -751,6 +752,18 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
+            # Additional Calcs for Consistency
+            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+
+            # Risk/Reward calculation
+            invalidation_level = stop_loss
+            target_level = target
+            potential_risk = curr_close - invalidation_level
+            potential_reward = target_level - curr_close
+            rr_ratio = potential_reward / potential_risk if potential_risk > 0 else 0.0
+
             if check_mode or signal != "WAIT":
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
@@ -762,13 +775,13 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
                     "pct_change_1d": pct_change_1d,
                     "signal": signal,
                     "breakout_level": prev_high,
-                    "stop_loss": stop_loss,
-                    "target": target,
-                    "atr": atr,
-                    "atr_value": round(atr, 2),
-                    "volatility_pct": round(volatility_pct, 2),
-                    "risk_per_share": abs(buy_price - stop_loss),
-                    "breakout_date": breakout_date
+                    "stop_loss": invalidation_level,
+                    "target": target_level,
+                    "risk_reward": f"1:{rr_ratio:.2f}",
+                    "atr": round(current_atr, 2),
+                    "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                    "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                    "sector_change": pct_change_1d # Returning stocks own change as placeholder for now as sector mapping requires fetching sector ticker
                 })
 
         except Exception as e:
@@ -859,7 +872,8 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
         try:
             df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            if df is None or len(df) < 22: # Need 21 for EMA 21
+            min_length = 22 if check_mode else 22 # Need 21 for EMA 21
+            if df is None or len(df) < min_length:
                 continue
 
             # --- EMA CALCULATIONS ---
@@ -883,6 +897,12 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
             curr_close = float(df['Close'].iloc[-1])
             volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
+            # Calc ATR, 52wk
+            # current_atr is already calculated above
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+            
+            # --- SIGNAL GENERATION ---
             signal = "WAIT"
             status_color = "gray"
             stop_loss = 0.0
@@ -951,6 +971,10 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
 
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
+            
+            # Additional Calcs for Consistency
+            # current_atr is already calculated above
+            # high_52wk and low_52wk are already calculated above
 
             if check_mode or signal != "WAIT":
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
@@ -968,7 +992,11 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
                     "ema_21": curr_21,
                     # Stop Loss usually strictly below the slow EMA line
                     "stop_loss": stop_loss,
-                    "atr_value": round(current_atr, 2),
+                    "atr_value": round(current_atr, 2), # Key was different in 5/13, standardizing or adding both? Keeping original key 'atr_value' but adding 'atr' for unified UI
+                    "atr": round(current_atr, 2),
+                    "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                    "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                    "sector_change": pct_change_1d,
                     "volatility_pct": round(volatility_pct, 2),
                     "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100,
                     "breakout_date": breakout_date
@@ -1062,7 +1090,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
         try:
             df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            if df is None or len(df) < 50:
+            min_length = 50 if check_mode else 50 # Darvas needs enough history for pivots
+            if df is None or len(df) < min_length:
                 return None
 
             curr_close = float(df['Close'].iloc[-1])
@@ -1165,6 +1194,13 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                 # We are likely "In Formation".
                 pass
 
+            # Calc ATR, 52wk
+            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+            pct_change_1d = ((curr_close - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
+            
+            # --- SIGNAL GENERATION ---
             signal = "WAIT"
 
             # 3. Check for Breakout
@@ -1194,14 +1230,17 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
 
             # 4. Volume Filter (for Breakouts)
             is_valid_volume = True
+            vol_ma_ratio = 1.0
             if "BREAKOUT" in signal and not check_mode:
                 # Volume > 150% of 20-day MA
                 vol_ma = np.mean(volumes[-21:-1]) if len(volumes) > 21 else np.mean(volumes)
-                if vol_ma > 0 and curr_volume < vol_ma * 1.2: # Relaxed to 1.2x
-                    # signal += " (Low Vol)"
-                    # Maybe filter it out strictly?
-                    # Darvas insisted on volume.
-                    is_valid_volume = False
+                if vol_ma > 0:
+                    vol_ma_ratio = curr_volume / vol_ma
+                    if curr_volume < vol_ma * 1.2: # Relaxed to 1.2x
+                        # signal += " (Low Vol)"
+                        # Maybe filter it out strictly?
+                        # Darvas insisted on volume.
+                        is_valid_volume = False
 
             if not is_valid_volume and not check_mode:
                 return None
@@ -1215,16 +1254,14 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                      pass
 
             # Calculate metrics
-            pct_change_1d = None
-            if len(df) >= 2:
-                 pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
+            # pct_change_1d is already calculated above
 
-            atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1]
-            volatility_pct = (atr / curr_close * 100) if curr_close > 0 else 0.0
+            # atr is already calculated as current_atr
+            volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
-            stop_loss = floor if floor else (ceiling - 2*atr if ceiling else curr_close * 0.95)
+            stop_loss = floor if floor else (ceiling - 2*current_atr if ceiling else curr_close * 0.95)
             # Target = Breakout + Box Height
-            box_height = (ceiling - floor) if (ceiling and floor) else (4 * atr)
+            box_height = (ceiling - floor) if (ceiling and floor) else (4 * current_atr)
             target = ceiling + box_height if ceiling else curr_close * 1.2
 
             base_ticker = ticker.split('.')[0]
@@ -1247,10 +1284,14 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                 "stop_loss": stop_loss,
                 "target_price": target,
                 "high_52w": period_high,
-                "atr_value": round(atr, 2),
+                "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
-                "volume_ratio": (curr_volume / np.mean(volumes[-21:-1])) if len(volumes) > 21 else 1.0,
-                "breakout_date": breakout_date
+                "volume_ratio": round(vol_ma_ratio, 2),
+                "breakout_date": breakout_date,
+                "atr": round(current_atr, 2),
+                "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                "sector_change": pct_change_1d
             }
 
         except Exception as e:
@@ -1394,7 +1435,8 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
             # Prepare data from batch
             df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            if df is None or len(df) < 50:
+            min_length = 50 if check_mode else 50 # OTE needs enough history for swings and fibs
+            if df is None or len(df) < min_length:
                 return None
 
             curr_close = float(df['Close'].iloc[-1])
@@ -1555,6 +1597,11 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
+            # Additional Calcs for Consistency
+            # current_atr is already calculated above
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+            
             if signal != "WAIT" or check_mode:
                 # Calculate % Change
                 pct_change_1d = None
@@ -1576,7 +1623,11 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                     "fvg_detected": "Yes",
                     "atr_value": round(current_atr, 2),
                     "volatility_pct": round(volatility_pct, 2),
-                    "breakout_date": breakout_date
+                    "breakout_date": breakout_date,
+                    "atr": round(current_atr, 2),
+                    "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                    "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                    "sector_change": pct_change_1d
                 }
 
         except Exception as e:
@@ -1651,7 +1702,10 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
 
             # We need ~6 months of data for SMA 50 and stability check
             df = tk.history(period="6mo", interval="1d", auto_adjust=True)
-            if df.empty or len(df) < 50: return None
+            if df.empty: return None
+
+            min_length = 50 if check_mode else 50 # Need 50 bars for SMA 50
+            if len(df) < min_length: return None
 
             # Flatten columns if needed (history usually returns simple index but just in case)
             if isinstance(df.columns, pd.MultiIndex):
@@ -1766,6 +1820,11 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
+            # Additional Calcs for Consistency
+            # current_atr is already calculated above
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+
             return {
                 "ticker": ticker,
                 "price": curr_price,
@@ -1782,7 +1841,11 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
                 "trend": "Bullish (>SMA50)",
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "atr": round(current_atr, 2),
+                "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                "sector_change": pct_change_1d
             }
 
         except Exception as e:
@@ -1911,10 +1974,18 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
             # Clean and validate
             df = df.dropna(how='all')
-            if len(df) < 200: continue
+            # If check_mode is ON, we relax length requirements strictly for basic data
+            min_length = 50 if check_mode else 200
+            if len(df) < min_length: continue
 
-            # 2. Calculate Indicators
+            # Get latest price
             curr_close = float(df['Close'].iloc[-1])
+            
+            # Additional Calcs
+            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+            pct_change_1d = ((curr_close - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
 
             # Liquidity Filter: Average Daily Dollar Volume > $5M
             # (Simons says: Liquidity First)
@@ -2016,10 +2087,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
             volatility_pct = (atr_20 / curr_close) * 100
 
             # Additional: 1D Change
-            pct_change_1d = 0.0
-            if len(df) >= 2:
-                prev = float(df['Close'].iloc[-2])
-                pct_change_1d = ((curr_close - prev) / prev) * 100
+            # pct_change_1d is already calculated above
 
             # --- Breakout Date Logic ---
             breakout_date = _calculate_trend_breakout_date(df)
@@ -2058,7 +2126,11 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 "tharp_verdict": tharp_verdict,
                 "max_position_size": max_position_size_str,
                 "breakout_date": breakout_date,
-                "safe_to_trade": is_tharp_safe
+                "safe_to_trade": is_tharp_safe,
+                "atr": round(current_atr, 2),
+                "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                "sector_change": pct_change_1d
             })
 
         except Exception as e:
@@ -2386,7 +2458,10 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
                 df = all_data.copy()
 
             df = df.dropna(how='all')
-            if len(df) < 200: continue
+            
+            # If check_mode is ON, we relax length requirements strictly for basic data
+            min_length = 50 if check_mode else 200
+            if len(df) < min_length: continue
 
             curr_close = float(df['Close'].iloc[-1])
             closes = df['Close'].tolist()
@@ -2395,6 +2470,14 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
             sma_200 = df['Close'].rolling(200).mean().iloc[-1]
             high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
 
+            # New Metrics for User
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+            
+            # Simple Sector Change Placeholder (future enhancement: map real sector performance)
+            # For now, just return this stock's change as a proxy or null if unknown
+            sector_change_pct = None
+            
             trend_verdict = "NEUTRAL"
             if curr_close > sma_200:
                 trend_verdict = "BULLISH"
@@ -2565,7 +2648,11 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
                 "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})", # <--- IS IT WORTH IT?
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "atr": round(current_atr, 2),
+                "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                "sector_change": pct_change_1d
             })
 
         except Exception as e:

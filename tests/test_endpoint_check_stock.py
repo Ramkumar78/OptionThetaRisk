@@ -35,6 +35,25 @@ class TestUnifiedStockCheck(unittest.TestCase):
         mock_screen.assert_called_once()
         self.assertEqual(mock_screen.call_args.kwargs['ticker_list'], ['AAPL'])
         self.assertTrue(mock_screen.call_args.kwargs.get('check_mode'), "check_mode should be True for individual checks")
+        # Ensure new fields are attempted to be accessed/returned (mock return value might need update if we strictly test values)
+        # But here we mocking the return, so checking the logic of endpoint passing it through is implicit if we get 200.
+        # However, to be thorough, let's update mock return to include them and assert.
+        
+    @patch('webapp.app.screener.screen_turtle_setups')
+    def test_check_stock_dispatch_turtle_columns(self, mock_screen):
+        mock_screen.return_value = [{
+            "ticker": "AAPL",
+            "price": 150.0,
+            "signal": "BUY",
+            "atr": 2.5,
+            "52_week_high": 180.0,
+            "52_week_low": 120.0
+        }]
+        resp = self.client.get('/screen/check?ticker=AAPL&strategy=turtle')
+        data = resp.json
+        self.assertIn('atr', data)
+        self.assertIn('52_week_high', data)
+
 
     @patch('webapp.app.screener.screen_hybrid_strategy')
     def test_check_stock_hybrid(self, mock_screen):
