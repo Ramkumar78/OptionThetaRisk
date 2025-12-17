@@ -76,6 +76,34 @@ def _calculate_trend_breakout_date(df: pd.DataFrame) -> str:
     except Exception:
         return "N/A"
 
+def _resolve_region_tickers(region: str) -> list:
+    """
+    Helper to resolve ticker list based on region.
+    Default: US (Sector Components + Watch)
+    """
+    if region == "uk_euro":
+        return get_uk_euro_tickers()
+    elif region == "uk":
+        try:
+            from option_auditor.uk_stock_data import get_uk_tickers
+            return get_uk_tickers()
+        except ImportError:
+            # Fallback to UK/Euro or empty
+            return get_uk_euro_tickers()
+    elif region == "india":
+        return get_indian_tickers()
+    elif region == "sp500":
+        # S&P 500 (Volume Filtered) + Watch List
+        # Note: We use check_trend=False to get the universe.
+        sp500 = _get_filtered_sp500(check_trend=False)
+        watch_list = SECTOR_COMPONENTS.get("WATCH", [])
+        return list(set(sp500 + watch_list))
+    else: # us / combined default
+        all_tickers = []
+        for t_list in SECTOR_COMPONENTS.values():
+            all_tickers.extend(t_list)
+        return list(set(all_tickers))
+
 
 def enrich_with_fundamentals(results_list: list) -> list:
     """
@@ -461,23 +489,11 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
     """
     all_tickers = []
 
-    if region == "sp500":
-        # Apply Pre-Filter (Volume Only for Market Screener, as we might want oversold stocks < SMA200)
-        # But allow "High Interest" list to bypass filters?
-        # The prompt says: "Keep your High Interest List: Always scan... Add a Dynamic S&P 500 Scan... Filter 1 (Volume)..."
+    all_tickers = []
 
-        # 1. Get Filtered S&P 500 (Volume Only)
-        sp500_filtered = _get_filtered_sp500(check_trend=False)
-
-        # 2. Get Watch List
-        # Note: If running a dedicated S&P 500 scan, users might expect ONLY S&P 500.
-        # However, the requirement was "Keep your High Interest List: Always scan that list too".
-        # So we merge them.
-        watch_list = SECTOR_COMPONENTS.get("WATCH", [])
-
-        # Merge unique
-        all_tickers = list(set(sp500_filtered + watch_list))
-
+    if region != "us" and region is not None:
+        # Use common helper for non-default regions
+        all_tickers = _resolve_region_tickers(region)
     else:
         # Default US Sector Components
         for t_list in SECTOR_COMPONENTS.values():
@@ -585,7 +601,7 @@ def get_indian_tickers():
     # Append .NS for NSE
     return [t + ".NS" for t in INDIAN_TICKERS]
 
-def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
+def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
     Screens for Turtle Trading Setups (20-Day Breakouts).
     Supports multiple timeframes.
@@ -594,15 +610,9 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
     import pandas_ta as ta
     import pandas as pd
 
-    # If list is None, use default. If empty list passed, use empty.
+    # If list is None, use default based on region
     if ticker_list is None:
-        ticker_list = [
-            "SPY", "QQQ", "IWM", "GLD", "SLV", "USO", "TLT", # ETFs
-            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN", # Tech
-            "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS" # Blue Chips
-        ]
-        if "WATCH" in SECTOR_COMPONENTS:
-             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
+        ticker_list = _resolve_region_tickers(region)
 
     # Additional names for ETFs not in TICKER_NAMES
     ETF_NAMES = {
@@ -767,7 +777,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d") -> li
 
     return results
 
-def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list:
+def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
     Screens for 5/13 and 5/21 EMA Crossovers (Momentum Breakouts).
     """
@@ -780,14 +790,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
     import pandas as pd
 
     if ticker_list is None:
-        # Default liquid list + Crypto proxies usually traded with this system
-        ticker_list = [
-            "SPY", "QQQ", "IWM", "GLD", "SLV", "BITO", "COIN", "MSTR", # Crypto-adj
-            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN",
-            "NFLX", "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS"
-        ]
-        if "WATCH" in SECTOR_COMPONENTS:
-             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
+        ticker_list = _resolve_region_tickers(region)
 
     # Additional names for ETFs not in TICKER_NAMES
     ETF_NAMES = {
@@ -979,7 +982,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d") -> list
     results.sort(key=lambda x: 0 if "FRESH" in x['signal'] else 1)
     return results
 
-def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
+def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
     Screens for Darvas Box Breakouts.
     Strategy:
@@ -993,13 +996,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d") -> list:
     import numpy as np
 
     if ticker_list is None:
-        ticker_list = [
-            "SPY", "QQQ", "IWM", "GLD", "SLV", "USO", "TLT", # ETFs
-            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "GOOGL", "AMZN", # Tech
-            "JPM", "BAC", "XOM", "CVX", "PFE", "KO", "DIS" # Blue Chips
-        ]
-        if "WATCH" in SECTOR_COMPONENTS:
-             ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
+        ticker_list = _resolve_region_tickers(region)
 
     ETF_NAMES = {
         "SPY": "SPDR S&P 500 ETF Trust",
@@ -1345,7 +1342,7 @@ def _detect_fvgs(df: pd.DataFrame) -> list:
                 })
     return fvgs
 
-def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> list:
+def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", region: str = "us") -> list:
     """
     Screens for ICT Market Maker Models + OTE (Optimal Trade Entry).
 
@@ -1362,10 +1359,7 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h") -> l
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     if ticker_list is None:
-        # Default to liquid lists + Forex proxies + Watchlist
-        base = ["SPY", "QQQ", "IWM", "GLD", "FXE", "FXY", "MSFT", "AAPL", "NVDA", "TSLA", "AMD", "AMZN", "META", "GOOGL"]
-        watch = SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(base + watch))
+        ticker_list = _resolve_region_tickers(region)
 
     # For OTE, we usually want Intraday data to see the displacement clearly.
     # 1h (60m) is a good balance for Swing Trading this model.
@@ -1623,7 +1617,7 @@ def _calculate_put_delta(S, K, T, r, sigma):
     d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
     return _norm_cdf(d1) - 1.0
 
-def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> list:
+def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, region: str = "us") -> list:
     """
     Screens for 45 DTE, 30-Delta Bull Put Spreads ($5 Wide).
 
@@ -1639,8 +1633,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15) -> 
     import pandas as pd
 
     if ticker_list is None:
-        # Liquid stocks are essential for good spreads
-        ticker_list = ["SPY", "QQQ", "IWM", "NVDA", "AMD", "TSLA", "AMZN", "MSFT", "AAPL", "GOOGL", "META", "NFLX", "JPM", "DIS", "BA", "COIN", "MARA"]
+        ticker_list = _resolve_region_tickers(region)
 
     results = []
 
@@ -2150,7 +2143,7 @@ def _calculate_dominant_cycle(prices):
 
     return round(period, 1), rel_pos
 
-def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> list:
+def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
     Screens for stocks at the BOTTOM of their dominant time cycle (Fourier).
     Best for 'Swing Trading' in sideways or gently trending markets.
@@ -2159,7 +2152,7 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d") -> l
     import pandas as pd
 
     if ticker_list is None:
-        ticker_list = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "TSLA", "AMD", "NVDA", "AMZN", "GOOGL"]
+        ticker_list = _resolve_region_tickers(region)
 
     results = []
 
@@ -2331,26 +2324,7 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     import numpy as np
 
     if ticker_list is None:
-        if region == "india":
-             ticker_list = get_indian_tickers() # Assuming this is available in scope (imported)
-        elif region == "uk" or region == "uk_euro": # Map both to UK/Euro logic or separate?
-             # If "uk", use the new 350 list. If "uk_euro", use the manual one or same?
-             # User asked for "UK 350". Let's map "uk" to that.
-             # Note: "uk_euro" was the previous task. Let's keep it for backward compat or explicit request.
-             if region == "uk":
-                 from option_auditor.uk_stock_data import get_uk_tickers
-                 ticker_list = get_uk_tickers()
-             else:
-                 # diverse list of top UK/EU stocks (Legacy/Fallback)
-                 ticker_list = [
-                     "ASML.AS", "SAP.DE", "MC.PA", "OR.PA", "SIE.DE", "AIR.PA", "TTE.PA", 
-                     "SHEL.L", "AZN.L", "HSBA.L", "LIN.DE", "ULVR.L", "BP.L", "GSK.L", 
-                     "DIAGEO.L", "RIO.L", "DGE.L", "RMS.PA", "AI.PA"
-                 ]
-        elif "WATCH" in SECTOR_COMPONENTS:
-             ticker_list = SECTOR_COMPONENTS["WATCH"]
-        else:
-             ticker_list = ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "TSLA", "AMD", "COIN"]
+        ticker_list = _resolve_region_tickers(region)
         
     results = []
 
