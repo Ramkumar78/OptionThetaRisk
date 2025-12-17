@@ -145,13 +145,15 @@ class TestScreenerImprovements:
         assert len(results) == 1
         assert results[0]['ticker'] == 'AAPL'
 
-    @patch('option_auditor.screener.yf.download')
-    def test_fourier_cycles(self, mock_download):
+    @patch('option_auditor.screener.fetch_batch_data_safe')
+    def test_fourier_cycles(self, mock_fetch):
         """Test Fourier Transform Cycle Detection."""
         # Create a perfect sine wave with 20 day period
         df = create_sine_wave_data(periods=128, cycle_period=20)
 
-        mock_download.return_value = pd.concat({'SINE': df}, axis=1)
+        # Mock returns MultiIndex or dict structure that fetch_batch_data_safe returns?
+        # fetch_batch_data_safe returns a DataFrame.
+        mock_fetch.return_value = pd.concat({'SINE': df}, axis=1)
 
         results = screen_fourier_cycles(['SINE'])
 
@@ -173,7 +175,10 @@ class TestScreenerImprovements:
         df_low = create_sine_wave_data(periods=135, cycle_period=20)
         # 135 / 20 = 6.75. .75 * 2pi = 1.5pi -> -1 (Low).
 
-        mock_download.return_value = pd.concat({'LOW': df_low}, axis=1)
+        # Reset return value for second call logic (if we were calling calling helper multiple times)
+        # But we call screen_fourier_cycles which calls fetch once.
+        # We need to run screener again with new mock data.
+        mock_fetch.return_value = pd.concat({'LOW': df_low}, axis=1)
         results = screen_fourier_cycles(['LOW'])
         assert "CYCLICAL LOW" in results[0]['signal']
 
@@ -183,9 +188,9 @@ class TestScreenerImprovements:
         res = _calculate_dominant_cycle(prices)
         assert res is None
 
-    @patch('option_auditor.screener.yf.download')
-    @patch('option_auditor.screener.yf.Ticker')
-    def test_mms_bullish_setup(self, mock_ticker, mock_download):
+    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.screener._prepare_data_for_ticker')
+    def test_mms_bullish_setup(self, mock_prep, mock_fetch):
         """Test Bullish OTE Logic (Market Maker Buy Model)."""
         # Logic:
         # 1. Low (Turtle Soup)
@@ -212,10 +217,9 @@ class TestScreenerImprovements:
             'Low': [p-0.1 for p in final_prices], 'Close': final_prices, 'Volume': 1000
         }, index=dates)
 
-        # Set Ticker Mock
-        instance = MagicMock()
-        instance.history.return_value = df
-        mock_ticker.return_value = instance
+        # Set mocks
+        mock_fetch.return_value = MagicMock()
+        mock_prep.return_value = df
 
         results = screen_mms_ote_setups(['AAPL'], time_frame='1h')
 

@@ -114,10 +114,12 @@ def test_detect_fvgs():
     assert fvg['bottom'] == 100
 
 def test_screen_mms_ote_setup(bearish_ote_df):
-    # Mock yfinance Ticker
-    with patch('yfinance.Ticker') as MockTicker:
-        instance = MockTicker.return_value
-        instance.history.return_value = bearish_ote_df
+    # Mock batch fetch and prepare
+    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch, \
+         patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+        
+        mock_fetch.return_value = MagicMock() # Just to pass the check
+        mock_prep.return_value = bearish_ote_df
 
         # Run screener
         results = screen_mms_ote_setups(ticker_list=["TEST"], time_frame="1h")
@@ -133,16 +135,22 @@ def test_screen_mms_ote_setup(bearish_ote_df):
         assert res['stop_loss'] == 115.0
 
 def test_screen_mms_no_setup(sample_df):
-    with patch('yfinance.Ticker') as MockTicker:
-        instance = MockTicker.return_value
-        instance.history.return_value = sample_df
+    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch, \
+         patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+        
+        mock_fetch.return_value = MagicMock()
+        mock_prep.return_value = sample_df
+        
         # This simple DF has no complex OTE structure
         results = screen_mms_ote_setups(ticker_list=["TEST"], time_frame="1h")
         assert len(results) == 0
 
 def test_screen_mms_empty_data():
-    with patch('yfinance.Ticker') as MockTicker:
-        instance = MockTicker.return_value
-        instance.history.return_value = pd.DataFrame()
+    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch, \
+         patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+        
+        mock_fetch.return_value = MagicMock()
+        mock_prep.return_value = None # Prepare returns None if data issue
+        
         results = screen_mms_ote_setups(ticker_list=["TEST"], time_frame="1h")
         assert len(results) == 0
