@@ -55,6 +55,58 @@ class TestUnifiedStockCheck(unittest.TestCase):
         self.assertIn('52_week_high', data)
 
 
+    @patch('webapp.app.screener.screen_turtle_setups')
+    @patch('webapp.app.screener.screen_hybrid_strategy')
+    @patch('webapp.app.screener.screen_trend_followers_isa')
+    @patch('webapp.app.screener.screen_mms_ote_setups')
+    @patch('webapp.app.screener.screen_5_13_setups')
+    @patch('webapp.app.screener.screen_darvas_box')
+    @patch('webapp.app.screener.screen_bull_put_spreads')
+    def test_check_stock_all_strategies_data_integrity(self, mock_bull, mock_darvas, mock_513, mock_mms, mock_isa, mock_hybrid, mock_turtle):
+        """
+        Verify that ALL strategies return the unified data fields required for the UI.
+        """
+        strategies = [
+            ('turtle', mock_turtle),
+            ('hybrid', mock_hybrid),
+            ('isa', mock_isa),
+            ('mms', mock_mms),
+            ('5/13', mock_513),
+            ('darvas', mock_darvas),
+            ('bull_put', mock_bull)
+        ]
+        
+        sample_result = [{
+            "ticker": "AAPL",
+            "price": 150.0,
+            "signal": "BUY",
+            "atr": 2.5,
+            "52_week_high": 180.0,
+            "52_week_low": 120.0,
+            "sector_change": 1.5,
+            "pct_change_1d": 0.5
+        }]
+
+        for strat_name, mock_func in strategies:
+            # Setup Mock
+            mock_func.return_value = sample_result
+            
+            # Execute
+            resp = self.client.get(f'/screen/check?ticker=AAPL&strategy={strat_name}')
+            self.assertEqual(resp.status_code, 200, f"Strategy {strat_name} failed")
+            
+            data = resp.json
+            
+            # Verify Fields
+            required_fields = ['atr', '52_week_high', '52_week_low', 'sector_change', 'price', 'signal']
+            for field in required_fields:
+                self.assertIn(field, data, f"Strategy {strat_name} missing field {field}")
+            
+            # Verify Mock Call
+            mock_func.assert_called()
+            # Reset for next iteration
+            mock_func.reset_mock()
+
     @patch('webapp.app.screener.screen_hybrid_strategy')
     def test_check_stock_hybrid(self, mock_screen):
         """Test that strategy='hybrid' calls the screener with check_mode=True."""

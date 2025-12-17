@@ -523,11 +523,43 @@ const Screener: React.FC<ScreenerProps> = () => {
                                         <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">Strategy</span>
                                         <span className="font-medium text-gray-900 dark:text-white">{screenerInfo[activeTab]?.title}</span>
                                     </div>
+                                    <div>
+                                        <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">Signal</span>
+                                        <span className={clsx("font-bold",
+                                            checkResult.signal?.includes('BUY') ? "text-emerald-600" :
+                                                checkResult.signal?.includes('SELL') ? "text-red-600" : "text-gray-900 dark:text-white"
+                                        )}>
+                                            {checkResult.signal || "WAIT"}
+                                        </span>
+                                    </div>
                                     {checkResult.pnl_value !== undefined && (
                                         <div>
                                             <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">PnL</span>
                                             <span className={clsx("font-mono font-bold", checkResult.pnl_value >= 0 ? "text-emerald-600" : "text-red-600")}>
                                                 {checkResult.pnl_value >= 0 ? "+" : ""}{formatCurrency(checkResult.pnl_value, getCurrencySymbol(checkResult.ticker))} ({parseFloat(checkResult.pnl_pct).toFixed(2)}%)
+                                            </span>
+                                        </div>
+                                    )}
+                                    {checkResult.pct_change_1d !== undefined && (
+                                        <div>
+                                            <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">Change (1D)</span>
+                                            <span className={clsx("font-mono font-bold", checkResult.pct_change_1d >= 0 ? "text-emerald-600" : "text-red-600")}>
+                                                {checkResult.pct_change_1d >= 0 ? "+" : ""}{checkResult.pct_change_1d.toFixed(2)}%
+                                            </span>
+                                        </div>
+                                    )}
+                                    {checkResult.atr !== undefined && (
+                                        <div>
+                                            <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">ATR</span>
+                                            <span className="font-mono text-gray-900 dark:text-white">{checkResult.atr}</span>
+                                        </div>
+                                    )}
+                                    {(checkResult['52_week_high'] || checkResult['52_week_low']) && (
+                                        <div>
+                                            <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">52 Wk High/Low</span>
+                                            <span className="font-mono text-gray-900 dark:text-white text-xs">
+                                                H: {checkResult['52_week_high'] || "-"}<br />
+                                                L: {checkResult['52_week_low'] || "-"}
                                             </span>
                                         </div>
                                     )}
@@ -630,7 +662,8 @@ const Screener: React.FC<ScreenerProps> = () => {
                                                     activeTab === 'isa' ? 'Trend Follower (ISA)' :
                                                         activeTab === 'fourier' ? 'Harmonic Cycle (Fourier)' :
                                                             activeTab === 'hybrid' ? 'Hybrid (Trend + Cycle)' :
-                                                                '5/13 EMA Setups'}
+                                                                activeTab === 'market' ? 'Master Convergence' :
+                                                                    '5/13 EMA Setups'}
                                 </h3>
                                 <input
                                     type="text"

@@ -2397,6 +2397,10 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
 
     if ticker_list is None:
         ticker_list = _resolve_region_tickers(region)
+    
+    # Ensure tickers are uppercase to match yfinance index
+    if ticker_list:
+        ticker_list = [t.upper() for t in ticker_list]
         
     results = []
 
@@ -2419,7 +2423,10 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     print(f"DEBUG: using cache_name={cache_name}", flush=True)
 
     # Only use cache for daily timeframe (intraday needs fresh data)
-    if time_frame == "1d":
+    if check_mode:
+        # Force fresh fetch for individual checks
+        all_data = fetch_batch_data_safe(ticker_list, period="2y", interval=time_frame)
+    elif time_frame == "1d":
         all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     else:
         # Intraday

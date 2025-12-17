@@ -694,7 +694,7 @@ def create_app(testing: bool = False) -> Flask:
                 results = screener.screen_turtle_setups(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "darvas":
                 results = screener.screen_darvas_box(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
-            elif strategy == "ema":
+            elif strategy == "ema" or strategy == "5/13":
                 results = screener.screen_5_13_setups(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "bull_put":
                 results = screener.screen_bull_put_spreads(ticker_list=[ticker], check_mode=True)
