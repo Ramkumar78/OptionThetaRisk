@@ -57,8 +57,8 @@ class TestRegionStrategies:
         
         # Check Tickers
         passed_tickers = call_args[0] if call_args else call_kwargs.get('tickers')
-        # Expecting the small manual list (~19)
-        assert len(passed_tickers) < 100 
+        # Expecting the manual list (~150)
+        assert len(passed_tickers) <= 200 
         assert "ASML.AS" in passed_tickers
         assert "SHEL.L" in passed_tickers
 

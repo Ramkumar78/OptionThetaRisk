@@ -39,9 +39,10 @@ def test_get_filtered_sp500_fallback(mock_yf_download):
 
     # Mock SP500_NAMES indirectly by patching get_sp500_tickers
     with patch("option_auditor.screener.get_sp500_tickers", return_value=["AAPL", "GOOG"]):
-        res = _get_filtered_sp500(check_trend=True)
-        # Should return base tickers sliced [:50] (here just 2)
-        assert res == ["AAPL", "GOOG"]
+        with patch("option_auditor.screener.get_cached_market_data", return_value=pd.DataFrame()):
+            res = _get_filtered_sp500(check_trend=True)
+            # Should return base tickers (fallback)
+            assert res == ["AAPL", "GOOG"]
 
 def test_fetch_data_with_retry_failure(mock_yf_download):
     mock_yf_download.side_effect = Exception("Fail")
