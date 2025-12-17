@@ -377,87 +377,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                         </>
                     )}
 
-                    {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier'].includes(activeTab) && (
-                        <div className="col-span-1 md:col-span-3 space-y-4">
-                            <div className="flex items-end gap-4">
-                                <div className="flex-1">
-                                    <label htmlFor="check-stock" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Check Individual Stock</label>
-                                    <form onSubmit={handleCheckStock} className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            id="check-stock"
-                                            value={checkTicker}
-                                            onChange={(e) => setCheckTicker(e.target.value)}
-                                            placeholder="Enter Ticker (e.g. AAPL)"
-                                            className="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                        />
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={checkEntryPrice}
-                                            onChange={(e) => setCheckEntryPrice(e.target.value)}
-                                            placeholder="Entry Price (Opt.)"
-                                            className="w-32 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                        />
-                                        <input
-                                            type="date"
-                                            value={checkEntryDate}
-                                            onChange={(e) => setCheckEntryDate(e.target.value)}
-                                            placeholder="Entry Date"
-                                            className="w-40 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={checkLoading || !checkTicker.trim()}
-                                            className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 font-medium rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                        >
-                                            {checkLoading ? 'Checking...' : 'Check'}
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                            {checkError && <div className="text-red-600 text-sm">{checkError}</div>}
-                            {checkResult && (
-                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <h4 className="text-md font-bold text-gray-900 dark:text-white mb-2">{checkResult.company_name} ({checkResult.ticker})</h4>
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Signal</span>
-                                            <span className={clsx("font-bold", (checkResult.signal || "").toString().toUpperCase().includes('ENTER') || (checkResult.signal || "").toString().toUpperCase().includes('BUY') ? "text-emerald-600" : (checkResult.signal || "").toString().toUpperCase().includes('EXIT') || (checkResult.signal || "").toString().toUpperCase().includes('SELL') ? "text-red-600" : "text-blue-600")}>
-                                                {checkResult.signal || "N/A"}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block">Price</span>
-                                            <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(checkResult.price || checkResult.Close, getCurrencySymbol(checkResult.ticker))}</span>
-                                        </div>
-                                        {checkResult.pnl_value !== undefined && (
-                                            <div>
-                                                <span className="text-gray-500 dark:text-gray-400 block">PnL</span>
-                                                <span className={clsx("font-mono font-bold", checkResult.pnl_value >= 0 ? "text-emerald-600" : "text-red-600")}>
-                                                    {checkResult.pnl_value >= 0 ? "+" : ""}{formatCurrency(checkResult.pnl_value, getCurrencySymbol(checkResult.ticker))} ({parseFloat(checkResult.pnl_pct).toFixed(2)}%)
-                                                </span>
-                                            </div>
-                                        )}
-                                        {checkResult.user_verdict && (
-                                            <div>
-                                                <span className="text-gray-500 dark:text-gray-400 block">Verdict</span>
-                                                <span className="font-bold text-gray-900 dark:text-white">{checkResult.user_verdict}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {checkResult.cycle_position && (
-                                        <div className="mt-2 text-xs text-gray-500">
-                                            Cycle: {checkResult.cycle_position} ({checkResult.cycle_period})
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            <div className="flex items-center text-sm text-gray-500 italic">
-                                Strategy: {screenerInfo[activeTab]?.title || activeTab}.
-                            </div>
-                        </div>
-                    )}
+
 
 
 
@@ -540,6 +460,91 @@ const Screener: React.FC<ScreenerProps> = () => {
                 {error && (
                     <div id="screener-error" className="mt-4 p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
                         <span className="font-medium">Error:</span> {error}
+                    </div>
+                )}
+
+                {/* Individual Stock Check - Relocated */}
+                {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier'].includes(activeTab) && (
+                    <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
+                        <div className="flex flex-col md:flex-row items-end justify-between gap-4">
+                            <div className="w-full md:w-auto flex-1">
+                                <label htmlFor="check-stock" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Check Individual Stock ({screenerInfo[activeTab]?.title})</label>
+                                <form onSubmit={handleCheckStock} className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                        type="text"
+                                        id="check-stock"
+                                        value={checkTicker}
+                                        onChange={(e) => setCheckTicker(e.target.value)}
+                                        placeholder="Ticker (e.g. AAPL)"
+                                        className="w-full sm:w-40 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                    />
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={checkEntryPrice}
+                                        onChange={(e) => setCheckEntryPrice(e.target.value)}
+                                        placeholder="Entry Price"
+                                        className="w-full sm:w-32 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                    />
+                                    <input
+                                        type="date"
+                                        value={checkEntryDate}
+                                        onChange={(e) => setCheckEntryDate(e.target.value)}
+                                        placeholder="Entry Date"
+                                        className="w-full sm:w-40 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={checkLoading || !checkTicker.trim()}
+                                        className="px-4 py-2.5 text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 font-medium rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                    >
+                                        {checkLoading ? 'Checking...' : 'Check'}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {checkError && <div className="mt-2 text-red-600 text-sm">{checkError}</div>}
+
+                        {/* Result Card */}
+                        {checkResult && (
+                            <div className="mt-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 animate-fadeIn">
+                                <h4 className="text-md font-bold text-gray-900 dark:text-white mb-2 flex justify-between items-center">
+                                    <span>{checkResult.company_name} ({checkResult.ticker})</span>
+                                    <span className={clsx("text-sm px-2 py-1 rounded", (checkResult.signal || "").toString().toUpperCase().includes('ENTER') || (checkResult.signal || "").toString().toUpperCase().includes('BUY') ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-800")}>
+                                        {checkResult.signal || "N/A"}
+                                    </span>
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
+                                    <div>
+                                        <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">Price</span>
+                                        <span className="font-mono text-gray-900 dark:text-white font-medium">{formatCurrency(checkResult.price || checkResult.Close, getCurrencySymbol(checkResult.ticker))}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">Strategy</span>
+                                        <span className="font-medium text-gray-900 dark:text-white">{screenerInfo[activeTab]?.title}</span>
+                                    </div>
+                                    {checkResult.pnl_value !== undefined && (
+                                        <div>
+                                            <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">PnL</span>
+                                            <span className={clsx("font-mono font-bold", checkResult.pnl_value >= 0 ? "text-emerald-600" : "text-red-600")}>
+                                                {checkResult.pnl_value >= 0 ? "+" : ""}{formatCurrency(checkResult.pnl_value, getCurrencySymbol(checkResult.ticker))} ({parseFloat(checkResult.pnl_pct).toFixed(2)}%)
+                                            </span>
+                                        </div>
+                                    )}
+                                    {checkResult.user_verdict && (
+                                        <div>
+                                            <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">Verdict</span>
+                                            <span className="font-bold text-gray-900 dark:text-white">{checkResult.user_verdict}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                {checkResult.cycle_position && (
+                                    <div className="mt-3 text-xs text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-2">
+                                        Fourier Cycle: {checkResult.cycle_position} ({checkResult.cycle_period} bars)
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

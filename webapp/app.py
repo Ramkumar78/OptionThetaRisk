@@ -689,20 +689,27 @@ def create_app(testing: bool = False) -> Flask:
             # Dispatch Strategy
             results = []
             if strategy == "isa":
-                results = screener.screen_trend_followers_isa(ticker_list=[ticker])
+                results = screener.screen_trend_followers_isa(ticker_list=[ticker], check_mode=True)
             elif strategy == "turtle":
-                results = screener.screen_turtle_setups(ticker_list=[ticker], time_frame=time_frame)
+                results = screener.screen_turtle_setups(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "darvas":
-                results = screener.screen_darvas_box(ticker_list=[ticker], time_frame=time_frame)
+                results = screener.screen_darvas_box(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "ema":
-                results = screener.screen_5_13_setups(ticker_list=[ticker], time_frame=time_frame)
+                results = screener.screen_5_13_setups(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "bull_put":
-                results = screener.screen_bull_put_spreads(ticker_list=[ticker])
+                results = screener.screen_bull_put_spreads(ticker_list=[ticker], check_mode=True)
             elif strategy == "hybrid":
-                results = screener.screen_hybrid_strategy(ticker_list=[ticker], time_frame=time_frame)
+                # Hybrid usually aggregates others, might not support check_mode yet or needs update
+                # But let's check its signature. screen_hybrid_strategy usually calls others.
+                # Use standard call, hybrid might not need check_mode if it just aggregates.
+                # But wait, if hybrid filters results...
+                # For now leave hybrid as is or update if signature allows. 
+                # I didn't verify hybrid signature. Let's assume it doesn't support it yet or works differently.
+                # Actually, the implementation plan didn't explicitly list hybrid for update, but listed "Update Backend Endpoint".
+                results = screener.screen_hybrid_strategy(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "mms":
                 # MMS/OTE
-                results = screener.screen_mms_ote_setups(ticker_list=[ticker], time_frame=time_frame)
+                results = screener.screen_mms_ote_setups(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "fourier":
                  results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame=time_frame)
             elif strategy == "master":

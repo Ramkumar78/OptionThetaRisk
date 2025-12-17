@@ -34,6 +34,23 @@ class TestUnifiedStockCheck(unittest.TestCase):
         self.assertEqual(data['ticker'], 'AAPL')
         mock_screen.assert_called_once()
         self.assertEqual(mock_screen.call_args.kwargs['ticker_list'], ['AAPL'])
+        self.assertTrue(mock_screen.call_args.kwargs.get('check_mode'), "check_mode should be True for individual checks")
+
+    @patch('webapp.app.screener.screen_hybrid_strategy')
+    def test_check_stock_hybrid(self, mock_screen):
+        """Test that strategy='hybrid' calls the screener with check_mode=True."""
+        mock_screen.return_value = [{
+            "ticker": "NVDA",
+            "price": 400.0,
+            "signal": "BUY"
+        }]
+        
+        resp = self.client.get('/screen/check?ticker=NVDA&strategy=hybrid')
+        
+        self.assertEqual(resp.status_code, 200)
+        mock_screen.assert_called_once()
+        self.assertEqual(mock_screen.call_args.kwargs['ticker_list'], ['NVDA'])
+        self.assertTrue(mock_screen.call_args.kwargs.get('check_mode'), "check_mode must be True for hybrid check")
 
     @patch('webapp.app.screener.screen_trend_followers_isa')
     def test_check_stock_pnl_calculation(self, mock_screen):

@@ -601,7 +601,7 @@ def get_indian_tickers():
     # Append .NS for NSE
     return [t + ".NS" for t in INDIAN_TICKERS]
 
-def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
+def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for Turtle Trading Setups (20-Day Breakouts).
     Supports multiple timeframes.
@@ -751,7 +751,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
-            if signal != "WAIT":
+            if check_mode or signal != "WAIT":
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
                 company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
@@ -777,7 +777,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
 
     return results
 
-def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
+def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for 5/13 and 5/21 EMA Crossovers (Momentum Breakouts).
     """
@@ -952,7 +952,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
-            if signal != "WAIT":
+            if check_mode or signal != "WAIT":
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
                 company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
@@ -977,12 +977,11 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
         except Exception as e:
             logger.error(f"Error processing 5/13 setup for {ticker}: {e}")
             continue
-
     # Sort by "Freshness" (Breakouts first)
     results.sort(key=lambda x: 0 if "FRESH" in x['signal'] else 1)
     return results
 
-def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
+def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for Darvas Box Breakouts.
     Strategy:
@@ -1076,7 +1075,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             # Let's use the max of the available data.
             period_high = df['High'].max()
             # If we are within 5% of the high
-            if curr_close < period_high * 0.90:
+            if curr_close < period_high * 0.90 and not check_mode:
                 # Darvas requires new highs. If we are deep in drawdown, ignore.
                 # Exception: Early stage breakout from a base might be slightly lower.
                 # Strictest rule: Must be making a new high.
@@ -1115,7 +1114,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                 # Left neighbors (i-3 to i-1)
                 if i < 3: break
 
-                # Check if High[i] is >= High[i-3...i-1] AND High[i] >= High[i+1...i+3]
+                # Check if High[i] is >= High[i-1] AND High[i] >= High[i-2] AND High[i] >= High[i-3] AND
+                # High[i] >= High[i+1] AND High[i] >= High[i+2] AND High[i] >= High[i+3]
                 # Note: i+3 must exist.
                 if i + 3 >= len(df): continue
 
@@ -1189,12 +1189,12 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                 # Price is between Top and (undefined) Bottom.
                 pass
 
-            if signal == "WAIT":
+            if signal == "WAIT" and not check_mode:
                 return None
 
             # 4. Volume Filter (for Breakouts)
             is_valid_volume = True
-            if "BREAKOUT" in signal:
+            if "BREAKOUT" in signal and not check_mode:
                 # Volume > 150% of 20-day MA
                 vol_ma = np.mean(volumes[-21:-1]) if len(volumes) > 21 else np.mean(volumes)
                 if vol_ma > 0 and curr_volume < vol_ma * 1.2: # Relaxed to 1.2x
@@ -1203,11 +1203,11 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                     # Darvas insisted on volume.
                     is_valid_volume = False
 
-            if not is_valid_volume:
+            if not is_valid_volume and not check_mode:
                 return None
 
             # 52-Week High check (Strict for Entry)
-            if "BREAKOUT" in signal:
+            if "BREAKOUT" in signal and not check_mode:
                 if curr_close < period_high * 0.95:
                      # Breakout of a box, but far from 52w high?
                      # Might be a recovery box. Darvas preferred ATH.
@@ -1342,7 +1342,7 @@ def _detect_fvgs(df: pd.DataFrame) -> list:
                 })
     return fvgs
 
-def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", region: str = "us") -> list:
+def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for ICT Market Maker Models + OTE (Optimal Trade Entry).
 
@@ -1555,7 +1555,7 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
-            if signal != "WAIT":
+            if signal != "WAIT" or check_mode:
                 # Calculate % Change
                 pct_change_1d = None
                 if len(df) >= 2:
@@ -1570,9 +1570,9 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                     "price": curr_close,
                     "pct_change_1d": pct_change_1d,
                     "signal": signal,
-                    "stop_loss": setup_details['stop'],
-                    "ote_zone": setup_details['entry_zone'],
-                    "target": setup_details['target'],
+                    "stop_loss": setup_details.get('stop', 0.0),
+                    "ote_zone": setup_details.get('entry_zone', "N/A"),
+                    "target": setup_details.get('target', 0.0),
                     "fvg_detected": "Yes",
                     "atr_value": round(current_atr, 2),
                     "volatility_pct": round(volatility_pct, 2),
@@ -1617,7 +1617,7 @@ def _calculate_put_delta(S, K, T, r, sigma):
     d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
     return _norm_cdf(d1) - 1.0
 
-def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, region: str = "us") -> list:
+def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for 45 DTE, 30-Delta Bull Put Spreads ($5 Wide).
 
@@ -1665,7 +1665,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
 
             # Trend Check: Only sell puts if stock is above SMA 50 (Bullish/Neutral)
-            if curr_price < sma_50:
+            if curr_price < sma_50 and not check_mode:
                 return None
 
             # 2. Get Option Dates
@@ -1687,7 +1687,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
 
             # Filter: Ensure DTE is reasonably close (e.g. 30 to 60 days)
             actual_dte = (pd.to_datetime(best_date).date() - today).days
-            if not (25 <= actual_dte <= 75): return None
+            if not (25 <= actual_dte <= 75) and not check_mode: return None
 
             # 3. Get Option Chain for that Date
             chain = tk.option_chain(best_date)
@@ -1728,7 +1728,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
 
             # Check if we actually found a $5 wide spread (allow small variance for weird strikes)
             actual_width = short_strike - long_strike
-            if abs(actual_width - SPREAD_WIDTH) > 1.0:
+            if abs(actual_width - SPREAD_WIDTH) > 1.0 and not check_mode:
                 return None # Could not find the defined spread width
 
             # 6. Calc Metrics
@@ -1745,11 +1745,11 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             # Max Risk = Width - Credit
             risk = actual_width - credit
 
-            if risk <= 0 or credit <= 0: return None # Yield too low
+            if (risk <= 0 or credit <= 0) and not check_mode: return None # Yield too low
 
             roi = credit / risk
 
-            if roi < min_roi: return None # Yield too low
+            if roi < min_roi and not check_mode: return None # Yield too low
 
             # Rate limiting sleep
             time.sleep(0.1)
@@ -1834,7 +1834,7 @@ def resolve_ticker(query: str) -> str:
     # 4. Fallback: Assume it is a valid ticker if no match found
     return query
 
-def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us") -> list:
+def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False) -> list:
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).
     Based on Seykota/Dennis (Breakouts) and Tharp (Risk).
@@ -1919,7 +1919,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
             # Liquidity Filter: Average Daily Dollar Volume > $5M
             # (Simons says: Liquidity First)
             avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-            if (avg_vol * curr_close) < 5_000_000:
+            if not check_mode and (avg_vol * curr_close) < 5_000_000:
                 continue
 
             # Trend Filter: 200 SMA
@@ -2312,7 +2312,7 @@ class StrategyAnalyzer:
         if rsi_val > 70: return "OVERBOUGHT"
         return "NEUTRAL"
 
-def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
+def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Robust Hybrid Screener with CHUNKING to prevent API Timeouts.
     Combines ISA Trend Following with Fourier Cycle Analysis.
@@ -2357,9 +2357,6 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     if isinstance(all_data, pd.DataFrame):
          print(f"DEBUG: all_data columns={all_data.columns}", flush=True)
 
-    # Logic cleaned up - duplicate block removed
-    # Logic cleaned up - duplicate block removed
-
     # Process Data
     # Get list of successfully downloaded tickers
     if isinstance(all_data.columns, pd.MultiIndex):
@@ -2367,6 +2364,7 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     else:
         # Fallback if only 1 ticker in list or flat structure
         if not all_data.empty:
+             val_tickers = [] # placeholder
              # If flat and we requested multiple, it might be weird.
              # But if we requested 1 ticker, it is flat.
              # If we requested multiple and only 1 came back, it might be flat or multi.
@@ -2427,8 +2425,8 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
 
             # Volume Filter (Anti-Double-Tap Fix):
             # If scanning daily (1d), ensure we aren't wasting time on illiquid stocks (<500k avg vol).
-            # Skip this check for WATCH list items (High Interest).
-            if time_frame == "1d":
+            # Skip this check for WATCH list items (High Interest) OR if check_mode is ON.
+            if time_frame == "1d" and not check_mode:
                 watch_list = SECTOR_COMPONENTS.get("WATCH", [])
                 if ticker not in watch_list:
                     # Calculate 20-day Avg Volume
