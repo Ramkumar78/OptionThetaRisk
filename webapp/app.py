@@ -20,6 +20,7 @@ from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
 from dotenv import load_dotenv
 import sys
+from option_auditor.common.resilience import data_api_breaker
 
 # Load environment variables from .env file
 load_dotenv()
@@ -224,6 +225,17 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/health")
     def health():
         return "OK", 200
+
+    @app.route("/api/screener/status")
+    def get_breaker_status():
+        """
+        Returns the real-time status of the Circuit Breaker.
+        Used by the frontend to display 'Stale Data' warnings.
+        """
+        return jsonify({
+            "api_health": data_api_breaker.current_state, # 'closed', 'open', 'half-open'
+            "is_fallback": data_api_breaker.current_state == 'open'
+        })
 
     # API Routes for Screener
     @app.route("/screen", methods=["POST"])
