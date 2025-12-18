@@ -60,7 +60,7 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
         description: 'Combines ISA Trend (Direction) with Fourier Cycles (Timing). Finds "Buy the Dip" setups where a strong uptrend meets a cyclical bottom. High probability, high reward.'
     },
     fortress: {
-        title: "Dynamic Volatility Fortress",
+        title: "Options: Bull Put Spread - Dynamic ATR VIX Screener",
         subtitle: "VIX-Adjusted ATR Spreads",
         description: "Mathematically derived Bull Put Spreads using a dynamic safety multiplier based on the VIX. Targets liquid US options."
     }
@@ -274,11 +274,7 @@ const Screener: React.FC<ScreenerProps> = () => {
     }, [results, activeTab]);
 
     const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
-<<<<<<< HEAD
-        { id: 'fortress', label: 'Options: Bull Put', subLabel: 'Dynamic ATR VIX' },
-=======
         { id: 'fortress', label: '🏰 Fortress', subLabel: 'Dynamic ATR' },
->>>>>>> 41cb73a (feat: Add Dynamic Volatility Fortress Screener)
         { id: 'master', label: '⚡ Master Convergence', subLabel: 'Best of All' },
         { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
         { id: 'turtle', label: 'Turtle Trading' },
