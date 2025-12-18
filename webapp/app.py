@@ -11,7 +11,7 @@ from typing import Optional
 import yfinance as yf
 from flask import Flask, request, redirect, url_for, flash, send_file, session, jsonify, send_from_directory, g
 
-from option_auditor import analyze_csv, screener, journal_analyzer
+from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
 from option_auditor.uk_stock_data import get_uk_tickers
@@ -875,6 +875,24 @@ def create_app(testing: bool = False) -> Flask:
             return jsonify({"error": str(e)}), 500
 
     # API Route for Analysis (Audit)
+    @app.route("/analyze/portfolio", methods=["POST"])
+    def analyze_portfolio_route():
+        """
+        Expects JSON: { "positions": [ {"ticker": "NVDA", "value": 5000}, ... ] }
+        """
+        try:
+            data = request.json
+            positions = data.get("positions", [])
+
+            if not positions:
+                return jsonify({"error": "No positions provided"}), 400
+
+            report = portfolio_risk.analyze_portfolio_risk(positions)
+            return jsonify(report)
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/analyze", methods=["POST"])
     def analyze():
         file = request.files.get("csv")
