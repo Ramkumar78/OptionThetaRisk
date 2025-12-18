@@ -60,7 +60,7 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
         description: 'Combines ISA Trend (Direction) with Fourier Cycles (Timing). Finds "Buy the Dip" setups where a strong uptrend meets a cyclical bottom. High probability, high reward.'
     },
     fortress: {
-        title: "Dynamic Volatility Fortress",
+        title: "Options: Bull Put Spread - Dynamic ATR VIX Screener",
         subtitle: "VIX-Adjusted ATR Spreads",
         description: "Mathematically derived Bull Put Spreads using a dynamic safety multiplier based on the VIX. Targets liquid US options."
     }
@@ -274,7 +274,7 @@ const Screener: React.FC<ScreenerProps> = () => {
     }, [results, activeTab]);
 
     const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
-        { id: 'fortress', label: '🏰 Fortress', subLabel: 'Dynamic ATR' },
+        { id: 'fortress', label: 'Options: Bull Put', subLabel: 'Dynamic ATR VIX' },
         { id: 'master', label: '⚡ Master Convergence', subLabel: 'Best of All' },
         { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
         { id: 'turtle', label: 'Turtle Trading' },
@@ -678,7 +678,8 @@ const Screener: React.FC<ScreenerProps> = () => {
                                                         activeTab === 'fourier' ? 'Harmonic Cycle (Fourier)' :
                                                             activeTab === 'hybrid' ? 'Hybrid (Trend + Cycle)' :
                                                                 activeTab === 'master' ? 'Master Convergence' :
-                                                                    '5/13 EMA Setups'}
+                                                                    activeTab === 'fortress' ? 'Options: Bull Put Spread - Dynamic ATR VIX Screener' :
+                                                                        '5/13 EMA Setups'}
                                 </h3>
                                 <input
                                     type="text"
@@ -808,6 +809,10 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                 } else if (sortConfig.key === 'breakout_date') {
                     aValue = a.breakout_date;
                     bValue = b.breakout_date;
+                } else if (sortConfig.key === 'cushion') {
+                    // Numerical sort for percentage strings (e.g. "10.4%")
+                    aValue = parseFloat((a.cushion || "0").replace('%', ''));
+                    bValue = parseFloat((b.cushion || "0").replace('%', ''));
                 }
 
                 // Handle N/A or Missing Values
@@ -902,7 +907,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 <HeaderCell label="Momentum" sortKey="momentum" align="right" />
                             </>
                         )}
-                        {type !== 'market' && type !== 'bull_put' && type !== 'master' && (
+                        {type !== 'market' && type !== 'bull_put' && type !== 'master' && type !== 'fortress' && (
                             <>
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
                                 {type === 'darvas' && (
@@ -1037,7 +1042,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     </>
                                 )}
 
-                                {type !== 'market' && type !== 'bull_put' && (
+                                {type !== 'market' && type !== 'bull_put' && type !== 'fortress' && (
                                     <>
                                         {type === 'master' ? (
                                             <>
