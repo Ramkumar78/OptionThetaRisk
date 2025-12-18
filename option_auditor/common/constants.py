@@ -37,6 +37,9 @@ SECTOR_COMPONENTS = {
 
 SECTOR_NAMES["WATCH"] = "High Interest / Growth"
 
+# In-Memory Cache for Circuit Breaker Fallbacks
+SCREENER_CACHE = {}
+
 TICKER_NAMES = {
     "ECL": "Ecolab Inc.",
     "PLTR": "Palantir Technologies Inc.",

@@ -10,3 +10,23 @@ class BaseStrategy(ABC):
         - key metrics...
         """
         pass
+
+    def check_market_volatility(self, df: pd.DataFrame) -> str | None:
+        """
+        Financial Breaker: If 1-day ATR is 5x the norm, trip 'AVOID' state.
+        This acts as a 'Risk Management Circuit Breaker'.
+        """
+        if df is None or df.empty or 'ATR' not in df.columns:
+            return None
+
+        try:
+            current_atr = df['ATR'].iloc[-1]
+            mean_atr = df['ATR'].mean()
+
+            # If current ATR is > 5x the average, market is too crazy
+            if mean_atr > 0 and current_atr > (mean_atr * 5):
+                return "TRIPPED: HIGH VOLATILITY"
+        except Exception:
+            pass
+
+        return None

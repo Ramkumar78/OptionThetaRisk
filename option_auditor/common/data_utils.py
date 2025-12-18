@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import logging
 import time
 import random
+from option_auditor.common.resilience import data_api_breaker, ResiliencyGuru
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,8 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
     """
     for attempt in range(retries):
         try:
-            df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=auto_adjust)
+            # Wrap the actual network call with the breaker
+            df = data_api_breaker.call(yf.download, ticker, period=period, interval=interval, progress=False, auto_adjust=auto_adjust)
             if not df.empty:
                 return df
         except Exception as e:
@@ -162,7 +164,9 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
                 time.sleep(1.0 + random.random() * 0.5)
 
             # yf.download can be flaky, try/except the batch
-            batch = yf.download(
+            # Wrap the actual network call with the breaker
+            batch = data_api_breaker.call(
+                yf.download,
                 chunk,
                 period=period,
                 interval=interval,
@@ -176,9 +180,23 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
                 data_frames.append(batch)
 
         except Exception as e:
-            logger.error(f"Batch {i} download failed: {e}")
+            logger.error(f"Batch {i} download failed or Circuit Open: {e}")
+            # If the circuit is OPEN or the API fails, return Hystrix Fallback if we have nothing
+            # Note: in batch context, one failed batch might not mean total failure, but if breaker opens,
+            # subsequent calls will fail fast.
+            if data_api_breaker.current_state == 'open':
+                # If we are in the middle of a batch and breaker trips, we probably should abort.
+                # However, ResiliencyGuru returns a dict, not a dataframe.
+                # Here we expect a dataframe. The fallback provided by the guru is for screener results (list),
+                # not raw dataframe.
+                # So we just return empty or partial.
+                logger.warning("Circuit breaker open during batch fetch. Aborting remaining batches.")
+                break
+
 
     if not data_frames:
+        # If we got nothing, maybe check if we should return something else?
+        # But fetch_batch_data_safe is expected to return a DataFrame.
         return pd.DataFrame()
 
     try:
