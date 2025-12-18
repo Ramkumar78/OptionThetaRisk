@@ -682,18 +682,26 @@ def create_app(testing: bool = False) -> Flask:
                      dt = datetime.strptime(entry_date_str, "%Y-%m-%d")
                      # Fetch history: Use yfinance directly or helper
                      # Start date is inclusive, fetch a few days to ensure we hit a trading day
-                     hist = yf.download(ticker, start=dt, end=dt + timedelta(days=5), progress=False)
+                     # Use auto_adjust=True to match screener logic
+                     hist = yf.download(ticker, start=dt, end=dt + timedelta(days=5), progress=False, auto_adjust=True)
                      if not hist.empty:
                         # Use the first available Close (closest to subsequent days if holiday)
-                        # Accessing 'Close' which might be multi-index if multi-ticker, but here single ticker
                         try:
-                            # yfinance>=0.2 returns columns (Price, Ticker) sometimes?
-                            # Usually simple dataframe for single ticker
-                            val = hist['Close'].iloc[0]
-                            # If val is Series (multi-ticker), take it, but we requested one ticker
-                            if hasattr(val, 'item'):
-                                entry_price = float(val.item())
+                            # Handling yfinance structure (MultiIndex or Flat)
+                            # If single ticker, it might be flat or have Ticker as column level
+                            close_series = hist['Close']
+
+                            # If MultiIndex (Date, Ticker), selecting 'Close' returns a DataFrame with tickers as columns
+                            # If Single Index (Date), selecting 'Close' returns a Series
+
+                            val = None
+                            if isinstance(close_series, pd.DataFrame):
+                                # If columns are tickers, get the first one (should be our ticker)
+                                val = close_series.iloc[0, 0]
                             else:
+                                val = close_series.iloc[0]
+
+                            if val is not None:
                                 entry_price = float(val)
                         except Exception as inner:
                             print(f"Error accessing Close price: {inner}")
@@ -729,13 +737,7 @@ def create_app(testing: bool = False) -> Flask:
             elif strategy == "fourier":
                  results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame=time_frame)
             elif strategy == "master":
-                 # Master convergence might not support single ticker easily if it relies on huge pre-load?
-                 # But commonly it just intersects others.
-                 # Let's try calling it or fallback.
-                 # Currently screen_master_convergence loads sector components. 
-                 # We'd need to refactor it to accept list or just run it and filter.
-                 # For now, return error or not supported.
-                 return jsonify({"error": "Master strategy does not support single stock check yet."}), 400
+                 results = screener.screen_master_convergence(ticker_list=[ticker], check_mode=True)
             else:
                 return jsonify({"error": f"Unknown strategy: {strategy}"}), 400
 
@@ -753,6 +755,7 @@ def create_app(testing: bool = False) -> Flask:
 
                 # Logic: If user is holding, provide context
                 signal = str(result.get('signal', 'WAIT')).upper()
+                verdict = str(result.get('verdict', '')).upper()
                 
                 # Check specifics
                 if strategy == "isa":
@@ -765,26 +768,61 @@ def create_app(testing: bool = False) -> Flask:
                          result['user_verdict'] = "✅ HOLD (Trend Valid)"
                 
                 elif strategy == "turtle":
-                    # Turtle has stop loss in result usually
+                    # Check 10-day trailing exit if available (for winning trades)
+                    trailing_exit = result.get('trailing_exit_10d', 0)
                     sl = result.get('stop_loss', 0)
-                    if curr < sl:
+
+                    if trailing_exit > 0 and curr < trailing_exit:
+                        result['user_verdict'] = "🛑 EXIT (Below 10-Day Low)"
+                    elif sl > 0 and curr < sl:
                          result['user_verdict'] = "🛑 EXIT (Stop Loss Hit)"
                     else:
-                         result['user_verdict'] = "✅ HOLD (Above Stop)"
+                         result['user_verdict'] = "✅ HOLD (Trend Valid)"
 
                 elif strategy == "ema":
                     # 5/13 Cross? 
                     # If signal is SELL, exit.
-                    if "SELL" in signal:
+                    if "SELL" in signal or "DUMP" in signal:
                          result['user_verdict'] = "🛑 EXIT (Bearish Cross)"
                     else:
                          result['user_verdict'] = "✅ HOLD (Momentum)"
 
+                elif strategy == "fourier":
+                    # Check Cycle Position
+                    # If at Top (>0.8) -> SELL
+                    if "HIGH" in signal or "SELL" in signal:
+                        result['user_verdict'] = "🛑 EXIT (Cycle Peak)"
+                    elif "LOW" in signal or "BUY" in signal:
+                         # If already holding, maybe accumulate
+                         result['user_verdict'] = "✅ HOLD/ADD (Cycle Bottom)"
+                    else:
+                         result['user_verdict'] = "✅ HOLD (Mid-Cycle)"
+
+                elif strategy == "master":
+                    # Confluence Score Logic
+                    score = result.get('confluence_score', 0)
+                    # "STAY LONG": If 2/3 or 3/3 strategies remain bullish.
+                    # "URGENT EXIT": If multiple strategies have flipped to SELL/EXIT since your purchase date.
+
+                    if score >= 2:
+                         result['user_verdict'] = f"✅ STAY LONG ({score}/3 Bullish)"
+                    else:
+                         # Check specific negatives
+                         isa = result.get('isa_trend', 'NEUTRAL')
+                         fourier = result.get('fourier', '')
+
+                         if isa == "BEARISH" and "TOP" in str(fourier).upper():
+                              result['user_verdict'] = "🛑 URGENT EXIT (Trend & Cycle Bearish)"
+                         elif score == 1:
+                              result['user_verdict'] = "⚠️ CAUTION (Only 1/3 Bullish)"
+                         else:
+                              result['user_verdict'] = "🛑 EXIT (No Confluence)"
+
                 # Fallback
                 if 'user_verdict' not in result:
-                    if "BUY" in signal or "GREEN" in signal or "BREAKOUT" in signal:
+                    if "BUY" in signal or "GREEN" in signal or "BREAKOUT" in signal or "LONG" in signal or "BUY" in verdict:
                          result['user_verdict'] = "✅ HOLD (Signal Active)"
-                    elif "SELL" in signal or "SHORT" in signal:
+                    elif "SELL" in signal or "SHORT" in signal or "DUMP" in signal or "SELL" in verdict:
                          result['user_verdict'] = "🛑 EXIT (Signal Bearish)"
                     else:
                          result['user_verdict'] = "👀 WATCH (Neutral)"

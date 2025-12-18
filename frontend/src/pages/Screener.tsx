@@ -479,41 +479,55 @@ const Screener: React.FC<ScreenerProps> = () => {
                 )}
 
                 {/* Individual Stock Check - Relocated */}
-                {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier'].includes(activeTab) && (
+                {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier', 'master'].includes(activeTab) && (
                     <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-6">
                         <div className="flex flex-col md:flex-row items-end justify-between gap-4">
                             <div className="w-full md:w-auto flex-1">
                                 <label htmlFor="check-stock" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Check Individual Stock ({screenerInfo[activeTab]?.title})</label>
                                 <form onSubmit={handleCheckStock} className="flex flex-col sm:flex-row gap-2">
-                                    <input
-                                        type="text"
-                                        id="check-stock"
-                                        value={checkTicker}
-                                        onChange={(e) => setCheckTicker(e.target.value)}
-                                        placeholder="Ticker (e.g. AAPL)"
-                                        className="w-full sm:w-40 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                    />
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={checkEntryPrice}
-                                        onChange={(e) => setCheckEntryPrice(e.target.value)}
-                                        placeholder="Entry Price"
-                                        className="w-full sm:w-32 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                    />
-                                    <input
-                                        type="date"
-                                        value={checkEntryDate}
-                                        onChange={(e) => setCheckEntryDate(e.target.value)}
-                                        placeholder="Entry Date"
-                                        className="w-full sm:w-40 bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                    />
+                                    <div className="flex-1">
+                                        <label htmlFor="check-stock" className="sr-only">Ticker</label>
+                                        <input
+                                            type="text"
+                                            id="check-stock"
+                                            value={checkTicker}
+                                            onChange={(e) => setCheckTicker(e.target.value)}
+                                            placeholder="Ticker (e.g. AAPL)"
+                                            className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label htmlFor="check-entry-price" className="sr-only">Entry Price</label>
+                                        <input
+                                            type="number"
+                                            id="check-entry-price"
+                                            step="0.01"
+                                            value={checkEntryPrice}
+                                            onChange={(e) => setCheckEntryPrice(e.target.value)}
+                                            placeholder="Entry Price ($)"
+                                            className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label htmlFor="check-entry-date" className="sr-only">Date Bought</label>
+                                        <div className="relative">
+                                            <input
+                                                type="date"
+                                                id="check-entry-date"
+                                                value={checkEntryDate}
+                                                onChange={(e) => setCheckEntryDate(e.target.value)}
+                                                placeholder="Date Bought"
+                                                className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-base rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                            />
+                                            <span className="absolute right-3 top-2.5 text-gray-400 text-xs pointer-events-none hidden sm:block">Date Bought</span>
+                                        </div>
+                                    </div>
                                     <button
                                         type="submit"
                                         disabled={checkLoading || !checkTicker.trim()}
                                         className="px-4 py-2.5 text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 font-medium rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                     >
-                                        {checkLoading ? 'Checking...' : 'Check'}
+                                        {checkLoading ? 'Checking...' : 'Check Strategy'}
                                     </button>
                                 </form>
                             </div>
@@ -548,11 +562,16 @@ const Screener: React.FC<ScreenerProps> = () => {
                                         </span>
                                     </div>
                                     {checkResult.pnl_value !== undefined && (
-                                        <div>
-                                            <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">PnL</span>
-                                            <span className={clsx("font-mono font-bold", checkResult.pnl_value >= 0 ? "text-emerald-600" : "text-red-600")}>
-                                                {checkResult.pnl_value >= 0 ? "+" : ""}{formatCurrency(checkResult.pnl_value, getCurrencySymbol(checkResult.ticker))} ({parseFloat(checkResult.pnl_pct).toFixed(2)}%)
-                                            </span>
+                                        <div className="col-span-2 md:col-span-2 bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                                            <span className="text-gray-500 dark:text-gray-400 block text-xs uppercase tracking-wider">Performance Since Purchase</span>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className={clsx("text-lg font-mono font-bold", checkResult.pnl_value >= 0 ? "text-emerald-600" : "text-red-600")}>
+                                                    {checkResult.pnl_value >= 0 ? "+" : ""}{parseFloat(checkResult.pnl_pct).toFixed(2)}%
+                                                </span>
+                                                <span className="text-sm text-gray-600 dark:text-gray-300">
+                                                    ({checkResult.pnl_value >= 0 ? "+" : ""}{formatCurrency(checkResult.pnl_value, getCurrencySymbol(checkResult.ticker))})
+                                                </span>
+                                            </div>
                                         </div>
                                     )}
                                     {checkResult.pct_change_1d !== undefined && (
