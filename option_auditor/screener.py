@@ -781,7 +781,8 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
                     "atr": round(current_atr, 2),
                     "52_week_high": round(high_52wk, 2) if high_52wk else None,
                     "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                    "sector_change": pct_change_1d # Returning stocks own change as placeholder for now as sector mapping requires fetching sector ticker
+                    "sector_change": pct_change_1d, # Returning stocks own change as placeholder for now as sector mapping requires fetching sector ticker
+                    "trailing_exit_10d": round(prev_low_10, 2)
                 })
 
         except Exception as e:
@@ -2670,7 +2671,7 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
 
-def screen_master_convergence(ticker_list: list = None, region: str = "us") -> list:
+def screen_master_convergence(ticker_list: list = None, region: str = "us", check_mode: bool = False) -> list:
     """
     Runs ALL strategies on the dataset to find CONFLUENCE.
     Uses Caching to prevent timeouts on S&P 500 scans.
@@ -2696,12 +2697,15 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us") -> l
     cache_name = "market_scan_v1" if is_large else "watchlist_scan"
 
     try:
-        # This replaces the entire slow "chunking" loop you had before
-        # Note: If region=sp500, we are requesting ~500 tickers.
-        # get_cached_market_data will check cache "market_scan_v1".
-        # This cache is populated by refresh_cache.py with get_sp500_tickers().
-        # So it should be a hit.
-        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+        if check_mode:
+             all_data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
+        else:
+            # This replaces the entire slow "chunking" loop you had before
+            # Note: If region=sp500, we are requesting ~500 tickers.
+            # get_cached_market_data will check cache "market_scan_v1".
+            # This cache is populated by refresh_cache.py with get_sp500_tickers().
+            # So it should be a hit.
+            all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     except Exception as e:
         logger.error(f"Master screener data fetch failed: {e}")
         return []
