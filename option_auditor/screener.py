@@ -2871,51 +2871,45 @@ def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 100):
 
 def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     """
-    Mathematical Implementation of VIX-Adjusted ATR Strategy.
-    Uses Continuous Linear Interpolation for Strike Selection.
-    Target: Liquid US Options.
+    YIELD-OPTIMIZED STRATEGY:
+    - Tightens strikes in low VIX regimes to ensure decent premiums.
+    - FILTERS OUT low-volatility stocks (Dead Money).
+    - Focuses on High Beta names where implied volatility pays well.
     """
     import pandas as pd
     import pandas_ta as ta
     import yfinance as yf
     from datetime import datetime, timedelta
-
-    # Imports for caching
     from option_auditor.common.data_utils import get_cached_market_data
     from option_auditor.common.constants import LIQUID_OPTION_TICKERS
 
-    # --- 1. GET GLOBAL VIX (THE REGIME) ---
+    # --- 1. GET VIX & REGIME ---
     try:
-        # VIX doesn't need caching, it's tiny and vital to be real-time
         vix_df = yf.download("^VIX", period="5d", progress=False)
         current_vix = float(vix_df['Close'].iloc[-1])
     except:
-        current_vix = 16.0 # Fallback
+        current_vix = 14.0 # Default to "Low-ish" if fail
 
-    # --- 2. CALCULATE DYNAMIC MULTIPLIER (THE FORMULA) ---
-    # Base = 2.0x ATR. Scaling = Adds 0.1x ATR for every 1 point of VIX above 12.
-    # Logic: VIX 12 -> 2.0x. VIX 22 -> 3.0x. VIX 32 -> 4.0x.
-    safety_k = 2.0 + max(0, (current_vix - 12) / 10.0)
+    # --- 2. THE NEW "YIELD" MATH ---
+    # In low VIX, we must get closer to the fire to feel the heat (premium).
+    # Floor at 1.5x ATR, Cap at 3.0x ATR.
+    safety_k = 1.5 + ((current_vix - 12) / 15.0)
 
-    # Cap safety to avoid being ridiculous (e.g. asking to sell $0 puts)
-    if safety_k > 4.5: safety_k = 4.5
+    # Clamping
+    if safety_k < 1.5: safety_k = 1.5  # Never get closer than 1.5 ATR (Gamma Risk)
+    if safety_k > 3.0: safety_k = 3.0  # Cap max distance
 
-    # --- 3. LOAD DATA ---
+    # --- 3. FILTER UNIVERSE ---
     if ticker_list is None:
         ticker_list = LIQUID_OPTION_TICKERS
 
-    # Use existing cache logic
-    # We use "market_scan_us_liquid" as cache name
     all_data = get_cached_market_data(ticker_list, period="1y", cache_name="market_scan_us_liquid")
     results = []
 
-    # Dates
     today = datetime.now()
-    # 45 DTE Entry -> 21 DTE Management
-    entry_expiry = today + timedelta(days=45)
     manage_date = today + timedelta(days=24)
 
-    # --- 4. ANALYZE ---
+    # MultiIndex Handler
     if isinstance(all_data.columns, pd.MultiIndex):
         valid_tickers = all_data.columns.levels[0]
     else:
@@ -2923,92 +2917,78 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
 
     for ticker in valid_tickers:
         try:
-            # Extract DF
             df = pd.DataFrame()
             if isinstance(all_data.columns, pd.MultiIndex):
                 if ticker in all_data.columns.levels[0]:
                     df = all_data[ticker].copy()
             else:
-                if isinstance(all_data, pd.DataFrame) and not all_data.empty:
-                     # Check if it's single ticker df or flat
-                     # If all_data has columns like Open, High, etc. it's single ticker (or loop iteration 1)
-                     if 'Close' in all_data.columns:
-                          df = all_data.copy()
-                     else:
-                          # Flat but maybe keyed by ticker? No, get_cached_market_data returns multiindex or single df.
-                          # If it was a list of tickers, it should be multiindex.
-                          # If 1 ticker, it might be flat.
-                          # If flat and we are iterating tickers, we assume it matches valid_tickers[0]
-                          if len(valid_tickers) == 1 and ticker == valid_tickers[0]:
-                               df = all_data.copy()
-                          else:
-                               continue
+                df = all_data.copy()
 
             df = df.dropna(how='all')
-            if len(df) < 200: continue
+            if len(df) < 100: continue
 
-            # Current Price
-            curr_close = float(df['Close'].iloc[-1])
+            curr_close = df['Close'].iloc[-1]
 
-            # Trend Filters (200 SMA)
-            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-            sma_20 = df['Close'].rolling(20).mean().iloc[-1]
-
-            # Filter: MUST be in Bull Trend (Price > SMA200)
-            if curr_close < sma_200: continue
-
-            # Volatility (ATR)
+            # --- CRITICAL FILTER: DEAD MONEY CHECK ---
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            atr = float(df['ATR'].iloc[-1])
+            atr = df['ATR'].iloc[-1]
 
-            # --- THE STRIKE CALCULATION ---
-            # Formula: Mean - (Dynamic_K * ATR)
-            # We use SMA_20 as the "Mean" (Center of gravity)
-            short_strike_raw = sma_20 - (safety_k * atr)
+            atr_pct = (atr / curr_close) * 100
 
-            # Safety Check: If calculated strike is ABOVE current price, math failed (crash occurring)
-            if short_strike_raw >= curr_close: continue
+            # IF STOCK IS TOO BORING (<2% Volatility), OPTIONS ARE WORTHLESS. SKIP IT.
+            if atr_pct < 2.0 and current_vix < 20:
+                continue
 
-            # Round to nearest 0.5 or 1 (Standard strikes)
-            if curr_close < 50:
-                short_strike = float(int(short_strike_raw * 2) / 2) # Round to 0.5
-                spread_width = 1.0
-            elif curr_close < 200:
-                short_strike = float(int(short_strike_raw)) # Round to 1.0
+            # Trend Check (Only Bullish)
+            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
+            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+
+            # Relaxed Trend: Price > SMA50 (Momentum) is enough for 45DTE trades
+            if curr_close < sma_50: continue
+
+            # --- STRIKE CALCULATION ---
+            # Using EMA(20) as it tracks price tighter than SMA
+            ema_20 = ta.ema(df['Close'], length=20).iloc[-1]
+
+            # Strike Floor
+            safe_floor = ema_20 - (safety_k * atr)
+
+            if safe_floor >= curr_close: continue
+
+            # Rounding to actionable strikes
+            if curr_close < 100:
+                short_strike = float(int(safe_floor)) # Round down to nearest $1
+                spread_width = 1.0 # Tight spread for cheap stocks
+            elif curr_close < 300:
+                short_strike = float(int(safe_floor / 2.5) * 2.5) # Nearest $2.50
                 spread_width = 5.0
             else:
-                short_strike = float(int(short_strike_raw / 5) * 5) # Round to 5.0 (Expensive stocks)
+                short_strike = float(int(safe_floor / 5) * 5) # Nearest $5
                 spread_width = 10.0
 
             long_strike = short_strike - spread_width
 
             # --- SCORING ---
-            # Calculate "Safety Cushion Percentage"
-            cushion_pct = (curr_close - short_strike) / curr_close
-
-            # Arbitrary score for sorting: Volatility pays better
-            atr_pct = (atr / curr_close) * 100
+            # We score by "Juice" (Volatility)
             score = atr_pct * 10
 
-            # Penalty if cushion is too small (<5%)
-            if cushion_pct < 0.05: score -= 50
+            # Bonus for strong uptrend (Price > SMA200 too)
+            if curr_close > sma_200: score += 15
 
             results.append({
                 "ticker": ticker,
-                "symbol": ticker,
                 "price": round(curr_close, 2),
                 "vix_ref": round(current_vix, 2),
-                "atr": round(atr, 2),
-                "k_factor": round(safety_k, 2),
-                "trend": "Bullish",
+                "volatility_pct": f"{atr_pct:.1f}%", # Show me the juice
+                "safety_mult": f"{safety_k:.1f}x",
                 "sell_strike": short_strike,
                 "buy_strike": long_strike,
-                "cushion": f"{cushion_pct:.1%}",
-                "manage_by": manage_date.strftime('%Y-%m-%d'),
+                "dist_pct": f"{((curr_close - short_strike)/curr_close)*100:.1f}%",
                 "score": round(score, 1)
             })
 
         except Exception: continue
 
+    # Sort by Score (High Volatility First) -> The ones that actually pay money
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
