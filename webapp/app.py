@@ -9,6 +9,7 @@ import json
 from typing import Optional
 
 import yfinance as yf
+import pandas as pd
 from flask import Flask, request, redirect, url_for, flash, send_file, session, jsonify, send_from_directory, g
 
 from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
@@ -717,6 +718,8 @@ def create_app(testing: bool = False) -> Flask:
                                 entry_price = float(val)
                         except Exception as inner:
                             print(f"Error accessing Close price: {inner}")
+                            import traceback
+                            traceback.print_exc()
                             pass
                  except Exception as e:
                      print(f"Error fetching historical price for {ticker} on {entry_date_str}: {e}")

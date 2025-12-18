@@ -107,6 +107,8 @@ async def check_isa_stock_async(ticker: str, entry_price: Optional[float] = None
         SCREENER_CACHE[cache_key] = result
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -156,6 +156,9 @@ class TestUnifiedStockCheck(unittest.TestCase):
 
         # Setup Historical Price Mock
         # Mocking yf.download to return a DataFrame with a Close price of 250
+        # Important: The code expects a Series or a DataFrame where accessing 'Close'
+        # works, and then .iloc[0] or .iloc[0,0] gets the value.
+
         mock_df = pd.DataFrame({'Close': [250.0]})
         mock_download.return_value = mock_df
 
