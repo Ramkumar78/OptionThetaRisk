@@ -17,7 +17,8 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../webapp/static/react_build',
+    // Default output directory is 'dist', which is required for Dockerfile COPY
+    // outDir: '../webapp/static/react_build',
     emptyOutDir: true
   }
 })
