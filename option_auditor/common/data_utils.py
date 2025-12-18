@@ -135,7 +135,7 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
         try:
             # Wrap the actual network call with the breaker
             df = data_api_breaker.call(yf.download, ticker, period=period, interval=interval, progress=False, auto_adjust=auto_adjust)
-            if not df.empty:
+            if df is not None and not df.empty:
                 return df
         except Exception as e:
             # Check if it is a potentially transient error or just no data

@@ -57,6 +57,6 @@ def calculate_dominant_cycle(prices):
     cycle_range = np.max(detrended) - np.min(detrended)
 
     # Normalized position (-1.0 to 1.0)
-    rel_pos = current_val / (cycle_range / 2.0) if cycle_range > 0 else 0
+    rel_pos = current_val / (cycle_range / 2.0) if cycle_range > 1e-9 else 0.0
 
     return round(period, 1), rel_pos

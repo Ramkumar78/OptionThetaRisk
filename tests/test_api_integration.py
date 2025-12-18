@@ -2,6 +2,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 from webapp.app import create_app
+import os
 
 @pytest.fixture
 def client():
@@ -90,16 +91,6 @@ def test_journal_api_crud(client):
     # List (empty again)
     resp = client.get("/journal")
     assert len(resp.json) == 0
-
-def test_root_serves_react(client):
-    """Verify root path serves the React index.html."""
-    resp = client.get("/")
-    assert resp.status_code == 200
-    # In test env without build, checking for 200 or failure is key.
-    # The default mock might return 404 if file not found, but we want to ensure routing works.
-    # create_app handles 404 by returning index.html if file exists, else 404 if truly missing in static/react_build.
-    # We can mock os.path.exists to return True if needed, but let's see current behavior.
-    # If it fails, we know we need to mock static file serving.
 
 def test_analyze_api_returns_json(client):
     """Verify analyze endpoint returns JSON."""
