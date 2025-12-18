@@ -34,6 +34,8 @@ describe('Screener Component', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    // Mock window.scrollTo
+    window.scrollTo = vi.fn();
   });
 
   it('renders screener options', () => {
@@ -58,8 +60,9 @@ describe('Screener Component', () => {
       </BrowserRouter>
     );
 
-    const runBtn = screen.getByRole('button', { name: /Run Screener/i });
-    await user.click(runBtn);
+    // There are now two "Run Screener" buttons (Desktop and Mobile)
+    const runBtns = screen.getAllByRole('button', { name: /Run Screener/i });
+    await user.click(runBtns[0]); // Click the first available one
 
     try {
       await waitFor(() => {
@@ -82,8 +85,8 @@ describe('Screener Component', () => {
       </BrowserRouter>
     );
 
-    const runBtn = screen.getByRole('button', { name: /Run Screener/i });
-    fireEvent.click(runBtn);
+    const runBtns = screen.getAllByRole('button', { name: /Run Screener/i });
+    fireEvent.click(runBtns[0]);
 
     await waitFor(() => {
       expect(screen.getByText(/Network Error/i)).toBeInTheDocument();
@@ -135,9 +138,9 @@ describe('Screener Component', () => {
       const fortressTab = screen.getByText('Options: Bull Put');
       fireEvent.click(fortressTab);
 
-      // Run Screener
-      const runBtn = screen.getByRole('button', { name: /Run Screener/i });
-      fireEvent.click(runBtn);
+      // Run Screener - handle multiple buttons
+      const runBtns = screen.getAllByRole('button', { name: /Run Screener/i });
+      fireEvent.click(runBtns[0]);
 
       await waitFor(() => {
         expect(screen.getByText('10.0%')).toBeInTheDocument();
@@ -147,7 +150,6 @@ describe('Screener Component', () => {
       const sortHeader = screen.getByText('Safety %');
       fireEvent.click(sortHeader); // Ascending
 
-      // Check order in 6th column
       const cells = document.querySelectorAll('tbody tr td:nth-child(6)');
       expect(cells.length).toBe(3);
 
