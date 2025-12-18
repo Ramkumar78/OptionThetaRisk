@@ -1,84 +1,121 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.concurrency import run_in_threadpool
-import logging
-from option_auditor.models import StockCheckRequest
+from fastapi.responses import JSONResponse
+from cachetools import TTLCache
+import asyncio
+import pandas as pd
+from typing import Optional, List, Dict, Any
+
+from webapp.app import app as flask_app
+from option_auditor.models import StockCheckRequest, ScanResult
 from option_auditor import screener
+from option_auditor.strategies.isa import IsaStrategy
+from option_auditor.common.data_utils import async_fetch_data_with_retry
 from option_auditor.common.resilience import data_api_breaker
-from option_auditor.common.constants import TICKER_NAMES
-import pybreaker
 
-# Logger
-logger = logging.getLogger(__name__)
+# Initialize FastAPI
+fastapi_app = FastAPI()
 
-app = FastAPI(title="OptionThetaRisk Guru API")
-
-# Middleware
-app.add_middleware(
+# Enable CORS (Required for Frontend)
+fastapi_app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Adjust for production
+    allow_origins=["*"],  # Adjust this in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "service": "fastapi-core"}
+# 2. Advanced Local Caching (The "Poor Man's Redis")
+# Thread-Safe LRU Cache with TTL of 600 seconds
+SCREENER_CACHE = TTLCache(maxsize=100, ttl=600)
 
-@app.get("/api/screener/status")
+@fastapi_app.get("/health")
+async def health():
+    return "OK"
+
+@fastapi_app.get("/api/screener/status")
 async def get_breaker_status():
     """
     Returns the real-time status of the Circuit Breaker.
+    Used by the frontend to display 'Stale Data' warnings.
     """
     return {
-        "api_health": data_api_breaker.current_state,
+        "api_health": data_api_breaker.current_state, # 'closed', 'open', 'half-open'
         "is_fallback": data_api_breaker.current_state == 'open'
     }
 
-@app.post("/api/screen/isa/check")
-async def check_isa_stock(payload: StockCheckRequest):
+@fastapi_app.get("/api/screen/isa/check", response_model=ScanResult)
+async def check_isa_stock_async(ticker: str, entry_price: Optional[float] = None):
     """
-    Async implementation of the ISA Stock Check.
-    Uses run_in_threadpool to handle synchronous yfinance/pandas calls.
+    Async implementation of the ISA Check endpoint.
+    Uses asyncio to handle concurrent requests without blocking.
     """
 
-    # 1. Resolve Ticker (Synchronous helper)
-    ticker_query = payload.ticker.strip()
-    if not ticker_query:
-        raise HTTPException(status_code=400, detail="No ticker provided")
+    # Check Cache
+    cache_key = f"isa_check_{ticker}"
+    if cache_key in SCREENER_CACHE:
+        return SCREENER_CACHE[cache_key]
 
     try:
-        # We wrap resolve_ticker logic here or call it
-        # Since resolve_ticker is pure logic/memory lookup (TICKER_NAMES), it's fast enough to run in main thread,
-        # but screen_trend_followers_isa is heavy (I/O).
+        ticker = screener.resolve_ticker(ticker) or ticker.upper()
 
-        # We can use the screener.resolve_ticker helper
-        resolved_ticker = screener.resolve_ticker(ticker_query)
-        if not resolved_ticker:
-            resolved_ticker = ticker_query.upper()
+        # 1. Transition to Async I/O (The "No-Cost" Performance Play)
+        # Fetch data asynchronously
+        df = await async_fetch_data_with_retry(ticker, period="1y")
 
-        # 2. Execute with Circuit Breaker and Threadpool
-        # Uses refactored helper from screener.py to keep controller clean.
-        result = await run_in_threadpool(
-            data_api_breaker.call,
-            screener.screen_single_ticker_with_pnl,
-            resolved_ticker,
-            payload.entry_price
+        if df.empty or len(df) < 200:
+            raise HTTPException(status_code=404, detail=f"Insufficient data for {ticker}")
+
+        # Run Strategy (CPU bound, but fast for single ticker)
+        # 4. The "HFT" Signal Refinement (Hurst Exponent) is included in IsaStrategy.analyze
+        strategy = IsaStrategy()
+        result_dict = strategy.analyze(df)
+
+        # Construct Result
+        curr_price = float(df['Close'].iloc[-1])
+        signal = result_dict.get('signal', 'WAIT')
+
+        # PnL Logic
+        details = result_dict
+        if entry_price:
+             pnl_value = curr_price - entry_price
+             pnl_pct = ((curr_price - entry_price) / entry_price) * 100
+             details['pnl_value'] = pnl_value
+             details['pnl_pct'] = pnl_pct
+
+             # Override signal if holding
+             if "ENTER" in signal or "WATCH" in signal:
+                 signal = "✅ HOLD (Trend Active)"
+
+             stop_exit = result_dict.get('trailing_exit_20d', 0)
+             if curr_price <= stop_exit:
+                 signal = "🛑 EXIT (Stop Hit)"
+
+             if "AVOID" in signal:
+                 signal = "🛑 EXIT (Downtrend)"
+
+        result = ScanResult(
+            ticker=ticker,
+            price=curr_price,
+            signal=signal,
+            verdict=signal, # Mapping signal to verdict
+            details=details
         )
 
-        if not result:
-             raise HTTPException(status_code=404, detail=f"No data found for {resolved_ticker}")
-
-        return {"status": "success", "data": result}
-
-    except HTTPException:
-        raise
-    except pybreaker.CircuitBreakerError:
-        # Fallback logic
-        logger.warning(f"Circuit Breaker Open for {ticker_query}")
-        return {"status": "degraded", "message": "API Throttled - Using Cache"}
+        # Update Cache
+        SCREENER_CACHE[cache_key] = result
+        return result
 
     except Exception as e:
-        logger.error(f"Error checking stock {ticker_query}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Mount Flask App (for backward compatibility)
+fastapi_app.mount("/", WSGIMiddleware(flask_app))
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    uvicorn.run(fastapi_app, host="0.0.0.0", port=port, log_level="debug" if debug else "info")

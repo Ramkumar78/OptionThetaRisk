@@ -96,3 +96,14 @@ class StockCheckRequest(BaseModel):
     ticker: str
     entry_price: Optional[float] = None
     purchase_date: Optional[str] = None
+
+class Position(BaseModel):
+    ticker: str
+    value: float
+
+class ScanResult(BaseModel):
+    ticker: str
+    price: float
+    signal: str
+    verdict: str
+    details: Dict[str, Any]
