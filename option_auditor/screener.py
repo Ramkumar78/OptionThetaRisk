@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
+from typing import Optional
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -1897,6 +1898,39 @@ def resolve_ticker(query: str) -> str:
 
     # 4. Fallback: Assume it is a valid ticker if no match found
     return query
+
+def screen_single_ticker_with_pnl(ticker: str, entry_price: Optional[float] = None) -> Optional[dict]:
+    """
+    Screens a single ticker using ISA Trend logic and calculates PnL if entry price provided.
+    Helper for API Check endpoints.
+    """
+    results = screen_trend_followers_isa(ticker_list=[ticker], check_mode=True)
+    if not results:
+        return None
+
+    result = results[0]
+
+    # Enrich with PnL logic if entry price provided
+    if entry_price and result.get('price'):
+        curr = result['price']
+        result['pnl_value'] = curr - entry_price
+        result['pnl_pct'] = ((curr - entry_price) / entry_price) * 100
+        result['user_entry_price'] = entry_price
+
+        signal = str(result.get('signal', 'WAIT')).upper()
+        stop_exit = result.get('trailing_exit_20d', 0)
+
+        # Contextual Verdict
+        if "ENTER" in signal or "WATCH" in signal:
+            result['signal'] = "✅ HOLD (Trend Active)"
+
+        if curr <= stop_exit:
+            result['signal'] = "🛑 EXIT (Stop Hit)"
+
+        if "SELL" in signal or "AVOID" in signal:
+            result['signal'] = "🛑 EXIT (Downtrend)"
+
+    return result
 
 def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False) -> list:
     """

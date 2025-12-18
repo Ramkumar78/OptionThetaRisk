@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 import pandas as pd
+from pydantic import BaseModel
 
 @dataclass
 class Leg:
@@ -89,3 +90,9 @@ class StrategyGroup:
     def record_segment(self):
         """Records the current state as a segment (e.g. before rolling)."""
         pass
+
+# --- FastAPI Models ---
+class StockCheckRequest(BaseModel):
+    ticker: str
+    entry_price: Optional[float] = None
+    purchase_date: Optional[str] = None

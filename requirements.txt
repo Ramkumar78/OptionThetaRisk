@@ -17,3 +17,7 @@ scipy
 pyarrow>=14.0.0
 schedule
 pybreaker
+fastapi
+uvicorn[standard]
+pydantic
+httpx
