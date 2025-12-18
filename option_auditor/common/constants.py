@@ -457,3 +457,14 @@ try:
     TICKER_NAMES.update(SP500_NAMES)
 except ImportError:
     pass
+
+# Stocks with penny-wide spreads and massive liquidity. Best for algo trading.
+LIQUID_OPTION_TICKERS = [
+    "SPY", "QQQ", "IWM", "NVDA", "TSLA", "AAPL", "AMD", "AMZN", "MSFT", "GOOGL",
+    "META", "NFLX", "BA", "DIS", "JPM", "GS", "C", "WFC", "BAC", "XOM", "CVX",
+    "COP", "SLB", "OXY", "INTC", "MU", "QCOM", "TXN", "AMAT", "LRCX",
+    "ADBE", "CRM", "ORCL", "IBM", "CSCO", "CMCSA", "VZ", "T", "TMUS", "COST",
+    "WMT", "TGT", "HD", "LOW", "NKE", "SBUX", "MCD", "KO", "PEP", "PG", "JNJ",
+    "PFE", "MRK", "ABBV", "UNH", "CAT", "DE", "MMM", "GE", "HON", "RTX", "LMT",
+    "PLTR", "COIN", "MARA", "RIOT", "DKNG", "UBER", "LYFT", "ABNB", "SQ", "PYPL"
+]

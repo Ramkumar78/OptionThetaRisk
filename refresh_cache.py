@@ -28,6 +28,11 @@ def job():
         logger.info(f"Refreshing UK/Euro ({len(tickers_euro)} tickers)...")
         get_cached_market_data(tickers_euro, period="2y", cache_name="market_scan_europe", force_refresh=True)
 
+        # 4. Fortress / Liquid Options (US)
+        from option_auditor.common.constants import LIQUID_OPTION_TICKERS
+        logger.info(f"Refreshing Fortress Liquid Options ({len(LIQUID_OPTION_TICKERS)} tickers)...")
+        get_cached_market_data(LIQUID_OPTION_TICKERS, period="1y", cache_name="market_scan_us_liquid", force_refresh=True)
+
         logger.info("✅ All Caches Updated Successfully.")
     except Exception as e:
         logger.error(f"Cache refresh failed: {e}")
