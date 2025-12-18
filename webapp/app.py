@@ -351,6 +351,22 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/fortress", methods=["GET"])
+    def screen_fortress():
+        try:
+            # Cache this specific result for 1 hour as VIX doesn't change setup logic instantly
+            cache_key = "api_screen_fortress_us"
+            cached = get_cached_screener_result(cache_key)
+            if cached: return jsonify(cached)
+
+            # Run the new math function
+            results = screener.screen_dynamic_volatility_fortress()
+
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/isa", methods=["GET"])
     def screen_isa():
         try:

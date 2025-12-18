@@ -6,7 +6,7 @@ import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps { }
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master' | 'fortress';
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
     master: {
@@ -58,6 +58,11 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
         title: 'Hybrid (Trend + Cycle)',
         subtitle: 'High Probability Setup',
         description: 'Combines ISA Trend (Direction) with Fourier Cycles (Timing). Finds "Buy the Dip" setups where a strong uptrend meets a cyclical bottom. High probability, high reward.'
+    },
+    fortress: {
+        title: "Dynamic Volatility Fortress",
+        subtitle: "VIX-Adjusted ATR Spreads",
+        description: "Mathematically derived Bull Put Spreads using a dynamic safety multiplier based on the VIX. Targets liquid US options."
     }
 };
 
@@ -188,6 +193,9 @@ const Screener: React.FC<ScreenerProps> = () => {
             } else if (activeTab === 'master') {
                 const res = await fetch(`/screen/master?region=${region}`);
                 data = await res.json();
+            } else if (activeTab === 'fortress') {
+                const res = await fetch(`/screen/fortress`);
+                data = await res.json();
             }
             setResults(data);
         } catch (err: any) {
@@ -266,6 +274,7 @@ const Screener: React.FC<ScreenerProps> = () => {
     }, [results, activeTab]);
 
     const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
+        { id: 'fortress', label: '🏰 Fortress', subLabel: 'Dynamic ATR' },
         { id: 'master', label: '⚡ Master Convergence', subLabel: 'Best of All' },
         { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
         { id: 'turtle', label: 'Turtle Trading' },
@@ -442,6 +451,12 @@ const Screener: React.FC<ScreenerProps> = () => {
                                 Targeting 45 DTE, ~30 Delta Puts.
                             </div>
                         </>
+                    )}
+
+                    {activeTab === 'fortress' && (
+                        <div className="col-span-3 flex items-center justify-center p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg text-blue-800 dark:text-blue-200">
+                            <p className="text-center italic">Scanning High-Liquidity US Options Universe automatically. No region selection required.</p>
+                        </div>
                     )}
                 </div>
 
@@ -856,9 +871,21 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         <HeaderCell label="Symbol" sortKey="symbol" />
                         {type === 'market' && <HeaderCell label="Company" sortKey="company" />}
                         <HeaderCell label="Price" sortKey="price" align="right" />
-                        {type !== 'bull_put' && type !== 'hybrid' && <HeaderCell label="Change" sortKey="change" align="right" />}
-                        <HeaderCell label="ATR" sortKey="atr" align="right" />
-                        <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />
+                        {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && <HeaderCell label="Change" sortKey="change" align="right" />}
+
+                        {type === 'fortress' && (
+                            <>
+                                <HeaderCell label="Safety K" sortKey="k_factor" align="center" />
+                                <HeaderCell label="Sell Put" sortKey="sell_strike" align="right" />
+                                <HeaderCell label="Buy Put" sortKey="buy_strike" align="right" />
+                                <HeaderCell label="Safety %" sortKey="cushion" align="right" />
+                                <HeaderCell label="Close Date" sortKey="manage_by" align="right" />
+                            </>
+                        )}
+
+                        {type !== 'fortress' && <HeaderCell label="ATR" sortKey="atr" align="right" />}
+                        {type !== 'fortress' && <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />}
+
                         {type === 'market' && (
                             <>
                                 <HeaderCell label="RSI" sortKey="rsi" align="right" />
@@ -958,18 +985,34 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     {formatCurrency(price, currency)}
                                 </td>
 
-                                {type !== 'bull_put' && type !== 'hybrid' && (
+                                {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && (
                                     <td className={clsx("px-4 py-3 text-right font-bold", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
                                         {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
                                     </td>
                                 )}
 
-                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
-                                    {row.atr_value ? formatCurrency(row.atr_value, currency) : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
-                                    {row.breakout_date || '-'}
-                                </td>
+                                {type === 'fortress' ? (
+                                    <>
+                                        <td className="px-4 py-3 text-center">
+                                            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded dark:bg-blue-900 dark:text-blue-200">
+                                                {row.k_factor}x ATR
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">${row.sell_strike}</td>
+                                        <td className="px-4 py-3 text-right font-mono text-gray-500">${row.buy_strike}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-gray-300">{row.cushion}</td>
+                                        <td className="px-4 py-3 text-right text-xs text-gray-500">{row.manage_by}</td>
+                                    </>
+                                ) : (
+                                    <>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                            {row.atr_value ? formatCurrency(row.atr_value, currency) : '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                                            {row.breakout_date || '-'}
+                                        </td>
+                                    </>
+                                )}
 
                                 {type === 'market' && (
                                     <>
