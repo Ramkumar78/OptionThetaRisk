@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import logging
 import time
 import random
+import asyncio
 from option_auditor.common.resilience import data_api_breaker, ResiliencyGuru
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,12 @@ try:
     yf.set_tz_cache_location(tz_cache_path)
 except Exception as e:
     logger.warning(f"Failed to set yfinance cache location: {e}")
+
+async def async_fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, retries=3):
+    """
+    Async wrapper for yfinance data fetching with retries.
+    """
+    return await asyncio.to_thread(fetch_data_with_retry, ticker, period, interval, auto_adjust, retries)
 
 def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp500", force_refresh: bool = False, lookup_only: bool = False):
     """

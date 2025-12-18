@@ -3,6 +3,7 @@ import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
+import psutil
 
 from option_auditor.strategies.turtle import TurtleStrategy
 from option_auditor.strategies.isa import IsaStrategy
@@ -12,11 +13,32 @@ from option_auditor.optimization import PortfolioOptimizer
 
 logger = logging.getLogger(__name__)
 
+def check_memory_usage(threshold_mb=450):
+    """
+    Checks if memory usage exceeds the threshold (in MB).
+    Render free tier often has 512MB RAM.
+    """
+    process = psutil.Process()
+    mem_info = process.memory_info()
+    mem_usage_mb = mem_info.rss / 1024 / 1024
+    return mem_usage_mb > threshold_mb
+
 def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> list:
     """
     Runs ALL strategies on the provided ticker list using a single data fetch.
     Returns a unified "Master Signal" matrix.
     """
+    # 3. Local Memory Guard
+    if check_memory_usage(threshold_mb=400):
+        logger.warning("⚠️ High Memory Usage detected! Limiting scan size.")
+        if ticker_list and len(ticker_list) > 50:
+            ticker_list = ticker_list[:50]
+
+    # Also enforce max batch size
+    if ticker_list and len(ticker_list) > 500:
+        logger.warning(f"Batch too large ({len(ticker_list)}). Truncating to 500 to prevent crash.")
+        ticker_list = ticker_list[:500]
+
     if ticker_list is None:
         # Default to a mix if not provided
         ticker_list = ["SPY", "QQQ", "IWM", "AAPL", "NVDA", "MSFT", "TSLA", "AMD", "AMZN", "GOOGL"]

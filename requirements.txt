@@ -21,3 +21,5 @@ fastapi
 uvicorn[standard]
 pydantic
 httpx
+cachetools
+psutil

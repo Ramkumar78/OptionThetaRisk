@@ -4,7 +4,7 @@ import uuid
 import json
 from abc import ABC, abstractmethod
 import boto3
-from sqlalchemy import create_engine, Column, String, LargeBinary, Float, Integer, Text, text, inspect
+from sqlalchemy import create_engine, Column, String, LargeBinary, Float, Integer, Text, text, inspect, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 Base = declarative_base()
@@ -121,6 +121,15 @@ class DatabaseStorage(StorageProvider):
         self.db_url = db_url
         if db_url not in DatabaseStorage._engines:
             engine = create_engine(db_url)
+            self.is_sqlite = db_url.startswith("sqlite")
+
+            if self.is_sqlite:
+                @event.listens_for(engine, "connect")
+                def set_sqlite_pragma(dbapi_connection, connection_record):
+                    cursor = dbapi_connection.cursor()
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                    cursor.close()
+
             # Only perform migration checks on creation
             DatabaseStorage._ensure_schema_migrations(engine)
             DatabaseStorage._engines[db_url] = engine
@@ -128,6 +137,7 @@ class DatabaseStorage(StorageProvider):
         self.engine = DatabaseStorage._engines[db_url]
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+        # Ensure is_sqlite is set even if engine was cached
         self.is_sqlite = db_url.startswith("sqlite")
 
     @staticmethod
