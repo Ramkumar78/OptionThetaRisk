@@ -204,7 +204,7 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
     # Iterate through the downloaded data to check criteria
     # OPTIMIZED ITERATION
     if isinstance(data.columns, pd.MultiIndex):
-        iterator = data.groupby(level=0, axis=1)
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
     else:
         # Fallback for single ticker result (rare)
         iterator = [(base_tickers[0], data)] if not data.empty and len(base_tickers)==1 else []
@@ -1720,7 +1720,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 
     # OPTIMIZED ITERATION
     if isinstance(data.columns, pd.MultiIndex):
-        iterator = data.groupby(level=0, axis=1)
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
     else:
         # If single ticker requested and returned, make it behave like an iterator
         if len(ticker_list) == 1 and not data.empty:
@@ -1744,10 +1744,10 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     # If it is NOT MultiIndex, it is a single ticker frame.
 
     if isinstance(data.columns, pd.MultiIndex):
-        for ticker, df in data.groupby(level=0, axis=1):
+        for ticker, df in [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]:
             try:
-                # Droplevel to get OHLVC
-                df = df.droplevel(0, axis=1)
+                # Droplevel is implicit when accessing by top level key in MultiIndex columns
+                # df = df.droplevel(0, axis=1) # No longer needed with direct access
 
                 # Check if ticker matches what we wanted (groupby yields all in dataframe)
                 # If data contains more than we asked (e.g. cache has full market), we filter?
@@ -1941,7 +1941,7 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
 
     # Optimized Iteration for Fourier
     if isinstance(data.columns, pd.MultiIndex):
-        iterator = data.groupby(level=0, axis=1)
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
     else:
         # Single Ticker fallback
         iterator = [(ticker_list[0], data)] if len(ticker_list)==1 and not data.empty else []
@@ -2117,7 +2117,7 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
 
     # Optimized Iteration
     if isinstance(all_data.columns, pd.MultiIndex):
-        iterator = all_data.groupby(level=0, axis=1)
+        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
     else:
         # Fallback for single or flat
         if not all_data.empty and len(ticker_list) == 1:
@@ -2333,7 +2333,7 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
 
     if isinstance(all_data.columns, pd.MultiIndex):
         valid_tickers = [t for t in ticker_list if t in all_data.columns.levels[0]]
-        iterator = all_data.groupby(level=0, axis=1)
+        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
     else:
         valid_tickers = ticker_list if not all_data.empty else []
         iterator = [(ticker_list[0], all_data)] if len(ticker_list)==1 else []
@@ -2497,7 +2497,7 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     # OPTIMIZED ITERATION
     if isinstance(all_data.columns, pd.MultiIndex):
         # This iterator yields (ticker, dataframe)
-        iterator = all_data.groupby(level=0, axis=1)
+        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
     else:
         # Fallback for single ticker result (rare) or flat
         if not all_data.empty and len(ticker_list)==1:
@@ -2598,7 +2598,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
 
     # OPTIMIZED ITERATION
     if isinstance(all_data.columns, pd.MultiIndex):
-        iterator = all_data.groupby(level=0, axis=1)
+        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
     else:
         # Fallback for single ticker result (rare)
         if not all_data.empty and len(ticker_list)==1:
