@@ -8,6 +8,7 @@ import time
 import json
 from typing import Optional
 
+import pandas as pd
 import yfinance as yf
 from flask import Flask, request, redirect, url_for, flash, send_file, session, jsonify, send_from_directory, g
 

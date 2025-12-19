@@ -54,7 +54,9 @@ def test_screen_fortress_logic(mock_yfinance, mock_get_cached_data):
     res = results[0]
     assert res['ticker'] == "AAPL"
     assert res['trend'] == "Bullish"
-    assert res['k_factor'] >= 2.0 # Base is 2.0
+    # Check safety_mult (returned as string "1.8x")
+    safety_val = float(res['safety_mult'].replace('x', ''))
+    assert safety_val >= 1.5
 
     # Check Math
     # ATR approx 4.0? High-Low=4.0 usually in mock, plus gap?
