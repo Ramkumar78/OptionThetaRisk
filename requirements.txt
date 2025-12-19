@@ -17,3 +17,9 @@ scipy
 pyarrow>=14.0.0
 schedule
 pybreaker
+numba>=0.57.0
+pykalman>=0.9.5
+scipy>=1.10.0
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+cachetools>=5.3.0

@@ -22,6 +22,7 @@ import resend
 from dotenv import load_dotenv
 import sys
 from option_auditor.common.resilience import data_api_breaker
+from cachetools import TTLCache
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,7 +33,8 @@ CLEANUP_INTERVAL = 1200 # 20 minutes
 MAX_REPORT_AGE = 1200 # 20 minutes
 
 # Screener Cache
-SCREENER_CACHE = {}
+# Using TTLCache for automatic expiration
+SCREENER_CACHE = TTLCache(maxsize=100, ttl=600)
 SCREENER_CACHE_TIMEOUT = 600  # 10 minutes
 
 # Cached storage provider singleton at application level (if appropriate)
@@ -52,16 +54,13 @@ def get_storage_provider(app):
     return g.storage_provider
 
 def get_cached_screener_result(key):
+    # TTLCache handles expiration automatically
     if key in SCREENER_CACHE:
-        timestamp, data = SCREENER_CACHE[key]
-        if time.time() - timestamp < SCREENER_CACHE_TIMEOUT:
-            return data
-        else:
-            del SCREENER_CACHE[key]
+        return SCREENER_CACHE[key]
     return None
 
 def cache_screener_result(key, data):
-    SCREENER_CACHE[key] = (time.time(), data)
+    SCREENER_CACHE[key] = data
 
 # Helper Function for Email
 def _get_env_or_docker_default(key, default=None):

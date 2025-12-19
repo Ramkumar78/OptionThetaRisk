@@ -9,8 +9,45 @@ from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.strategies.fourier import FourierStrategy
 from option_auditor.common.constants import TICKER_NAMES, SECTOR_COMPONENTS
 from option_auditor.optimization import PortfolioOptimizer
+from option_auditor.common.math_engine import (
+    calculate_hurst_exponent,
+    calculate_momentum_decay,
+    get_signal_entropy
+)
 
 logger = logging.getLogger(__name__)
+
+def run_quantum_audit(ticker, df, tech_result):
+    try:
+        prices = df['Close'].values
+
+        # Calculate physical stats
+        h = calculate_hurst_exponent(prices)
+        s = get_signal_entropy(prices)
+        decay_days = calculate_momentum_decay(prices)
+
+        # THE HEAVYWEIGHT VERDICT ENGINE
+        if h < 0.55:
+            return {**tech_result, "verdict": "⚠️ RANDOM WALK", "score": 0, "hurst": h, "entropy": s}
+
+        if s > 0.75:
+            return {**tech_result, "verdict": "🛑 HEAT DEATH (Too Messy)", "score": 0, "hurst": h, "entropy": s}
+
+        if decay_days < 5:
+            return {**tech_result, "verdict": "🛑 EXHAUSTED", "score": 0, "hurst": h, "entropy": s}
+
+        # If physics passes, upgrade the verdict
+        # Append QUANTUM to existing verdict if it's not WAIT/AVOID
+        current_verdict = tech_result.get('master_verdict', 'WAIT')
+
+        final_verdict = current_verdict
+        if "BUY" in current_verdict or "WATCH" in current_verdict:
+             final_verdict = f"🚀 QUANTUM {current_verdict}"
+
+        return {**tech_result, "master_verdict": final_verdict, "hurst": h, "entropy": s, "decay_days": decay_days}
+    except Exception as e:
+        logger.error(f"Quantum audit failed for {ticker}: {e}")
+        return tech_result
 
 def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> list:
     """
@@ -115,7 +152,7 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
-            return {
+            tech_result = {
                 "ticker": ticker,
                 "company_name": company_name,
                 "price": float(df['Close'].iloc[-1]),
@@ -128,6 +165,10 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
                     "fourier": fourier_res
                 }
             }
+
+            # --- QUANTUM AUDIT ---
+            quantum_result = run_quantum_audit(ticker, df, tech_result)
+            return quantum_result
 
         except Exception as e:
             # logger.error(f"Error processing universal {ticker}: {e}")
@@ -142,7 +183,8 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
                 if res: results.append(res)
             except: pass
 
-    # Sort by Buy Confluence
+    # Sort by Buy Confluence (and maybe Quantum Score/Hurst if we had it numerically easier)
+    # Just sort by text score for now
     results.sort(key=lambda x: x['confluence_score'], reverse=True)
 
     # --- NEW: Enrich only the output ---
@@ -165,18 +207,24 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
         # Extract signal counts
         buy_count = int(r['confluence_score'].split('/')[0])
 
-        # Simple Logic: Only optimize allocation for Strong Buys (2/3 or 3/3)
-        if buy_count >= 2:
+        # Check Quantum status
+        is_quantum = "QUANTUM" in r.get('master_verdict', '')
+        is_valid = "RANDOM" not in r.get('verdict', '') and "HEAT DEATH" not in r.get('verdict', '') and "EXHAUSTED" not in r.get('verdict', '')
+
+        # Simple Logic: Only optimize allocation for Strong Buys (2/3 or 3/3) AND Valid Physics
+        if buy_count >= 2 and is_valid:
             ticker = r['ticker']
             buy_candidates.append(ticker)
 
             # Map Confluence to Expected Return (Heuristic)
             # 3/3 = 40% Annualized Exp Return
             # 2/3 = 20% Annualized Exp Return
-            if buy_count == 3:
-                expected_returns[ticker] = 0.40
-            else:
-                expected_returns[ticker] = 0.20
+            # Bonus for Quantum
+            base_return = 0.40 if buy_count == 3 else 0.20
+            if is_quantum:
+                base_return += 0.10
+
+            expected_returns[ticker] = base_return
 
     # 2. Run Optimizer if we have candidates
     if len(buy_candidates) >= 2:

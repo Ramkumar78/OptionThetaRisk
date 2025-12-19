@@ -779,6 +779,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                 if (sortConfig.key === 'symbol') {
                     aValue = a.Ticker || a.ticker || a.symbol;
                     bValue = b.Ticker || b.ticker || b.symbol;
+                } else if (sortConfig.key === 'hurst') {
+                    aValue = a.hurst;
+                    bValue = b.hurst;
+                } else if (sortConfig.key === 'entropy') {
+                    aValue = a.entropy;
+                    bValue = b.entropy;
                 } else if (sortConfig.key === 'company') {
                     aValue = a.Company || a.company_name;
                     bValue = b.Company || b.company_name;
@@ -951,6 +957,8 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 <HeaderCell label="ISA Trend" sortKey="isa_trend" align="center" />
                                 <HeaderCell label="Fourier" sortKey="fourier" align="right" />
                                 <HeaderCell label="Momentum" sortKey="momentum" align="right" />
+                                <HeaderCell label="Hurst (H)" sortKey="hurst" align="right" />
+                                <HeaderCell label="Entropy (S)" sortKey="entropy" align="right" />
                             </>
                         )}
                         {type !== 'market' && type !== 'bull_put' && type !== 'master' && type !== 'fortress' && (
@@ -1108,6 +1116,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 </td>
                                                 <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap">
                                                     {row.momentum}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap font-mono">
+                                                    {row.hurst ? row.hurst.toFixed(2) : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap font-mono">
+                                                    {row.entropy ? row.entropy.toFixed(2) : '-'}
                                                 </td>
                                             </>
                                         ) : (

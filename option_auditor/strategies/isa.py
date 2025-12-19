@@ -1,6 +1,7 @@
 from .base import BaseStrategy
 import pandas as pd
 import pandas_ta as ta
+from option_auditor.common.math_engine import apply_kalman_filter
 
 class IsaStrategy(BaseStrategy):
     def analyze(self, df: pd.DataFrame) -> dict:
@@ -11,11 +12,15 @@ class IsaStrategy(BaseStrategy):
 
         curr_close = float(df['Close'].iloc[-1])
 
-        # Liquidity Check (Assuming passed df is for one ticker and might need volume check)
-        # Unified screener might handle this or we do it here.
-        # But for 'analyze', we just process data.
-
-        sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+        # UPGRADE: Replace SMA with Kalman DSP
+        # We need numpy array for Kalman
+        try:
+            kalman_trend = apply_kalman_filter(df['Close'].values)
+            df['Kalman_Trend'] = kalman_trend
+            current_kalman = float(kalman_trend[-1])
+        except Exception:
+            # Fallback if Kalman fails (e.g. library issue)
+            current_kalman = df['Close'].rolling(200).mean().iloc[-1]
 
         # Breakout Levels
         high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
@@ -26,7 +31,8 @@ class IsaStrategy(BaseStrategy):
 
         signal = "WAIT"
 
-        if curr_close > sma_200:
+        # New physical condition for entry: Price > Kalman Trend
+        if curr_close > current_kalman:
             if curr_close >= high_50:
                 signal = "BUY"
             elif curr_close >= high_50 * 0.98:
@@ -42,8 +48,9 @@ class IsaStrategy(BaseStrategy):
 
         return {
             "signal": signal,
-            "trend_200sma": "BULLISH" if curr_close > sma_200 else "BEARISH",
+            "trend_200sma": "BULLISH" if curr_close > current_kalman else "BEARISH", # Label kept as 200sma for compatibility
             "breakout_level": high_50,
             "stop_loss_3atr": stop_loss_3atr,
-            "trailing_exit_20d": low_20
+            "trailing_exit_20d": low_20,
+            "kalman_trend": current_kalman
         }
