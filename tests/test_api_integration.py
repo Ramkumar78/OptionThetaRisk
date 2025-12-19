@@ -1,5 +1,6 @@
 import json
 import pytest
+from flask import Response
 from unittest.mock import patch, MagicMock
 from webapp.app import create_app
 
@@ -93,13 +94,14 @@ def test_journal_api_crud(client):
 
 def test_root_serves_react(client):
     """Verify root path serves the React index.html."""
-    resp = client.get("/")
-    assert resp.status_code == 200
-    # In test env without build, checking for 200 or failure is key.
-    # The default mock might return 404 if file not found, but we want to ensure routing works.
-    # create_app handles 404 by returning index.html if file exists, else 404 if truly missing in static/react_build.
-    # We can mock os.path.exists to return True if needed, but let's see current behavior.
-    # If it fails, we know we need to mock static file serving.
+    # Mock send_from_directory to simulate index.html existence since build artifacts are not in repo
+    with patch('webapp.app.send_from_directory') as mock_send:
+        # send_from_directory returns a Response object
+        mock_send.return_value = Response("Index HTML Content", status=200)
+
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert resp.data == b"Index HTML Content"
 
 def test_analyze_api_returns_json(client):
     """Verify analyze endpoint returns JSON."""
