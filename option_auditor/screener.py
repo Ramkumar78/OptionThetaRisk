@@ -2583,7 +2583,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
 
     if ticker_list is None:
         if region == "us":
-            ticker_list = LIQUID_OPTION_TICKERS
+            # Expand to S&P 500 universe for broader search
+            ticker_list = _resolve_region_tickers("sp500")
         else:
             ticker_list = _resolve_region_tickers(region)
 
