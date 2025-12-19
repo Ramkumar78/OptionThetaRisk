@@ -2943,6 +2943,8 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
             sma_50 = df['Close'].rolling(50).mean().iloc[-1]
             sma_200 = df['Close'].rolling(200).mean().iloc[-1]
 
+            trend_status = "Bullish" if curr_close > sma_200 else "Neutral" # Or specific based on SMA
+
             # Relaxed Trend: Price > SMA50 (Momentum) is enough for 45DTE trades
             if curr_close < sma_50: continue
 
@@ -2984,7 +2986,8 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
                 "sell_strike": short_strike,
                 "buy_strike": long_strike,
                 "dist_pct": f"{((curr_close - short_strike)/curr_close)*100:.1f}%",
-                "score": round(score, 1)
+                "score": round(score, 1),
+                "trend": trend_status
             })
 
         except Exception: continue
