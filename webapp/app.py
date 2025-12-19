@@ -7,6 +7,7 @@ import threading
 import time
 import json
 from typing import Optional
+from collections import OrderedDict
 
 import pandas as pd
 import yfinance as yf
@@ -22,7 +23,6 @@ import resend
 from dotenv import load_dotenv
 import sys
 from option_auditor.common.resilience import data_api_breaker
-from cachetools import TTLCache
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,10 +32,46 @@ CLEANUP_INTERVAL = 1200 # 20 minutes
 # Max age of reports in seconds
 MAX_REPORT_AGE = 1200 # 20 minutes
 
-# Screener Cache
-# Using TTLCache for automatic expiration
-SCREENER_CACHE = TTLCache(maxsize=100, ttl=600)
-SCREENER_CACHE_TIMEOUT = 600  # 10 minutes
+# --- MEMORY SAFE CACHE (LRU) ---
+class LRUCache:
+    def __init__(self, capacity: int, ttl_seconds: int):
+        self.cache = OrderedDict()
+        self.capacity = capacity
+        self.ttl = ttl_seconds
+
+    def get(self, key):
+        if key not in self.cache:
+            return None
+
+        value, timestamp = self.cache[key]
+
+        # Check Expiry
+        if time.time() - timestamp > self.ttl:
+            self.cache.pop(key)
+            return None
+
+        # Move to end (Recently Used)
+        self.cache.move_to_end(key)
+        return value
+
+    def set(self, key, value):
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        self.cache[key] = (value, time.time())
+        self.cache.move_to_end(key)
+
+        # Evict if full
+        if len(self.cache) > self.capacity:
+            self.cache.popitem(last=False)
+
+# Init Cache (Max 50 results, 10 min expiry)
+screener_cache = LRUCache(capacity=50, ttl_seconds=600)
+
+def get_cached_screener_result(key):
+    return screener_cache.get(key)
+
+def cache_screener_result(key, data):
+    screener_cache.set(key, data)
 
 # Cached storage provider singleton at application level (if appropriate)
 # Since we might rely on app context (e.g. SQLite path), we use Flask's `g` or memoize based on app instance.
@@ -52,15 +88,6 @@ def get_storage_provider(app):
     if 'storage_provider' not in g:
         g.storage_provider = _get_storage_provider(app)
     return g.storage_provider
-
-def get_cached_screener_result(key):
-    # TTLCache handles expiration automatically
-    if key in SCREENER_CACHE:
-        return SCREENER_CACHE[key]
-    return None
-
-def cache_screener_result(key, data):
-    SCREENER_CACHE[key] = data
 
 # Helper Function for Email
 def _get_env_or_docker_default(key, default=None):

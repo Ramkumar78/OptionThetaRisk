@@ -5,11 +5,15 @@ from datetime import datetime, timedelta
 import logging
 import time
 import random
+import numpy as np
 from option_auditor.common.resilience import data_api_breaker, ResiliencyGuru
 
 logger = logging.getLogger(__name__)
 
 CACHE_DIR = "cache_data"
+
+# Ensure cache directory exists
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Fix for yfinance TzCache permission issues in Docker
 try:
@@ -20,27 +24,40 @@ try:
 except Exception as e:
     logger.warning(f"Failed to set yfinance cache location: {e}")
 
+def optimize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Downcasts floats to float32 to save 50% memory.
+    """
+    for col in df.select_dtypes(include=['float64']).columns:
+        df[col] = df[col].astype('float32')
+    return df
+
+def save_atomic(df: pd.DataFrame, file_path: str):
+    """
+    Prevents race conditions (Reading while writing).
+    Writes to .tmp then atomic swap.
+    """
+    tmp_path = f"{file_path}.tmp"
+    try:
+        # Optimize before save
+        df = optimize_dataframe(df)
+        df.to_parquet(tmp_path)
+        # Atomic replace
+        os.replace(tmp_path, file_path)
+        logger.info(f"✅ Atomically saved: {file_path}")
+    except Exception as e:
+        logger.error(f"Failed atomic save: {e}")
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
 def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp500", force_refresh: bool = False, lookup_only: bool = False):
     """
     Retrieves data from disk cache if valid (<24 hours for market scans).
-
-    Args:
-        ticker_list: List of tickers to download if cache is missing.
-        period: Data period (e.g. "2y").
-        cache_name: Filename for the cache.
-        force_refresh: If True, ignore cache and re-download.
-        lookup_only: If True, do NOT download if cache is missing/invalid. Return empty DataFrame.
-                     Useful for screeners checking if "master" data is available.
+    Uses atomic writes and memory optimization.
     """
-    # Ensure cache directory exists
-    if not os.path.exists(CACHE_DIR):
-        os.makedirs(CACHE_DIR)
-
     file_path = os.path.join(CACHE_DIR, f"{cache_name}.parquet")
 
     # Determine Validity Duration
-    # For heavy market scans (S&P 500), we allow 24 hours validity to prevent timeouts.
-    # For smaller lists, 4 hours is fine.
     validity_hours = 24 if "market_scan" in cache_name else 4
 
     # Check if Cache Exists and Age
@@ -53,13 +70,12 @@ def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp
         try:
             mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
             file_age = datetime.now() - mtime
+            age_hours = file_age.total_seconds() / 3600
 
-            if file_age < timedelta(hours=validity_hours):
+            if age_hours < validity_hours:
                 is_valid = True
-            elif file_age < timedelta(hours=48):
-                # If cache is between 24h and 48h old, we consider it "stale but usable"
-                # to prevent blocking the user with a massive download (Timeout).
-                # The background worker should eventually refresh it.
+            elif age_hours < 48:
+                # Stale but usable fallback
                 is_stale_but_usable = True
         except Exception as e:
             logger.warning(f"Error checking cache validity: {e}")
@@ -72,7 +88,7 @@ def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp
         except Exception:
             logger.warning("Cache corrupted, will re-download.")
 
-    # 2. Return Stale Cache (if allowed)
+    # 2. Return Stale Cache (if allowed and not forcing refresh)
     if is_stale_but_usable and not force_refresh:
         try:
             logger.warning(f"⚠️  Cache {cache_name} is stale ({file_age}). Returning to prevent timeout.")
@@ -82,13 +98,10 @@ def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp
 
     # 3. Lookup Only Mode
     if lookup_only:
-        # If we reached here, cache is missing or too old (>48h) or force_refresh is True (which shouldn't happen with lookup_only usually)
-        # But if force_refresh is True, we proceed to download.
-        # If force_refresh is False, we return empty.
         if not force_refresh:
             return pd.DataFrame()
 
-    # 4. SLOW PATH: Download & Save
+    # 4. Download Fresh
     if not ticker_list:
         logger.warning("No ticker list provided for download.")
         return pd.DataFrame()
@@ -101,22 +114,16 @@ def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp
         first = ticker_list[0]
         if first.endswith('.NS') or first.endswith('.BO'):
              logger.info("🇮🇳 Indian tickers detected. Using chunking with sleep for safety.")
-             # Optionally set use_threads = False if needed, but current sleep seems sufficient.
         elif any(first.endswith(s) for s in ['.L', '.AS', '.DE', '.PA', '.MC', '.MI', '.HE']):
              logger.info("🇬🇧/🇪🇺 UK/Euro tickers detected. Disabling threads to prevent connection drop.")
              use_threads = False
              
     # Use safe batch fetch
-    # Chunk size reduced to 30 to prevent timeouts
     all_data = fetch_batch_data_safe(ticker_list, period=period, interval="1d", chunk_size=30, threads=use_threads)
 
-    # 5. Save to Disk
+    # 5. Save Cache Atomically
     if not all_data.empty:
-        try:
-            all_data.to_parquet(file_path)
-            logger.info(f"✅ Saved {cache_name} to disk.")
-        except Exception as e:
-            logger.error(f"Failed to save cache: {e}")
+        save_atomic(all_data, file_path)
 
     return all_data
 
@@ -158,13 +165,9 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
 
     for i, chunk in enumerate(chunks):
         try:
-            # Randomize sleep slightly to look more human if needed
-            # For India/NSE, a sleep is critical.
             if i > 0:
                 time.sleep(1.0 + random.random() * 0.5)
 
-            # yf.download can be flaky, try/except the batch
-            # Wrap the actual network call with the breaker
             batch = data_api_breaker.call(
                 yf.download,
                 chunk,
@@ -181,31 +184,17 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
 
         except Exception as e:
             logger.error(f"Batch {i} download failed or Circuit Open: {e}")
-            # If the circuit is OPEN or the API fails, return Hystrix Fallback if we have nothing
-            # Note: in batch context, one failed batch might not mean total failure, but if breaker opens,
-            # subsequent calls will fail fast.
             if data_api_breaker.current_state == 'open':
-                # If we are in the middle of a batch and breaker trips, we probably should abort.
-                # However, ResiliencyGuru returns a dict, not a dataframe.
-                # Here we expect a dataframe. The fallback provided by the guru is for screener results (list),
-                # not raw dataframe.
-                # So we just return empty or partial.
                 logger.warning("Circuit breaker open during batch fetch. Aborting remaining batches.")
                 break
 
-
     if not data_frames:
-        # If we got nothing, maybe check if we should return something else?
-        # But fetch_batch_data_safe is expected to return a DataFrame.
         return pd.DataFrame()
 
     try:
         if len(data_frames) == 1:
             return data_frames[0]
         else:
-            # axis=1 because yfinance returns columns like (Price, Ticker) with group_by='ticker'
-            # Wait, when group_by='ticker', column levels are (Ticker, Price).
-            # If we concat multiple batches, we are appending new tickers (columns).
             return pd.concat(data_frames, axis=1)
     except Exception as e:
         logger.error(f"Failed to concat batches: {e}")
