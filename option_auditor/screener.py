@@ -2583,14 +2583,27 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
 
     if ticker_list is None:
         if region == "us":
-            # Expand to S&P 500 universe for broader search
-            ticker_list = _resolve_region_tickers("sp500")
+            try:
+                # Expand to S&P 500 universe for broader search
+                ticker_list = _resolve_region_tickers("sp500")
+            except Exception as e:
+                logger.error(f"Failed to resolve S&P 500 tickers, falling back to liquid: {e}")
+                from option_auditor.common.constants import LIQUID_OPTION_TICKERS
+                ticker_list = LIQUID_OPTION_TICKERS
         else:
             ticker_list = _resolve_region_tickers(region)
 
-    cache_name = "market_scan_us_liquid" if region == "us" and ticker_list == LIQUID_OPTION_TICKERS else f"market_scan_{region}"
+    # Use cache name based on actual content to avoid mismatches
+    if region == "us" and ticker_list == LIQUID_OPTION_TICKERS:
+         cache_name = "market_scan_us_liquid"
+    else:
+         cache_name = f"market_scan_{region}"
 
-    all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+    try:
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+    except Exception as e:
+        logger.error(f"Critical Error fetching market data: {e}")
+        return []
 
     results = []
 
