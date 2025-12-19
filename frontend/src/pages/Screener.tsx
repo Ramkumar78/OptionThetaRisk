@@ -1,13 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkUnifiedStock, runFourierScreener, runHybridScreener } from '../api';
+import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, checkUnifiedStock, runFourierScreener, runHybridScreener, runQuantumScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps { }
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master' | 'fortress';
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master' | 'fortress' | 'quantum';
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
+    quantum: {
+        title: 'Quantum Entanglement',
+        subtitle: 'Hurst & Entropy Physics',
+        description: 'Applies physics-based statistical mechanics (Hurst Exponent, Shannon Entropy) to separate signal from noise. Identifies persistent trends (H > 0.5) vs mean reversion.'
+    },
     master: {
         title: 'Master Convergence',
         subtitle: 'Multi-Strategy Collation',
@@ -214,6 +219,8 @@ const Screener: React.FC<ScreenerProps> = () => {
             } else if (activeTab === 'fortress') {
                 const res = await fetch(`/screen/fortress`);
                 data = await res.json();
+            } else if (activeTab === 'quantum') {
+                data = await runQuantumScreener(region);
             }
             setResults(data);
         } catch (err: any) {
@@ -288,6 +295,7 @@ const Screener: React.FC<ScreenerProps> = () => {
     }, [results, activeTab]);
 
     const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
+        { id: 'quantum', label: '⚛ Quantum Physics', subLabel: 'Hurst/Entropy' },
         { id: 'fortress', label: 'Options: Bull Put', subLabel: 'Dynamic ATR VIX' },
         { id: 'master', label: '⚡ Master Convergence', subLabel: 'Best of All' },
         { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
@@ -421,7 +429,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                             </>
                         )}
 
-                        {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid' || activeTab === 'master') && (
+                        {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid' || activeTab === 'master' || activeTab === 'quantum') && (
                             <>
                                 <div>
                                     <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -622,7 +630,7 @@ const Screener: React.FC<ScreenerProps> = () => {
 
 
                 {/* Individual Stock Check - Relocated */}
-                {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier', 'master'].includes(activeTab) && (
+                {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier', 'master', 'quantum'].includes(activeTab) && (
                     <div className="mt-12 border-t border-gray-100 dark:border-gray-800 pt-8">
                         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Check Individual Stock</h3>
@@ -862,6 +870,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                 } else if (sortConfig.key === 'cushion') {
                     aValue = parseFloat((a.cushion || "0").replace('%', ''));
                     bValue = parseFloat((b.cushion || "0").replace('%', ''));
+                } else if (sortConfig.key === 'hurst') {
+                    aValue = a.hurst;
+                    bValue = b.hurst;
+                } else if (sortConfig.key === 'entropy') {
+                    aValue = a.entropy;
+                    bValue = b.entropy;
                 }
 
                 const isInvalid = (v: any) => v === undefined || v === null || v === 'N/A' || v === 'N/A*' || v === '';
@@ -922,7 +936,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         <HeaderCell label="Symbol" sortKey="symbol" />
                         {type === 'market' && <HeaderCell label="Company" sortKey="company" />}
                         <HeaderCell label="Price" sortKey="price" align="right" />
-                        {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && <HeaderCell label="Change" sortKey="change" align="right" />}
+                        {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && type !== 'quantum' && <HeaderCell label="Change" sortKey="change" align="right" />}
 
                         {type === 'fortress' && (
                             <>
@@ -934,8 +948,8 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                             </>
                         )}
 
-                        {type !== 'fortress' && <HeaderCell label="ATR" sortKey="atr" align="right" />}
-                        {type !== 'fortress' && <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />}
+                        {type !== 'fortress' && type !== 'quantum' && <HeaderCell label="ATR" sortKey="atr" align="right" />}
+                        {type !== 'fortress' && type !== 'quantum' && <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />}
 
                         {type === 'market' && (
                             <>
@@ -953,7 +967,15 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 <HeaderCell label="Momentum" sortKey="momentum" align="right" />
                             </>
                         )}
-                        {type !== 'market' && type !== 'bull_put' && type !== 'master' && type !== 'fortress' && (
+                        {type === 'quantum' && (
+                            <>
+                                <HeaderCell label="Hurst (H)" sortKey="hurst" align="center" />
+                                <HeaderCell label="Entropy (S)" sortKey="entropy" align="center" />
+                                <HeaderCell label="Kalman" sortKey="verdict" align="center" />
+                                <HeaderCell label="Score" sortKey="score" align="right" />
+                            </>
+                        )}
+                        {type !== 'market' && type !== 'bull_put' && type !== 'master' && type !== 'fortress' && type !== 'quantum' && (
                             <>
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
                                 {type === 'darvas' && (
@@ -1034,13 +1056,33 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     {formatCurrency(price, currency)}
                                 </td>
 
-                                {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && (
+                                {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && type !== 'quantum' && (
                                     <td className={clsx("px-4 py-3 text-right font-bold whitespace-nowrap", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
                                         {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
                                     </td>
                                 )}
 
-                                {type === 'fortress' ? (
+                                {type === 'quantum' ? (
+                                    <>
+                                        <td className="p-3 text-center">
+                                            <span className={clsx("px-2 py-1 rounded text-xs font-bold",
+                                                row.hurst > 0.6 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                                    row.hurst < 0.4 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                            )}>
+                                                H={row.hurst}
+                                            </span>
+                                        </td>
+                                        <td className="p-3 text-center">
+                                            <span className={clsx("px-2 py-1 rounded text-xs",
+                                                row.entropy < 1.5 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                            )}>
+                                                {row.entropy} bits
+                                            </span>
+                                        </td>
+                                        <td className="p-3 text-center font-medium text-purple-700 dark:text-purple-400">{row.verdict}</td>
+                                        <td className="p-3 text-right font-bold">{row.score}</td>
+                                    </>
+                                ) : (type === 'fortress' ? (
                                     <>
                                         <td className="px-4 py-3 text-center whitespace-nowrap">
                                             <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded dark:bg-blue-900 dark:text-blue-200">
@@ -1061,7 +1103,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                             {row.breakout_date || '-'}
                                         </td>
                                     </>
-                                )}
+                                ))}
 
                                 {type === 'market' && (
                                     <>
@@ -1086,7 +1128,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     </>
                                 )}
 
-                                {type !== 'market' && type !== 'bull_put' && type !== 'fortress' && (
+                                {type !== 'market' && type !== 'bull_put' && type !== 'fortress' && type !== 'quantum' && (
                                     <>
                                         {type === 'master' ? (
                                             <>
