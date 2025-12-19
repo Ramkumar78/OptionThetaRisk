@@ -5,9 +5,25 @@ import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps { }
 
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master' | 'fortress';
+export interface ScreenerResult {
+    ticker: string;
+    price: number;
+    signal?: string;
+    hurst?: number;
+    entropy?: number;
+    verdict?: string;
+    score?: number;
+    [key: string]: any;
+}
+
+type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master' | 'fortress' | 'quantum';
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
+    quantum: {
+        title: 'Quantum Screener',
+        subtitle: 'Advanced Statistical Metrics',
+        description: 'Utilizes advanced statistical metrics like Hurst Exponent and Entropy to identify market regimes and potential turning points.'
+    },
     master: {
         title: 'Master Convergence',
         subtitle: 'Multi-Strategy Collation',
@@ -214,6 +230,9 @@ const Screener: React.FC<ScreenerProps> = () => {
             } else if (activeTab === 'fortress') {
                 const res = await fetch(`/screen/fortress`);
                 data = await res.json();
+            } else if (activeTab === 'quantum') {
+                const res = await fetch(`/screen/quantum?region=${region}`);
+                data = await res.json();
             }
             setResults(data);
         } catch (err: any) {
@@ -289,6 +308,7 @@ const Screener: React.FC<ScreenerProps> = () => {
 
     const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
         { id: 'fortress', label: 'Options: Bull Put', subLabel: 'Dynamic ATR VIX' },
+        { id: 'quantum', label: 'Quantum', subLabel: 'Stat Metrics' },
         { id: 'master', label: '⚡ Master Convergence', subLabel: 'Best of All' },
         { id: 'hybrid', label: 'Hybrid (Trend+Cycle)', subLabel: 'High Prob' },
         { id: 'turtle', label: 'Turtle Trading' },
@@ -622,7 +642,7 @@ const Screener: React.FC<ScreenerProps> = () => {
 
 
                 {/* Individual Stock Check - Relocated */}
-                {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier', 'master'].includes(activeTab) && (
+                {['isa', 'turtle', 'darvas', 'ema', 'bull_put', 'hybrid', 'mms', 'fourier', 'master', 'quantum'].includes(activeTab) && (
                     <div className="mt-12 border-t border-gray-100 dark:border-gray-800 pt-8">
                         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Check Individual Stock</h3>
