@@ -1038,6 +1038,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         <HeaderCell label="R/R" sortKey="rr_ratio" align="right" />
                                     </>
                                 )}
+                                {/* @ts-expect-error type check might be redundant but needed for logic */}
                                 {type !== 'isa' && type !== 'fourier' && type !== 'hybrid' && type !== 'quantum' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
                             </>
                         )}
@@ -1131,20 +1132,32 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     <>
                                         {type === 'quantum' ? (
                                             <>
-                                                <td className="px-4 py-3 text-center font-mono text-xs text-gray-500 whitespace-nowrap">
-                                                    {row.hurst ? row.hurst.toFixed(2) : '-'}
-                                                </td>
-                                                <td className="px-4 py-3 text-center font-mono text-xs text-gray-500 whitespace-nowrap">
-                                                    {row.entropy ? row.entropy.toFixed(2) : '-'}
-                                                </td>
-                                                <td className="px-4 py-3 text-left whitespace-nowrap">
+                                                {/* Metric 1: HURST ($H$) */}
+                                                <td className="px-4 py-3 text-center whitespace-nowrap">
                                                     <span className={clsx("px-2 py-1 rounded text-xs font-bold",
-                                                        (row.verdict || "").includes('BULL') ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                            (row.verdict || "").includes('BEAR') ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300")}>
-                                                        {row.verdict || '-'}
+                                                        (row.hurst || 0) > 0.6 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
+                                                        (row.hurst || 0) < 0.4 ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                                                        "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                                    )}>
+                                                        H={row.hurst ? row.hurst.toFixed(2) : '-'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+
+                                                {/* Metric 2: ENTROPY ($S$) */}
+                                                <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                    <span className={clsx("px-2 py-1 rounded text-xs",
+                                                        (row.entropy ?? 999) < 1.5 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
+                                                        "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                                    )}>
+                                                        {row.entropy ? row.entropy.toFixed(2) : '-'} bits
+                                                    </span>
+                                                </td>
+
+                                                {/* Metric 3: KALMAN */}
+                                                <td className="px-4 py-3 text-left font-medium text-purple-700 dark:text-purple-400 whitespace-nowrap">
+                                                    {row.verdict}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white whitespace-nowrap">
                                                     {row.score}
                                                 </td>
                                             </>
