@@ -446,7 +446,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                             </>
                         )}
 
-                        {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid' || activeTab === 'master') && (
+                        {(activeTab === 'turtle' || activeTab === 'ema' || activeTab === 'darvas' || activeTab === 'mms' || activeTab === 'isa' || activeTab === 'fourier' || activeTab === 'hybrid' || activeTab === 'master' || activeTab === 'quantum') && (
                             <>
                                 <div>
                                     <label htmlFor="region-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region</label>
@@ -1136,8 +1136,8 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 <td className="px-4 py-3 text-center whitespace-nowrap">
                                                     <span className={clsx("px-2 py-1 rounded text-xs font-bold",
                                                         (row.hurst || 0) > 0.6 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                        (row.hurst || 0) < 0.4 ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
-                                                        "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                                            (row.hurst || 0) < 0.4 ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                                                                "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
                                                     )}>
                                                         H={row.hurst ? row.hurst.toFixed(2) : '-'}
                                                     </span>
@@ -1147,7 +1147,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 <td className="px-4 py-3 text-center whitespace-nowrap">
                                                     <span className={clsx("px-2 py-1 rounded text-xs",
                                                         (row.entropy ?? 999) < 1.5 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                        "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                                            "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
                                                     )}>
                                                         {row.entropy ? row.entropy.toFixed(2) : '-'} bits
                                                     </span>
