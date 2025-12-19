@@ -690,6 +690,43 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/quantum", methods=["GET"])
+    def screen_quantum():
+        try:
+            region = request.args.get("region", "us")
+            cache_key = ("quantum", region)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            results = screener.screen_quantum_setups(region=region)
+
+            # Transform to the requested API contract
+            api_results = [
+                {
+                    "ticker": r["ticker"],
+                    "price": r["price"],
+                    "hurst": round(r["hurst"], 2),
+                    "entropy": round(r["entropy"], 2),
+                    "verdict": r["signal"],  # Mapping signal to verdict as per instruction
+                    "score": r["score"],
+                    # Keeping other useful fields
+                    "company_name": r.get("company_name"),
+                    "kalman_diff": round(r["kalman_diff"], 2),
+                    "phase": round(r["phase"], 2),
+                    "verdict_color": r.get("verdict_color"),
+                    "atr_value": r.get("atr_value"),
+                    "volatility_pct": r.get("volatility_pct"),
+                    "pct_change_1d": r.get("pct_change_1d"),
+                    "breakout_date": r.get("breakout_date")
+                } for r in results
+            ]
+
+            cache_screener_result(cache_key, api_results)
+            return jsonify(api_results)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/check", methods=["GET"])
     def check_unified_stock():
         try:
