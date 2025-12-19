@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
+from option_auditor.quant_engine import QuantPhysicsEngine
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -2993,5 +2994,141 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
         except Exception: continue
 
     # Sort by Score (High Volatility First) -> The ones that actually pay money
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return results
+
+def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
+    """
+    Screens for High Fidelity 'Quantum' Setups using Physics-based metrics.
+    Metrics: Hurst Exponent, Shannon Entropy, Kalman Filter Deviation.
+    """
+    from option_auditor.common.constants import LIQUID_OPTION_TICKERS
+    import pandas_ta as ta
+    import pandas as pd
+
+    # Force use of Liquid List if none provided
+    if ticker_list is None:
+        if region == "us":
+            ticker_list = LIQUID_OPTION_TICKERS
+        else:
+            ticker_list = _resolve_region_tickers(region)
+
+    # Fetch Data (Ensuring we have enough history for Hurst - need ~2y)
+    # Using 'market_scan_us_liquid' cache for US liquid tickers specifically if applicable
+    cache_name = "market_scan_us_liquid" if region == "us" and ticker_list == LIQUID_OPTION_TICKERS else f"market_scan_{region}"
+
+    # If using LIQUID_OPTION_TICKERS (default for US), we can try to rely on cache heavily
+    # get_cached_market_data handles fetching if cache miss.
+
+    all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+
+    results = []
+
+    if all_data.empty:
+        return []
+
+    # Get valid tickers
+    if isinstance(all_data.columns, pd.MultiIndex):
+        valid_tickers = all_data.columns.levels[0].intersection(ticker_list)
+    else:
+        valid_tickers = ticker_list if not all_data.empty else []
+
+    for ticker in valid_tickers:
+        try:
+            df = pd.DataFrame()
+            if isinstance(all_data.columns, pd.MultiIndex):
+                if ticker in all_data.columns.levels[0]:
+                    df = all_data[ticker].copy()
+            else:
+                df = all_data.copy()
+
+            df = df.dropna(how='all')
+
+            # Ensure checking for Minimum Data Length
+            if len(df) < 252: continue # Require 1 year of data for robust Hurst
+
+            closes = df['Close']
+
+            # 1. Physics Metrics
+            hurst = QuantPhysicsEngine.calculate_hurst(closes)
+            entropy = QuantPhysicsEngine.shannon_entropy(closes)
+
+            # Kalman Filter
+            kalman = QuantPhysicsEngine.kalman_filter(closes)
+            current_price = closes.iloc[-1]
+            current_kalman = kalman.iloc[-1]
+
+            # Phase
+            phase = QuantPhysicsEngine.instantaneous_phase(closes)
+
+            # 2. Logic
+            signal = "WAIT"
+            score = 0
+
+            # Trending (Hurst > 0.6) + Orderly (Entropy < 3.0 approx? Relative?)
+            # Let's interpret Entropy: Low entropy means predictable. High means chaotic.
+            # Hurst > 0.5 is trending.
+
+            trend_strength = "WEAK"
+            if hurst > 0.6: trend_strength = "STRONG TREND"
+            elif hurst < 0.4: trend_strength = "MEAN REVERTING"
+
+            # Kalman Deviation (Price vs Filter)
+            # If Price > Kalman in Trend -> Good.
+            kalman_diff_pct = (current_price - current_kalman) / current_kalman * 100
+
+            verdict_color = "gray"
+
+            if hurst > 0.6 and entropy < 5.0: # Arbitrary entropy threshold, maybe check relative
+                 if kalman_diff_pct > 0 and kalman_diff_pct < 5.0: # Pullback to Kalman or riding it
+                      signal = "⚛️ QUANTUM TREND (Hurst+Entropy)"
+                      verdict_color = "green"
+                      score = 90
+
+            if hurst < 0.4 and entropy > 6.0: # Chaotic mean reversion?
+                 if abs(kalman_diff_pct) > 10:
+                      signal = "⚛️ QUANTUM REVERSION"
+                      verdict_color = "blue"
+                      score = 80
+
+            # Additional Calcs
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            volatility_pct = (current_atr / current_price * 100) if current_price > 0 else 0.0
+            pct_change_1d = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
+            breakout_date = _calculate_trend_breakout_date(df)
+
+            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+
+            # Name lookup
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            results.append({
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": float(current_price),
+                "signal": signal,
+                "hurst": f"{hurst:.2f}",
+                "entropy": f"{entropy:.2f}",
+                "kalman_diff": f"{kalman_diff_pct:.2f}%",
+                "phase": f"{phase:.2f}",
+                "score": score,
+                "verdict_color": verdict_color,
+                "atr_value": round(current_atr, 2),
+                "volatility_pct": round(volatility_pct, 2),
+                "pct_change_1d": pct_change_1d,
+                "breakout_date": breakout_date,
+                "atr": round(current_atr, 2),
+                "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                "sector_change": pct_change_1d
+            })
+
+        except Exception as e:
+            # logger.error(f"Quantum screener error for {ticker}: {e}")
+            continue
+
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
