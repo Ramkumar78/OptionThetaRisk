@@ -87,15 +87,20 @@ const StrategyTile = ({ tab, active, onClick }: { tab: { id: ScreenerType, label
         className={clsx(
             "relative flex flex-col items-start p-4 rounded-xl transition-all duration-300 border-2 w-full text-left group",
             active
-                ? "bg-primary-600/10 border-primary-600 scale-[1.02] shadow-lg"
+                ? tab.id === 'quantum'
+                    ? "bg-purple-600/10 border-purple-600 scale-[1.02] shadow-lg"
+                    : "bg-primary-600/10 border-primary-600 scale-[1.02] shadow-lg"
                 : "bg-gray-800 border-transparent hover:bg-gray-700 hover:translate-x-2"
         )}
     >
-        <span className={clsx("text-base font-bold transition-colors", active ? "text-primary-500" : "text-white group-hover:text-gray-200")}>
+        <span className={clsx("text-base font-bold transition-colors",
+            active
+                ? tab.id === 'quantum' ? "text-purple-500" : "text-primary-500"
+                : "text-white group-hover:text-gray-200")}>
             {tab.label}
         </span>
         {tab.subLabel && <span className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-medium">{tab.subLabel}</span>}
-        {active && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-primary-600 rounded-full animate-pulse" />}
+        {active && <div className={clsx("absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full animate-pulse", tab.id === 'quantum' ? "bg-purple-600" : "bg-primary-600")} />}
     </button>
 );
 
@@ -948,7 +953,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         <HeaderCell label="Symbol" sortKey="symbol" />
                         {type === 'market' && <HeaderCell label="Company" sortKey="company" />}
                         <HeaderCell label="Price" sortKey="price" align="right" />
-                        {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && <HeaderCell label="Change" sortKey="change" align="right" />}
+                        {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && type !== 'quantum' && <HeaderCell label="Change" sortKey="change" align="right" />}
 
                         {type === 'fortress' && (
                             <>
@@ -960,14 +965,22 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                             </>
                         )}
 
-                        {type !== 'fortress' && <HeaderCell label="ATR" sortKey="atr" align="right" />}
-                        {type !== 'fortress' && <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />}
+                        {type !== 'fortress' && type !== 'quantum' && <HeaderCell label="ATR" sortKey="atr" align="right" />}
+                        {type !== 'fortress' && type !== 'quantum' && <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />}
 
                         {type === 'market' && (
                             <>
                                 <HeaderCell label="RSI" sortKey="rsi" align="right" />
                                 <HeaderCell label="IV Rank" sortKey="iv_rank" align="right" />
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
+                            </>
+                        )}
+                        {type === 'quantum' && (
+                            <>
+                                <HeaderCell label="Hurst (Trend)" sortKey="hurst" align="center" />
+                                <HeaderCell label="Entropy (Chaos)" sortKey="entropy" align="center" />
+                                <HeaderCell label="Kalman Signal" sortKey="verdict" align="left" />
+                                <HeaderCell label="Score" sortKey="score" align="right" />
                             </>
                         )}
                         {type === 'master' && (
@@ -981,7 +994,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 <HeaderCell label="Entropy (S)" sortKey="entropy" align="right" />
                             </>
                         )}
-                        {type !== 'market' && type !== 'bull_put' && type !== 'master' && type !== 'fortress' && (
+                        {type !== 'market' && type !== 'bull_put' && type !== 'master' && type !== 'fortress' && type !== 'quantum' && (
                             <>
                                 <HeaderCell label="Signal" sortKey="signal" align="center" />
                                 {type === 'darvas' && (
@@ -1025,7 +1038,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         <HeaderCell label="R/R" sortKey="rr_ratio" align="right" />
                                     </>
                                 )}
-                                {type !== 'isa' && type !== 'fourier' && type !== 'hybrid' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
+                                {type !== 'isa' && type !== 'fourier' && type !== 'hybrid' && type !== 'quantum' && <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />}
                             </>
                         )}
                         {type === 'bull_put' && (
@@ -1062,7 +1075,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     {formatCurrency(price, currency)}
                                 </td>
 
-                                {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && (
+                                {type !== 'bull_put' && type !== 'hybrid' && type !== 'fortress' && type !== 'quantum' && (
                                     <td className={clsx("px-4 py-3 text-right font-bold whitespace-nowrap", (change || 0) >= 0 ? "text-emerald-500" : "text-red-500")}>
                                         {change !== undefined && change !== null ? `${change > 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(2) : change}%` : '-'}
                                     </td>
@@ -1080,7 +1093,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-gray-300 whitespace-nowrap">{row.cushion}</td>
                                         <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap">{row.manage_by}</td>
                                     </>
-                                ) : (
+                                ) : type === 'quantum' ? null : (
                                     <>
                                         <td className="px-4 py-3 text-right font-mono text-xs text-gray-500 whitespace-nowrap">
                                             {row.atr_value ? formatCurrency(row.atr_value, currency) : '-'}
@@ -1116,7 +1129,26 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
 
                                 {type !== 'market' && type !== 'bull_put' && type !== 'fortress' && (
                                     <>
-                                        {type === 'master' ? (
+                                        {type === 'quantum' ? (
+                                            <>
+                                                <td className="px-4 py-3 text-center font-mono text-xs text-gray-500 whitespace-nowrap">
+                                                    {row.hurst ? row.hurst.toFixed(2) : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-center font-mono text-xs text-gray-500 whitespace-nowrap">
+                                                    {row.entropy ? row.entropy.toFixed(2) : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-left whitespace-nowrap">
+                                                    <span className={clsx("px-2 py-1 rounded text-xs font-bold",
+                                                        (row.verdict || "").includes('BULL') ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
+                                                            (row.verdict || "").includes('BEAR') ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300")}>
+                                                        {row.verdict || '-'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                                                    {row.score}
+                                                </td>
+                                            </>
+                                        ) : type === 'master' ? (
                                             <>
                                                 <td className="px-4 py-3 text-center font-bold whitespace-nowrap">
                                                     <span className={clsx("px-2 py-1 rounded text-xs",
@@ -1241,7 +1273,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 </td>
                                             </>
                                         )}
-                                        {type !== 'isa' && type !== 'fourier' && type !== 'hybrid' && (
+                                        {type !== 'isa' && type !== 'fourier' && type !== 'hybrid' && type !== 'quantum' && (
                                             <td className="px-4 py-3 text-right font-mono text-xs text-gray-500 whitespace-nowrap">
                                                 {formatCurrency(row.stop_loss, currency)}
                                             </td>
