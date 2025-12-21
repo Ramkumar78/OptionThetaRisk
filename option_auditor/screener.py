@@ -2576,10 +2576,15 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
 
-def sanitize_value(val):
-    """Converts NaN/Inf to None so JSON doesn't crash."""
+# --- CRITICAL FIX: Sanitize Function ---
+def sanitize(val):
+    """
+    Converts NaN, Infinity, and -Infinity to None (JSON null).
+    This prevents the 'Out of range float values are not JSON compliant' error.
+    """
     try:
         if val is None: return None
+        # Handle numpy types and standard floats
         if isinstance(val, (float, np.floating)):
             if np.isnan(val) or np.isinf(val):
                 return None
@@ -2587,146 +2592,106 @@ def sanitize_value(val):
     except:
         return None
 
-def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
+def screen_quantum_setups(ticker_list: list = None) -> list:
     """
-    Screens for High Fidelity 'Quantum' Setups using Physics-based metrics.
+    The 'Quantum' Screener.
+    Uses Physics (Kalman) + Info Theory (Entropy) + Fractals (Hurst).
     """
-    from option_auditor.common.constants import LIQUID_OPTION_TICKERS
-    import pandas_ta as ta
-    import pandas as pd
-
     try:
         from option_auditor.common.constants import LIQUID_OPTION_TICKERS
     except ImportError:
-        LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "IWM", "NVDA", "TSLA"] # Fallback
+        LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL", "AMD", "AMZN", "MSFT"]
 
     if ticker_list is None:
-        if region == "us":
-            try:
-                # Expand to S&P 500 universe for broader search
-                ticker_list = _resolve_region_tickers("sp500")
-            except Exception as e:
-                logger.error(f"Failed to resolve S&P 500 tickers, falling back to liquid: {e}")
-                ticker_list = LIQUID_OPTION_TICKERS
-        else:
-            ticker_list = _resolve_region_tickers(region)
+        ticker_list = LIQUID_OPTION_TICKERS
 
-    print(f"DEBUG: Starting Quantum Scan on {len(ticker_list)} tickers...") # Debug print
+    print(f"DEBUG: Starting Quantum Scan on {len(ticker_list)} tickers...")
 
-    # Use cache name based on actual content to avoid mismatches
-    if region == "us" and ticker_list == LIQUID_OPTION_TICKERS:
-         cache_name = "market_scan_us_liquid"
-    else:
-         cache_name = f"market_scan_{region}"
-
+    # 1. Load Data
     try:
-        # 1. FETCH DATA
-        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
-
-        results = []
-
-        if all_data.empty:
-            return []
-
-        # OPTIMIZED ITERATION
-        if isinstance(all_data.columns, pd.MultiIndex):
-            iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
-        else:
-            # Fallback for single ticker result (rare)
-            if not all_data.empty and len(ticker_list)==1:
-                iterator = [(ticker_list[0], all_data)]
-            else:
-                iterator = []
-
-        # 2. RUN PHYSICS ENGINE
-        for ticker, df in iterator:
-            try:
-                if isinstance(df.columns, pd.MultiIndex):
-                    df = df.droplevel(0, axis=1)
-
-                if ticker not in ticker_list: continue
-
-                df = df.dropna(how='all')
-                if len(df) < 252: continue
-
-                closes = df['Close']
-
-                # --- MATH CALLS ---
-                hurst = QuantPhysicsEngine.calculate_hurst(closes)
-                entropy = QuantPhysicsEngine.shannon_entropy(closes)
-                kalman = QuantPhysicsEngine.kalman_filter(closes)
-
-                # If scipy is missing, it will crash HERE
-
-                current_price = closes.iloc[-1]
-                current_kalman = kalman.iloc[-1]
-                phase = QuantPhysicsEngine.instantaneous_phase(closes)
-
-                # 2. Logic
-                signal = "WAIT"
-                score = 0
-                trend_strength = "WEAK"
-                if hurst > 0.6: trend_strength = "STRONG TREND"
-                elif hurst < 0.4: trend_strength = "MEAN REVERTING"
-
-                kalman_diff_pct = (current_price - current_kalman) / current_kalman * 100
-                verdict_color = "gray"
-
-                if hurst > 0.6 and entropy < 5.0:
-                    if kalman_diff_pct > 0 and kalman_diff_pct < 5.0:
-                        signal = "⚛️ QUANTUM TREND (Hurst+Entropy)"
-                        verdict_color = "green"
-                        score = 90
-
-                if hurst < 0.4 and entropy > 6.0:
-                    if abs(kalman_diff_pct) > 10:
-                        signal = "⚛️ QUANTUM REVERSION"
-                        verdict_color = "blue"
-                        score = 80
-
-                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-                current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-                volatility_pct = (current_atr / current_price * 100) if current_price > 0 else 0.0
-                pct_change_1d = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
-                breakout_date = _calculate_trend_breakout_date(df)
-
-                high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
-                low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
-
-                base_ticker = ticker.split('.')[0]
-                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-                results.append({
-                    "ticker": ticker,
-                    "company_name": company_name,
-                    "price": sanitize_value(float(current_price)),
-                    "signal": signal,
-                    "hurst": sanitize_value(float(hurst)),
-                    "entropy": sanitize_value(float(entropy)),
-                    "kalman_diff": sanitize_value(float(kalman_diff_pct)),
-                    "phase": sanitize_value(float(phase)),
-                    "score": sanitize_value(score),
-                    "verdict_color": verdict_color,
-                    "atr_value": sanitize_value(round(current_atr, 2)),
-                    "volatility_pct": sanitize_value(round(volatility_pct, 2)),
-                    "pct_change_1d": sanitize_value(pct_change_1d),
-                    "breakout_date": breakout_date,
-                    "atr": sanitize_value(round(current_atr, 2)),
-                    "52_week_high": sanitize_value(round(high_52wk, 2)) if high_52wk else None,
-                    "52_week_low": sanitize_value(round(low_52wk, 2)) if low_52wk else None,
-                    "sector_change": sanitize_value(pct_change_1d)
-                })
-
-            except Exception as e:
-                # Log individual ticker failures but don't stop the whole scan
-                # print(f"⚠️ Failed on {ticker}: {e}")
-                continue
-
-        results.sort(key=lambda x: x['score'], reverse=True)
-        return results
-
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name="market_scan_us_liquid")
     except Exception as e:
-        # 3. CATCH THE MAIN CRASH
-        print("CRITICAL ERROR IN QUANTUM SCREENER:")
-        traceback.print_exc() # <--- THIS IS THE MAGIC LINE
-        return [] # Return empty list so UI shows "No Results" instead of 500 Error
+        print(f"CRITICAL: Data fetch failed: {e}")
+        return []
+
+    results = []
+
+    # Helper to handle MultiIndex columns
+    valid_tickers = ticker_list
+    if isinstance(all_data.columns, pd.MultiIndex):
+        valid_tickers = all_data.columns.levels[0]
+
+    def process_ticker(ticker):
+        try:
+            # Extract DataFrame for single ticker
+            if isinstance(all_data.columns, pd.MultiIndex):
+                if ticker not in all_data.columns.levels[0]: return None
+                df = all_data[ticker].copy()
+            else:
+                df = all_data.copy()
+
+            df = df.dropna(how='all')
+            if len(df) < 252: return None # Need 1 year for robust math
+
+            close = df['Close']
+            current_price = float(close.iloc[-1])
+
+            # --- QUANTUM MATH ENGINE ---
+            # 1. Hurst Exponent (Trend Persistence)
+            hurst = QuantPhysicsEngine.calculate_hurst(close, max_lag=20)
+
+            # 2. Shannon Entropy (Signal Disorder)
+            entropy = QuantPhysicsEngine.shannon_entropy(close)
+
+            # 3. Kalman Filter (True Trend)
+            kalman = QuantPhysicsEngine.kalman_filter(close)
+
+            # Calculate Kalman Slope (Direction of the 'True' price)
+            k_price = kalman.iloc[-1]
+            k_prev = kalman.iloc[-2]
+            k_slope = k_price - k_prev
+
+            # --- VERDICT LOGIC ---
+            verdict = "WAIT"
+            score = 0
+
+            # Setup: Strong Persistence + Low Chaos + Uptrend
+            if hurst > 0.60 and entropy < 1.5:
+                if k_slope > 0:
+                    verdict = "🚀 QUANTUM BUY"
+                    score = 90 + (hurst * 10)
+                elif k_slope < 0:
+                    verdict = "📉 QUANTUM SHORT"
+                    score = 80
+
+            # Setup: Mean Reversion (Hurst < 0.4)
+            elif hurst < 0.40:
+                verdict = "rubber_band_mode"
+                score = 60
+
+            # --- RETURN SANITIZED DATA ---
+            # We wrap EVERY float in sanitize() to prevent JSON crash
+            return {
+                "ticker": ticker,
+                "price": sanitize(current_price),
+                "hurst": sanitize(hurst),
+                "entropy": sanitize(entropy),
+                "trend_model": "Kalman",
+                "verdict": verdict,
+                "score": sanitize(score)
+            }
+
+        except Exception as e:
+            # Log specific errors but don't crash the whole scan
+            # print(f"⚠️ Error processing {ticker}: {e}")
+            return None
+
+    # --- PARALLEL EXECUTION ---
+    # Reduced max_workers to 4 to prevent memory crashes on free tier
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        temp_results = list(executor.map(process_ticker, valid_tickers))
+
+    results = [r for r in temp_results if r is not None]
+    results.sort(key=lambda x: (x['score'] or 0), reverse=True)
+
+    return results
