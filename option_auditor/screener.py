@@ -2661,24 +2661,50 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             k_price = kalman.iloc[-1]
             k_prev = kalman.iloc[-2]
             k_slope = k_price - k_prev
+            kalman_diff = k_slope
+
+            # Calculate Phase
+            phase = QuantPhysicsEngine.instantaneous_phase(close)
 
             # --- VERDICT LOGIC ---
             verdict = "WAIT"
             score = 0
+            verdict_color = "gray"
 
             # Setup: Strong Persistence + Low Chaos + Uptrend
             if hurst > 0.60 and entropy < 1.5:
                 if k_slope > 0:
                     verdict = "🚀 QUANTUM BUY"
                     score = 90 + (hurst * 10)
+                    verdict_color = "green"
                 elif k_slope < 0:
                     verdict = "📉 QUANTUM SHORT"
                     score = 80
+                    verdict_color = "red"
 
             # Setup: Mean Reversion (Hurst < 0.4)
             elif hurst < 0.40:
                 verdict = "rubber_band_mode"
                 score = 60
+                verdict_color = "blue"
+
+            # Additional Metrics for UI
+            import pandas_ta as ta
+            atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = atr_series.iloc[-1] if atr_series is not None and not atr_series.empty else 0.0
+            volatility_pct = (current_atr / current_price * 100) if current_price > 0 else 0.0
+
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((current_price - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
+            breakout_date = _calculate_trend_breakout_date(df)
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
             # --- RETURN SANITIZED DATA ---
             # We wrap EVERY float in sanitize() to prevent JSON crash
@@ -2689,7 +2715,16 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 "entropy": sanitize(entropy),
                 "trend_model": "Kalman",
                 "verdict": verdict,
-                "score": sanitize(score)
+                "signal": verdict, # Alias for UI
+                "score": sanitize(score),
+                "company_name": company_name,
+                "kalman_diff": sanitize(kalman_diff),
+                "phase": sanitize(phase),
+                "verdict_color": verdict_color,
+                "atr_value": sanitize(current_atr),
+                "volatility_pct": sanitize(volatility_pct),
+                "pct_change_1d": sanitize(pct_change_1d),
+                "breakout_date": breakout_date
             }
 
         except Exception as e:
