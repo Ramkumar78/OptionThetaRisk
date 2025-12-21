@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
+import traceback
 from option_auditor.quant_engine import QuantPhysicsEngine
 
 # Configure logger
@@ -2581,6 +2582,11 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     import pandas_ta as ta
     import pandas as pd
 
+    try:
+        from option_auditor.common.constants import LIQUID_OPTION_TICKERS
+    except ImportError:
+        LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "IWM", "NVDA", "TSLA"] # Fallback
+
     if ticker_list is None:
         if region == "us":
             try:
@@ -2588,7 +2594,6 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 ticker_list = _resolve_region_tickers("sp500")
             except Exception as e:
                 logger.error(f"Failed to resolve S&P 500 tickers, falling back to liquid: {e}")
-                from option_auditor.common.constants import LIQUID_OPTION_TICKERS
                 ticker_list = LIQUID_OPTION_TICKERS
         else:
             ticker_list = _resolve_region_tickers(region)
@@ -2602,105 +2607,113 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
          cache_name = f"market_scan_{region}"
 
     try:
+        # 1. FETCH DATA
         all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
-    except Exception as e:
-        print(f"CRITICAL ERROR: Data Fetch Failed -> {str(e)}")
-        logger.error(f"Critical Error fetching market data: {e}")
-        return []
 
-    results = []
+        results = []
 
-    if all_data.empty:
-        return []
+        if all_data.empty:
+            return []
 
-    # OPTIMIZED ITERATION
-    if isinstance(all_data.columns, pd.MultiIndex):
-        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
-    else:
-        # Fallback for single ticker result (rare)
-        if not all_data.empty and len(ticker_list)==1:
-             iterator = [(ticker_list[0], all_data)]
+        # OPTIMIZED ITERATION
+        if isinstance(all_data.columns, pd.MultiIndex):
+            iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
         else:
-             iterator = []
+            # Fallback for single ticker result (rare)
+            if not all_data.empty and len(ticker_list)==1:
+                iterator = [(ticker_list[0], all_data)]
+            else:
+                iterator = []
 
-    for ticker, df in iterator:
-        try:
-            if isinstance(df.columns, pd.MultiIndex):
-                df = df.droplevel(0, axis=1)
+        # 2. RUN PHYSICS ENGINE
+        for ticker, df in iterator:
+            try:
+                if isinstance(df.columns, pd.MultiIndex):
+                    df = df.droplevel(0, axis=1)
 
-            if ticker not in ticker_list: continue
+                if ticker not in ticker_list: continue
 
-            df = df.dropna(how='all')
-            if len(df) < 252: continue
+                df = df.dropna(how='all')
+                if len(df) < 252: continue
 
-            closes = df['Close']
+                closes = df['Close']
 
-            # 1. Physics Metrics
-            hurst = QuantPhysicsEngine.calculate_hurst(closes)
-            entropy = QuantPhysicsEngine.shannon_entropy(closes)
-            kalman = QuantPhysicsEngine.kalman_filter(closes)
-            current_price = closes.iloc[-1]
-            current_kalman = kalman.iloc[-1]
-            phase = QuantPhysicsEngine.instantaneous_phase(closes)
+                # --- MATH CALLS ---
+                hurst = QuantPhysicsEngine.calculate_hurst(closes)
+                entropy = QuantPhysicsEngine.shannon_entropy(closes)
+                kalman = QuantPhysicsEngine.kalman_filter(closes)
 
-            # 2. Logic
-            signal = "WAIT"
-            score = 0
-            trend_strength = "WEAK"
-            if hurst > 0.6: trend_strength = "STRONG TREND"
-            elif hurst < 0.4: trend_strength = "MEAN REVERTING"
+                # If scipy is missing, it will crash HERE
 
-            kalman_diff_pct = (current_price - current_kalman) / current_kalman * 100
-            verdict_color = "gray"
+                current_price = closes.iloc[-1]
+                current_kalman = kalman.iloc[-1]
+                phase = QuantPhysicsEngine.instantaneous_phase(closes)
 
-            if hurst > 0.6 and entropy < 5.0:
-                 if kalman_diff_pct > 0 and kalman_diff_pct < 5.0:
-                      signal = "⚛️ QUANTUM TREND (Hurst+Entropy)"
-                      verdict_color = "green"
-                      score = 90
+                # 2. Logic
+                signal = "WAIT"
+                score = 0
+                trend_strength = "WEAK"
+                if hurst > 0.6: trend_strength = "STRONG TREND"
+                elif hurst < 0.4: trend_strength = "MEAN REVERTING"
 
-            if hurst < 0.4 and entropy > 6.0:
-                 if abs(kalman_diff_pct) > 10:
-                      signal = "⚛️ QUANTUM REVERSION"
-                      verdict_color = "blue"
-                      score = 80
+                kalman_diff_pct = (current_price - current_kalman) / current_kalman * 100
+                verdict_color = "gray"
 
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-            volatility_pct = (current_atr / current_price * 100) if current_price > 0 else 0.0
-            pct_change_1d = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
-            breakout_date = _calculate_trend_breakout_date(df)
+                if hurst > 0.6 and entropy < 5.0:
+                    if kalman_diff_pct > 0 and kalman_diff_pct < 5.0:
+                        signal = "⚛️ QUANTUM TREND (Hurst+Entropy)"
+                        verdict_color = "green"
+                        score = 90
 
-            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
-            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+                if hurst < 0.4 and entropy > 6.0:
+                    if abs(kalman_diff_pct) > 10:
+                        signal = "⚛️ QUANTUM REVERSION"
+                        verdict_color = "blue"
+                        score = 80
 
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+                current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+                volatility_pct = (current_atr / current_price * 100) if current_price > 0 else 0.0
+                pct_change_1d = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
+                breakout_date = _calculate_trend_breakout_date(df)
 
-            results.append({
-                "ticker": ticker,
-                "company_name": company_name,
-                "price": float(current_price),
-                "signal": signal,
-                "hurst": float(hurst),
-                "entropy": float(entropy),
-                "kalman_diff": float(kalman_diff_pct),
-                "phase": float(phase),
-                "score": score,
-                "verdict_color": verdict_color,
-                "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2),
-                "pct_change_1d": pct_change_1d,
-                "breakout_date": breakout_date,
-                "atr": round(current_atr, 2),
-                "52_week_high": round(high_52wk, 2) if high_52wk else None,
-                "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                "sector_change": pct_change_1d
-            })
+                high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+                low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
 
-        except Exception as e:
-            print(f"❌ Error processing {ticker}: {str(e)}") # PRINT THE ERROR
-            continue
+                base_ticker = ticker.split('.')[0]
+                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
-    results.sort(key=lambda x: x['score'], reverse=True)
-    return results
+                results.append({
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "price": float(current_price),
+                    "signal": signal,
+                    "hurst": float(hurst),
+                    "entropy": float(entropy),
+                    "kalman_diff": float(kalman_diff_pct),
+                    "phase": float(phase),
+                    "score": score,
+                    "verdict_color": verdict_color,
+                    "atr_value": round(current_atr, 2),
+                    "volatility_pct": round(volatility_pct, 2),
+                    "pct_change_1d": pct_change_1d,
+                    "breakout_date": breakout_date,
+                    "atr": round(current_atr, 2),
+                    "52_week_high": round(high_52wk, 2) if high_52wk else None,
+                    "52_week_low": round(low_52wk, 2) if low_52wk else None,
+                    "sector_change": pct_change_1d
+                })
+
+            except Exception as e:
+                # Log individual ticker failures but don't stop the whole scan
+                # print(f"⚠️ Failed on {ticker}: {e}")
+                continue
+
+        results.sort(key=lambda x: x['score'], reverse=True)
+        return results
+
+    except Exception as e:
+        # 3. CATCH THE MAIN CRASH
+        print("CRITICAL ERROR IN QUANTUM SCREENER:")
+        traceback.print_exc() # <--- THIS IS THE MAGIC LINE
+        return [] # Return empty list so UI shows "No Results" instead of 500 Error
