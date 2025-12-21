@@ -2592,7 +2592,7 @@ def sanitize(val):
     except:
         return None
 
-def screen_quantum_setups(ticker_list: list = None) -> list:
+def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     """
     The 'Quantum' Screener.
     Uses Physics (Kalman) + Info Theory (Entropy) + Fractals (Hurst).
@@ -2602,14 +2602,25 @@ def screen_quantum_setups(ticker_list: list = None) -> list:
     except ImportError:
         LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL", "AMD", "AMZN", "MSFT"]
 
-    if ticker_list is None:
-        ticker_list = LIQUID_OPTION_TICKERS
+    cache_suffix = "us_liquid"
 
-    print(f"DEBUG: Starting Quantum Scan on {len(ticker_list)} tickers...")
+    if ticker_list is None:
+        if region == "us":
+            # Default for US is just the liquid list for speed
+            ticker_list = LIQUID_OPTION_TICKERS
+        else:
+            # Other regions use their full list
+            ticker_list = _resolve_region_tickers(region)
+            cache_suffix = region
+
+    if not ticker_list:
+        return []
+
+    print(f"DEBUG: Starting Quantum Scan on {len(ticker_list)} tickers ({region})...")
 
     # 1. Load Data
     try:
-        all_data = get_cached_market_data(ticker_list, period="2y", cache_name="market_scan_us_liquid")
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=f"market_scan_{cache_suffix}")
     except Exception as e:
         print(f"CRITICAL: Data fetch failed: {e}")
         return []
