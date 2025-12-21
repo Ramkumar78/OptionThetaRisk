@@ -1,5 +1,7 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
+import math
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
@@ -2574,6 +2576,17 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
 
+def sanitize_value(val):
+    """Converts NaN/Inf to None so JSON doesn't crash."""
+    try:
+        if val is None: return None
+        if isinstance(val, (float, np.floating)):
+            if np.isnan(val) or np.isinf(val):
+                return None
+        return val
+    except:
+        return None
+
 def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     """
     Screens for High Fidelity 'Quantum' Setups using Physics-based metrics.
@@ -2686,22 +2699,22 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 results.append({
                     "ticker": ticker,
                     "company_name": company_name,
-                    "price": float(current_price),
+                    "price": sanitize_value(float(current_price)),
                     "signal": signal,
-                    "hurst": float(hurst),
-                    "entropy": float(entropy),
-                    "kalman_diff": float(kalman_diff_pct),
-                    "phase": float(phase),
-                    "score": score,
+                    "hurst": sanitize_value(float(hurst)),
+                    "entropy": sanitize_value(float(entropy)),
+                    "kalman_diff": sanitize_value(float(kalman_diff_pct)),
+                    "phase": sanitize_value(float(phase)),
+                    "score": sanitize_value(score),
                     "verdict_color": verdict_color,
-                    "atr_value": round(current_atr, 2),
-                    "volatility_pct": round(volatility_pct, 2),
-                    "pct_change_1d": pct_change_1d,
+                    "atr_value": sanitize_value(round(current_atr, 2)),
+                    "volatility_pct": sanitize_value(round(volatility_pct, 2)),
+                    "pct_change_1d": sanitize_value(pct_change_1d),
                     "breakout_date": breakout_date,
-                    "atr": round(current_atr, 2),
-                    "52_week_high": round(high_52wk, 2) if high_52wk else None,
-                    "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                    "sector_change": pct_change_1d
+                    "atr": sanitize_value(round(current_atr, 2)),
+                    "52_week_high": sanitize_value(round(high_52wk, 2)) if high_52wk else None,
+                    "52_week_low": sanitize_value(round(low_52wk, 2)) if low_52wk else None,
+                    "sector_change": sanitize_value(pct_change_1d)
                 })
 
             except Exception as e:
