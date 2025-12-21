@@ -1,57 +1,55 @@
-# Stage 1: Build React Frontend
-FROM node:20-slim AS frontend-builder
+# [Stage 1: Frontend - Standard Build]
+FROM node:20.11-slim AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci --silent
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Python Backend
+# [Stage 2: Backend - Robust Build]
 FROM python:3.12-slim
 
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies (optional but good for stability)
+# 1. Install System Dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first
-COPY requirements.txt .
-
-# --- THE FIX STARTS HERE ---
-
-# 1. Upgrade pip to ensure better networking handling
+# 2. Upgrade PIP (Vital for better networking handling)
 RUN pip install --upgrade pip
 
-# 2. Install HEAVY libraries first with a huge timeout
-# This prevents one large file failure from ruining the whole build
+# Copy requirements file
+COPY requirements.txt .
+
+# 3. INSTALL HEAVY LIBRARIES FIRST (With 1000s Timeout)
+# We install these separately so if one fails, we don't restart the whole build.
+# This fixes the "ReadTimeoutError" on slow connections.
 RUN pip install --default-timeout=1000 --no-cache-dir \
     "numpy>=1.24.0" \
     "pandas>=2.1.4" \
-    "pyarrow>=14.0.0" \
-    "scipy>=1.10.0"
+    "scipy>=1.10.0" \
+    "pyarrow>=14.0.0"
 
-# 3. Install the rest of the requirements
+# 4. Install the rest of the requirements
+# We use --pre for pandas-ta compatibility
 RUN pip install --default-timeout=1000 --no-cache-dir --pre -r requirements.txt gunicorn
 
-# --- THE FIX ENDS HERE ---
-
-# Copy ONLY backend code
+# 5. Copy Backend Code
 COPY option_auditor ./option_auditor
 COPY webapp ./webapp
 COPY *.py .
 
-# Copy built frontend assets from Stage 1
+# 6. Copy Built Frontend Assets
 COPY --from=frontend-builder /app/frontend/dist /app/webapp/static/react_build
 
-# Environment Config
+# 7. Setup Environment
 ENV PYTHONPATH=/app
 ENV PORT=5000
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 5000
 
-# Run Gunicorn
-CMD sh -c "gunicorn --log-level warning -w ${WEB_CONCURRENCY:-1} --timeout 120 -b 0.0.0.0:${PORT:-5000} webapp.app:app"
+# 8. Run Application
+CMD sh -c "gunicorn --log-level warning -w 1 --timeout 120 -b 0.0.0.0:${PORT:-5000} webapp.app:app"
