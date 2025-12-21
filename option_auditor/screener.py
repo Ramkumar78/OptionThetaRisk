@@ -2580,6 +2580,7 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
 def sanitize(val):
     """
     Converts NaN, Infinity, and -Infinity to None (JSON null).
+    Also converts numpy floats to standard Python floats.
     This prevents the 'Out of range float values are not JSON compliant' error.
     """
     try:
@@ -2588,6 +2589,7 @@ def sanitize(val):
         if isinstance(val, (float, np.floating)):
             if np.isnan(val) or np.isinf(val):
                 return None
+            return float(val) # Force conversion to python float
         return val
     except:
         return None
