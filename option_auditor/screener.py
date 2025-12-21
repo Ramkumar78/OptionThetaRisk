@@ -2593,6 +2593,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
         else:
             ticker_list = _resolve_region_tickers(region)
 
+    print(f"DEBUG: Starting Quantum Scan on {len(ticker_list)} tickers...") # Debug print
+
     # Use cache name based on actual content to avoid mismatches
     if region == "us" and ticker_list == LIQUID_OPTION_TICKERS:
          cache_name = "market_scan_us_liquid"
@@ -2602,6 +2604,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     try:
         all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     except Exception as e:
+        print(f"CRITICAL ERROR: Data Fetch Failed -> {str(e)}")
         logger.error(f"Critical Error fetching market data: {e}")
         return []
 
@@ -2696,6 +2699,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             })
 
         except Exception as e:
+            print(f"❌ Error processing {ticker}: {str(e)}") # PRINT THE ERROR
             continue
 
     results.sort(key=lambda x: x['score'], reverse=True)
