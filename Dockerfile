@@ -9,33 +9,49 @@ RUN npm run build
 # Stage 2: Python Backend
 FROM python:3.12-slim
 
-# Set the working directory in the container
+# Set work directory
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
+# Install system dependencies (optional but good for stability)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first
 COPY requirements.txt .
 
-# Install any needed packages specified in requirements.txt
-# We also install gunicorn for a production-ready WSGI server
-# Use --pre to allow installation of pre-release versions (required for pandas_ta)
-RUN pip install --no-cache-dir --pre -r requirements.txt gunicorn
+# --- THE FIX STARTS HERE ---
 
-# Copy the backend code
-COPY . .
+# 1. Upgrade pip to ensure better networking handling
+RUN pip install --upgrade pip
 
-# Copy built frontend assets from the previous stage
+# 2. Install HEAVY libraries first with a huge timeout
+# This prevents one large file failure from ruining the whole build
+RUN pip install --default-timeout=1000 --no-cache-dir \
+    "numpy>=1.24.0" \
+    "pandas>=2.1.4" \
+    "pyarrow>=14.0.0" \
+    "scipy>=1.10.0"
+
+# 3. Install the rest of the requirements
+RUN pip install --default-timeout=1000 --no-cache-dir --pre -r requirements.txt gunicorn
+
+# --- THE FIX ENDS HERE ---
+
+# Copy ONLY backend code
+COPY option_auditor ./option_auditor
+COPY webapp ./webapp
+COPY *.py .
+
+# Copy built frontend assets from Stage 1
 COPY --from=frontend-builder /app/frontend/dist /app/webapp/static/react_build
 
-# Set environment variables
+# Environment Config
 ENV PYTHONPATH=/app
 ENV PORT=5000
-# Ensure output is sent directly to terminal (avoids buffering issues)
 ENV PYTHONUNBUFFERED=1
 
-# Expose the port the app runs on
 EXPOSE 5000
 
-# Run the application using Gunicorn
-# Use WEB_CONCURRENCY env var for workers, default to 1 for safety with SQLite
-# Increased timeout to 120s to prevent screener timeouts
+# Run Gunicorn
 CMD sh -c "gunicorn --log-level warning -w ${WEB_CONCURRENCY:-1} --timeout 120 -b 0.0.0.0:${PORT:-5000} webapp.app:app"
