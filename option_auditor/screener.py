@@ -2730,6 +2730,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
         except Exception as e:
             # Log specific errors but don't crash the whole scan
             # print(f"⚠️ Error processing {ticker}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     # --- PARALLEL EXECUTION ---

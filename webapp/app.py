@@ -725,6 +725,9 @@ def create_app(testing: bool = False) -> Flask:
             cache_screener_result(cache_key, api_results)
             return jsonify(api_results)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in /screen/quantum: {e}", flush=True)
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/check", methods=["GET"])
