@@ -718,7 +718,10 @@ def create_app(testing: bool = False) -> Flask:
                     "atr_value": r.get("atr_value"),
                     "volatility_pct": r.get("volatility_pct"),
                     "pct_change_1d": r.get("pct_change_1d"),
-                    "breakout_date": r.get("breakout_date")
+                    "breakout_date": r.get("breakout_date"),
+                    "kalman_signal": r.get("kalman_signal"),
+                    "human_verdict": r.get("human_verdict"),
+                    "rationale": r.get("rationale")
                 } for r in results
             ]
 
