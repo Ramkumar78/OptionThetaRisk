@@ -2594,6 +2594,53 @@ def sanitize(val):
     except:
         return None
 
+def generate_human_verdict(hurst, entropy, slope, price):
+    """
+    Synthesizes Physics metrics into a human-readable trading decision.
+    """
+    verdict = "WAIT"
+    rationale = "No clear signal."
+    score = 0
+
+    # 1. THE "SNIPER" SETUP (Strong Trend + Low Noise)
+    # Ideally: H > 0.65, S < 1.3
+    if hurst > 0.60 and entropy < 1.5:
+        if slope > 0:
+            verdict = "💎 STRONG BUY"
+            rationale = "High persistence (H) with organized uptrend (Low Entropy)."
+            score = 95
+        elif slope < 0:
+            verdict = "💎 STRONG SHORT"
+            rationale = "High persistence breakdown. Clean downward momentum."
+            score = 95
+
+    # 2. THE "MEAN REVERSION" SETUP (Rubber Band)
+    elif hurst < 0.40:
+        verdict = "REVERSAL WATCH"
+        rationale = "Price is acting elastic (Mean Reverting). Fade breakouts."
+        score = 65
+
+    # 3. THE "CASINO" ZONE (Random Walk)
+    elif 0.45 <= hurst <= 0.55:
+        verdict = "AVOID / CASINO"
+        rationale = "Mathematical Random Walk. Returns are 50/50 chance."
+        score = 10
+
+    # 4. THE "DANGER" ZONE (High Chaos)
+    elif entropy > 2.0:
+        verdict = "DO NOT TOUCH"
+        rationale = "Extreme Entropy (Chaos). Stop-hunts likely."
+        score = 0
+
+    # 5. WEAK TREND
+    else:
+        direction = "UP" if slope > 0 else "DOWN"
+        verdict = f"WEAK {direction}"
+        rationale = "Direction exists but signal is noisy or lacks memory."
+        score = 50
+
+    return verdict, rationale, score
+
 def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     """
     The 'Quantum' Screener.
@@ -2668,27 +2715,10 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             # Calculate Phase
             phase = QuantPhysicsEngine.instantaneous_phase(close)
 
-            # --- VERDICT LOGIC ---
-            verdict = "WAIT"
-            score = 0
-            verdict_color = "gray"
-
-            # Setup: Strong Persistence + Low Chaos + Uptrend
-            if hurst > 0.60 and entropy < 1.5:
-                if k_slope > 0:
-                    verdict = "🚀 QUANTUM BUY"
-                    score = 90 + (hurst * 10)
-                    verdict_color = "green"
-                elif k_slope < 0:
-                    verdict = "📉 QUANTUM SHORT"
-                    score = 80
-                    verdict_color = "red"
-
-            # Setup: Mean Reversion (Hurst < 0.4)
-            elif hurst < 0.40:
-                verdict = "rubber_band_mode"
-                score = 60
-                verdict_color = "blue"
+            # --- GENERATE HUMAN DECISION ---
+            verdict, rationale, score = generate_human_verdict(
+                hurst, entropy, k_slope, float(close.iloc[-1])
+            )
 
             # Additional Metrics for UI
             import pandas_ta as ta
@@ -2717,12 +2747,13 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 "entropy": sanitize(entropy),
                 "trend_model": "Kalman",
                 "verdict": verdict,
+                "human_verdict": verdict,   # <--- THE NEW COLUMN
+                "rationale": rationale,     # <--- THE EXPLANATION
                 "signal": verdict, # Alias for UI
                 "score": sanitize(score),
                 "company_name": company_name,
                 "kalman_diff": sanitize(kalman_diff),
                 "phase": sanitize(phase),
-                "verdict_color": verdict_color,
                 "atr_value": sanitize(current_atr),
                 "volatility_pct": sanitize(volatility_pct),
                 "pct_change_1d": sanitize(pct_change_1d),
