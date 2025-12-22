@@ -2623,7 +2623,28 @@ def generate_human_verdict(hurst, entropy, slope, price):
         verdict = "NO TRADE"
         rationale = f"Hurst ({hurst:.2f}) is in random walk zone."
 
-    return verdict, rationale
+    # Robust Score Calculation based on Logic
+    score = 50
+
+    if verdict == "💎 STRONG BUY" or verdict == "💎 STRONG SHORT":
+        score = 95
+    elif verdict == "🔄 REVERSAL":
+        score = 65
+    elif verdict == "💀 AVOID":
+        score = 0
+    elif verdict == "NO TRADE":
+        score = 50
+        # Refine NO TRADE based on conditions
+        if hurst is not None:
+            if 0.45 <= hurst <= 0.55 and entropy < 1.5:
+                # verdict remains "NO TRADE" but score drops
+                score = 10
+                rationale = "Random walk / Casino zone."
+            elif 0.55 < hurst < 0.60 and 1.5 < entropy < 2.0:
+                verdict = "WEAK UP"
+                score = 50
+
+    return verdict, rationale, score
 
 def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     # ... (Keep existing imports and LIQUID_OPTION_TICKERS logic) ...
@@ -2632,10 +2653,26 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     except ImportError:
         LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL"] # Fallback
 
-    if ticker_list is None: ticker_list = LIQUID_OPTION_TICKERS
+    # 1. Resolve Ticker List based on Region
+    if ticker_list is None:
+        if region == "us":
+            ticker_list = LIQUID_OPTION_TICKERS
+        else:
+            ticker_list = _resolve_region_tickers(region)
+
+    # 2. Determine appropriate cache name
+    cache_name = "market_scan_us_liquid"
+    if region == "uk":
+        cache_name = "market_scan_uk"
+    elif region == "india":
+        cache_name = "market_scan_india"
+    elif region == "uk_euro":
+        cache_name = "market_scan_europe"
+    elif region == "sp500":
+        cache_name = "market_scan_v1" # S&P 500 uses v1
 
     try:
-        all_data = get_cached_market_data(ticker_list, period="2y", cache_name="market_scan_us_liquid")
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     except Exception as e:
         print(f"Data fetch error: {e}")
         return []
@@ -2683,7 +2720,12 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             if entropy < 1.4: score += 20
 
             # --- HUMAN VERDICT (The "AI" Column) ---
-            ai_verdict, ai_rationale = generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
+            # Unpack 3 values to satisfy signature, but prefer technical score for ranking
+            ai_verdict, ai_rationale, ai_score = generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
+
+            # Use technical score if available, otherwise fallback (though technical is always calc'd above)
+            if score == 50 and ai_score != 50:
+                 score = ai_score
 
             # Color Logic
             verdict_color = "gray"
