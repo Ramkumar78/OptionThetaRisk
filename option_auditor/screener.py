@@ -2663,6 +2663,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             hurst = QuantPhysicsEngine.calculate_hurst(close)
             entropy = QuantPhysicsEngine.shannon_entropy(close)
             kalman = QuantPhysicsEngine.kalman_filter(close)
+            phase = QuantPhysicsEngine.instantaneous_phase(close)
 
             # Calculations
             k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 3
@@ -2684,16 +2685,53 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             # --- HUMAN VERDICT (The "AI" Column) ---
             ai_verdict, ai_rationale = generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
 
+            # Color Logic
+            verdict_color = "gray"
+            if "BUY" in ai_verdict or "LONG" in ai_verdict:
+                verdict_color = "green"
+            elif "SHORT" in ai_verdict or "SELL" in ai_verdict or "AVOID" in ai_verdict:
+                verdict_color = "red"
+            elif "REVERSAL" in ai_verdict:
+                verdict_color = "yellow"
+
+            # Standard Enrichment
+            import pandas_ta as ta
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            volatility_pct = (current_atr / float(close.iloc[-1]) * 100) if float(close.iloc[-1]) > 0 else 0.0
+
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((float(close.iloc[-1]) - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
+            breakout_date = _calculate_trend_breakout_date(df)
+
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
             # Return ALL Columns
             return {
                 "ticker": ticker,
+                "company_name": company_name,
                 "price": sanitize(float(close.iloc[-1])),
                 "hurst": sanitize(hurst),
                 "entropy": sanitize(entropy),
                 "kalman_signal": kalman_signal,     # RESTORED
+                "kalman_diff": sanitize(k_slope),
+                "phase": sanitize(phase),
                 "score": sanitize(score),           # RESTORED
                 "human_verdict": ai_verdict,        # AI Column
-                "rationale": ai_rationale           # Why Column
+                "signal": ai_verdict,               # Alias for frontend
+                "rationale": ai_rationale,          # Why Column
+                "verdict_color": verdict_color,
+                "atr_value": sanitize(round(current_atr, 2)),
+                "volatility_pct": sanitize(round(volatility_pct, 2)),
+                "pct_change_1d": sanitize(pct_change_1d),
+                "breakout_date": breakout_date
             }
         except Exception as e:
             return None
