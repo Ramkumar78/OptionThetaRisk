@@ -977,10 +977,10 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         )}
                         {type === 'quantum' && (
                             <>
-                                <HeaderCell label="Hurst (Trend)" sortKey="hurst" align="center" />
-                                <HeaderCell label="Entropy (Chaos)" sortKey="entropy" align="center" />
-                                <HeaderCell label="Kalman Signal" sortKey="verdict" align="left" />
-                                <HeaderCell label="Score" sortKey="score" align="right" />
+                                <HeaderCell label="Hurst" sortKey="hurst" align="center" />
+                                <HeaderCell label="Entropy" sortKey="entropy" align="center" />
+                                <HeaderCell label="AI Decision" sortKey="human_verdict" align="left" />
+                                <HeaderCell label="Why?" sortKey="rationale" align="left" />
                             </>
                         )}
                         {type === 'master' && (
@@ -1132,33 +1132,35 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     <>
                                         {type === 'quantum' ? (
                                             <>
-                                                {/* Metric 1: HURST ($H$) */}
+                                                {/* Visualizing Hurst */}
                                                 <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                    <span className={clsx("font-bold", (row.hurst || 0) > 0.6 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400')}>
+                                                        {row.hurst?.toFixed(2)}
+                                                    </span>
+                                                </td>
+
+                                                {/* Visualizing Entropy */}
+                                                <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                    <span className={clsx("font-bold", (row.entropy || 999) < 1.5 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400')}>
+                                                        {row.entropy?.toFixed(2)}
+                                                    </span>
+                                                </td>
+
+                                                {/* THE DECISION COLUMN */}
+                                                <td className="px-4 py-3 text-left whitespace-nowrap">
                                                     <span className={clsx("px-2 py-1 rounded text-xs font-bold",
-                                                        (row.hurst || 0) > 0.6 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                            (row.hurst || 0) < 0.4 ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
-                                                                "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                                        (row.human_verdict || "").includes('BUY') ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                                        (row.human_verdict || "").includes('SHORT') ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                                        (row.human_verdict || "").includes('AVOID') ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300' :
+                                                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                                                     )}>
-                                                        H={row.hurst ? row.hurst.toFixed(2) : '-'}
+                                                        {row.human_verdict}
                                                     </span>
                                                 </td>
 
-                                                {/* Metric 2: ENTROPY ($S$) */}
-                                                <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                    <span className={clsx("px-2 py-1 rounded text-xs",
-                                                        (row.entropy ?? 999) < 1.5 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" :
-                                                            "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                                                    )}>
-                                                        {row.entropy ? row.entropy.toFixed(2) : '-'} bits
-                                                    </span>
-                                                </td>
-
-                                                {/* Metric 3: KALMAN */}
-                                                <td className="px-4 py-3 text-left font-medium text-purple-700 dark:text-purple-400 whitespace-nowrap">
-                                                    {row.verdict}
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                                                    {row.score}
+                                                {/* THE RATIONALE COLUMN */}
+                                                <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-400 italic max-w-xs whitespace-normal break-words">
+                                                    {row.rationale}
                                                 </td>
                                             </>
                                         ) : type === 'master' ? (
