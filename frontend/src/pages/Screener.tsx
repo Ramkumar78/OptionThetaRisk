@@ -979,7 +979,9 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                             <>
                                 <HeaderCell label="Hurst" sortKey="hurst" align="center" />
                                 <HeaderCell label="Entropy" sortKey="entropy" align="center" />
-                                <HeaderCell label="AI Decision" sortKey="human_verdict" align="left" />
+                                <HeaderCell label="Kalman Sig" sortKey="kalman_signal" align="center" />
+                                <HeaderCell label="Score" sortKey="score" align="center" />
+                                <HeaderCell label="AI Verdict" sortKey="human_verdict" align="left" />
                                 <HeaderCell label="Why?" sortKey="rationale" align="left" />
                             </>
                         )}
@@ -1132,35 +1134,43 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                     <>
                                         {type === 'quantum' ? (
                                             <>
-                                                {/* Visualizing Hurst */}
                                                 <td className="px-4 py-3 text-center whitespace-nowrap">
                                                     <span className={clsx("font-bold", (row.hurst || 0) > 0.6 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400')}>
                                                         {row.hurst?.toFixed(2)}
                                                     </span>
                                                 </td>
 
-                                                {/* Visualizing Entropy */}
                                                 <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                    <span className={clsx("font-bold", (row.entropy || 999) < 1.5 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400')}>
+                                                    <span className={clsx("font-bold", (row.entropy || 999) < 1.4 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400')}>
                                                         {row.entropy?.toFixed(2)}
                                                     </span>
                                                 </td>
 
-                                                {/* THE DECISION COLUMN */}
+                                                <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                    <span className={clsx("px-2 py-1 text-xs rounded font-bold",
+                                                        row.kalman_signal === 'UPTREND' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                                        row.kalman_signal === 'DOWNTREND' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' : 'bg-gray-100 dark:bg-gray-700 dark:text-gray-300'
+                                                    )}>
+                                                        {row.kalman_signal}
+                                                    </span>
+                                                </td>
+
+                                                <td className="px-4 py-3 text-center font-bold font-mono">
+                                                    {row.score}
+                                                </td>
+
                                                 <td className="px-4 py-3 text-left whitespace-nowrap">
                                                     <span className={clsx("px-2 py-1 rounded text-xs font-bold",
                                                         (row.human_verdict || "").includes('BUY') ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                                                         (row.human_verdict || "").includes('SHORT') ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                                                        (row.human_verdict || "").includes('AVOID') ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300' :
-                                                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                                        'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                                                     )}>
-                                                        {row.human_verdict}
+                                                        {row.human_verdict || "Analyzing..."}
                                                     </span>
                                                 </td>
 
-                                                {/* THE RATIONALE COLUMN */}
-                                                <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-400 italic max-w-xs whitespace-normal break-words">
-                                                    {row.rationale}
+                                                <td className="px-4 py-3 text-xs text-gray-500 italic max-w-xs truncate hover:whitespace-normal dark:text-gray-400">
+                                                    {row.rationale || "-"}
                                                 </td>
                                             </>
                                         ) : type === 'master' ? (

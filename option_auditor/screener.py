@@ -2596,94 +2596,58 @@ def sanitize(val):
 
 def generate_human_verdict(hurst, entropy, slope, price):
     """
-    Synthesizes Physics metrics into a human-readable trading decision.
+    Generates the AI Decision and Rationale.
     """
+    # Defaults
     verdict = "WAIT"
-    rationale = "No clear signal."
-    score = 0
+    rationale = "Signal noise too high."
 
-    # 1. THE "SNIPER" SETUP (Strong Trend + Low Noise)
-    # Ideally: H > 0.65, S < 1.3
+    # Logic
+    if hurst is None or entropy is None:
+        return "ERROR", "Insufficient Data"
+
     if hurst > 0.60 and entropy < 1.5:
         if slope > 0:
             verdict = "💎 STRONG BUY"
-            rationale = "High persistence (H) with organized uptrend (Low Entropy)."
-            score = 95
+            rationale = "High trend persistence + Low disorder + Uptrend."
         elif slope < 0:
             verdict = "💎 STRONG SHORT"
-            rationale = "High persistence breakdown. Clean downward momentum."
-            score = 95
-
-    # 2. THE "MEAN REVERSION" SETUP (Rubber Band)
+            rationale = "High trend persistence + Low disorder + Downtrend."
     elif hurst < 0.40:
-        verdict = "REVERSAL WATCH"
-        rationale = "Price is acting elastic (Mean Reverting). Fade breakouts."
-        score = 65
-
-    # 3. THE "CASINO" ZONE (Random Walk)
-    elif 0.45 <= hurst <= 0.55:
-        verdict = "AVOID / CASINO"
-        rationale = "Mathematical Random Walk. Returns are 50/50 chance."
-        score = 10
-
-    # 4. THE "DANGER" ZONE (High Chaos)
+        verdict = "🔄 REVERSAL"
+        rationale = "Mean reverting regime. Expect snap-back."
     elif entropy > 2.0:
-        verdict = "DO NOT TOUCH"
-        rationale = "Extreme Entropy (Chaos). Stop-hunts likely."
-        score = 0
-
-    # 5. WEAK TREND
+        verdict = "💀 AVOID"
+        rationale = "Extreme chaos (Entropy > 2.0)."
     else:
-        direction = "UP" if slope > 0 else "DOWN"
-        verdict = f"WEAK {direction}"
-        rationale = "Direction exists but signal is noisy or lacks memory."
-        score = 50
+        verdict = "NO TRADE"
+        rationale = f"Hurst ({hurst:.2f}) is in random walk zone."
 
-    return verdict, rationale, score
+    return verdict, rationale
 
 def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
-    """
-    The 'Quantum' Screener.
-    Uses Physics (Kalman) + Info Theory (Entropy) + Fractals (Hurst).
-    """
+    # ... (Keep existing imports and LIQUID_OPTION_TICKERS logic) ...
     try:
         from option_auditor.common.constants import LIQUID_OPTION_TICKERS
     except ImportError:
-        LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL", "AMD", "AMZN", "MSFT"]
+        LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL"] # Fallback
 
-    cache_suffix = "us_liquid"
+    if ticker_list is None: ticker_list = LIQUID_OPTION_TICKERS
 
-    if ticker_list is None:
-        if region == "us":
-            # Default for US is just the liquid list for speed
-            ticker_list = LIQUID_OPTION_TICKERS
-        else:
-            # Other regions use their full list
-            ticker_list = _resolve_region_tickers(region)
-            cache_suffix = region
-
-    if not ticker_list:
-        return []
-
-    print(f"DEBUG: Starting Quantum Scan on {len(ticker_list)} tickers ({region})...")
-
-    # 1. Load Data
     try:
-        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=f"market_scan_{cache_suffix}")
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name="market_scan_us_liquid")
     except Exception as e:
-        print(f"CRITICAL: Data fetch failed: {e}")
+        print(f"Data fetch error: {e}")
         return []
 
-    results = []
-
-    # Helper to handle MultiIndex columns
+    # Helper for MultiIndex
     valid_tickers = ticker_list
     if isinstance(all_data.columns, pd.MultiIndex):
         valid_tickers = all_data.columns.levels[0]
 
     def process_ticker(ticker):
         try:
-            # Extract DataFrame for single ticker
+            # Data Extraction
             if isinstance(all_data.columns, pd.MultiIndex):
                 if ticker not in all_data.columns.levels[0]: return None
                 df = all_data[ticker].copy()
@@ -2691,88 +2655,53 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 df = all_data.copy()
 
             df = df.dropna(how='all')
-            if len(df) < 252: return None # Need 1 year for robust math
+            if len(df) < 200: return None
 
             close = df['Close']
-            current_price = float(close.iloc[-1])
 
-            # --- QUANTUM MATH ENGINE ---
-            # 1. Hurst Exponent (Trend Persistence)
-            hurst = QuantPhysicsEngine.calculate_hurst(close, max_lag=20)
-
-            # 2. Shannon Entropy (Signal Disorder)
+            # --- PHYSICS ENGINE ---
+            hurst = QuantPhysicsEngine.calculate_hurst(close)
             entropy = QuantPhysicsEngine.shannon_entropy(close)
-
-            # 3. Kalman Filter (True Trend)
             kalman = QuantPhysicsEngine.kalman_filter(close)
 
-            # Calculate Kalman Slope (Direction of the 'True' price)
-            k_price = kalman.iloc[-1]
-            k_prev = kalman.iloc[-2]
-            k_slope = k_price - k_prev
-            kalman_diff = k_slope
+            # Calculations
+            k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 3
 
-            # Calculate Phase
-            phase = QuantPhysicsEngine.instantaneous_phase(close)
+            # --- SCORING LOGIC (Restored) ---
+            score = 50
+            kalman_signal = "FLAT"
 
-            # --- GENERATE HUMAN DECISION ---
-            verdict, rationale, score = generate_human_verdict(
-                hurst, entropy, k_slope, float(close.iloc[-1])
-            )
+            if k_slope > 0:
+                kalman_signal = "UPTREND"
+                score += 10
+            elif k_slope < 0:
+                kalman_signal = "DOWNTREND"
+                score -= 10
 
-            # Additional Metrics for UI
-            import pandas_ta as ta
-            atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            current_atr = atr_series.iloc[-1] if atr_series is not None and not atr_series.empty else 0.0
-            volatility_pct = (current_atr / current_price * 100) if current_price > 0 else 0.0
+            if hurst > 0.6: score += 20
+            if entropy < 1.4: score += 20
 
-            pct_change_1d = None
-            if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    pct_change_1d = ((current_price - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
+            # --- HUMAN VERDICT (The "AI" Column) ---
+            ai_verdict, ai_rationale = generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
 
-            breakout_date = _calculate_trend_breakout_date(df)
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-            # --- RETURN SANITIZED DATA ---
-            # We wrap EVERY float in sanitize() to prevent JSON crash
+            # Return ALL Columns
             return {
                 "ticker": ticker,
-                "price": sanitize(current_price),
+                "price": sanitize(float(close.iloc[-1])),
                 "hurst": sanitize(hurst),
                 "entropy": sanitize(entropy),
-                "trend_model": "Kalman",
-                "verdict": verdict,
-                "human_verdict": verdict,   # <--- THE NEW COLUMN
-                "rationale": rationale,     # <--- THE EXPLANATION
-                "signal": verdict, # Alias for UI
-                "score": sanitize(score),
-                "company_name": company_name,
-                "kalman_diff": sanitize(kalman_diff),
-                "phase": sanitize(phase),
-                "atr_value": sanitize(current_atr),
-                "volatility_pct": sanitize(volatility_pct),
-                "pct_change_1d": sanitize(pct_change_1d),
-                "breakout_date": breakout_date
+                "kalman_signal": kalman_signal,     # RESTORED
+                "score": sanitize(score),           # RESTORED
+                "human_verdict": ai_verdict,        # AI Column
+                "rationale": ai_rationale           # Why Column
             }
-
         except Exception as e:
-            # Log specific errors but don't crash the whole scan
-            # print(f"⚠️ Error processing {ticker}: {e}")
-            import traceback
-            traceback.print_exc()
             return None
 
-    # --- PARALLEL EXECUTION ---
-    # Reduced max_workers to 4 to prevent memory crashes on free tier
+    # Parallel Execution
     with ThreadPoolExecutor(max_workers=4) as executor:
         temp_results = list(executor.map(process_ticker, valid_tickers))
 
     results = [r for r in temp_results if r is not None]
     results.sort(key=lambda x: (x['score'] or 0), reverse=True)
-
     return results
