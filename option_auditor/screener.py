@@ -2708,6 +2708,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             if len(df) < 200: return None
 
             close = df['Close']
+            curr_price = float(close.iloc[-1])
 
             # --- PHYSICS ENGINE ---
             hurst = QuantPhysicsEngine.calculate_hurst(close)
@@ -2717,9 +2718,14 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             kalman = QuantPhysicsEngine.kalman_filter(close)
             phase = QuantPhysicsEngine.instantaneous_phase(close)
 
-            # Calculations
-            # FIX: Slope over 2 periods (Index -1 to -3 is a span of 2)
-            k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 2.0 # Fixed: Slope is over 2 intervals
+            # --- FIX 1: SMOOTHER SLOPE CALCULATION ---
+            # Old: (iloc[-1] - iloc[-3]) / 2.0 (Too sensitive)
+            # New: 10-day Lookback for robust trend direction
+            lookback = 10
+            if len(kalman) > lookback:
+                k_slope = (kalman.iloc[-1] - kalman.iloc[-1 - lookback]) / float(lookback)
+            else:
+                k_slope = 0.0
 
             # --- SCORING LOGIC ---
             score = 50
@@ -2730,64 +2736,83 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             elif k_slope < 0:
                 kalman_signal = "DOWNTREND"
 
-            # SCORING UPDATE
-            if hurst > 0.55: score += 20
+            if hurst > 0.60: score += 20 # Updated threshold
             if entropy < 0.8: score += 15
             if k_slope > 0: score += 15
-            elif k_slope < 0: score -= 15 # Bearish
+            elif k_slope < 0: score -= 15
 
-            # Reversal Logic (Special Case)
             if hurst < 0.40:
-                score = 65 # Set fixed score for reversals to differentiate
+                score = 65
 
-            # --- HUMAN VERDICT (The "AI" Column) ---
-            # Use Centralized Verdict Engine
-            ai_verdict, ai_rationale = QuantPhysicsEngine.generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
+            # --- HUMAN VERDICT ---
+            ai_verdict, ai_rationale = QuantPhysicsEngine.generate_human_verdict(hurst, entropy, k_slope, curr_price)
 
-            # Color Logic
             verdict_color = "gray"
-            if "BUY" in ai_verdict or "LONG" in ai_verdict:
+            if "BUY" in ai_verdict:
                 verdict_color = "green"
-            elif "SHORT" in ai_verdict or "SELL" in ai_verdict or "AVOID" in ai_verdict:
+            elif "SHORT" in ai_verdict:
                 verdict_color = "red"
             elif "REVERSAL" in ai_verdict:
                 verdict_color = "yellow"
 
-            # Standard Enrichment
+            # --- FIX 2: ADD ATR, TARGET, STOP LOSS ---
             import pandas_ta as ta
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
             current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-            volatility_pct = (current_atr / float(close.iloc[-1]) * 100) if float(close.iloc[-1]) > 0 else 0.0
+
+            # Default to 0.0
+            stop_loss = 0.0
+            target_price = 0.0
+
+            # Calculate Targets based on Direction
+            if "BUY" in ai_verdict:
+                # Long: Stop below, Target above
+                stop_loss = curr_price - (2.0 * current_atr)
+                target_price = curr_price + (3.0 * current_atr)
+            elif "SHORT" in ai_verdict:
+                # Short: Stop above, Target below
+                stop_loss = curr_price + (2.0 * current_atr)
+                target_price = curr_price - (3.0 * current_atr)
+            else:
+                # Neutral/Wait - just show levels relative to price for reference
+                stop_loss = curr_price - (2.0 * current_atr)
+                target_price = curr_price + (3.0 * current_atr)
+
+            volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
 
             pct_change_1d = None
             if len(df) >= 2:
                 try:
                     prev_close_px = float(df['Close'].iloc[-2])
-                    pct_change_1d = ((float(close.iloc[-1]) - prev_close_px) / prev_close_px) * 100
+                    pct_change_1d = ((curr_price - prev_close_px) / prev_close_px) * 100
                 except Exception:
                     pass
 
             breakout_date = _calculate_trend_breakout_date(df)
-
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
-            # Return ALL Columns
             return {
                 "ticker": ticker,
                 "company_name": company_name,
-                "price": sanitize(float(close.iloc[-1])),
+                "price": sanitize(curr_price),
                 "hurst": sanitize(hurst),
                 "entropy": sanitize(entropy),
-                "kalman_signal": kalman_signal,     # RESTORED
+                "kalman_signal": kalman_signal,
                 "kalman_diff": sanitize(k_slope),
                 "phase": sanitize(phase),
-                "score": sanitize(score),           # RESTORED
-                "human_verdict": ai_verdict,        # AI Column
-                "signal": ai_verdict,               # Alias for frontend
-                "rationale": ai_rationale,          # Why Column
+                "score": sanitize(score),
+                "human_verdict": ai_verdict,
+                "signal": ai_verdict,
+                "rationale": ai_rationale,
                 "verdict_color": verdict_color,
-                "atr_value": sanitize(round(current_atr, 2)),
+
+                # --- NEW COLUMNS ---
+                "atr_value": sanitize(round(current_atr, 2)),  # Existing key
+                "ATR": sanitize(round(current_atr, 2)),        # Requested key
+                "Stop Loss": sanitize(round(stop_loss, 2)),    # Requested key
+                "Target": sanitize(round(target_price, 2)),    # Requested key
+
                 "volatility_pct": sanitize(round(volatility_pct, 2)),
                 "pct_change_1d": sanitize(pct_change_1d),
                 "breakout_date": breakout_date

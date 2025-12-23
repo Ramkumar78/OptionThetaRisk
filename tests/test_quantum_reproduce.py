@@ -36,6 +36,7 @@ def test_quantum_fallback_and_nan():
                  MockEngine.shannon_entropy.return_value = float('inf') # Test Infinity too
                  MockEngine.kalman_filter.return_value = pd.Series([100]*250) # Need series for slope calc
                  MockEngine.instantaneous_phase.return_value = float('nan')
+                 MockEngine.generate_human_verdict.return_value = ("WAIT", "Mock Rationale")
 
                  results = screen_quantum_setups(ticker_list=['AAPL'], region='us')
 
