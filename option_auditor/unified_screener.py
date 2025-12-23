@@ -9,22 +9,19 @@ from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.strategies.fourier import FourierStrategy
 from option_auditor.common.constants import TICKER_NAMES, SECTOR_COMPONENTS
 from option_auditor.optimization import PortfolioOptimizer
-from option_auditor.common.math_engine import (
-    calculate_hurst_exponent,
-    calculate_momentum_decay,
-    get_signal_entropy
-)
+from option_auditor.quant_engine import QuantPhysicsEngine
 
 logger = logging.getLogger(__name__)
 
 def run_quantum_audit(ticker, df, tech_result):
     try:
         prices = df['Close'].values
+        close_series = df['Close']
 
         # Calculate physical stats
-        h = calculate_hurst_exponent(prices)
-        s = get_signal_entropy(prices)
-        decay_days = calculate_momentum_decay(prices)
+        h = QuantPhysicsEngine.calculate_hurst(close_series)
+        s = QuantPhysicsEngine.shannon_entropy(close_series)
+        decay_days = QuantPhysicsEngine.calculate_momentum_decay(prices)
 
         # THE HEAVYWEIGHT VERDICT ENGINE
         if h < 0.55:
