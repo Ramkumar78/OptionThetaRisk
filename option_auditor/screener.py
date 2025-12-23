@@ -2596,55 +2596,42 @@ def sanitize(val):
 
 def generate_human_verdict(hurst, entropy, slope, price):
     """
-    Generates the AI Decision and Rationale.
+    Refined logic to prevent 'All Reversal' false positives.
     """
-    # Defaults
     verdict = "WAIT"
-    rationale = "Signal noise too high."
+    rationale = "Signal inconclusive."
 
-    # Logic
+    # Safety check
     if hurst is None or entropy is None:
-        return "ERROR", "Insufficient Data"
+        return "ERROR", "Missing data"
 
-    if hurst > 0.60 and entropy < 1.5:
+    # 1. STRONG TREND (The 'Buy' Zone)
+    # Hurst > 0.55 is enough evidence for a trend if Entropy is low.
+    if hurst > 0.55 and entropy < 1.6:
         if slope > 0:
             verdict = "💎 STRONG BUY"
-            rationale = "High trend persistence + Low disorder + Uptrend."
+            rationale = f"Persistent Trend (H={hurst:.2f}) + Ordered (S={entropy:.2f})"
         elif slope < 0:
             verdict = "💎 STRONG SHORT"
-            rationale = "High trend persistence + Low disorder + Downtrend."
+            rationale = f"Persistent Downtrend (H={hurst:.2f})"
+
+    # 2. MEAN REVERSION (The 'Rubber Band')
+    # Only trigger if H is VERY low.
     elif hurst < 0.40:
-        verdict = "🔄 REVERSAL"
-        rationale = "Mean reverting regime. Expect snap-back."
+        verdict = "🔄 REVERSAL WATCH"
+        rationale = f"Price is elastic (H={hurst:.2f}). Expect snap-back."
+
+    # 3. HIGH CHAOS (Danger Zone)
     elif entropy > 2.0:
         verdict = "💀 AVOID"
-        rationale = "Extreme chaos (Entropy > 2.0)."
+        rationale = f"High Chaos (S={entropy:.2f}). Market is chopping."
+
+    # 4. RANDOM WALK (Neutral)
     else:
-        verdict = "NO TRADE"
-        rationale = f"Hurst ({hurst:.2f}) is in random walk zone."
+        verdict = "NEUTRAL / HOLD"
+        rationale = f"Random Walk (H={hurst:.2f}). No edge."
 
-    # Robust Score Calculation based on Logic
-    score = 50
-
-    if verdict == "💎 STRONG BUY" or verdict == "💎 STRONG SHORT":
-        score = 95
-    elif verdict == "🔄 REVERSAL":
-        score = 65
-    elif verdict == "💀 AVOID":
-        score = 0
-    elif verdict == "NO TRADE":
-        score = 50
-        # Refine NO TRADE based on conditions
-        if hurst is not None:
-            if 0.45 <= hurst <= 0.55 and entropy < 1.5:
-                # verdict remains "NO TRADE" but score drops
-                score = 10
-                rationale = "Random walk / Casino zone."
-            elif 0.55 < hurst < 0.60 and 1.5 < entropy < 2.0:
-                verdict = "WEAK UP"
-                score = 50
-
-    return verdict, rationale, score
+    return verdict, rationale
 
 def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     # ... (Keep existing imports and LIQUID_OPTION_TICKERS logic) ...
@@ -2705,27 +2692,32 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             # Calculations
             k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 3
 
-            # --- SCORING LOGIC (Restored) ---
+            # --- SCORING LOGIC ---
             score = 50
             kalman_signal = "FLAT"
 
             if k_slope > 0:
                 kalman_signal = "UPTREND"
-                score += 10
             elif k_slope < 0:
                 kalman_signal = "DOWNTREND"
-                score -= 10
 
-            if hurst > 0.6: score += 20
-            if entropy < 1.4: score += 20
+            # Trend Component
+            if k_slope > 0: score += 10
+            elif k_slope < 0: score -= 10
+
+            # Physics Component
+            if hurst > 0.55: score += 15
+            if hurst > 0.65: score += 10 # Bonus for strong persistence
+
+            if entropy < 1.4: score += 15
+            if entropy > 2.0: score -= 20 # Penalty for chaos
+
+            # Reversal Logic (Special Case)
+            if hurst < 0.40:
+                score = 65 # Set fixed score for reversals to differentiate
 
             # --- HUMAN VERDICT (The "AI" Column) ---
-            # Unpack 3 values to satisfy signature, but prefer technical score for ranking
-            ai_verdict, ai_rationale, ai_score = generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
-
-            # Use technical score if available, otherwise fallback (though technical is always calc'd above)
-            if score == 50 and ai_score != 50:
-                 score = ai_score
+            ai_verdict, ai_rationale = generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
 
             # Color Logic
             verdict_color = "gray"
