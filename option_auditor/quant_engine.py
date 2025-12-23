@@ -204,20 +204,22 @@ class QuantPhysicsEngine:
 
         if hurst is None: return "ERR", "No Data"
 
-        # --- THE "REAL WORLD" THRESHOLDS ---
-        # H > 0.55 is a Trend. H > 0.65 is a Super Trend.
-        # Entropy < 0.8 (Normalized) is Organized.
+        # --- THE "REAL WORLD" THRESHOLDS (UPDATED) ---
+        # Fixed: Raised thresholds to reduce false positives
+        # Old: > 0.62 (Strong), > 0.55 (Moderate)
+        # New: > 0.70 (Strong), > 0.60 (Moderate)
 
         trend_strength = "Weak"
-        if hurst > 0.62: trend_strength = "🔥 Strong"
-        elif hurst > 0.55: trend_strength = "✅ Moderate"
+        if hurst > 0.70: trend_strength = "🔥 Strong"
+        elif hurst > 0.60: trend_strength = "✅ Moderate"
 
         noise_level = "Noisy"
         if entropy < 0.6: noise_level = "💎 Crystal Clear"
         elif entropy < 0.85: noise_level = "🌊 Tradeable"
 
         # LOGIC TREE
-        if hurst > 0.55 and entropy < 0.85:
+        # Fixed: Stricter Hurst requirement (0.60) for entry
+        if hurst > 0.60 and entropy < 0.85:
             if slope > 0:
                 verdict = f"BUY ({trend_strength})"
                 rationale = f"Trend detected (H={hurst:.2f}) with acceptable noise."
