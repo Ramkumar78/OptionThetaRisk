@@ -29,6 +29,9 @@ def calculate_hurst_exponent(price_series):
     Random Process: Persistence vs Mean Reversion.
     H > 0.5: Trending (The physics of momentum is present)
     H < 0.5: Noise (Random walk, avoid)
+
+    Standard Interpretation for Geometric Brownian Motion:
+    Slope of log(StdDev) vs log(Lag) should be 0.5 for Random Walk.
     """
     if len(price_series) < 30:
         return 0.5
@@ -52,7 +55,9 @@ def calculate_hurst_exponent(price_series):
     log_tau = np.log(tau[valid_mask])
 
     slope = _linear_regression_slope(log_lags, log_tau)
-    return slope * 2.0
+
+    # REMOVED * 2.0 to align with standard Hurst (RW = 0.5)
+    return slope
 
 @njit(fastmath=True)
 def calculate_momentum_decay(price_series):

@@ -12,32 +12,48 @@ class QuantPhysicsEngine:
     def calculate_hurst(series: pd.Series, max_lag=20) -> float:
         """
         Calculates the Hurst Exponent using Log-Price differences.
-        Robust against volatility spikes.
+        Robust against volatility spikes and flat lines.
         """
         try:
             # 1. Use Log Prices (Critical for Geometric Brownian Motion)
-            lags = range(2, max_lag)
-            log_price = np.log(series)
+            # Handle non-positive values gracefully if they appear
+            if (series <= 0).any():
+                # fallback to raw series if log is impossible, or shift
+                log_price = series
+            else:
+                log_price = np.log(series)
 
-            # 2. Calculate Variances of Differences (Tau)
-            # Var(t) proportional to t^(2H)
+            lags = range(2, max_lag)
             tau = []
+
             for lag in lags:
                 # Difference between Price(t+lag) and Price(t)
                 diff = log_price.diff(lag).dropna()
-                tau.append(np.std(diff))
+
+                # Standard Deviation of differences
+                std = np.std(diff)
+
+                # Handle zero std (constant price) to avoid log(0)
+                if std == 0:
+                    std = 1e-9
+
+                tau.append(std)
 
             # 3. Linear Fit on Log-Log scale
             # log(std) = H * log(lag) + C
-            m = np.polyfit(np.log(lags), np.log(tau), 1)
+            # Handle potential zeros in tau just in case
+            tau_array = np.array(tau)
+            tau_array[tau_array <= 0] = 1e-9
 
-            hurst = m[0] # The slope IS the Hurst exponent. Do not multiply by 2.
+            m = np.polyfit(np.log(lags), np.log(tau_array), 1)
 
-            # Clamp result to 0-1 range to prevent math explosions
+            hurst = m[0] # The slope IS the Hurst exponent.
+
+            # Clamp result to 0-1 range
             return max(0.0, min(1.0, hurst))
 
         except Exception:
-            return 0.5 # Default to Random Walk
+            return 0.5 # Default to Random Walk on error
 
     @staticmethod
     def shannon_entropy(series: pd.Series, base=2) -> float:
@@ -47,13 +63,16 @@ class QuantPhysicsEngine:
 
             # Dynamic binning based on Rice Rule
             num_bins = int(2 * (len(data) ** (1/3)))
+            # Ensure at least 5 bins
+            num_bins = max(5, num_bins)
+
             hist, bin_edges = np.histogram(data, bins=num_bins, density=True)
 
             probs = hist * np.diff(bin_edges)
             probs = probs[probs > 0]
 
             entropy = -np.sum(probs * np.log(probs)) / np.log(base)
-            return entropy
+            return float(entropy)
         except:
             return 1.0
 
@@ -65,7 +84,11 @@ class QuantPhysicsEngine:
             sz = (n_iter,)
 
             # Rolling volatility for Dynamic R
-            returns_std = series.pct_change().rolling(30).std().fillna(0.01).values
+            # Handle short series
+            if len(series) < 30:
+                returns_std = np.full(n_iter, 0.01)
+            else:
+                returns_std = series.pct_change().rolling(30).std().fillna(0.01).values
 
             Q = 1e-5
             xhat = np.zeros(sz)
@@ -79,7 +102,11 @@ class QuantPhysicsEngine:
 
             for k in range(1, n_iter):
                 # Dynamic R: High vol = trust measurement less (High R)
-                vol_factor = (returns_std[k] * x[k]) if k < len(returns_std) else x[k]*0.01
+                # Ensure returns_std index access is safe
+                vol_val = returns_std[k] if k < len(returns_std) else 0.01
+                if np.isnan(vol_val): vol_val = 0.01
+
+                vol_factor = (vol_val * x[k])
                 R_dynamic = vol_factor ** 2
                 if R_dynamic == 0: R_dynamic = 0.01
 
@@ -93,7 +120,7 @@ class QuantPhysicsEngine:
                 P[k] = (1 - K[k]) * Pminus[k]
 
             return pd.Series(xhat, index=series.index)
-        except:
+        except Exception:
             return series
 
     @staticmethod
@@ -104,6 +131,8 @@ class QuantPhysicsEngine:
         try:
             # Linear detrending preserves the phase better than moving average subtraction
             price = series.values
+            if len(price) < 10: return 0.0
+
             detrended = detrend(price, type='linear')
 
             analytic_signal = hilbert(detrended)
