@@ -2995,3 +2995,187 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     # Sort by Score (High Volatility First) -> The ones that actually pay money
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
+def sanitize(val):
+    if val is None or pd.isna(val):
+        return None
+    if isinstance(val, float):
+        return round(val, 2)
+    return val
+
+def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
+    """
+    Screens for 'Quantum' setups using Physics-based metrics (Hurst, Entropy, Kalman).
+    """
+    # Imports inside function to avoid circular deps if needed, but QuantPhysicsEngine is needed
+    from option_auditor.quant_engine import QuantPhysicsEngine
+    import pandas_ta as ta
+
+    # ... (Keep existing imports and setup logic) ...
+    try:
+        from option_auditor.common.constants import LIQUID_OPTION_TICKERS
+    except ImportError:
+        LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL"]
+
+    if ticker_list is None:
+        if region == "us":
+            ticker_list = LIQUID_OPTION_TICKERS
+        else:
+             ticker_list = _resolve_region_tickers(region)
+
+    # Fetch Data
+    # Use 200 days minimum for Hurst/Entropy
+    # Batch fetch
+    try:
+        data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
+    except Exception as e:
+        logger.error(f"Quantum screener fetch failed: {e}")
+        return []
+
+    results = []
+
+    # Helper for batch data processing
+    if isinstance(data.columns, pd.MultiIndex):
+        valid_tickers = [t for t in ticker_list if t in data.columns.levels[0]]
+    else:
+        valid_tickers = ticker_list if not data.empty else []
+
+    # ... inside process_ticker(ticker): ...
+    def process_ticker(ticker):
+        try:
+            # ... (Existing data extraction code) ...
+            df = pd.DataFrame()
+            if isinstance(data.columns, pd.MultiIndex):
+                if ticker in data.columns.levels[0]:
+                    df = data[ticker].copy()
+            else:
+                df = data.copy()
+
+            if df is None or df.empty: return None
+
+            df = df.dropna(how='all')
+            if len(df) < 200: return None
+
+            close = df['Close']
+            curr_price = float(close.iloc[-1])
+
+            # --- PHYSICS ENGINE ---
+            hurst = QuantPhysicsEngine.calculate_hurst(close)
+            if hurst is None: return None
+
+            entropy = QuantPhysicsEngine.shannon_entropy(close)
+            kalman = QuantPhysicsEngine.kalman_filter(close)
+            phase = QuantPhysicsEngine.instantaneous_phase(close)
+
+            # --- FIX 1: SMOOTHER SLOPE CALCULATION ---
+            # Old: (iloc[-1] - iloc[-3]) / 2.0 (Too sensitive)
+            # New: 10-day Lookback for robust trend direction
+            lookback = 10
+            if len(kalman) > lookback:
+                k_slope = (kalman.iloc[-1] - kalman.iloc[-1 - lookback]) / float(lookback)
+            else:
+                k_slope = 0.0
+
+            # --- SCORING LOGIC ---
+            score = 50
+            kalman_signal = "FLAT"
+
+            if k_slope > 0:
+                kalman_signal = "UPTREND"
+            elif k_slope < 0:
+                kalman_signal = "DOWNTREND"
+
+            if hurst > 0.60: score += 20 # Updated threshold
+            if entropy < 0.8: score += 15
+            if k_slope > 0: score += 15
+            elif k_slope < 0: score -= 15
+
+            if hurst < 0.40:
+                score = 65
+
+            # --- HUMAN VERDICT ---
+            ai_verdict, ai_rationale = QuantPhysicsEngine.generate_human_verdict(hurst, entropy, k_slope, curr_price)
+
+            verdict_color = "gray"
+            if "BUY" in ai_verdict:
+                verdict_color = "green"
+            elif "SHORT" in ai_verdict:
+                verdict_color = "red"
+            elif "REVERSAL" in ai_verdict:
+                verdict_color = "yellow"
+
+            # --- FIX 2: ADD ATR, TARGET, STOP LOSS ---
+            # import pandas_ta as ta # already imported
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+
+            # Default to 0.0
+            stop_loss = 0.0
+            target_price = 0.0
+
+            # Calculate Targets based on Direction
+            if "BUY" in ai_verdict:
+                # Long: Stop below, Target above
+                stop_loss = curr_price - (2.0 * current_atr)
+                target_price = curr_price + (3.0 * current_atr)
+            elif "SHORT" in ai_verdict:
+                # Short: Stop above, Target below
+                stop_loss = curr_price + (2.0 * current_atr)
+                target_price = curr_price - (3.0 * current_atr)
+            else:
+                # Neutral/Wait - just show levels relative to price for reference
+                stop_loss = curr_price - (2.0 * current_atr)
+                target_price = curr_price + (3.0 * current_atr)
+
+            volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
+
+            pct_change_1d = None
+            if len(df) >= 2:
+                try:
+                    prev_close_px = float(df['Close'].iloc[-2])
+                    pct_change_1d = ((curr_price - prev_close_px) / prev_close_px) * 100
+                except Exception:
+                    pass
+
+            breakout_date = _calculate_trend_breakout_date(df)
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            return {
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": sanitize(curr_price),
+                "hurst": sanitize(hurst),
+                "entropy": sanitize(entropy),
+                "kalman_signal": kalman_signal,
+                "kalman_diff": sanitize(k_slope),
+                "phase": sanitize(phase),
+                "score": sanitize(score),
+                "human_verdict": ai_verdict,
+                "signal": ai_verdict,
+                "rationale": ai_rationale,
+                "verdict_color": verdict_color,
+
+                # --- NEW COLUMNS ---
+                "atr_value": sanitize(round(current_atr, 2)),  # Existing key
+                "ATR": sanitize(round(current_atr, 2)),        # Requested key
+                "Stop Loss": sanitize(round(stop_loss, 2)),    # Requested key
+                "Target": sanitize(round(target_price, 2)),    # Requested key
+
+                "volatility_pct": sanitize(round(volatility_pct, 2)),
+                "pct_change_1d": sanitize(pct_change_1d),
+                "breakout_date": breakout_date
+            }
+        except Exception as e:
+            logger.error(f"Error processing {ticker}: {e}")
+            return None
+
+    # Thread Pool
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        future_to_ticker = {executor.submit(process_ticker, t): t for t in valid_tickers}
+        for future in as_completed(future_to_ticker):
+             res = future.result()
+             if res: results.append(res)
+
+    # Sort by score
+    results.sort(key=lambda x: x['score'] if x and x['score'] else 0, reverse=True)
+    return results
