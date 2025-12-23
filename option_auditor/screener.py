@@ -2663,13 +2663,27 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     try:
         all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     except Exception as e:
-        print(f"Data fetch error: {e}")
-        return []
+        logger.warning(f"Cache fetch failed for Quantum: {e}")
+        all_data = pd.DataFrame()
+
+    # Fallback to Live Data if Cache Missing/Empty
+    if all_data.empty:
+        try:
+            logger.info("Quantum: Falling back to live batch download...")
+            all_data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
+        except Exception as e:
+            logger.error(f"Live fetch failed for Quantum: {e}")
+            return []
+
+    if all_data.empty: return []
 
     # Helper for MultiIndex
     valid_tickers = ticker_list
     if isinstance(all_data.columns, pd.MultiIndex):
-        valid_tickers = all_data.columns.levels[0]
+        valid_tickers = all_data.columns.unique(level=0)
+    elif len(ticker_list) > 1:
+         # If flat but multiple requested, we iterate blindly (safe check inside process_ticker)
+         pass
 
     def process_ticker(ticker):
         try:
