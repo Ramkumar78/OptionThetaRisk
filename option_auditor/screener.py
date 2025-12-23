@@ -12,6 +12,9 @@ from option_auditor.quant_engine import QuantPhysicsEngine
 # Configure logger
 logger = logging.getLogger(__name__)
 
+# Export centralized verdict logic for unified_screener
+generate_human_verdict = QuantPhysicsEngine.generate_human_verdict
+
 # Import Unified Screener (Lazy import inside function to avoid circular dep if needed, or top level)
 # We will expose it via this module for backward compatibility/ease of use.
 from option_auditor.unified_screener import screen_universal_dashboard
@@ -2650,9 +2653,32 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     valid_tickers = ticker_list
     if isinstance(all_data.columns, pd.MultiIndex):
         valid_tickers = all_data.columns.unique(level=0)
-    elif len(ticker_list) > 1:
-         # If flat but multiple requested, we iterate blindly (safe check inside process_ticker)
-         pass
+    else:
+        # FIX: Handle Flat DataFrame Robustly
+        if all_data.empty:
+            return []
+
+        # If we have data but it's flat, check if we can identify the ticker
+        # or if we should treat it as a single result.
+        if len(ticker_list) == 1:
+            # Trivial case: We know who this belongs to
+            # Wrap it to mimic the iterator structure below
+            iterator = [(ticker_list[0], all_data)]
+            valid_tickers = [ticker_list[0]]
+        else:
+            # "Identity Theft" Scenario: Multiple requested, one returned flat.
+            # We cannot blindly assign it, but failing silently is worse.
+            # Strategy: Log warning and attempt to re-fetch individually (or skip safely).
+            # For high-performance, we skip the ambiguity but LOG it.
+            logger.warning("Batch fetch returned ambiguous flat data. Skipping batch.")
+            return []
+
+    # If we haven't defined iterator yet (MultiIndex case)
+    if 'iterator' not in locals():
+         if isinstance(all_data.columns, pd.MultiIndex):
+            iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
+         else:
+            iterator = []
 
     def process_ticker(ticker):
         try:
@@ -2692,6 +2718,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             phase = QuantPhysicsEngine.instantaneous_phase(close)
 
             # Calculations
+            # FIX: Slope over 2 periods (Index -1 to -3 is a span of 2)
             k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 2.0 # Fixed: Slope is over 2 intervals
 
             # --- SCORING LOGIC ---

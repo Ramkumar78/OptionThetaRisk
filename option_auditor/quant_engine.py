@@ -16,7 +16,7 @@ class QuantPhysicsEngine:
             if series.empty: return None
 
             returns = np.log(series / series.shift(1)).dropna()
-            if len(returns) < 50: return None
+            if len(returns) < 50: return None # FIX: Return None, not 0.5
 
             # 2. R/S Calculation Loop
             # We calculate the range of cumulative deviations relative to standard deviation
