@@ -2595,41 +2595,43 @@ def sanitize(val):
         return None
 
 def generate_human_verdict(hurst, entropy, slope, price):
-    """
-    Refined logic to prevent 'All Reversal' false positives.
-    """
     verdict = "WAIT"
-    rationale = "Signal inconclusive."
+    rationale = "No edge."
 
-    # Safety check
-    if hurst is None or entropy is None:
-        return "ERROR", "Missing data"
+    if hurst is None: return "ERR", "No Data"
 
-    # 1. STRONG TREND (The 'Buy' Zone)
-    # Hurst > 0.55 is enough evidence for a trend if Entropy is low.
-    if hurst > 0.55 and entropy < 1.6:
+    # --- THE "REAL WORLD" THRESHOLDS ---
+    # H > 0.55 is a Trend. H > 0.65 is a Super Trend.
+    # Entropy < 0.8 (Normalized) is Organized.
+
+    trend_strength = "Weak"
+    if hurst > 0.62: trend_strength = "🔥 Strong"
+    elif hurst > 0.55: trend_strength = "✅ Moderate"
+
+    noise_level = "Noisy"
+    if entropy < 0.6: noise_level = "💎 Crystal Clear"
+    elif entropy < 0.85: noise_level = "🌊 Tradeable"
+
+    # LOGIC TREE
+    if hurst > 0.55 and entropy < 0.85:
         if slope > 0:
-            verdict = "💎 STRONG BUY"
-            rationale = f"Persistent Trend (H={hurst:.2f}) + Ordered (S={entropy:.2f})"
+            verdict = f"BUY ({trend_strength})"
+            rationale = f"Trend detected (H={hurst:.2f}) with acceptable noise."
         elif slope < 0:
-            verdict = "💎 STRONG SHORT"
-            rationale = f"Persistent Downtrend (H={hurst:.2f})"
+            verdict = f"SHORT ({trend_strength})"
+            rationale = f"Clean breakdown (H={hurst:.2f})."
 
-    # 2. MEAN REVERSION (The 'Rubber Band')
-    # Only trigger if H is VERY low.
-    elif hurst < 0.40:
-        verdict = "🔄 REVERSAL WATCH"
-        rationale = f"Price is elastic (H={hurst:.2f}). Expect snap-back."
+    elif hurst < 0.45:
+        verdict = "REVERSAL"
+        rationale = f"Mean Reverting (H={hurst:.2f}). Fade moves."
 
-    # 3. HIGH CHAOS (Danger Zone)
-    elif entropy > 2.0:
-        verdict = "💀 AVOID"
-        rationale = f"High Chaos (S={entropy:.2f}). Market is chopping."
+    elif entropy > 0.9:
+        verdict = "CHOP"
+        rationale = "Market is too chaotic."
 
-    # 4. RANDOM WALK (Neutral)
     else:
-        verdict = "NEUTRAL / HOLD"
-        rationale = f"Random Walk (H={hurst:.2f}). No edge."
+        verdict = "NEUTRAL"
+        rationale = "Random Walk zone."
 
     return verdict, rationale
 
@@ -2701,16 +2703,11 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             elif k_slope < 0:
                 kalman_signal = "DOWNTREND"
 
-            # Trend Component
-            if k_slope > 0: score += 10
-            elif k_slope < 0: score -= 10
-
-            # Physics Component
-            if hurst > 0.55: score += 15
-            if hurst > 0.65: score += 10 # Bonus for strong persistence
-
-            if entropy < 1.4: score += 15
-            if entropy > 2.0: score -= 20 # Penalty for chaos
+            # SCORING UPDATE
+            if hurst > 0.55: score += 20
+            if entropy < 0.8: score += 15
+            if k_slope > 0: score += 15
+            elif k_slope < 0: score -= 15 # Bearish
 
             # Reversal Logic (Special Case)
             if hurst < 0.40:
