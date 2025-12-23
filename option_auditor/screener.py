@@ -2594,47 +2594,6 @@ def sanitize(val):
     except:
         return None
 
-def generate_human_verdict(hurst, entropy, slope, price):
-    verdict = "WAIT"
-    rationale = "No edge."
-
-    if hurst is None: return "ERR", "No Data"
-
-    # --- THE "REAL WORLD" THRESHOLDS ---
-    # H > 0.55 is a Trend. H > 0.65 is a Super Trend.
-    # Entropy < 0.8 (Normalized) is Organized.
-
-    trend_strength = "Weak"
-    if hurst > 0.62: trend_strength = "🔥 Strong"
-    elif hurst > 0.55: trend_strength = "✅ Moderate"
-
-    noise_level = "Noisy"
-    if entropy < 0.6: noise_level = "💎 Crystal Clear"
-    elif entropy < 0.85: noise_level = "🌊 Tradeable"
-
-    # LOGIC TREE
-    if hurst > 0.55 and entropy < 0.85:
-        if slope > 0:
-            verdict = f"BUY ({trend_strength})"
-            rationale = f"Trend detected (H={hurst:.2f}) with acceptable noise."
-        elif slope < 0:
-            verdict = f"SHORT ({trend_strength})"
-            rationale = f"Clean breakdown (H={hurst:.2f})."
-
-    elif hurst < 0.45:
-        verdict = "REVERSAL"
-        rationale = f"Mean Reverting (H={hurst:.2f}). Fade moves."
-
-    elif entropy > 0.9:
-        verdict = "CHOP"
-        rationale = "Market is too chaotic."
-
-    else:
-        verdict = "NEUTRAL"
-        rationale = "Random Walk zone."
-
-    return verdict, rationale
-
 def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     # ... (Keep existing imports and LIQUID_OPTION_TICKERS logic) ...
     try:
@@ -2698,16 +2657,26 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     def process_ticker(ticker):
         try:
             # Data Extraction
+            df = None
             if isinstance(all_data.columns, pd.MultiIndex):
-                if ticker not in all_data.columns.levels[0]: return None
-                df = all_data[ticker].copy()
+                if ticker in all_data.columns.levels[0]:
+                    df = all_data[ticker].copy()
             else:
-                # Fix for "Identity Theft" Bug:
-                # If we have a flat dataframe but requested multiple tickers,
-                # we cannot be sure which ticker this data belongs to (and shouldn't broadcast it).
-                if len(ticker_list) > 1:
-                    return None
-                df = all_data.copy()
+                # Flat dataframe check
+                if len(ticker_list) == 1:
+                     df = all_data.copy()
+                # If flat and multiple tickers, df remains None -> Trigger Fallback
+
+            # FALLBACK: If batch failed for this ticker (or identity theft protection kicked in)
+            if df is None or df.empty:
+                 try:
+                     # Fetch individually using robust fetcher
+                     # logger.debug(f"Fallback individual fetch for {ticker}")
+                     df = fetch_batch_data_safe([ticker], period="2y", interval="1d")
+                 except:
+                     return None
+
+            if df is None or df.empty: return None
 
             df = df.dropna(how='all')
             if len(df) < 200: return None
@@ -2716,12 +2685,14 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
 
             # --- PHYSICS ENGINE ---
             hurst = QuantPhysicsEngine.calculate_hurst(close)
+            if hurst is None: return None
+
             entropy = QuantPhysicsEngine.shannon_entropy(close)
             kalman = QuantPhysicsEngine.kalman_filter(close)
             phase = QuantPhysicsEngine.instantaneous_phase(close)
 
             # Calculations
-            k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 3
+            k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 2.0 # Fixed: Slope is over 2 intervals
 
             # --- SCORING LOGIC ---
             score = 50
@@ -2743,7 +2714,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 score = 65 # Set fixed score for reversals to differentiate
 
             # --- HUMAN VERDICT (The "AI" Column) ---
-            ai_verdict, ai_rationale = generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
+            # Use Centralized Verdict Engine
+            ai_verdict, ai_rationale = QuantPhysicsEngine.generate_human_verdict(hurst, entropy, k_slope, float(close.iloc[-1]))
 
             # Color Logic
             verdict_color = "gray"
@@ -2794,6 +2766,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 "breakout_date": breakout_date
             }
         except Exception as e:
+            # logger.error(f"Error processing {ticker}: {e}")
             return None
 
     # Parallel Execution
