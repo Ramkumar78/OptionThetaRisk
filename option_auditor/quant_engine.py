@@ -12,6 +12,9 @@ class QuantPhysicsEngine:
         """
         try:
             # 1. Prepare Returns
+            # Check if input is valid
+            if series.empty: return 0.5
+
             returns = np.log(series / series.shift(1)).dropna()
             if len(returns) < 50: return 0.5
 
@@ -91,34 +94,57 @@ class QuantPhysicsEngine:
 
     @staticmethod
     def kalman_filter(series: pd.Series) -> pd.Series:
-        # (Keep the existing dynamic R version I gave you previously)
+        """
+        Fixed Kalman Filter using Log Prices to avoid Scale Bias.
+        Price level independent.
+        """
         try:
-            x = series.values
+            # FIX: Use Log Prices
+            # If we process raw prices, the noise R scales with Price^2,
+            # while Q is constant, causing high priced stocks to lag.
+            # Using log prices makes volatility (R) percentage based and consistent.
+
+            if (series <= 0).any():
+                # Fallback for negative/zero prices (shouldn't happen for stocks usually)
+                return series
+
+            x = np.log(series.values)
             n_iter = len(x)
             sz = (n_iter,)
+
+            # Volatility of Returns (approx log diff)
             returns_std = series.pct_change().rolling(30).std().fillna(0.01).values
+
             Q = 1e-5
+
             xhat = np.zeros(sz)
             P = np.zeros(sz)
             xhatminus = np.zeros(sz)
             Pminus = np.zeros(sz)
             K = np.zeros(sz)
+
             xhat[0] = x[0]
             P[0] = 1.0
 
             for k in range(1, n_iter):
-                vol_factor = (returns_std[k] * x[k]) if k < len(returns_std) else x[k]*0.01
-                R_dynamic = vol_factor ** 2
-                if R_dynamic == 0: R_dynamic = 0.01
+                # R depends on current volatility of returns.
+                # Since x is Log Price, volatility IS the standard deviation of returns.
+                vol_est = returns_std[k] if k < len(returns_std) else 0.01
+                if np.isnan(vol_est) or vol_est == 0: vol_est = 0.01
+
+                R_dynamic = vol_est ** 2
 
                 xhatminus[k] = xhat[k-1]
                 Pminus[k] = P[k-1] + Q
+
                 K[k] = Pminus[k] / (Pminus[k] + R_dynamic)
                 xhat[k] = xhatminus[k] + K[k] * (x[k] - xhatminus[k])
                 P[k] = (1 - K[k]) * Pminus[k]
 
-            return pd.Series(xhat, index=series.index)
-        except:
+            # Convert back from Log Space
+            return pd.Series(np.exp(xhat), index=series.index)
+        except Exception as e:
+            # print(f"Kalman Error: {e}")
             return series
 
     @staticmethod
@@ -136,3 +162,33 @@ class QuantPhysicsEngine:
             return instantaneous_phase[-1]
         except:
             return 0.0
+
+    @staticmethod
+    def calculate_momentum_decay(price_series: np.ndarray) -> float:
+        """
+        Atomic Physics: Half-life of a trend.
+        Uses Ornstein-Uhlenbeck process to predict radioactive decay of momentum.
+        """
+        try:
+            # Ensure numpy array
+            z = np.array(price_series)
+            if len(z) < 2: return 0.0
+
+            z_lag = z[:-1]
+            z_diff = z[1:] - z[:-1] # Equivalent to np.diff(z)
+
+            # Fast linear regression for reversion speed (lambda)
+            # lambda = - sum((x - mx)*(y - my)) / sum((x-mx)^2)
+            m_x = np.mean(z_lag)
+            m_y = np.mean(z_diff)
+
+            denom = np.sum((z_lag - m_x)**2)
+            if denom == 0:
+                return 999.0
+
+            lambda_val = -np.sum((z_lag - m_x) * (z_diff - m_y)) / denom
+
+            if lambda_val <= 0: return 999.0 # Infinite trend
+            return np.log(2) / lambda_val # Returns half-life in days
+        except:
+            return 999.0

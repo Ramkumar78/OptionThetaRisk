@@ -2649,6 +2649,16 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
         else:
             ticker_list = _resolve_region_tickers(region)
 
+    # Resolve tickers (Fix for Ticker Resolution Failure)
+    if ticker_list:
+        # Apply region-specific suffixes if missing
+        if region == 'india':
+            ticker_list = [t if t.endswith('.NS') else f"{t}.NS" for t in ticker_list]
+        elif region == 'uk':
+            ticker_list = [t if t.endswith('.L') else f"{t}.L" for t in ticker_list]
+
+        ticker_list = [resolve_ticker(t) for t in ticker_list]
+
     # 2. Determine appropriate cache name
     cache_name = "market_scan_us_liquid"
     if region == "uk":
@@ -2692,6 +2702,11 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 if ticker not in all_data.columns.levels[0]: return None
                 df = all_data[ticker].copy()
             else:
+                # Fix for "Identity Theft" Bug:
+                # If we have a flat dataframe but requested multiple tickers,
+                # we cannot be sure which ticker this data belongs to (and shouldn't broadcast it).
+                if len(ticker_list) > 1:
+                    return None
                 df = all_data.copy()
 
             df = df.dropna(how='all')

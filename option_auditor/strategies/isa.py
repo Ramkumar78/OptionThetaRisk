@@ -1,7 +1,7 @@
 from .base import BaseStrategy
 import pandas as pd
 import pandas_ta as ta
-from option_auditor.common.math_engine import apply_kalman_filter
+from option_auditor.quant_engine import QuantPhysicsEngine
 
 class IsaStrategy(BaseStrategy):
     def analyze(self, df: pd.DataFrame) -> dict:
@@ -15,9 +15,9 @@ class IsaStrategy(BaseStrategy):
         # UPGRADE: Replace SMA with Kalman DSP
         # We need numpy array for Kalman
         try:
-            kalman_trend = apply_kalman_filter(df['Close'].values)
+            kalman_trend = QuantPhysicsEngine.kalman_filter(df['Close'])
             df['Kalman_Trend'] = kalman_trend
-            current_kalman = float(kalman_trend[-1])
+            current_kalman = float(kalman_trend.iloc[-1])
         except Exception:
             # Fallback if Kalman fails (e.g. library issue)
             current_kalman = df['Close'].rolling(200).mean().iloc[-1]
