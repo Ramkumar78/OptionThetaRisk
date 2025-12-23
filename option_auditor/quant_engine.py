@@ -13,10 +13,10 @@ class QuantPhysicsEngine:
         try:
             # 1. Prepare Returns
             # Check if input is valid
-            if series.empty: return 0.5
+            if series.empty: return None
 
             returns = np.log(series / series.shift(1)).dropna()
-            if len(returns) < 50: return 0.5
+            if len(returns) < 50: return None
 
             # 2. R/S Calculation Loop
             # We calculate the range of cumulative deviations relative to standard deviation
@@ -46,10 +46,10 @@ class QuantPhysicsEngine:
                     rs_values.append(np.mean(chunk_rs))
 
             # 3. Linear Regression: log(R/S) = H * log(lag) + C
-            if not rs_values: return 0.5
+            if not rs_values: return None
 
             valid_indices = np.where(np.array(rs_values) > 0)
-            if len(valid_indices[0]) < 2: return 0.5
+            if len(valid_indices[0]) < 2: return None
 
             y = np.log(np.array(rs_values)[valid_indices])
             x = np.log(list(lags))[valid_indices]
@@ -61,7 +61,7 @@ class QuantPhysicsEngine:
 
         except Exception as e:
             # print(f"Hurst Error: {e}")
-            return 0.5
+            return None
 
     @staticmethod
     def shannon_entropy(series: pd.Series, base=2) -> float:
@@ -192,3 +192,49 @@ class QuantPhysicsEngine:
             return np.log(2) / lambda_val # Returns half-life in days
         except:
             return 999.0
+
+    @staticmethod
+    def generate_human_verdict(hurst, entropy, slope, price):
+        """
+        Centralized logic for Quantum Verdicts.
+        Used by both Screener and Dashboard.
+        """
+        verdict = "WAIT"
+        rationale = "No edge."
+
+        if hurst is None: return "ERR", "No Data"
+
+        # --- THE "REAL WORLD" THRESHOLDS ---
+        # H > 0.55 is a Trend. H > 0.65 is a Super Trend.
+        # Entropy < 0.8 (Normalized) is Organized.
+
+        trend_strength = "Weak"
+        if hurst > 0.62: trend_strength = "🔥 Strong"
+        elif hurst > 0.55: trend_strength = "✅ Moderate"
+
+        noise_level = "Noisy"
+        if entropy < 0.6: noise_level = "💎 Crystal Clear"
+        elif entropy < 0.85: noise_level = "🌊 Tradeable"
+
+        # LOGIC TREE
+        if hurst > 0.55 and entropy < 0.85:
+            if slope > 0:
+                verdict = f"BUY ({trend_strength})"
+                rationale = f"Trend detected (H={hurst:.2f}) with acceptable noise."
+            elif slope < 0:
+                verdict = f"SHORT ({trend_strength})"
+                rationale = f"Clean breakdown (H={hurst:.2f})."
+
+        elif hurst < 0.45:
+            verdict = "REVERSAL"
+            rationale = f"Mean Reverting (H={hurst:.2f}). Fade moves."
+
+        elif entropy > 0.9:
+            verdict = "CHOP"
+            rationale = "Market is too chaotic."
+
+        else:
+            verdict = "NEUTRAL"
+            rationale = "Random Walk zone."
+
+        return verdict, rationale

@@ -23,25 +23,31 @@ def run_quantum_audit(ticker, df, tech_result):
         s = QuantPhysicsEngine.shannon_entropy(close_series)
         decay_days = QuantPhysicsEngine.calculate_momentum_decay(prices)
 
-        # THE HEAVYWEIGHT VERDICT ENGINE
-        if h < 0.55:
-            return {**tech_result, "verdict": "⚠️ RANDOM WALK", "score": 0, "hurst": h, "entropy": s}
+        # Calculate Kalman Slope for consistency with screener
+        kalman = QuantPhysicsEngine.kalman_filter(close_series)
+        k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 2.0
 
-        if s > 0.75:
-            return {**tech_result, "verdict": "🛑 HEAT DEATH (Too Messy)", "score": 0, "hurst": h, "entropy": s}
+        # THE HEAVYWEIGHT VERDICT ENGINE (Unified Logic)
+        ai_verdict, ai_rationale = QuantPhysicsEngine.generate_human_verdict(h, s, k_slope, float(prices[-1]))
 
-        if decay_days < 5:
-            return {**tech_result, "verdict": "🛑 EXHAUSTED", "score": 0, "hurst": h, "entropy": s}
-
-        # If physics passes, upgrade the verdict
-        # Append QUANTUM to existing verdict if it's not WAIT/AVOID
+        # Append QUANTUM to existing verdict if it's not WAIT/AVOID and Quantum says BUY
         current_verdict = tech_result.get('master_verdict', 'WAIT')
-
         final_verdict = current_verdict
-        if "BUY" in current_verdict or "WATCH" in current_verdict:
-             final_verdict = f"🚀 QUANTUM {current_verdict}"
 
-        return {**tech_result, "master_verdict": final_verdict, "hurst": h, "entropy": s, "decay_days": decay_days}
+        # If Quantum gives a strong BUY signal, we upgrade the verdict
+        if "BUY" in ai_verdict:
+            if "BUY" in current_verdict or "WATCH" in current_verdict:
+                 final_verdict = f"🚀 QUANTUM {current_verdict}"
+            elif current_verdict == "WAIT":
+                 final_verdict = f"✨ QUANTUM BUY (Physics Only)"
+        elif "SHORT" in ai_verdict:
+            if "SELL" in current_verdict or "AVOID" in current_verdict:
+                 final_verdict = f"📉 QUANTUM SHORT"
+
+        # If Quantum says CHOP or REVERSAL, we might want to downgrade/warn?
+        # Keeping it additive for now to avoid confusing the user too much.
+
+        return {**tech_result, "master_verdict": final_verdict, "hurst": h, "entropy": s, "decay_days": decay_days, "quantum_verdict": ai_verdict}
     except Exception as e:
         logger.error(f"Quantum audit failed for {ticker}: {e}")
         return tech_result
