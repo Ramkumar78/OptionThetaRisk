@@ -13,6 +13,7 @@ export interface ScreenerResult {
     entropy?: number;
     verdict?: string;
     score?: number;
+    breakout_date?: string; // Add this optional field
     [key: string]: any;
 }
 
@@ -984,6 +985,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
                                 <HeaderCell label="Target" sortKey="target" align="right" />
                                 <HeaderCell label="ATR" sortKey="atr" align="right" />
+                                <HeaderCell label="Breakout Date" sortKey="breakout_date" align="right" />
                                 <HeaderCell label="AI Verdict" sortKey="human_verdict" align="left" />
                                 <HeaderCell label="Why?" sortKey="rationale" align="left" />
                             </>
@@ -1170,6 +1172,16 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-500 whitespace-nowrap">
                                                     {row.atr_value || row.ATR}
+                                                </td>
+
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500 whitespace-nowrap">
+                                                    {row.breakout_date ? (
+                                                        <span className="text-blue-600 font-medium">
+                                                            {row.breakout_date}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">-</span>
+                                                    )}
                                                 </td>
 
                                                 <td className="px-4 py-3 text-left whitespace-nowrap">
