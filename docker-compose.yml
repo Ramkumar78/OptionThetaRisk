@@ -1,5 +1,6 @@
 services:
   web:
+    image: option-theta-risk:latest
     build: .
     ports:
       - "5000:5000"
@@ -15,6 +16,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-shriram2222@gmail.com}
 
   cache_worker:
+    image: option-theta-risk:latest
     build: .
     command: python refresh_cache.py
     volumes:
