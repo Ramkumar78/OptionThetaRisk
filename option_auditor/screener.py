@@ -2762,27 +2762,28 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 verdict_color = "yellow"
 
             # --- FIX 2: ADD ATR, TARGET, STOP LOSS ---
+            # Richard Dennis / Turtle Trading uses 20-day ATR ('N')
             import pandas_ta as ta
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
             current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
 
             # Default to 0.0
             stop_loss = 0.0
             target_price = 0.0
 
-            # Calculate Targets based on Direction
+            # Calculate Targets based on Turtle Logic (Stop = 2N, Target = 4N)
             if "BUY" in ai_verdict:
                 # Long: Stop below, Target above
                 stop_loss = curr_price - (2.0 * current_atr)
-                target_price = curr_price + (3.0 * current_atr)
+                target_price = curr_price + (4.0 * current_atr)
             elif "SHORT" in ai_verdict:
                 # Short: Stop above, Target below
                 stop_loss = curr_price + (2.0 * current_atr)
-                target_price = curr_price - (3.0 * current_atr)
+                target_price = curr_price - (4.0 * current_atr)
             else:
                 # Neutral/Wait - just show levels relative to price for reference
                 stop_loss = curr_price - (2.0 * current_atr)
-                target_price = curr_price + (3.0 * current_atr)
+                target_price = curr_price + (4.0 * current_atr)
 
             volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
 
