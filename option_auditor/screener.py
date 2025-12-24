@@ -2718,28 +2718,34 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             kalman = QuantPhysicsEngine.kalman_filter(close)
             phase = QuantPhysicsEngine.instantaneous_phase(close)
 
-            # --- FIX 1: SMOOTHER SLOPE CALCULATION ---
-            # Old: (iloc[-1] - iloc[-3]) / 2.0 (Too sensitive)
-            # New: 10-day Lookback for robust trend direction
+            # --- FIX: PERCENTAGE SLOPE CALCULATION ---
+            # Old: (kalman.iloc[-1] - kalman.iloc[-10]) / 10.0  <- Dollar Slope (Bug)
+            # New: (kalman.iloc[-1] - kalman.iloc[-10]) / kalman.iloc[-10] <- Percentage Return
+
             lookback = 10
+            k_slope = 0.0
+
             if len(kalman) > lookback:
-                k_slope = (kalman.iloc[-1] - kalman.iloc[-1 - lookback]) / float(lookback)
-            else:
-                k_slope = 0.0
+                prev_val = float(kalman.iloc[-1 - lookback])
+                curr_val = float(kalman.iloc[-1])
+
+                if prev_val > 0:
+                    k_slope = (curr_val - prev_val) / prev_val
 
             # --- SCORING LOGIC ---
             score = 50
             kalman_signal = "FLAT"
 
-            if k_slope > 0:
+            # Require at least 1.5% move over 10 days to call it a trend
+            if k_slope > 0.015:
                 kalman_signal = "UPTREND"
-            elif k_slope < 0:
+            elif k_slope < -0.015:
                 kalman_signal = "DOWNTREND"
 
-            if hurst > 0.60: score += 20 # Updated threshold
+            if hurst > 0.65: score += 20 # Raised threshold
             if entropy < 0.8: score += 15
-            if k_slope > 0: score += 15
-            elif k_slope < 0: score -= 15
+            if k_slope > 0.015: score += 15
+            elif k_slope < -0.015: score -= 15
 
             if hurst < 0.40:
                 score = 65

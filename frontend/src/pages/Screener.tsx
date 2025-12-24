@@ -981,6 +981,9 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                 <HeaderCell label="Entropy" sortKey="entropy" align="center" />
                                 <HeaderCell label="Kalman Sig" sortKey="kalman_signal" align="center" />
                                 <HeaderCell label="Score" sortKey="score" align="center" />
+                                <HeaderCell label="Stop Loss" sortKey="stop_loss" align="right" />
+                                <HeaderCell label="Target" sortKey="target" align="right" />
+                                <HeaderCell label="ATR" sortKey="atr" align="right" />
                                 <HeaderCell label="AI Verdict" sortKey="human_verdict" align="left" />
                                 <HeaderCell label="Why?" sortKey="rationale" align="left" />
                             </>
@@ -1135,7 +1138,7 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                         {type === 'quantum' ? (
                                             <>
                                                 <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                    <span className={clsx("font-bold", (row.hurst || 0) > 0.6 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400')}>
+                                                    <span className={clsx("font-bold", (row.hurst || 0) > 0.65 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400')}>
                                                         {row.hurst?.toFixed(2)}
                                                     </span>
                                                 </td>
@@ -1157,6 +1160,16 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
 
                                                 <td className="px-4 py-3 text-center font-bold font-mono">
                                                     {row.score}
+                                                </td>
+
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-red-600 dark:text-red-400 whitespace-nowrap">
+                                                    {formatCurrency(row.stop_loss || row['Stop Loss'], currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                                    {formatCurrency(row.target || row.Target, currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-500 whitespace-nowrap">
+                                                    {row.atr_value || row.ATR}
                                                 </td>
 
                                                 <td className="px-4 py-3 text-left whitespace-nowrap">

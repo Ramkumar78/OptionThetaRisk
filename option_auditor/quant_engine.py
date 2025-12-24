@@ -197,35 +197,39 @@ class QuantPhysicsEngine:
     def generate_human_verdict(hurst, entropy, slope, price):
         """
         Centralized logic for Quantum Verdicts.
-        Used by both Screener and Dashboard.
+        Slope is now expected to be a PERCENTAGE change (e.g., 0.02 for 2%).
         """
         verdict = "WAIT"
         rationale = "No edge."
 
         if hurst is None: return "ERR", "No Data"
 
-        # --- THE "REAL WORLD" THRESHOLDS (UPDATED) ---
-        # Fixed: Raised thresholds to reduce false positives
-        # Old: > 0.62 (Strong), > 0.55 (Moderate)
-        # New: > 0.70 (Strong), > 0.60 (Moderate)
+        # --- CALIBRATION V3 (Strict Mode) ---
+        # 0.50-0.60 = Random Walk / Noise
+        # 0.60-0.65 = Weak Trend (Ignored)
+        # > 0.65 = Confirmed Trend
+        # > 0.72 = Strong Trend
 
         trend_strength = "Weak"
-        if hurst > 0.70: trend_strength = "🔥 Strong"
-        elif hurst > 0.60: trend_strength = "✅ Moderate"
+        if hurst > 0.72: trend_strength = "🔥 Strong"
+        elif hurst > 0.65: trend_strength = "✅ Moderate"
 
-        noise_level = "Noisy"
-        if entropy < 0.6: noise_level = "💎 Crystal Clear"
-        elif entropy < 0.85: noise_level = "🌊 Tradeable"
+        # Slope Threshold (Min 1% move over the period to qualify)
+        # This prevents flat stocks from being marked as 'Uptrend' just because slope is 0.00001
+        SIGNIFICANT_SLOPE = 0.01
 
         # LOGIC TREE
-        # Fixed: Stricter Hurst requirement (0.60) for entry
-        if hurst > 0.60 and entropy < 0.85:
-            if slope > 0:
+        # Fixed: Raised Hurst to 0.65 to kill false positives
+        if hurst > 0.65 and entropy < 0.85:
+            if slope > SIGNIFICANT_SLOPE:
                 verdict = f"BUY ({trend_strength})"
-                rationale = f"Trend detected (H={hurst:.2f}) with acceptable noise."
-            elif slope < 0:
+                rationale = f"Trend Confirmed (H={hurst:.2f}) & Momentum > 1%."
+            elif slope < -SIGNIFICANT_SLOPE:
                 verdict = f"SHORT ({trend_strength})"
-                rationale = f"Clean breakdown (H={hurst:.2f})."
+                rationale = f"Breakdown Confirmed (H={hurst:.2f})."
+            else:
+                verdict = "WAIT"
+                rationale = f"Trend exists (H={hurst:.2f}) but price is flat."
 
         elif hurst < 0.45:
             verdict = "REVERSAL"
