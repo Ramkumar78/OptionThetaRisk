@@ -244,3 +244,47 @@ class QuantPhysicsEngine:
             rationale = "Random Walk zone."
 
         return verdict, rationale
+
+    @staticmethod
+    def analyze_breakout(ticker, df):
+        """
+        Analyzes if a stock has broken out of a 6-month range and when.
+        """
+        # 1. Ensure we have enough data (approx 126 trading days in 6 months)
+        if len(df) < 120:
+            return {"signal": False, "breakout_date": None}
+
+        # 2. Define the "Lookback" vs "Recent" window
+        # We look for a breakout that happened in the last 30 days
+        # relative to the high of the prior 5 months.
+        recent_window = 30
+        historical_window = len(df) - recent_window
+
+        # Get the data subsets
+        history_df = df.iloc[:historical_window]
+        recent_df = df.iloc[historical_window:]
+
+        # 3. Calculate the Resistance Level (Max High of the previous period)
+        resistance_level = history_df['Close'].max()
+
+        # 4. Check for Breakout in the recent window
+        # Find days where Close > Resistance Level
+        breakout_mask = recent_df['Close'] > resistance_level
+
+        if not breakout_mask.any():
+            return {"signal": False, "breakout_date": None}
+
+        # 5. Find the FIRST date the breakout occurred in this recent window
+        breakout_dates = recent_df[breakout_mask].index
+        first_breakout_date = breakout_dates[0]
+
+        # Calculate days since breakout
+        days_since = (df.index[-1] - first_breakout_date).days
+
+        return {
+            "signal": True,
+            "breakout_date": first_breakout_date.strftime('%Y-%m-%d'), # Format date string
+            "days_since": days_since,
+            "resistance_level": resistance_level,
+            "current_price": df['Close'].iloc[-1]
+        }

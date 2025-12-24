@@ -2794,7 +2794,9 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 except Exception:
                     pass
 
-            breakout_date = _calculate_trend_breakout_date(df)
+            breakout_data = QuantPhysicsEngine.analyze_breakout(ticker, df.tail(130))
+            breakout_date = breakout_data.get("breakout_date")
+
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
