@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import math
 from datetime import datetime, timedelta
+from scipy.signal import hilbert, detrend
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
@@ -1893,6 +1894,38 @@ def _process_isa_ticker(ticker, df, check_mode):
 # -------------------------------------------------------------------------
 import numpy as np
 
+def _calculate_hilbert_phase(prices):
+    """
+    Calculates Instantaneous Phase using the Hilbert Transform.
+    FIX: Replaces rigid FFT with Analytic Signal for non-stationary data.
+    Returns:
+        - phase: (-pi to +pi) where -pi/pi is a trough/peak.
+        - strength: Magnitude of the cycle (Amplitude).
+    """
+    try:
+        if len(prices) < 30: return None, None
+
+        # 1. Log Returns to normalize magnitude
+        # We work with price deviations, but log prices are safer for trends
+        log_prices = np.log(prices)
+
+        # 2. Detrend (Linear) to isolate oscillatory component
+        # 'linear' detrending removes the primary trend so we see the cycle
+        detrended = detrend(log_prices, type='linear')
+
+        # 3. Apply Hilbert Transform to get Analytic Signal
+        analytic_signal = hilbert(detrended)
+
+        # 4. Extract Phase (Angle) and Amplitude (Abs)
+        # Phase ranges from -pi to +pi radians
+        phase = np.angle(analytic_signal)[-1]
+        amplitude = np.abs(analytic_signal)[-1]
+
+        return phase, amplitude
+
+    except Exception:
+        return None, None
+
 def _calculate_dominant_cycle(prices):
     """
     Uses FFT to find the dominant cycle period (in days) of a price series.
@@ -1930,26 +1963,27 @@ def _calculate_dominant_cycle(prices):
 
 def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
-    Screens for stocks at the BOTTOM of their dominant time cycle (Fourier).
+    Screens for Cyclical Turns using Instantaneous Phase (Hilbert Transform).
+    FIX: Removed fixed period limits (5-60d). Now detects geometric turns.
     """
-    import yfinance as yf
     import pandas as pd
+    import numpy as np # Ensure numpy is imported
 
     if ticker_list is None:
         ticker_list = _resolve_region_tickers(region)
 
     results = []
 
+    # Batch fetch logic remains same ...
     try:
         data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d", chunk_size=100)
     except:
         return []
 
-    # Optimized Iteration for Fourier
+    # Iterator setup ...
     if isinstance(data.columns, pd.MultiIndex):
         iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
     else:
-        # Single Ticker fallback
         iterator = [(ticker_list[0], data)] if len(ticker_list)==1 and not data.empty else []
 
     for ticker, df in iterator:
@@ -1958,71 +1992,74 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
                 df = df.droplevel(0, axis=1)
 
             df = df.dropna(how='all')
-            if len(df) < 100: continue
-
-            # Check requested list
+            if len(df) < 50: continue
             if ticker not in ticker_list: continue
 
-            closes = df['Close'].tolist()
+            # --- DSP PHYSICS CALCULATION ---
+            # Use 'Close' series values
+            closes = df['Close'].values
 
-            import pandas_ta as ta
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-            volatility_pct = (current_atr / float(closes[-1]) * 100) if float(closes[-1]) > 0 else 0.0
+            phase, strength = _calculate_hilbert_phase(closes)
 
-            # --- FOURIER CALC ---
-            cycle_data = _calculate_dominant_cycle(closes)
-            if not cycle_data: continue
+            if phase is None: continue
 
-            period, rel_pos = cycle_data
+            # --- SIGNAL LOGIC (Based on Radians) ---
+            # Phase -3.14 (or 3.14) is the TROUGH (Bottom)
+            # Phase 0 is the ZERO CROSSING (Midpoint/Trend)
+            # Phase 1.57 (pi/2) is the PEAK (Top)
 
-            pct_change_1d = None
-            if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    curr_close = float(df['Close'].iloc[-1])
-                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
+            # Normalize phase for display (-1 to 1 scale roughly)
+            norm_phase = phase / np.pi
 
             signal = "WAIT"
             verdict_color = "gray"
 
-            if 5 <= period <= 60:
-                if rel_pos <= -0.8:
-                    signal = "🌊 CYCLICAL LOW (Buy)"
-                    verdict_color = "green"
-                elif rel_pos >= 0.8:
-                    signal = "🏔️ CYCLICAL HIGH (Sell)"
-                    verdict_color = "red"
-                elif -0.2 <= rel_pos <= 0.2:
-                    signal = "➡️ MID-CYCLE (Neutral)"
-            else:
-                continue
+            # Sine Wave Cycle logic:
+            # We want to catch the turn UP from the bottom.
+            # Bottom is +/- pi. As it crosses from negative to positive?
+            # Actually, Hilbert Phase moves continuously.
+            # Deep cycle low is typically near +/- pi boundaries depending on convention.
 
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+            # DEFINITION:
+            # Phase close to +/- Pi = Trough (Oversold Cycle)
+            # Phase close to 0 = Peak (Overbought Cycle) in some implementations,
+            # BUT standard Hilbert on detrended data:
+            # Real part max = Peak, Real part min = Trough.
+            # Phase transitions align with the wave.
 
-            breakout_date = _calculate_trend_breakout_date(df)
+            # Simplify: If Phase is turning from Negative to Positive (Sine wave bottom)
+
+            if 0.8 <= abs(norm_phase) <= 1.0:
+                signal = "🌊 CYCLICAL LOW (Bottoming)"
+                verdict_color = "green"
+            elif 0.0 <= abs(norm_phase) <= 0.2:
+                signal = "🏔️ CYCLICAL HIGH (Topping)"
+                verdict_color = "red"
+
+            # Filter weak cycles (Noise)
+            if strength < 0.02: # 2% Amplitude threshold
+                signal = "WAIT (Weak Cycle)"
+                verdict_color = "gray"
+
+            pct_change_1d = None
+            if len(df) >= 2:
+                pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
 
             results.append({
                 "ticker": ticker,
-                "company_name": company_name,
                 "price": float(closes[-1]),
                 "pct_change_1d": pct_change_1d,
                 "signal": signal,
-                "cycle_period": f"{period} Days",
-                "cycle_position": f"{rel_pos:.2f} (-1 Low, +1 High)",
+                "cycle_phase": f"{phase:.2f} rad",
+                "cycle_strength": f"{strength*100:.1f}%", # Volatility of the cycle
                 "verdict_color": verdict_color,
-                "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2),
-                "breakout_date": breakout_date
+                "method": "Hilbert (Non-Stationary)"
             })
 
         except Exception:
             continue
 
-    results.sort(key=lambda x: x['cycle_position'])
+    results.sort(key=lambda x: x.get('cycle_strength', 0), reverse=True)
     return results
 
 class StrategyAnalyzer:
