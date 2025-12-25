@@ -2426,16 +2426,19 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
     results.sort(key=lambda x: x['confluence_score'], reverse=True)
     return results
 
-def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 100):
+def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 1000):
     """
-    Project stock price 30 days out using Monte Carlo (GBM).
+    Project stock price 30 days out using Monte Carlo with Historical Bootstrapping.
+    FIX: Replaces Gaussian GBM with Bootstrapping to capture Fat Tails.
     """
     import numpy as np
+    import pandas as pd
     import yfinance as yf
 
     try:
-        df = yf.download(ticker, period="1y", progress=False)
-        if df.empty or len(df) < 30: return None
+        # Fetch sufficient history to capture tail events (2 years minimum)
+        df = yf.download(ticker, period="2y", progress=False)
+        if df.empty or len(df) < 100: return None
 
         if isinstance(df.columns, pd.MultiIndex):
             try:
@@ -2445,29 +2448,40 @@ def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 100):
                     df.columns = df.columns.get_level_values(0)
             except: pass
 
-        returns = df['Close'].pct_change().dropna()
-        if returns.empty: return None
+        # Calculate Log Returns
+        log_returns = np.log(df['Close'] / df['Close'].shift(1)).dropna()
+        if log_returns.empty: return None
 
         last_price = float(df['Close'].iloc[-1])
 
-        mu = returns.mean()
-        sigma = returns.std()
+        # BOOTSTRAPPING: Sample from ACTUAL past returns with replacement.
+        # This preserves skewness and kurtosis (fat tails).
+        random_returns = np.random.choice(log_returns, size=(days, sims), replace=True)
 
-        daily_returns = np.random.normal(mu, sigma, (days, sims)) + 1
-        price_paths = last_price * daily_returns.cumprod(axis=0)
+        # Reconstruct Price Paths
+        # Cumulative sum of log returns -> cumulative product of price
+        price_paths = last_price * np.exp(np.cumsum(random_returns, axis=0))
 
         final_prices = price_paths[-1]
-        prob_below_90pct = np.mean(final_prices < (last_price * 0.90)) * 100
+
+        # Probability of Drop > 10%
+        # Measures how many simulation paths ended below 90% of current price
+        prob_drop_10pct = np.mean(final_prices < (last_price * 0.90)) * 100
+
+        median_forecast = np.median(final_prices)
+
+        # Annualized Volatility for context
+        vol_annual = log_returns.std() * np.sqrt(252)
 
         return {
             "ticker": ticker,
             "current": last_price,
-            "median_forecast": np.median(final_prices),
-            "prob_drop_10pct": f"{prob_below_90pct:.1f}%",
-            "volatility_annual": f"{sigma * np.sqrt(252) * 100:.1f}%"
+            "median_forecast": median_forecast,
+            "prob_drop_10pct": f"{prob_drop_10pct:.1f}%",
+            "volatility_annual": f"{vol_annual * 100:.1f}%",
+            "method": "Historical Bootstrapping (Fat Tails)"
         }
-    except Exception as e:
-        logger.debug(f"Monte Carlo forecast error for {ticker}: {e}")
+    except Exception:
         return None
 
 def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
