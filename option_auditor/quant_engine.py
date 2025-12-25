@@ -7,115 +7,110 @@ class QuantPhysicsEngine:
     @staticmethod
     def calculate_hurst(series: pd.Series, max_lag=20) -> float:
         """
-        Standard Rescaled Range (R/S) Analysis.
-        More sensitive to trends than Aggregated Variance.
+        Robust Rescaled Range (R/S) Analysis.
+        FIX: Enforces stricter data requirements to avoid 'ghost' signals.
         """
         try:
-            # 1. Prepare Returns
-            # Check if input is valid
             if series.empty: return None
 
-            returns = np.log(series / series.shift(1)).dropna()
-            if len(returns) < 50: return None # FIX: Return None, not 0.5
+            # FIX 1: Strict Minimum Length (approx 6 months)
+            # Statistical validity of Hurst degrades rapidly below 100 points.
+            if len(series) < 100: return None
 
-            # 2. R/S Calculation Loop
-            # We calculate the range of cumulative deviations relative to standard deviation
-            lags = range(2, min(max_lag, len(returns) // 2))
+            # Prepare Returns (Log differences)
+            returns = np.log(series / series.shift(1)).dropna()
+
+            # Check for zero variance (Flatline stock)
+            if returns.std() == 0: return 0.5
+
+            # R/S Calculation Loop
+            # Dynamic max_lag based on available history
+            actual_max_lag = min(max_lag, len(returns) // 4)
+            if actual_max_lag < 5: return None
+
+            lags = range(2, actual_max_lag)
             rs_values = []
 
             for lag in lags:
-                # Split data into chunks of size 'lag'
                 num_chunks = len(returns) // lag
                 chunk_rs = []
 
                 for i in range(num_chunks):
                     chunk = returns.iloc[i*lag : (i+1)*lag]
 
-                    # Calculate Mean and Deviations
+                    # Calculate Range and Standard Deviation
                     mean = chunk.mean()
                     cumsum_dev = (chunk - mean).cumsum()
-
-                    # Range (R) and StdDev (S)
                     R = cumsum_dev.max() - cumsum_dev.min()
                     S = chunk.std(ddof=1)
 
-                    if S > 0:
+                    # Avoid division by zero
+                    if S > 1e-9:
                         chunk_rs.append(R / S)
 
                 if chunk_rs:
                     rs_values.append(np.mean(chunk_rs))
 
-            # 3. Linear Regression: log(R/S) = H * log(lag) + C
-            if not rs_values: return None
+            # Linear Regression: log(R/S) = H * log(lag)
+            if len(rs_values) < 3: return None
 
+            # Filter out invalid lags
             valid_indices = np.where(np.array(rs_values) > 0)
-            if len(valid_indices[0]) < 2: return None
-
             y = np.log(np.array(rs_values)[valid_indices])
             x = np.log(list(lags))[valid_indices]
 
+            if len(x) < 3: return None
+
             H, _ = np.polyfit(x, y, 1)
 
-            # Cap result (Financial markets rarely exceed 0.8)
+            # Cap result (Financial time series bounds)
             return max(0.3, min(0.85, H))
 
-        except Exception as e:
-            # print(f"Hurst Error: {e}")
+        except Exception:
             return None
 
     @staticmethod
     def shannon_entropy(series: pd.Series, base=2) -> float:
         """
-        Normalized Shannon Entropy (0 to 1 scale).
-        Makes interpretation consistent across tickers.
+        Normalized Shannon Entropy.
         """
         try:
             data = series.pct_change().dropna()
-            if len(data) < 10: return 1.0
+            if len(data) < 30: return 1.0 # Insufficient data = Assumption of Chaos
 
-            # Binning
-            num_bins = int(len(data) ** 0.5) # Square root choice
+            # Binning Strategy: Rice Rule or Sqrt
+            num_bins = int(len(data) ** 0.5)
             counts, _ = np.histogram(data, bins=num_bins, density=False)
 
             probs = counts / np.sum(counts)
             probs = probs[probs > 0]
 
-            # Raw Entropy
             S = -np.sum(probs * np.log(probs) / np.log(base))
-
-            # Normalize by Max Entropy (log(num_bins))
             max_S = np.log(num_bins) / np.log(base)
 
-            # Return inverted score: 0 = Chaos, 1 = Order (Optional, but let's stick to standard)
-            # Standard: Low is Order.
-            return S / max_S if max_S > 0 else 1.0
+            if max_S == 0: return 1.0
+
+            normalized_entropy = S / max_S
+            return normalized_entropy
         except:
             return 1.0
 
     @staticmethod
     def kalman_filter(series: pd.Series) -> pd.Series:
         """
-        Fixed Kalman Filter using Log Prices to avoid Scale Bias.
-        Price level independent.
+        Adaptive Kalman Filter on Log Prices.
+        FIX: Adaptive Q (Process Noise) to reduce lag on volatile assets.
         """
         try:
-            # FIX: Use Log Prices
-            # If we process raw prices, the noise R scales with Price^2,
-            # while Q is constant, causing high priced stocks to lag.
-            # Using log prices makes volatility (R) percentage based and consistent.
+            if (series <= 0).any(): return series
 
-            if (series <= 0).any():
-                # Fallback for negative/zero prices (shouldn't happen for stocks usually)
-                return series
-
+            # Work in Log Space to handle percentage moves linearly
             x = np.log(series.values)
             n_iter = len(x)
             sz = (n_iter,)
 
-            # Volatility of Returns (approx log diff)
+            # Rolling volatility (30-day) to estimate Measurement Noise (R)
             returns_std = series.pct_change().rolling(30).std().fillna(0.01).values
-
-            Q = 1e-5
 
             xhat = np.zeros(sz)
             P = np.zeros(sz)
@@ -126,25 +121,32 @@ class QuantPhysicsEngine:
             xhat[0] = x[0]
             P[0] = 1.0
 
+            # FIX 2: Adaptive Process Noise (Q)
+            # If the stock is highly volatile, we assume the "True Value" moves faster.
+            # We scale Q based on recent volatility.
+            base_Q = 1e-5
+
             for k in range(1, n_iter):
-                # R depends on current volatility of returns.
-                # Since x is Log Price, volatility IS the standard deviation of returns.
-                vol_est = returns_std[k] if k < len(returns_std) else 0.01
-                if np.isnan(vol_est) or vol_est == 0: vol_est = 0.01
+                # Adaptive R (Measurement Noise)
+                vol_est = returns_std[k] if k < len(returns_std) and not np.isnan(returns_std[k]) else 0.01
+                vol_est = max(0.001, vol_est) # Clamp min vol
 
                 R_dynamic = vol_est ** 2
 
-                xhatminus[k] = xhat[k-1]
-                Pminus[k] = P[k-1] + Q
+                # Adaptive Q (Process Noise) - allow faster reaction in high vol regimes
+                Q_adaptive = base_Q * (1 + (vol_est * 100))
 
+                # Predict
+                xhatminus[k] = xhat[k-1]
+                Pminus[k] = P[k-1] + Q_adaptive
+
+                # Update
                 K[k] = Pminus[k] / (Pminus[k] + R_dynamic)
                 xhat[k] = xhatminus[k] + K[k] * (x[k] - xhatminus[k])
                 P[k] = (1 - K[k]) * Pminus[k]
 
-            # Convert back from Log Space
             return pd.Series(np.exp(xhat), index=series.index)
-        except Exception as e:
-            # print(f"Kalman Error: {e}")
+        except Exception:
             return series
 
     @staticmethod
@@ -196,52 +198,52 @@ class QuantPhysicsEngine:
     @staticmethod
     def generate_human_verdict(hurst, entropy, slope, price):
         """
-        Centralized logic for Quantum Verdicts.
-        Slope is now expected to be a PERCENTAGE change (e.g., 0.02 for 2%).
+        Verdict Logic V3: Explicit 'Casino Zone' identification.
+        Slope: Expected as a DECIMAL percentage (0.01 = 1%).
         """
+        if hurst is None: return "ERR", "Insufficient Data"
+
+        # --- REGIME DEFINITIONS ---
+        # H < 0.45       : Mean Reversion (Rubber Band)
+        # 0.45 <= H <= 0.60 : RANDOM WALK (The Casino Zone) -> DO NOT TRADE
+        # 0.60 < H <= 0.65  : Weak/Emerging Trend
+        # H > 0.65       : Strong Trend (Persistence)
+
+        # Slope Thresholds
+        SIGNIFICANT_SLOPE = 0.015  # 1.5% move required to confirm trend direction
+
         verdict = "WAIT"
-        rationale = "No edge."
+        rationale = "No distinct edge."
 
-        if hurst is None: return "ERR", "No Data"
+        # 1. MEAN REVERSION REGIME
+        if hurst < 0.45:
+            verdict = "REVERSAL (Mean Rev)"
+            rationale = f"Price is elastic (H={hurst:.2f}). Fade extensions."
 
-        # --- CALIBRATION V3 (Strict Mode) ---
-        # 0.50-0.60 = Random Walk / Noise
-        # 0.60-0.65 = Weak Trend (Ignored)
-        # > 0.65 = Confirmed Trend
-        # > 0.72 = Strong Trend
+        # 2. RANDOM WALK REGIME (The 'Chop')
+        elif 0.45 <= hurst <= 0.60:
+            verdict = "RANDOM (Casino Zone)"
+            rationale = f"Price action is noise (H={hurst:.2f}). Edge is zero."
 
-        trend_strength = "Weak"
-        if hurst > 0.72: trend_strength = "🔥 Strong"
-        elif hurst > 0.65: trend_strength = "✅ Moderate"
+        # 3. TREND REGIME
+        elif hurst > 0.60:
+            strength = "Weak" if hurst <= 0.65 else "🔥 Strong"
 
-        # Slope Threshold (Min 1% move over the period to qualify)
-        # This prevents flat stocks from being marked as 'Uptrend' just because slope is 0.00001
-        SIGNIFICANT_SLOPE = 0.01
-
-        # LOGIC TREE
-        # Fixed: Raised Hurst to 0.65 to kill false positives
-        if hurst > 0.65 and entropy < 0.85:
-            if slope > SIGNIFICANT_SLOPE:
-                verdict = f"BUY ({trend_strength})"
-                rationale = f"Trend Confirmed (H={hurst:.2f}) & Momentum > 1%."
-            elif slope < -SIGNIFICANT_SLOPE:
-                verdict = f"SHORT ({trend_strength})"
-                rationale = f"Breakdown Confirmed (H={hurst:.2f})."
+            # Filter by Entropy (Chaos)
+            if entropy > 0.85:
+                verdict = "CHOP (High Entropy)"
+                rationale = "Trend exists but signal is too noisy/choppy."
             else:
-                verdict = "WAIT"
-                rationale = f"Trend exists (H={hurst:.2f}) but price is flat."
-
-        elif hurst < 0.45:
-            verdict = "REVERSAL"
-            rationale = f"Mean Reverting (H={hurst:.2f}). Fade moves."
-
-        elif entropy > 0.9:
-            verdict = "CHOP"
-            rationale = "Market is too chaotic."
-
-        else:
-            verdict = "NEUTRAL"
-            rationale = "Random Walk zone."
+                # Check Direction via Slope
+                if slope > SIGNIFICANT_SLOPE:
+                    verdict = f"BUY ({strength})"
+                    rationale = f"Persistent Uptrend (H={hurst:.2f}) & Mom > 1.5%."
+                elif slope < -SIGNIFICANT_SLOPE:
+                    verdict = f"SHORT ({strength})"
+                    rationale = f"Persistent Downtrend (H={hurst:.2f}) & Mom < -1.5%."
+                else:
+                    verdict = "WAIT (Flat)"
+                    rationale = f"High persistence (H={hurst:.2f}) but Price is stalling."
 
         return verdict, rationale
 
