@@ -57,8 +57,8 @@ class TestQuantumScreenerCalculations(unittest.TestCase):
         # Verify ATR is approx 10
         self.assertAlmostEqual(atr, 10.0, places=1)
 
-        # Verify Stop Loss: Price - 2.0 * ATR
-        self.assertAlmostEqual(stop, price - 2.0 * atr, places=2)
+        # Verify Stop Loss: Price - 2.5 * ATR (New Requirement)
+        self.assertAlmostEqual(stop, price - 2.5 * atr, places=2)
 
         # Verify Target Price: Price + 4.0 * ATR (New Requirement)
         self.assertAlmostEqual(target, price + 4.0 * atr, places=2)

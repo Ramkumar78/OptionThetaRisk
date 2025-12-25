@@ -2649,154 +2649,105 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
 
     if all_data.empty: return []
 
-    # Helper for MultiIndex
-    valid_tickers = ticker_list
+    # FIX 3: Robust Multi-Ticker vs Flat Data Handling
+    # Use a helper to normalize the dataframe structure
+    valid_tickers = []
+
+    # Logic to ensure we have a list of (ticker, df) tuples
+    ticker_data_map = {}
+
     if isinstance(all_data.columns, pd.MultiIndex):
-        valid_tickers = all_data.columns.unique(level=0)
+        # Standard Batch Result
+        for t in all_data.columns.levels[0]:
+            if t in ticker_list:
+                ticker_data_map[t] = all_data[t]
     else:
-        # FIX: Handle Flat DataFrame Robustly
-        if all_data.empty:
-            return []
-
-        # If we have data but it's flat, check if we can identify the ticker
-        # or if we should treat it as a single result.
+        # Flat Result (Single Ticker or Identity Ambiguity)
         if len(ticker_list) == 1:
-            # Trivial case: We know who this belongs to
-            # Wrap it to mimic the iterator structure below
-            iterator = [(ticker_list[0], all_data)]
-            valid_tickers = [ticker_list[0]]
+            ticker_data_map[ticker_list[0]] = all_data
         else:
-            # "Identity Theft" Scenario: Multiple requested, one returned flat.
-            # We cannot blindly assign it, but failing silently is worse.
-            # Strategy: Log warning and attempt to re-fetch individually (or skip safely).
-            # For high-performance, we skip the ambiguity but LOG it.
-            logger.warning("Batch fetch returned ambiguous flat data. Skipping batch.")
+            # Ambiguous: We asked for 10, got 1 flat DF.
+            # Safe Failover: Skip batch, try to match columns?
+            # Or just fail gracefully.
+            logger.warning("Quantum Screener received ambiguous flat data for multiple tickers. Skipping.")
             return []
 
-    # If we haven't defined iterator yet (MultiIndex case)
-    if 'iterator' not in locals():
-         if isinstance(all_data.columns, pd.MultiIndex):
-            iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
-         else:
-            iterator = []
+    valid_tickers = list(ticker_data_map.keys())
 
     def process_ticker(ticker):
         try:
-            # Data Extraction
-            df = None
-            if isinstance(all_data.columns, pd.MultiIndex):
-                if ticker in all_data.columns.levels[0]:
-                    df = all_data[ticker].copy()
-            else:
-                # Flat dataframe check
-                if len(ticker_list) == 1:
-                     df = all_data.copy()
-                # If flat and multiple tickers, df remains None -> Trigger Fallback
-
-            # FALLBACK: If batch failed for this ticker (or identity theft protection kicked in)
-            if df is None or df.empty:
-                 try:
-                     # Fetch individually using robust fetcher
-                     # logger.debug(f"Fallback individual fetch for {ticker}")
-                     df = fetch_batch_data_safe([ticker], period="2y", interval="1d")
-                 except:
-                     return None
-
+            df = ticker_data_map.get(ticker)
             if df is None or df.empty: return None
 
+            # Clean Data
             df = df.dropna(how='all')
-            if len(df) < 200: return None
+            # Check Hurst Requirement (120 days)
+            if len(df) < 120: return None
 
             close = df['Close']
             curr_price = float(close.iloc[-1])
 
-            # --- PHYSICS ENGINE ---
+            # --- PHYSICS ENGINE CALLS ---
             hurst = QuantPhysicsEngine.calculate_hurst(close)
+
+            # Fast Failover: If Hurst failed (e.g. flat line), skip
             if hurst is None: return None
 
             entropy = QuantPhysicsEngine.shannon_entropy(close)
             kalman = QuantPhysicsEngine.kalman_filter(close)
-            phase = QuantPhysicsEngine.instantaneous_phase(close)
 
-            # --- FIX: PERCENTAGE SLOPE CALCULATION ---
-            # Old: (kalman.iloc[-1] - kalman.iloc[-10]) / 10.0  <- Dollar Slope (Bug)
-            # New: (kalman.iloc[-1] - kalman.iloc[-10]) / kalman.iloc[-10] <- Percentage Return
-
+            # --- FIX 4: Correct Slope Calculation (Percentage) ---
+            # We compare current Kalman value vs 10 days ago
             lookback = 10
             k_slope = 0.0
 
             if len(kalman) > lookback:
-                prev_val = float(kalman.iloc[-1 - lookback])
-                curr_val = float(kalman.iloc[-1])
+                curr_k = float(kalman.iloc[-1])
+                prev_k = float(kalman.iloc[-1 - lookback])
 
-                if prev_val > 0:
-                    k_slope = (curr_val - prev_val) / prev_val
+                # Avoid div by zero
+                if prev_k > 0:
+                    k_slope = (curr_k - prev_k) / prev_k
+                else:
+                    k_slope = 0.0
 
-            # --- SCORING LOGIC ---
-            score = 50
-            kalman_signal = "FLAT"
-
-            # Require at least 1.5% move over 10 days to call it a trend
-            if k_slope > 0.015:
-                kalman_signal = "UPTREND"
-            elif k_slope < -0.015:
-                kalman_signal = "DOWNTREND"
-
-            if hurst > 0.65: score += 20 # Raised threshold
-            if entropy < 0.8: score += 15
-            if k_slope > 0.015: score += 15
-            elif k_slope < -0.015: score -= 15
-
-            if hurst < 0.40:
-                score = 65
-
-            # --- HUMAN VERDICT ---
+            # --- VERDICT GENERATION ---
             ai_verdict, ai_rationale = QuantPhysicsEngine.generate_human_verdict(hurst, entropy, k_slope, curr_price)
 
+            # Colors
             verdict_color = "gray"
-            if "BUY" in ai_verdict:
-                verdict_color = "green"
-            elif "SHORT" in ai_verdict:
-                verdict_color = "red"
-            elif "REVERSAL" in ai_verdict:
-                verdict_color = "yellow"
+            if "BUY" in ai_verdict: verdict_color = "green"
+            elif "SHORT" in ai_verdict: verdict_color = "red"
+            elif "RANDOM" in ai_verdict: verdict_color = "gray" # Explicitly Gray out casino zone
 
-            # --- FIX 2: ADD ATR, TARGET, STOP LOSS ---
-            # Richard Dennis / Turtle Trading uses 20-day ATR ('N')
+            # --- RISK MANAGEMENT (ATR) ---
             import pandas_ta as ta
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
-            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+            # Calculate ATR locally if not present
+            atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = atr_series.iloc[-1] if atr_series is not None else (curr_price * 0.01)
 
-            # Default to 0.0
+            # Set Stops/Targets based on Regime
             stop_loss = 0.0
             target_price = 0.0
 
-            # Calculate Targets based on Turtle Logic (Stop = 2N, Target = 4N)
             if "BUY" in ai_verdict:
-                # Long: Stop below, Target above
-                stop_loss = curr_price - (2.0 * current_atr)
+                stop_loss = curr_price - (2.5 * current_atr) # Wider stop for trends
                 target_price = curr_price + (4.0 * current_atr)
             elif "SHORT" in ai_verdict:
-                # Short: Stop above, Target below
-                stop_loss = curr_price + (2.0 * current_atr)
+                stop_loss = curr_price + (2.5 * current_atr)
                 target_price = curr_price - (4.0 * current_atr)
             else:
-                # Neutral/Wait - just show levels relative to price for reference
+                # Default brackets for context
                 stop_loss = curr_price - (2.0 * current_atr)
-                target_price = curr_price + (4.0 * current_atr)
+                target_price = curr_price + (2.0 * current_atr)
 
-            volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
-
-            pct_change_1d = None
-            if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    pct_change_1d = ((curr_price - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
-
-            breakout_data = QuantPhysicsEngine.analyze_breakout(ticker, df.tail(130))
-            breakout_date = breakout_data.get("breakout_date")
+            # --- SCORING (For Sorting) ---
+            score = 50
+            if "Strong" in ai_verdict: score = 90
+            elif "BUY" in ai_verdict: score = 80
+            elif "SHORT" in ai_verdict: score = 80
+            elif "REVERSAL" in ai_verdict: score = 60
+            elif "RANDOM" in ai_verdict: score = 0 # Push to bottom
 
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
@@ -2807,33 +2758,29 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 "price": sanitize(curr_price),
                 "hurst": sanitize(hurst),
                 "entropy": sanitize(entropy),
-                "kalman_signal": kalman_signal,
-                "kalman_diff": sanitize(k_slope),
-                "phase": sanitize(phase),
-                "score": sanitize(score),
+                "kalman_diff": sanitize(k_slope), # Returns decimal (e.g. 0.015)
                 "human_verdict": ai_verdict,
-                "signal": ai_verdict,
                 "rationale": ai_rationale,
                 "verdict_color": verdict_color,
-
-                # --- NEW COLUMNS ---
-                "atr_value": sanitize(round(current_atr, 2)),  # Existing key
-                "ATR": sanitize(round(current_atr, 2)),        # Requested key
-                "Stop Loss": sanitize(round(stop_loss, 2)),    # Requested key
-                "Target": sanitize(round(target_price, 2)),    # Requested key
-
-                "volatility_pct": sanitize(round(volatility_pct, 2)),
-                "pct_change_1d": sanitize(pct_change_1d),
-                "breakout_date": breakout_date
+                "score": score,
+                "ATR": sanitize(round(current_atr, 2)),
+                "Stop Loss": sanitize(round(stop_loss, 2)),
+                "Target": sanitize(round(target_price, 2)),
+                "volatility_pct": sanitize(round((current_atr/curr_price)*100, 2))
             }
+
         except Exception as e:
             # logger.error(f"Error processing {ticker}: {e}")
             return None
 
-    # Parallel Execution
+    # Threaded Execution
     with ThreadPoolExecutor(max_workers=4) as executor:
         temp_results = list(executor.map(process_ticker, valid_tickers))
 
+    # Filter None results
     results = [r for r in temp_results if r is not None]
-    results.sort(key=lambda x: (x['score'] or 0), reverse=True)
+
+    # Sort: High Scores first
+    results.sort(key=lambda x: (x.get('score', 0)), reverse=True)
+
     return results
