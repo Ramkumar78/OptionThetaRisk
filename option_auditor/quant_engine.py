@@ -8,23 +8,21 @@ class QuantPhysicsEngine:
     def calculate_hurst(series: pd.Series, max_lag=20) -> float:
         """
         Robust Rescaled Range (R/S) Analysis.
-        FIX: Enforces stricter data requirements to avoid 'ghost' signals.
+        FIX: Removed artificial clamping [0.3, 0.85].
+        True anomalies (H > 0.9) are now visible.
         """
         try:
             if series.empty: return None
 
-            # FIX 1: Strict Minimum Length (approx 6 months)
-            # Statistical validity of Hurst degrades rapidly below 100 points.
+            # FIX: Require N > 100 for statistical significance
             if len(series) < 100: return None
 
             # Prepare Returns (Log differences)
             returns = np.log(series / series.shift(1)).dropna()
 
-            # Check for zero variance (Flatline stock)
             if returns.std() == 0: return 0.5
 
-            # R/S Calculation Loop
-            # Dynamic max_lag based on available history
+            # Dynamic max_lag
             actual_max_lag = min(max_lag, len(returns) // 4)
             if actual_max_lag < 5: return None
 
@@ -37,24 +35,20 @@ class QuantPhysicsEngine:
 
                 for i in range(num_chunks):
                     chunk = returns.iloc[i*lag : (i+1)*lag]
-
-                    # Calculate Range and Standard Deviation
                     mean = chunk.mean()
                     cumsum_dev = (chunk - mean).cumsum()
                     R = cumsum_dev.max() - cumsum_dev.min()
                     S = chunk.std(ddof=1)
 
-                    # Avoid division by zero
                     if S > 1e-9:
                         chunk_rs.append(R / S)
 
                 if chunk_rs:
                     rs_values.append(np.mean(chunk_rs))
 
-            # Linear Regression: log(R/S) = H * log(lag)
             if len(rs_values) < 3: return None
 
-            # Filter out invalid lags
+            # Log-Log Regression
             valid_indices = np.where(np.array(rs_values) > 0)
             y = np.log(np.array(rs_values)[valid_indices])
             x = np.log(list(lags))[valid_indices]
@@ -63,8 +57,9 @@ class QuantPhysicsEngine:
 
             H, _ = np.polyfit(x, y, 1)
 
-            # Cap result (Financial time series bounds)
-            return max(0.3, min(0.85, H))
+            # Return raw H.
+            # Values > 1.0 or < 0.0 indicate extreme statistical artifacts or strong memory.
+            return H
 
         except Exception:
             return None
@@ -73,12 +68,12 @@ class QuantPhysicsEngine:
     def shannon_entropy(series: pd.Series, base=2) -> float:
         """
         Normalized Shannon Entropy.
+        FIX: Returns None instead of default 1.0 if data is insufficient.
         """
         try:
             data = series.pct_change().dropna()
-            if len(data) < 30: return 1.0 # Insufficient data = Assumption of Chaos
+            if len(data) < 100: return None # Insufficient for distribution analysis
 
-            # Binning Strategy: Rice Rule or Sqrt
             num_bins = int(len(data) ** 0.5)
             counts, _ = np.histogram(data, bins=num_bins, density=False)
 
@@ -93,57 +88,54 @@ class QuantPhysicsEngine:
             normalized_entropy = S / max_S
             return normalized_entropy
         except:
-            return 1.0
+            return None
 
     @staticmethod
-    def kalman_filter(series: pd.Series) -> pd.Series:
+    def kalman_filter(series: pd.Series, optimization_window: int = 30) -> pd.Series:
         """
         Adaptive Kalman Filter on Log Prices.
-        FIX: Adaptive Q (Process Noise) to reduce lag on volatile assets.
+        FIX: Removed 'Magic Number' 100. Implemented Adaptive Q based on innovation variance.
         """
         try:
             if (series <= 0).any(): return series
 
-            # Work in Log Space to handle percentage moves linearly
             x = np.log(series.values)
             n_iter = len(x)
             sz = (n_iter,)
 
-            # Rolling volatility (30-day) to estimate Measurement Noise (R)
-            returns_std = series.pct_change().rolling(30).std().fillna(0.01).values
-
-            xhat = np.zeros(sz)
-            P = np.zeros(sz)
-            xhatminus = np.zeros(sz)
-            Pminus = np.zeros(sz)
-            K = np.zeros(sz)
+            xhat = np.zeros(sz)      # Posteriori estimate
+            P = np.zeros(sz)         # Posteriori error covariance
+            xhatminus = np.zeros(sz) # Priori estimate
+            Pminus = np.zeros(sz)    # Priori error covariance
+            K = np.zeros(sz)         # Gain
 
             xhat[0] = x[0]
             P[0] = 1.0
 
-            # FIX 2: Adaptive Process Noise (Q)
-            # If the stock is highly volatile, we assume the "True Value" moves faster.
-            # We scale Q based on recent volatility.
-            base_Q = 1e-5
+            # Estimate initial Measurement Noise (R) from history
+            if n_iter > optimization_window:
+                R_val = max(1e-5, np.var(np.diff(x[:optimization_window])))
+            else:
+                R_val = 1e-4
+
+            # Initial Process Noise (Q)
+            Q_val = 1e-5
 
             for k in range(1, n_iter):
-                # Adaptive R (Measurement Noise)
-                vol_est = returns_std[k] if k < len(returns_std) and not np.isnan(returns_std[k]) else 0.01
-                vol_est = max(0.001, vol_est) # Clamp min vol
-
-                R_dynamic = vol_est ** 2
-
-                # Adaptive Q (Process Noise) - allow faster reaction in high vol regimes
-                Q_adaptive = base_Q * (1 + (vol_est * 100))
-
-                # Predict
+                # Time Update
                 xhatminus[k] = xhat[k-1]
-                Pminus[k] = P[k-1] + Q_adaptive
+                Pminus[k] = P[k-1] + Q_val
 
-                # Update
-                K[k] = Pminus[k] / (Pminus[k] + R_dynamic)
+                # Measurement Update
+                K[k] = Pminus[k] / (Pminus[k] + R_val)
                 xhat[k] = xhatminus[k] + K[k] * (x[k] - xhatminus[k])
                 P[k] = (1 - K[k]) * Pminus[k]
+
+                # Adaptive Q: Update based on squared prediction error (Innovation)
+                # If model misses reality (innovation is high), increase Q to allow faster adaptation
+                innovation = x[k] - xhatminus[k]
+                alpha = 0.1 # Smoothing factor
+                Q_val = (1 - alpha) * Q_val + alpha * (innovation**2)
 
             return pd.Series(np.exp(xhat), index=series.index)
         except Exception:
@@ -198,52 +190,44 @@ class QuantPhysicsEngine:
     @staticmethod
     def generate_human_verdict(hurst, entropy, slope, price):
         """
-        Verdict Logic V3: Explicit 'Casino Zone' identification.
-        Slope: Expected as a DECIMAL percentage (0.01 = 1%).
+        Verdict Logic V3.1: Handling raw/None values
         """
         if hurst is None: return "ERR", "Insufficient Data"
 
-        # --- REGIME DEFINITIONS ---
-        # H < 0.45       : Mean Reversion (Rubber Band)
-        # 0.45 <= H <= 0.60 : RANDOM WALK (The Casino Zone) -> DO NOT TRADE
-        # 0.60 < H <= 0.65  : Weak/Emerging Trend
-        # H > 0.65       : Strong Trend (Persistence)
-
-        # Slope Thresholds
-        SIGNIFICANT_SLOPE = 0.015  # 1.5% move required to confirm trend direction
+        # Handle cases where entropy is None but Hurst calculated
+        entropy_val = entropy if entropy is not None else 1.0
 
         verdict = "WAIT"
         rationale = "No distinct edge."
 
-        # 1. MEAN REVERSION REGIME
+        # 1. MEAN REVERSION
         if hurst < 0.45:
             verdict = "REVERSAL (Mean Rev)"
-            rationale = f"Price is elastic (H={hurst:.2f}). Fade extensions."
+            rationale = f"Elastic Price (H={hurst:.2f}). Fade moves."
 
-        # 2. RANDOM WALK REGIME (The 'Chop')
+        # 2. RANDOM WALK (Casino Zone)
         elif 0.45 <= hurst <= 0.60:
             verdict = "RANDOM (Casino Zone)"
-            rationale = f"Price action is noise (H={hurst:.2f}). Edge is zero."
+            rationale = f"Pure Noise (H={hurst:.2f}). No statistical edge."
 
         # 3. TREND REGIME
         elif hurst > 0.60:
             strength = "Weak" if hurst <= 0.65 else "🔥 Strong"
 
-            # Filter by Entropy (Chaos)
-            if entropy > 0.85:
+            if entropy_val > 0.85:
                 verdict = "CHOP (High Entropy)"
-                rationale = "Trend exists but signal is too noisy/choppy."
+                rationale = "Trend exists but signal is too noisy."
             else:
-                # Check Direction via Slope
-                if slope > SIGNIFICANT_SLOPE:
+                # Slope check
+                if slope > 0.015:
                     verdict = f"BUY ({strength})"
-                    rationale = f"Persistent Uptrend (H={hurst:.2f}) & Mom > 1.5%."
-                elif slope < -SIGNIFICANT_SLOPE:
+                    rationale = f"Persistent Uptrend (H={hurst:.2f})."
+                elif slope < -0.015:
                     verdict = f"SHORT ({strength})"
-                    rationale = f"Persistent Downtrend (H={hurst:.2f}) & Mom < -1.5%."
+                    rationale = f"Persistent Downtrend (H={hurst:.2f})."
                 else:
-                    verdict = "WAIT (Flat)"
-                    rationale = f"High persistence (H={hurst:.2f}) but Price is stalling."
+                    verdict = "WAIT (Stalling)"
+                    rationale = f"High persistence (H={hurst:.2f}) but no momentum."
 
         return verdict, rationale
 
