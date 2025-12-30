@@ -2,265 +2,214 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import yfinance as yf
-from datetime import datetime, timedelta
 import logging
 
-# --- CONFIGURATION (HARDENED) ---
-ISA_ACCOUNT_GBP = 100000.0  # Your Capital
-OPTIONS_ACCOUNT_USD = 9500.0
-RISK_PER_TRADE = 0.01       # 1% Risk Rule (Seykota/Thorp)
-MIN_VOL_US = 1_000_000      # Liquidity Gate (Griffin)
-MIN_VOL_UK = 200_000        # Liquidity Gate for UK (Lower due to market size)
-VIX_PANIC_LEVEL = 28.0      # Soros Gate (Market Crash Level)
-
 # Setup Logger
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-logger = logging.getLogger("CouncilScreener")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("MasterScreener")
+
+# --- CONFIGURATION ---
+ISA_ACCOUNT_SIZE = 100000.0  # GBP
+OPTIONS_ACCOUNT_SIZE = 9500.0 # USD
+RISK_PER_TRADE_PCT = 0.01    # Risk 1%
+MARKET_TICKERS = ["SPY", "^VIX"]
+LIQUIDITY_MIN_VOL_USD = 1_000_000
+LIQUIDITY_MIN_VOL_GBP = 200_000
 
 class MasterScreener:
     def __init__(self, tickers_us, tickers_uk):
         self.tickers_us = list(set(tickers_us))
         self.tickers_uk = list(set(tickers_uk))
         self.all_tickers = self.tickers_us + self.tickers_uk
-        self.regime = "NEUTRAL"
+        self.market_regime = "NEUTRAL"
+        self.vix_level = 15.0
 
-    def check_market_regime(self):
+    def _fetch_market_regime(self):
         """
-        The Soros Gate: Determines if we are allowed to play.
+        Determines market health.
+        Fix: Uses '2y' data to guarantee valid 200 SMA calculation.
         """
         try:
-            # Fetch SPY and VIX
-            data = yf.download(["SPY", "^VIX"], period="1y", progress=False)['Close']
+            # FETCH 2 YEARS (Crucial fix for 200 SMA)
+            data = yf.download(MARKET_TICKERS, period="2y", progress=False)
 
-            # Check if we got data. yfinance returns empty DF on failure or missing symbols
-            if data.empty or 'SPY' not in data.columns or '^VIX' not in data.columns:
-                 # Fallback if download failed
-                 logger.error("Failed to fetch SPY/VIX data. Defaulting to RED.")
-                 self.regime = "RED"
-                 return
-
-            spy_price = data['SPY'].iloc[-1]
-            spy_sma200 = data['SPY'].rolling(200).mean().iloc[-1]
-            vix = data['^VIX'].iloc[-1]
-
-            # 1. Bull Market: Price > 200SMA & VIX < 20
-            if spy_price > spy_sma200 and vix < 20:
-                self.regime = "GREEN"
-            # 2. Chop Market: Price > 200SMA but VIX High
-            elif spy_price > spy_sma200 and vix >= 20:
-                self.regime = "YELLOW"
-            # 3. Bear Market: Price < 200SMA (Cash is King)
+            # Extract Close prices safely
+            if 'Close' in data.columns and isinstance(data.columns, pd.MultiIndex):
+                closes = data['Close']
             else:
-                self.regime = "RED"
+                closes = data
 
-            if vix > VIX_PANIC_LEVEL:
-                self.regime = "RED"
+            # SPY Check
+            spy_series = closes['SPY'].dropna()
+            spy_curr = spy_series.iloc[-1]
+            spy_sma = spy_series.rolling(200).mean().iloc[-1]
 
-            logger.info(f"MARKET REGIME: {self.regime} (SPY vs 200SMA | VIX: {vix:.2f})")
+            # VIX Check
+            vix_series = closes['^VIX'].dropna()
+            self.vix_level = vix_series.iloc[-1]
+
+            # FAIL-SAFE: If SMA is NaN, assume Bullish if Price > 50 SMA as backup
+            if pd.isna(spy_sma):
+                spy_sma = spy_series.rolling(50).mean().iloc[-1]
+
+            # LOGIC
+            if spy_curr > spy_sma and self.vix_level < 25:
+                self.market_regime = "BULLISH"
+                regime_color = "GREEN"
+            elif spy_curr < spy_sma and self.vix_level > 25:
+                self.market_regime = "BEARISH"
+                regime_color = "RED"
+            else:
+                self.market_regime = "CAUTIOUS"
+                regime_color = "YELLOW"
+
+            # Force Bearish only if VIX is properly panic-mode
+            if self.vix_level > 28:
+                self.market_regime = "BEARISH"
+                regime_color = "RED"
+
+            logger.info(f"MARKET REGIME: {regime_color} (SPY: {spy_curr:.2f} vs SMA: {spy_sma:.2f} | VIX: {self.vix_level:.2f})")
 
         except Exception as e:
-            logger.error(f"Failed to check regime: {e}. Defaulting to RED.")
-            self.regime = "RED"
+            logger.error(f"Failed to fetch market regime: {e}")
+            # Fallback to allow scanning if market check fails (don't block the UI)
+            self.market_regime = "CAUTIOUS"
 
-    def _calculate_physics_score(self, series):
-        """
-        The Thorp Fix: Calculates Volatility/Entropy on LOG RETURNS.
-        Returns a score 0-100 (0=Random, 100=Strong Trend/Structure).
-        """
+    def _process_stock(self, ticker, df):
         try:
-            # Log Returns (Stationary Data)
-            log_ret = np.log(series / series.shift(1)).dropna()
+            # Data validation
+            if df.empty or len(df) < 200: return None
 
-            # 1. Volatility (Annualized)
-            vol = log_ret.std() * np.sqrt(252)
+            # Handle MultiIndex column issue from yfinance
+            if isinstance(df.columns, pd.MultiIndex):
+                # Flatten or select the specific ticker level if needed
+                # Assuming 'df' passed here is already the single ticker slice
+                if 'Close' in df.columns:
+                    close_col = df['Close']
+                    high_col = df['High']
+                    low_col = df['Low']
+                    vol_col = df['Volume']
+                else:
+                    return None
+            else:
+                close_col = df['Close']
+                high_col = df['High']
+                low_col = df['Low']
+                vol_col = df['Volume']
 
-            # 2. Trend Strength (Sharpe-like proxy)
-            mean_ret = log_ret.mean() * 252
-            trend_score = (mean_ret / vol) if vol > 0 else 0
+            curr_price = float(close_col.iloc[-1])
+            avg_vol_20 = float(vol_col.rolling(20).mean().iloc[-1])
 
-            return trend_score
-        except:
-            return 0.0
-
-    def analyze_ticker(self, ticker, df):
-        """
-        The Unified Logic.
-        """
-        try:
-            # --- DATA HYGIENE (Simons) ---
-            if len(df) < 252: return None # Need 1 year of data
-
-            curr_price = df['Close'].iloc[-1]
-            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-
+            # Liquidity Filters
             is_uk = ticker.endswith(".L")
             is_us = not is_uk
+            if is_us and avg_vol_20 < LIQUIDITY_MIN_VOL_USD: return None
+            if is_uk and avg_vol_20 < LIQUIDITY_MIN_VOL_GBP: return None
 
-            # --- LIQUIDITY GATE (Griffin) ---
-            if is_us and avg_vol < MIN_VOL_US: return None
-            if is_uk and avg_vol < MIN_VOL_UK: return None
+            # Indicators
+            sma_50 = close_col.rolling(50).mean().iloc[-1]
+            sma_150 = close_col.rolling(150).mean().iloc[-1]
+            sma_200 = close_col.rolling(200).mean().iloc[-1]
+            atr = ta.atr(high_col, low_col, close_col, length=14).iloc[-1]
+            rsi = ta.rsi(close_col, length=14).iloc[-1]
+            high_52 = high_col.rolling(252).max().iloc[-1]
 
-            # --- INDICATORS ---
-            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
-            sma_150 = df['Close'].rolling(150).mean().iloc[-1]
-            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-            atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1]
-            rsi = ta.rsi(df['Close'], length=14).iloc[-1]
-
-            # 52-Week High
-            high_52 = df['High'].rolling(252).max().iloc[-1]
-            dist_to_high = (high_52 - curr_price) / high_52
-
-            # --- STRATEGY 1: ISA SWING (Minervini/Trend) ---
-            # Buying US/UK Stocks for the £100k account.
+            # --- LOGIC ---
             isa_signal = False
-            isa_setup = ""
+            options_signal = False
+            options_data = {}
 
-            # Rule 1: Trend Alignment (Minervini)
-            trend_ok = (curr_price > sma_150) and (sma_150 > sma_200) and (curr_price > sma_200)
+            # 1. ISA TREND (Buying Strength)
+            # Price must be above 200 SMA
+            if curr_price > sma_200:
+                dist_to_high = (high_52 - curr_price) / high_52
+                # Valid Setup: Uptrend + Near Highs + Not Overbought
+                if (curr_price > sma_150) and (dist_to_high < 0.25) and (50 <= rsi <= 75):
+                    isa_signal = True
 
-            # Rule 2: Near Highs (Momentum)
-            near_high = dist_to_high < 0.25 # Within 25% of highs
+            # 2. OPTIONS SELL (Selling Fear)
+            # US Only, Uptrend, Oversold Pullback
+            if is_us and (curr_price > sma_200):
+                if rsi < 55: # Pullback
+                    atr_pct = (atr / curr_price) * 100
+                    if atr_pct > 2.0: # High Volatility
+                        options_signal = True
+                        options_data = {
+                            "short": round(curr_price - (2*atr), 1),
+                            "long": round((curr_price - (2*atr)) - 5, 1)
+                        }
 
-            # Rule 3: Contraction (VCP) or Breakout
-            # We check if RSI is supportive (not overbought yet)
-            rsi_ok = 50 <= rsi <= 70
-
-            if self.regime != "RED" and trend_ok and near_high and rsi_ok:
-                isa_signal = True
-                isa_setup = "Trend Leader"
-
-            # --- STRATEGY 2: US OPTIONS (Sosnoff/Thorp) ---
-            # Selling Bull Put Spreads for the $9.5k account.
-            opt_signal = False
-            opt_setup = ""
-
-            # Rule 1: Uptrend (Don't sell puts on falling knives)
-            # Rule 2: Pullback (RSI < 50) - We want to sell premium into fear.
-            # Rule 3: High Volatility (ATR% > 2.0%) - ensures premium is juicy.
-            atr_pct = (atr / curr_price) * 100
-
-            if is_us and self.regime != "RED" and (curr_price > sma_200):
-                if rsi < 50 and atr_pct > 2.0:
-                    opt_signal = True
-                    opt_setup = "Bull Put (High IV)"
-
-            # --- SIZING (Kelly/Risk Manager) ---
-            # ISA Sizing (GBP)
-            stop_loss = curr_price - (3 * atr) # Wide stop for swing
-            risk_per_share = curr_price - stop_loss
-
-            isa_shares = 0
-            if isa_signal and risk_per_share > 0:
-                # Account for FX if US stock (approx 0.79 USD/GBP)
-                fx_rate = 0.79 if is_us else 1.0
-                risk_amt = ISA_ACCOUNT_GBP * RISK_PER_TRADE # £1,000 Risk
-                isa_shares = int((risk_amt / fx_rate) / risk_per_share)
-
-                # Max 20% Allocation Cap
-                max_shares = int((ISA_ACCOUNT_GBP * 0.20) / (curr_price * fx_rate))
-                isa_shares = min(isa_shares, max_shares)
-
-            # Options Sizing (USD)
-            # Standard: $5 wide spread. Max loss = $500 minus credit.
-            # We assume roughly $400 risk per contract.
-            opt_contracts = 0
-            if opt_signal:
-                risk_amt_usd = OPTIONS_ACCOUNT_USD * 0.05 # Risk 5% on options ($475)
-                opt_contracts = 1 # Keep it to 1 contract for small account
-
-            if not isa_signal and not opt_signal:
+            if not isa_signal and not options_signal:
                 return None
+
+            # Sizing Logic
+            stop_loss = curr_price - (3 * atr)
+            risk_per_share = curr_price - stop_loss
+            shares = 0
+            if risk_per_share > 0:
+                fx = 0.79 if is_us else 1.0
+                shares = int((ISA_ACCOUNT_SIZE * 0.01 / fx) / risk_per_share)
 
             return {
                 "Ticker": ticker,
                 "Price": round(curr_price, 2),
-                "Regime": self.regime,
                 "Type": "ISA_BUY" if isa_signal else "OPT_SELL",
-                "Setup": isa_setup if isa_signal else opt_setup,
+                "Setup": "Trend Leader" if isa_signal else "High Vol Put",
+                "Action": f"Buy {shares}" if isa_signal else "Sell Put Spread",
                 "Stop Loss": round(stop_loss, 2),
-                "Action": f"Buy {isa_shares} Shares" if isa_signal else f"Sell {opt_contracts} Put Spread",
-                "Metrics": f"RSI:{rsi:.0f} ATR%:{atr_pct:.1f}% DistH:{dist_to_high:.2f}",
-                "Warning": "Check Earnings!" if is_us else ""
+                "Metrics": f"RSI:{rsi:.0f} ATR:{atr:.2f}",
+                "Regime": self.market_regime,
+                # Extra fields for frontend sorting
+                "volatility_pct": round((atr/curr_price)*100, 2)
             }
 
         except Exception as e:
             return None
 
     def run(self):
-        # 1. Check Regime
-        self.check_market_regime()
-        if self.regime == "RED":
-            print("\n🛑 MARKET REGIME IS RED (BEARISH).")
-            print("COUNCIL ORDER: CEASE ALL LONG BUYING. CASH PRESERVED.\n")
-            return [] # Return empty list explicitly for API
+        """
+        Executes the screen and RETURNS the list (Does not just print).
+        """
+        self._fetch_market_regime()
 
-        print(f"\n🚀 SCANNING {len(self.all_tickers)} TICKERS IN {self.regime} REGIME...\n")
+        # If deeply bearish, return a warning row
+        if self.market_regime == "BEARISH":
+            return [{
+                "Ticker": "MARKET",
+                "Price": 0,
+                "Type": "WARNING",
+                "Setup": "BEARISH REGIME",
+                "Action": "CASH IS KING",
+                "Stop Loss": 0,
+                "Metrics": f"VIX: {self.vix_level:.2f}",
+                "Regime": "RED"
+            }]
 
-        # 2. Batch Download
-        # Chunking to avoid Yahoo limits
+        logger.info(f"Scanning {len(self.all_tickers)} tickers...")
+
         chunk_size = 50
         results = []
 
         for i in range(0, len(self.all_tickers), chunk_size):
             chunk = self.all_tickers[i:i+chunk_size]
             try:
-                # Use threads=True for speed, suppress errors
-                data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True)
+                # auto_adjust=True fixes historical price gaps
+                data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
                 if len(chunk) == 1:
-                    # Single ticker handling
-                    # yfinance might return a DataFrame with columns if successful, or empty if not
-                    # If 1 ticker, data columns are (Open, High, Low...) directly usually, but group_by='ticker' might enforce level
-                    # Actually with group_by='ticker' and 1 ticker, it might still have Ticker level or not depending on version.
-                    # Safest is to handle both.
-
-                    if not data.empty:
-                        # Check if columns are MultiIndex (Ticker, OHLC)
-                        if isinstance(data.columns, pd.MultiIndex):
-                             # Should be data[Ticker]
-                             # but let's just try accessing the ticker
-                             try:
-                                 df = data[chunk[0]].dropna()
-                                 res = self.analyze_ticker(chunk[0], df)
-                                 if res: results.append(res)
-                             except:
-                                 # Maybe it's not multiindex?
-                                 res = self.analyze_ticker(chunk[0], data.dropna())
-                                 if res: results.append(res)
-                        else:
-                             res = self.analyze_ticker(chunk[0], data.dropna())
-                             if res: results.append(res)
+                    res = self._process_stock(chunk[0], data)
+                    if res: results.append(res)
                 else:
                     for ticker in chunk:
                         try:
-                            # data[ticker] works if group_by='ticker' is used
-                            if ticker in data.columns.get_level_values(0):
-                                df = data[ticker].dropna()
-                                res = self.analyze_ticker(ticker, df)
-                                if res: results.append(res)
+                            # Access ticker level safely
+                            df = data[ticker].dropna()
+                            res = self._process_stock(ticker, df)
+                            if res: results.append(res)
                         except: pass
             except Exception as e:
                 logger.error(f"Chunk failed: {e}")
 
-        # 3. Output Results
-        df_res = pd.DataFrame(results)
-        if not df_res.empty:
-            # Sort by Setup Quality (ISA Buys first)
-            df_res = df_res.sort_values(by=['Type', 'Ticker'], ascending=[True, True])
-            print(df_res.to_markdown(index=False))
-            print("\nIMPORTANT: Verify US Earnings Dates before executing Options trades.")
-            return results # Return the list of dicts
-        else:
-            print("No setups found meeting the Council's strict criteria.")
-            return []
-
-# --- EXECUTION ---
-if __name__ == "__main__":
-    # REPLACE WITH YOUR FULL LISTS
-    # NOTE: I included a mix to test filters
-    us_universe = ["NVDA", "MSFT", "TSLA", "AAPL", "AMD", "PLTR", "HOOD", "AMC", "GME"]
-    uk_universe = ["RR.L", "AZN.L", "SHEL.L", "BP.L", "BARC.L", "VOD.L"]
-
-    screener = MasterScreener(us_universe, uk_universe)
-    screener.run()
+        # Sort: ISA Buys first
+        results.sort(key=lambda x: x['Type'] != "ISA_BUY")
+        return results

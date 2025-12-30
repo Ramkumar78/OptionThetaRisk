@@ -18,9 +18,9 @@ def create_mock_df(length=300, price=100.0, trend="flat", vol=2000000):
     dates = pd.date_range(end=pd.Timestamp.now(), periods=length, freq='D')
 
     if trend == "up":
-        prices = np.linspace(price * 0.5, price, length)
+        prices = np.linspace(price * 0.8, price * 1.2, length)
     elif trend == "down":
-        prices = np.linspace(price * 1.5, price, length)
+        prices = np.linspace(price * 1.2, price * 0.8, length)
     else:
         prices = np.full(length, price)
 
@@ -40,229 +40,233 @@ def create_mock_df(length=300, price=100.0, trend="flat", vol=2000000):
 def test_initialization(screener):
     assert "AAPL" in screener.tickers_us
     assert "BP.L" in screener.tickers_uk
-    assert screener.regime == "NEUTRAL"
+    assert screener.market_regime == "NEUTRAL"
 
-def test_check_market_regime_green(screener, mock_yf_download):
+def test_fetch_market_regime_bullish(screener, mock_yf_download):
     # Mock SPY and VIX data
-    dates = pd.date_range(periods=300, end="2023-01-01")
+    dates = pd.date_range(periods=600, end="2023-01-01") # 2 years approx
 
-    # Construct MultiIndex DataFrame to simulate yf.download result
-    # We need columns ('Close', 'SPY') and ('Close', '^VIX')
-    # Because code does: yf.download(...)['Close']
+    # Create DataFrame structure matching yf.download result
+    data = pd.DataFrame(index=dates)
 
-    iterables = [['Close'], ['SPY', '^VIX']]
-    columns = pd.MultiIndex.from_product(iterables, names=['Price', 'Ticker'])
+    # SPY Data (Bullish: Price > SMA)
+    spy_prices = np.linspace(300, 400, 600)
+    data[('Close', 'SPY')] = spy_prices
 
-    data = pd.DataFrame(index=dates, columns=columns)
-    data[('Close', 'SPY')] = np.linspace(300, 400, 300) # Uptrend
-    data[('Close', '^VIX')] = np.full(300, 15.0) # Low VIX
+    # VIX Data (Low)
+    data[('Close', '^VIX')] = np.full(600, 15.0)
 
-    # The code calls yf.download(...).
-    # If we return this DF, doing ['Close'] on it works if 'Close' is level 0?
-    # Actually yf.download returns columns as (Price, Ticker).
-    # So df['Close'] returns a DF with columns (Ticker).
-    # However, if I create it as above, df['Close'] works.
-
-    # But wait, the code does: data = yf.download(...)['Close']
-    # So my mock should return the full dataframe.
-
-    # Let's verify pandas behavior for MultiIndex.
-    # df['Close'] selects the level 0.
+    # Since the code checks if isinstance(data.columns, pd.MultiIndex), we need to ensure that.
+    data.columns = pd.MultiIndex.from_tuples(data.columns)
 
     mock_yf_download.return_value = data
 
-    screener.check_market_regime()
-    assert screener.regime == "GREEN"
+    screener._fetch_market_regime()
+    assert screener.market_regime == "BULLISH"
 
-def test_check_market_regime_yellow(screener, mock_yf_download):
-    dates = pd.date_range(periods=300, end="2023-01-01")
-    iterables = [['Close'], ['SPY', '^VIX']]
-    columns = pd.MultiIndex.from_product(iterables, names=['Price', 'Ticker'])
-    data = pd.DataFrame(index=dates, columns=columns)
+def test_fetch_market_regime_bearish_vix(screener, mock_yf_download):
+    dates = pd.date_range(periods=600, end="2023-01-01")
+    data = pd.DataFrame(index=dates)
 
-    data[('Close', 'SPY')] = np.linspace(300, 400, 300) # Uptrend
-    data[('Close', '^VIX')] = np.full(300, 22.0) # High VIX
+    # SPY Data (Uptrend but High VIX panic)
+    spy_prices = np.linspace(300, 400, 600)
+    data[('Close', 'SPY')] = spy_prices
 
+    # VIX Data (Panic)
+    data[('Close', '^VIX')] = np.full(600, 30.0)
+
+    data.columns = pd.MultiIndex.from_tuples(data.columns)
     mock_yf_download.return_value = data
 
-    screener.check_market_regime()
-    assert screener.regime == "YELLOW"
+    screener._fetch_market_regime()
+    assert screener.market_regime == "BEARISH"
 
-def test_check_market_regime_red_price(screener, mock_yf_download):
-    dates = pd.date_range(periods=300, end="2023-01-01")
-    iterables = [['Close'], ['SPY', '^VIX']]
-    columns = pd.MultiIndex.from_product(iterables, names=['Price', 'Ticker'])
-    data = pd.DataFrame(index=dates, columns=columns)
+def test_fetch_market_regime_bearish_trend(screener, mock_yf_download):
+    dates = pd.date_range(periods=600, end="2023-01-01")
+    data = pd.DataFrame(index=dates)
 
-    data[('Close', 'SPY')] = np.linspace(400, 300, 300) # Downtrend
-    data[('Close', '^VIX')] = np.full(300, 15.0)
+    # SPY Data (Downtrend: Price < SMA)
+    spy_prices = np.linspace(400, 300, 600)
+    data[('Close', 'SPY')] = spy_prices
 
+    # VIX Data (High)
+    data[('Close', '^VIX')] = np.full(600, 26.0)
+
+    data.columns = pd.MultiIndex.from_tuples(data.columns)
     mock_yf_download.return_value = data
 
-    screener.check_market_regime()
-    assert screener.regime == "RED"
+    screener._fetch_market_regime()
+    assert screener.market_regime == "BEARISH"
 
-def test_check_market_regime_red_panic(screener, mock_yf_download):
-    dates = pd.date_range(periods=300, end="2023-01-01")
-    iterables = [['Close'], ['SPY', '^VIX']]
-    columns = pd.MultiIndex.from_product(iterables, names=['Price', 'Ticker'])
-    data = pd.DataFrame(index=dates, columns=columns)
+def test_fetch_market_regime_cautious(screener, mock_yf_download):
+    dates = pd.date_range(periods=600, end="2023-01-01")
+    data = pd.DataFrame(index=dates)
 
-    data[('Close', 'SPY')] = np.linspace(300, 400, 300)
-    data[('Close', '^VIX')] = np.full(300, 30.0) # Panic
+    # SPY Data (Downtrend)
+    spy_prices = np.linspace(400, 300, 600)
+    data[('Close', 'SPY')] = spy_prices
 
+    # VIX Data (Low - mixed signal)
+    data[('Close', '^VIX')] = np.full(600, 20.0)
+
+    data.columns = pd.MultiIndex.from_tuples(data.columns)
     mock_yf_download.return_value = data
 
-    screener.check_market_regime()
-    assert screener.regime == "RED"
+    screener._fetch_market_regime()
+    assert screener.market_regime == "CAUTIOUS"
 
-def test_physics_score(screener):
-    # Test with a simple series
-    series = pd.Series(np.linspace(10, 20, 100))
-    score = screener._calculate_physics_score(series)
-    assert score >= 0
-
-    # Test with constant series (0 vol)
-    series_const = pd.Series(np.full(100, 10))
-    score_const = screener._calculate_physics_score(series_const)
-    assert score_const == 0.0
-
-def test_analyze_ticker_liquidity_fail(screener):
+def test_process_stock_liquidity_fail_us(screener):
     # US Ticker with low volume
     df = create_mock_df(vol=500000) # Below 1M
-    result = screener.analyze_ticker("AAPL", df)
+    result = screener._process_stock("AAPL", df)
     assert result is None
 
+def test_process_stock_liquidity_fail_uk(screener):
     # UK Ticker with low volume
     df_uk = create_mock_df(vol=100000) # Below 200k
-    result = screener.analyze_ticker("BP.L", df_uk)
+    result = screener._process_stock("BP.L", df_uk)
     assert result is None
 
-def test_analyze_ticker_isa_buy_signal(screener):
-    screener.regime = "GREEN"
-    dates = pd.date_range(periods=300, end="2023-01-01")
-    prices = np.linspace(100, 200, 300)
+def test_process_stock_isa_buy(screener):
+    # Setup for ISA Buy: Uptrend, Near Highs, RSI 50-75
+    length = 300
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=length, freq='D')
+
+    # Create uptrend price series
+    # Start at 100, End at 150
+    prices = np.linspace(100, 150, length)
+
+    # Make sure we are near highs (last price is high)
+    # And RSI is moderate (handled by mocking ta.rsi)
 
     df = pd.DataFrame({
-        'Close': prices,
-        'High': prices * 1.01,
-        'Low': prices * 0.99,
         'Open': prices,
-        'Volume': np.full(300, 2000000)
+        'High': prices, # High is close to Close
+        'Low': prices * 0.99,
+        'Close': prices,
+        'Volume': np.full(length, 2000000)
     }, index=dates)
 
     with patch('option_auditor.master_screener.ta.rsi') as mock_rsi, \
          patch('option_auditor.master_screener.ta.atr') as mock_atr:
 
-        mock_rsi.return_value = pd.Series(np.full(300, 60.0), index=dates)
-        mock_atr.return_value = pd.Series(np.full(300, 2.0), index=dates)
+        # Mock RSI to be 60 (Sweet spot)
+        mock_rsi.return_value = pd.Series(np.full(length, 60.0), index=dates)
+        # Mock ATR
+        mock_atr.return_value = pd.Series(np.full(length, 2.0), index=dates)
 
-        result = screener.analyze_ticker("AAPL", df)
+        result = screener._process_stock("AAPL", df)
 
         assert result is not None
         assert result['Type'] == "ISA_BUY"
         assert result['Setup'] == "Trend Leader"
 
-def test_analyze_ticker_opt_sell_signal(screener):
-    screener.regime = "GREEN"
-    dates = pd.date_range(periods=300, end="2023-01-01")
-    prices = np.linspace(100, 200, 300)
-    prices[-10:] = prices[-10:] * 0.90
+def test_process_stock_opt_sell(screener):
+    # Setup for Opt Sell: US, Uptrend, Oversold (RSI < 55), High Vol
+    length = 300
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=length, freq='D')
+
+    # Uptrend but recent dip
+    prices = np.linspace(100, 150, length)
 
     df = pd.DataFrame({
-        'Close': prices,
-        'High': prices * 1.05,
-        'Low': prices * 0.95,
         'Open': prices,
-        'Volume': np.full(300, 2000000)
+        'High': prices,
+        'Low': prices * 0.95,
+        'Close': prices,
+        'Volume': np.full(length, 2000000)
     }, index=dates)
 
     with patch('option_auditor.master_screener.ta.rsi') as mock_rsi, \
          patch('option_auditor.master_screener.ta.atr') as mock_atr:
 
-        mock_rsi.return_value = pd.Series(np.full(300, 40.0), index=dates)
-        mock_atr.return_value = pd.Series(np.full(300, 5.0), index=dates)
+        # Mock RSI to be 40 (Oversold)
+        mock_rsi.return_value = pd.Series(np.full(length, 40.0), index=dates)
+        # Mock ATR to be high (> 2% of price 150 -> > 3.0)
+        mock_atr.return_value = pd.Series(np.full(length, 5.0), index=dates)
 
-        result = screener.analyze_ticker("AAPL", df)
+        result = screener._process_stock("AAPL", df)
 
         assert result is not None
         assert result['Type'] == "OPT_SELL"
-        assert result['Setup'] == "Bull Put (High IV)"
+        assert result['Setup'] == "High Vol Put"
 
-def test_run_red_regime(screener, mock_yf_download, capsys):
-    dates = pd.date_range(periods=300, end="2023-01-01")
-    iterables = [['Close'], ['SPY', '^VIX']]
-    columns = pd.MultiIndex.from_product(iterables, names=['Price', 'Ticker'])
-    data = pd.DataFrame(index=dates, columns=columns)
-    data[('Close', 'SPY')] = np.linspace(400, 300, 300) # Bear
-    data[('Close', '^VIX')] = np.full(300, 15.0)
+def test_run_bearish_regime(screener, mock_yf_download):
+    # Mock Market Regime as Bearish via _fetch_market_regime logic
+    dates = pd.date_range(periods=600, end="2023-01-01")
+    data = pd.DataFrame(index=dates)
 
+    # Bearish signals
+    data[('Close', 'SPY')] = np.linspace(400, 300, 600)
+    data[('Close', '^VIX')] = np.full(600, 30.0)
+
+    data.columns = pd.MultiIndex.from_tuples(data.columns)
     mock_yf_download.return_value = data
 
-    screener.run()
+    results = screener.run()
 
-    captured = capsys.readouterr()
-    assert "MARKET REGIME IS RED" in captured.out
+    assert len(results) == 1
+    assert results[0]['Ticker'] == "MARKET"
+    assert results[0]['Type'] == "WARNING"
 
-def test_run_green_regime(screener, mock_yf_download, capsys):
-    dates = pd.date_range(periods=300, end="2023-01-01")
+def test_run_normal(screener, mock_yf_download):
+    # 1. First call is for Market Regime (SPY, VIX)
+    # 2. Second call is for Tickers (AAPL, BP.L)
 
-    # Regime Data (MultiIndex)
-    iterables = [['Close'], ['SPY', '^VIX']]
-    columns = pd.MultiIndex.from_product(iterables, names=['Price', 'Ticker'])
-    regime_data = pd.DataFrame(index=dates, columns=columns)
-    regime_data[('Close', 'SPY')] = np.linspace(300, 400, 300)
-    regime_data[('Close', '^VIX')] = np.full(300, 15.0)
+    dates = pd.date_range(periods=600, end="2023-01-01")
+
+    # Regime Data (Bullish)
+    regime_data = pd.DataFrame(index=dates)
+    regime_data[('Close', 'SPY')] = np.linspace(300, 400, 600)
+    regime_data[('Close', '^VIX')] = np.full(600, 15.0)
+    regime_data.columns = pd.MultiIndex.from_tuples(regime_data.columns)
+
+    # Ticker Data
+    # MultiIndex with (Ticker, OHLCV)
+    # Tickers are AAPL and BP.L
+    # Level 0 = Ticker, Level 1 = Price Type
+    # Note: yf.download(group_by='ticker') returns Level 0 = Ticker, Level 1 = Price Type
+
+    iterables = [['AAPL', 'BP.L'], ['Open', 'High', 'Low', 'Close', 'Volume']]
+    ticker_cols = pd.MultiIndex.from_product(iterables, names=['Ticker', 'Price'])
+    ticker_data = pd.DataFrame(index=dates, columns=ticker_cols)
+
+    # Fill AAPL (ISA Buy)
+    prices = np.linspace(100, 150, 600)
+    ticker_data[('AAPL', 'Close')] = prices
+    ticker_data[('AAPL', 'High')] = prices
+    ticker_data[('AAPL', 'Low')] = prices * 0.99
+    ticker_data[('AAPL', 'Open')] = prices
+    ticker_data[('AAPL', 'Volume')] = 2000000
+
+    # Fill BP.L (Low volume -> Fail)
+    ticker_data[('BP.L', 'Close')] = prices
+    ticker_data[('BP.L', 'High')] = prices
+    ticker_data[('BP.L', 'Low')] = prices
+    ticker_data[('BP.L', 'Open')] = prices
+    ticker_data[('BP.L', 'Volume')] = 100000 # Fail
 
     def side_effect(*args, **kwargs):
-        arg0 = args[0] if args else kwargs.get('tickers')
-        if isinstance(arg0, list) and "SPY" in arg0:
+        # Determine if this is the regime check or the ticker check
+        # Arg 0 usually tickers list
+        tickers = args[0] if args else kwargs.get('tickers')
+
+        if "SPY" in tickers:
             return regime_data
         else:
-            # Ticker Data: Dict of DataFrames or MultiIndex
-            # If code uses `data[ticker]`, and group_by='ticker' is used,
-            # yf returns a DF with top level columns as Tickers.
-
-            # Let's verify what the code does:
-            # data = yf.download(chunk, ..., group_by='ticker')
-            # df = data[ticker]
-
-            # So we return a DF with Tickers as top level columns.
-
-            # Ticker columns: (Ticker, Price)
-            # e.g. ('AAPL', 'Close')
-
-            # Let's create a MultiIndex DF
-            cols = pd.MultiIndex.from_product([screener.all_tickers, ['Open', 'High', 'Low', 'Close', 'Volume']])
-            df_tickers = pd.DataFrame(np.random.randn(300, len(cols)), index=dates, columns=cols)
-
-            # Populate with valid data to pass hygiene
-            for t in screener.all_tickers:
-                df_tickers[(t, 'Volume')] = 2000000
-                df_tickers[(t, 'Close')] = 100
-                df_tickers[(t, 'High')] = 105
-                df_tickers[(t, 'Low')] = 95
-                df_tickers[(t, 'Open')] = 100
-
-            return df_tickers
+            return ticker_data
 
     mock_yf_download.side_effect = side_effect
 
-    with patch.object(screener, 'analyze_ticker') as mock_analyze:
-        mock_analyze.return_value = {
-            "Ticker": "AAPL",
-            "Price": 100,
-            "Regime": "GREEN",
-            "Type": "ISA_BUY",
-            "Setup": "Test Setup",
-            "Stop Loss": 90,
-            "Action": "Buy",
-            "Metrics": "Test",
-            "Warning": ""
-        }
+    with patch('option_auditor.master_screener.ta.rsi') as mock_rsi, \
+         patch('option_auditor.master_screener.ta.atr') as mock_atr:
 
-        screener.run()
+        mock_rsi.return_value = pd.Series(np.full(600, 60.0), index=dates)
+        mock_atr.return_value = pd.Series(np.full(600, 2.0), index=dates)
 
-    captured = capsys.readouterr()
-    assert "SCANNING" in captured.out
-    assert "AAPL" in captured.out
+        results = screener.run()
+
+        assert len(results) == 1
+        assert results[0]['Ticker'] == "AAPL"
+        assert results[0]['Type'] == "ISA_BUY"
+
