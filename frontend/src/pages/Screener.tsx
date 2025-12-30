@@ -26,9 +26,9 @@ const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; desc
         description: 'Utilizes advanced statistical metrics like Hurst Exponent and Entropy to identify market regimes and potential turning points.'
     },
     master: {
-        title: 'Master Convergence',
-        subtitle: 'Multi-Strategy Collation',
-        description: 'Runs ISA Trend, Fourier Cycles, and Momentum checks simultaneously. Finds the highest probability setups where multiple strategies agree (Confluence).'
+        title: "The Council's Master Screen",
+        subtitle: "Regime-Filtered High Probability Setups",
+        description: "Strictly filtered setups. Uses 'The Soros Gate' (Market Regime), 'Griffin Gate' (Liquidity), and separates 'Trend Following' (ISA) from 'Volatility Selling' (Options)."
     },
     market: {
         title: 'Market Screener',
@@ -992,13 +992,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         )}
                         {type === 'master' && (
                             <>
-                                <HeaderCell label="Verdict" sortKey="verdict" align="center" />
-                                <HeaderCell label="Score" sortKey="confluence_score" align="center" />
-                                <HeaderCell label="ISA Trend" sortKey="isa_trend" align="center" />
-                                <HeaderCell label="Fourier" sortKey="fourier" align="right" />
-                                <HeaderCell label="Momentum" sortKey="momentum" align="right" />
-                                <HeaderCell label="Hurst (H)" sortKey="hurst" align="right" />
-                                <HeaderCell label="Entropy (S)" sortKey="entropy" align="right" />
+                                <HeaderCell label="Type" sortKey="Type" align="center" />
+                                <HeaderCell label="Setup" sortKey="Setup" align="left" />
+                                <HeaderCell label="Action (Size)" sortKey="Action" align="right" />
+                                <HeaderCell label="Stop Loss" sortKey="Stop Loss" align="right" />
+                                <HeaderCell label="Metrics" sortKey="Metrics" align="right" />
+                                <HeaderCell label="Regime" sortKey="Regime" align="center" />
                             </>
                         )}
                         {type !== 'market' && type !== 'bull_put' && type !== 'master' && type !== 'fortress' && type !== 'quantum' && (
@@ -1200,30 +1199,34 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                             </>
                                         ) : type === 'master' ? (
                                             <>
-                                                <td className="px-4 py-3 text-center font-bold whitespace-nowrap">
-                                                    <span className={clsx("px-2 py-1 rounded text-xs",
-                                                        (row.verdict || "").includes('STRONG') ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                                                            (row.verdict || "").includes('SELL') ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300")}>
-                                                        {row.verdict}
+                                                <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                    <span className={clsx("px-2 py-1 rounded text-xs font-bold",
+                                                        row.Type === 'ISA_BUY' ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                                            row.Type === 'OPT_SELL' ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                                                                "bg-gray-100 text-gray-800"
+                                                    )}>
+                                                        {row.Type === 'ISA_BUY' ? '🇬🇧 ISA BUY' : '🇺🇸 OPT SELL'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                                                    {row.confluence_score}/3
+                                                <td className="px-4 py-3 text-left font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                                                    {row.Setup}
                                                 </td>
-                                                <td className="px-4 py-3 text-center text-xs text-gray-900 dark:text-gray-300 whitespace-nowrap">
-                                                    {row.isa_trend === 'BULLISH' ? '🟢 UP' : '🔴 DOWN'}
+                                                <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                                                    {row.Action}
                                                 </td>
-                                                <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap">
-                                                    {row.fourier}
-                                                </td>
-                                                <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap">
-                                                    {row.momentum}
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-red-600 dark:text-red-400 font-bold whitespace-nowrap">
+                                                    {row['Stop Loss'] ? formatCurrency(row['Stop Loss'], currency) : '-'}
                                                 </td>
                                                 <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap font-mono">
-                                                    {row.hurst ? row.hurst.toFixed(2) : '-'}
+                                                    {row.Metrics}
                                                 </td>
-                                                <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap font-mono">
-                                                    {row.entropy ? row.entropy.toFixed(2) : '-'}
+                                                <td className="px-4 py-3 text-center text-xs font-bold whitespace-nowrap">
+                                                    <span className={clsx(
+                                                        row.Regime === 'GREEN' ? "text-green-600" :
+                                                            row.Regime === 'RED' ? "text-red-600" : "text-yellow-600"
+                                                    )}>
+                                                        {row.Regime}
+                                                    </span>
                                                 </td>
                                             </>
                                         ) : (

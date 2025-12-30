@@ -32,6 +32,13 @@ class MasterScreener:
             # Fetch SPY and VIX
             data = yf.download(["SPY", "^VIX"], period="1y", progress=False)['Close']
 
+            # Check if we got data. yfinance returns empty DF on failure or missing symbols
+            if data.empty or 'SPY' not in data.columns or '^VIX' not in data.columns:
+                 # Fallback if download failed
+                 logger.error("Failed to fetch SPY/VIX data. Defaulting to RED.")
+                 self.regime = "RED"
+                 return
+
             spy_price = data['SPY'].iloc[-1]
             spy_sma200 = data['SPY'].rolling(200).mean().iloc[-1]
             vix = data['^VIX'].iloc[-1]
@@ -186,7 +193,7 @@ class MasterScreener:
         if self.regime == "RED":
             print("\n🛑 MARKET REGIME IS RED (BEARISH).")
             print("COUNCIL ORDER: CEASE ALL LONG BUYING. CASH PRESERVED.\n")
-            return
+            return [] # Return empty list explicitly for API
 
         print(f"\n🚀 SCANNING {len(self.all_tickers)} TICKERS IN {self.regime} REGIME...\n")
 
@@ -198,18 +205,40 @@ class MasterScreener:
         for i in range(0, len(self.all_tickers), chunk_size):
             chunk = self.all_tickers[i:i+chunk_size]
             try:
+                # Use threads=True for speed, suppress errors
                 data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True)
 
                 if len(chunk) == 1:
                     # Single ticker handling
-                    res = self.analyze_ticker(chunk[0], data)
-                    if res: results.append(res)
+                    # yfinance might return a DataFrame with columns if successful, or empty if not
+                    # If 1 ticker, data columns are (Open, High, Low...) directly usually, but group_by='ticker' might enforce level
+                    # Actually with group_by='ticker' and 1 ticker, it might still have Ticker level or not depending on version.
+                    # Safest is to handle both.
+
+                    if not data.empty:
+                        # Check if columns are MultiIndex (Ticker, OHLC)
+                        if isinstance(data.columns, pd.MultiIndex):
+                             # Should be data[Ticker]
+                             # but let's just try accessing the ticker
+                             try:
+                                 df = data[chunk[0]].dropna()
+                                 res = self.analyze_ticker(chunk[0], df)
+                                 if res: results.append(res)
+                             except:
+                                 # Maybe it's not multiindex?
+                                 res = self.analyze_ticker(chunk[0], data.dropna())
+                                 if res: results.append(res)
+                        else:
+                             res = self.analyze_ticker(chunk[0], data.dropna())
+                             if res: results.append(res)
                 else:
                     for ticker in chunk:
                         try:
-                            df = data[ticker].dropna()
-                            res = self.analyze_ticker(ticker, df)
-                            if res: results.append(res)
+                            # data[ticker] works if group_by='ticker' is used
+                            if ticker in data.columns.get_level_values(0):
+                                df = data[ticker].dropna()
+                                res = self.analyze_ticker(ticker, df)
+                                if res: results.append(res)
                         except: pass
             except Exception as e:
                 logger.error(f"Chunk failed: {e}")
@@ -219,11 +248,12 @@ class MasterScreener:
         if not df_res.empty:
             # Sort by Setup Quality (ISA Buys first)
             df_res = df_res.sort_values(by=['Type', 'Ticker'], ascending=[True, True])
-
             print(df_res.to_markdown(index=False))
             print("\nIMPORTANT: Verify US Earnings Dates before executing Options trades.")
+            return results # Return the list of dicts
         else:
             print("No setups found meeting the Council's strict criteria.")
+            return []
 
 # --- EXECUTION ---
 if __name__ == "__main__":
