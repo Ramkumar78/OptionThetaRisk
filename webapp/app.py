@@ -615,17 +615,20 @@ def create_app(testing: bool = False) -> Flask:
             us_tickers = []
             uk_tickers = []
 
-            if region == "uk" or region == "uk_euro":
+            if region == "uk":
                 uk_tickers = get_uk_tickers()
-            elif region == "us" or region == "sp500":
-                # Combine Liquid Options + Watchlist + Sectors
-                # We do NOT scan the whole market. We scan the "Tradeable" market.
+            elif region == "us":
+                # Only Liquid Options + Top Tech
                 us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
-                for sector, tickers in SECTOR_COMPONENTS.items():
-                    if sector != "WATCH":
-                        us_tickers.extend(tickers)
+            elif region == "sp500":
+                # Get wider SP500 list
+                from option_auditor.sp500_data import get_sp500_tickers
+                us_tickers = get_sp500_tickers()
+            elif region == "uk_euro":
+                 # Combined UK + maybe others
+                 uk_tickers = get_uk_tickers()
             else:
-                # Default / Universal
+                # Default (Universal): Best of both
                 uk_tickers = get_uk_tickers()
                 us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
 
