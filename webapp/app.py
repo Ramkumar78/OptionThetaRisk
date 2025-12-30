@@ -16,7 +16,8 @@ from flask import Flask, request, redirect, url_for, flash, send_file, session, 
 from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
-from option_auditor.uk_stock_data import get_uk_tickers
+from option_auditor.master_screener import MasterScreener
+from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
@@ -598,18 +599,50 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route("/screen/master", methods=["GET"])
     def screen_master():
+        """
+        THE COUNCIL SCREENER:
+        Replaces the old logic with the Hardened MasterScreener.
+        """
         try:
             region = request.args.get("region", "us")
-            # Cache for 20 minutes as this is a heavy scan
-            cache_key = ("master_convergence", region)
+            # Cache for 20 minutes
+            cache_key = ("master_council_v1", region)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
-            results = screener.screen_master_convergence(region=region)
+            # 1. Define the Universe (Quality Control)
+            us_tickers = []
+            uk_tickers = []
+
+            if region == "uk" or region == "uk_euro":
+                uk_tickers = get_uk_tickers()
+            elif region == "us" or region == "sp500":
+                # Combine Liquid Options + Watchlist + Sectors
+                # We do NOT scan the whole market. We scan the "Tradeable" market.
+                us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
+                for sector, tickers in SECTOR_COMPONENTS.items():
+                    if sector != "WATCH":
+                        us_tickers.extend(tickers)
+            else:
+                # Default / Universal
+                uk_tickers = get_uk_tickers()
+                us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
+
+            # 2. Run the Council Screener
+            # Note: The class separates them internally based on .L suffix
+            council = MasterScreener(us_tickers, uk_tickers)
+            results = council.run()  # Calls the run() method in master_screener.py
+
+            # 3. Cache and Return
             cache_screener_result(cache_key, results)
             return jsonify(results)
+
         except Exception as e:
+            # Helpful error logging
+            print(f"Master Screener Error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
