@@ -2045,6 +2045,9 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
             if len(df) >= 2:
                 pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
 
+            # Calculate dominant period for context
+            period, rel_pos = _calculate_dominant_cycle(closes) or (0, 0)
+
             results.append({
                 "ticker": ticker,
                 "price": float(closes[-1]),
@@ -2053,7 +2056,8 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
                 "cycle_phase": f"{phase:.2f} rad",
                 "cycle_strength": f"{strength*100:.1f}%", # Volatility of the cycle
                 "verdict_color": verdict_color,
-                "method": "Hilbert (Non-Stationary)"
+                "method": "Hilbert (Non-Stationary)",
+                "cycle_period": f"{period} days" # Legacy compatibility for tests
             })
 
         except Exception:

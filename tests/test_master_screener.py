@@ -35,7 +35,7 @@ def test_initialization(screener):
     assert "BP.L" in screener.tickers_uk
     assert screener.market_regime == "NEUTRAL"
 
-def test_find_breakout_date(screener):
+def test_find_fresh_breakout(screener):
     # Create a scenario where price breaks out 5 days ago
     df = create_mock_df(length=100, price=100)
 
@@ -50,20 +50,25 @@ def test_find_breakout_date(screener):
     # Day -5: Price jumps to 106 (Breakout!)
     df.iloc[-5, df.columns.get_loc('Close')] = 106.0
     df.iloc[-5, df.columns.get_loc('High')] = 107.0
+    # And volume must be > 1.2 * avg
+    avg_vol = df.iloc[-30:-6]['Volume'].mean()
+    df.iloc[-5, df.columns.get_loc('Volume')] = avg_vol * 1.5
 
     # Days -4 to -1: Sustains 106
     df.iloc[-4:, df.columns.get_loc('Close')] = 106.0
+    df.iloc[-4:, df.columns.get_loc('Volume')] = avg_vol
 
-    date_str, days_since = screener._find_breakout_date(df, lookback=15)
+    date_str, days_since, bo_price = screener._find_fresh_breakout(df)
 
     assert date_str is not None
     assert days_since == 4
+    assert bo_price == 106.0
 
 def test_process_stock_isa_buy(screener):
     # Requirements:
     # 1. Trend: Price > 50 > 150 > 200
     # 2. Fresh Breakout: within 12 days
-    # 3. Not Extended: < 20% above 50 SMA
+    # 3. Not Extended: < 15% above 50 SMA
 
     df = create_mock_df(length=300, price=100, vol=2000000)
 
@@ -84,14 +89,14 @@ def test_process_stock_isa_buy(screener):
 
     with patch('option_auditor.master_screener.ta.atr') as mock_atr, \
          patch('option_auditor.master_screener.ta.rsi') as mock_rsi, \
-         patch.object(screener, '_find_breakout_date') as mock_bo:
+         patch.object(screener, '_find_fresh_breakout') as mock_bo:
 
          # Mock Indicators
          mock_atr.return_value = pd.Series(np.full(300, 2.0), index=df.index)
          mock_rsi.return_value = pd.Series(np.full(300, 60.0), index=df.index)
 
          # Mock Breakout (Success)
-         mock_bo.return_value = ("2023-01-01", 5)
+         mock_bo.return_value = ("2023-01-01", 5, 105.0)
 
          result = screener._process_stock("AAPL", df)
 
@@ -100,7 +105,7 @@ def test_process_stock_isa_buy(screener):
          assert "Breakout" in result['Setup']
 
 def test_process_stock_isa_fail_stale(screener):
-    # Breakout was 20 days ago (Stale)
+    # Breakout was too long ago (though _find_fresh_breakout handles this, we can mock it returning None)
     df = create_mock_df(length=300, price=100, vol=2000000)
 
     prices = np.linspace(80, 110, 300)
@@ -109,13 +114,13 @@ def test_process_stock_isa_fail_stale(screener):
 
     with patch('option_auditor.master_screener.ta.atr') as mock_atr, \
          patch('option_auditor.master_screener.ta.rsi') as mock_rsi, \
-         patch.object(screener, '_find_breakout_date') as mock_bo:
+         patch.object(screener, '_find_fresh_breakout') as mock_bo:
 
          mock_atr.return_value = pd.Series(np.full(300, 2.0), index=df.index)
          mock_rsi.return_value = pd.Series(np.full(300, 50.0), index=df.index)
 
-         # Mock Breakout (Stale > 12 days)
-         mock_bo.return_value = ("2023-01-01", 15)
+         # Mock Breakout (None because stale logic is inside _find_fresh_breakout)
+         mock_bo.return_value = (None, None, None)
 
          # Ensure Options check fails too (RSI > 45)
 
@@ -137,10 +142,10 @@ def test_process_stock_options_setup(screener):
 
     with patch('option_auditor.master_screener.ta.atr') as mock_atr, \
          patch('option_auditor.master_screener.ta.rsi') as mock_rsi, \
-         patch.object(screener, '_find_breakout_date') as mock_bo:
+         patch.object(screener, '_find_fresh_breakout') as mock_bo:
 
          # No breakout
-         mock_bo.return_value = (None, None)
+         mock_bo.return_value = (None, None, None)
 
          # RSI < 45
          mock_rsi.return_value = pd.Series(np.full(300, 40.0), index=df.index)
