@@ -17,6 +17,7 @@ from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_ri
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
 from option_auditor.master_screener import MasterScreener
+from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider as _get_storage_provider
@@ -600,52 +601,57 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/master", methods=["GET"])
     def screen_master():
         """
-        THE COUNCIL SCREENER:
-        Replaces the old logic with the Hardened MasterScreener.
+        THE COUNCIL SCREENER (Final v2)
+        Handles Region selection and executes Strict Filtering.
         """
         try:
             region = request.args.get("region", "us")
-            # Cache for 20 minutes
-            cache_key = ("master_council_v1", region)
+
+            # Cache Key includes region to prevent mixing results
+            cache_key = (f"master_council_v2_{region}")
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
-            # 1. Define the Universe (Quality Control)
+            # 1. Dynamic Universe Selection
             us_tickers = []
             uk_tickers = []
 
             if region == "uk":
                 uk_tickers = get_uk_tickers()
+
             elif region == "us":
-                # Only Liquid Options + Top Tech
+                # "US Market" = Liquid Options + High Growth Watchlist
+                # This keeps the scan fast and high quality
                 us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
+
             elif region == "sp500":
-                # Get wider SP500 list
-                from option_auditor.sp500_data import get_sp500_tickers
-                us_tickers = get_sp500_tickers()
+                # S&P 500 Mode
+                try:
+                    us_tickers = get_sp500_tickers()
+                except:
+                    # Fallback if file missing
+                    us_tickers = LIQUID_OPTION_TICKERS
+
             elif region == "uk_euro":
-                 # Combined UK + maybe others
-                 uk_tickers = get_uk_tickers()
+                # Combine UK with potential Euro list if you have it
+                uk_tickers = get_uk_tickers()
+
             else:
-                # Default (Universal): Best of both
+                # Default (Universal): Best of both worlds
                 uk_tickers = get_uk_tickers()
                 us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
 
-            # 2. Run the Council Screener
-            # Note: The class separates them internally based on .L suffix
+            # 2. Execution
             council = MasterScreener(us_tickers, uk_tickers)
-            results = council.run()  # Calls the run() method in master_screener.py
+            results = council.run()
 
-            # 3. Cache and Return
+            # 3. Cache & Return
             cache_screener_result(cache_key, results)
             return jsonify(results)
 
         except Exception as e:
-            # Helpful error logging
-            print(f"Master Screener Error: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
+            print(f"Master Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
