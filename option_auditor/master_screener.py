@@ -3,21 +3,21 @@ import pandas_ta as ta
 import numpy as np
 import yfinance as yf
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Setup Logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MasterScreener")
 
-# --- CONFIGURATION (THE COUNCIL'S STANDARDS) ---
+# --- CONFIGURATION (STRICT MODE) ---
 ISA_ACCOUNT_SIZE = 100000.0  # GBP
 OPTIONS_ACCOUNT_SIZE = 9500.0 # USD
-RISK_PER_TRADE_PCT = 0.01    # Risk 1% of account
+RISK_PER_TRADE_PCT = 0.01    # Risk 1%
 MARKET_TICKERS = ["SPY", "^VIX"]
 
-# LIQUIDITY GATES (Hardened)
-LIQUIDITY_MIN_VOL_USD = 1_500_000 # Minimum $1.5M daily volume
-LIQUIDITY_MIN_VOL_GBP = 500_000   # Minimum £500k daily volume
+# LIQUIDITY GATES
+LIQUIDITY_MIN_VOL_USD = 2_000_000
+LIQUIDITY_MIN_VOL_GBP = 500_000
 
 class MasterScreener:
     def __init__(self, tickers_us, tickers_uk):
@@ -26,33 +26,27 @@ class MasterScreener:
         self.all_tickers = self.tickers_us + self.tickers_uk
         self.market_regime = "NEUTRAL"
         self.vix_level = 15.0
-        self.regime_color = "YELLOW"
+        self.regime_color = "YELLOW" # Added default
 
     def _fetch_market_regime(self):
-        """
-        The Soros Gate: Market Health Check.
-        """
         try:
             data = yf.download(MARKET_TICKERS, period="2y", progress=False)
-
-            # Handle MultiIndex
             if isinstance(data.columns, pd.MultiIndex):
                 closes = data['Close']
             else:
                 closes = data
 
-            # SPY Check (Trend)
-            spy = closes['SPY'].dropna()
-            spy_curr = spy.iloc[-1]
-            spy_sma = spy.rolling(200).mean().iloc[-1]
+            spy_curr = closes['SPY'].dropna().iloc[-1]
+            spy_sma = closes['SPY'].dropna().rolling(200).mean().iloc[-1]
 
-            # VIX Check (Fear)
-            vix = closes['^VIX'].dropna()
-            self.vix_level = vix.iloc[-1] if not vix.empty else 20.0
+            # VIX check
+            try:
+                self.vix_level = closes['^VIX'].dropna().iloc[-1]
+            except:
+                self.vix_level = 20.0 # Fallback
 
-            if pd.isna(spy_sma): spy_sma = spy_curr * 0.9 # Fallback
+            if pd.isna(spy_sma): spy_sma = spy_curr * 0.9
 
-            # STRICT REGIME LOGIC
             if spy_curr > spy_sma and self.vix_level < 20:
                 self.market_regime = "BULLISH"
                 self.regime_color = "GREEN"
@@ -67,141 +61,119 @@ class MasterScreener:
                 self.market_regime = "BEARISH"
                 self.regime_color = "RED"
 
-        except Exception as e:
-            logger.error(f"Regime check failed: {e}")
+        except Exception:
             self.market_regime = "CAUTIOUS"
+            self.regime_color = "YELLOW"
 
-    def _find_fresh_breakout(self, df):
+    def _find_breakout(self, df, lookback_days=25):
         """
-        Minervini Logic: Did price cross a 20-day High recently?
-        Returns: (date_str, days_since, breakout_price)
+        Identifies the specific date a stock broke out.
         """
         try:
-            # 1. Define Pivot: High of the *previous* 20 days
-            # shift(1) ensures we don't compare today to today
+            # Pivot = Highest High of previous 20 days
             df['Pivot'] = df['High'].rolling(20).max().shift(1)
 
-            # 2. Look closely at last 12 days only
-            # We don't care if it broke out 2 months ago.
-            recent = df.iloc[-12:].copy()
+            # Check last N days for the FIRST break
+            recent = df.iloc[-lookback_days:].copy()
+            breakouts = recent[recent['Close'] > recent['Pivot']]
 
-            # 3. Find the specific day it crossed
-            # Condition: Close > Pivot
-            breakout_mask = recent['Close'] > recent['Pivot']
+            if breakouts.empty:
+                return None, None
 
-            if not breakout_mask.any():
-                return None, None, None
+            # The specific breakout date is the FIRST day in this window it crossed
+            first_breakout = breakouts.index[0]
+            days_since = (df.index[-1] - first_breakout).days
 
-            # Get the first date in this window
-            breakout_dates = recent[breakout_mask].index
-            first_bo_date = breakout_dates[0]
-
-            # 4. Volume Confirmation on that specific day
-            # Was volume > 120% of average?
-            bo_vol = recent.loc[first_bo_date, 'Volume']
-            avg_vol = df.loc[:first_bo_date, 'Volume'].tail(20).mean()
-
-            # STRICT FILTER: If volume wasn't high, it's a fakeout.
-            if bo_vol < (avg_vol * 1.2):
-                return None, None, None
-
-            days_since = (df.index[-1] - first_bo_date).days
-            bo_price = recent.loc[first_bo_date, 'Close']
-
-            return first_bo_date.strftime('%Y-%m-%d'), days_since, bo_price
-
-        except Exception:
-            return None, None, None
+            return first_breakout.strftime('%Y-%m-%d'), days_since
+        except:
+            return None, None
 
     def _process_stock(self, ticker, df):
         try:
-            # 1. Data Hygiene
             if df.empty or len(df) < 252: return None
 
-            # Flatten YFinance MultiIndex columns if present
+            # Handle Columns
             if isinstance(df.columns, pd.MultiIndex):
                 if 'Close' in df.columns:
-                    c = df['Close']
-                    h = df['High']
-                    l = df['Low']
-                    v = df['Volume']
+                    close_col = df['Close']
+                    high_col = df['High']
+                    low_col = df['Low']
+                    vol_col = df['Volume']
                 else: return None
             else:
-                c, h, l, v = df['Close'], df['High'], df['Low'], df['Volume']
+                close_col = df['Close']
+                high_col = df['High']
+                low_col = df['Low']
+                vol_col = df['Volume']
 
-            # 2. Liquidity Gate (Griffin Rule)
-            curr_price = float(c.iloc[-1])
-            avg_vol = float(v.rolling(20).mean().iloc[-1])
+            curr_price = float(close_col.iloc[-1])
+            avg_vol_20 = float(vol_col.rolling(20).mean().iloc[-1])
 
+            # Liquidity
             is_uk = ticker.endswith(".L")
             is_us = not is_uk
+            if is_us and avg_vol_20 < LIQUIDITY_MIN_VOL_USD: return None
+            if is_uk and avg_vol_20 < LIQUIDITY_MIN_VOL_GBP: return None
 
-            if is_us and avg_vol < LIQUIDITY_MIN_VOL_USD: return None
-            if is_uk and avg_vol < LIQUIDITY_MIN_VOL_GBP: return None
+            # Indicators
+            sma_50 = close_col.rolling(50).mean().iloc[-1]
+            sma_150 = close_col.rolling(150).mean().iloc[-1]
+            sma_200 = close_col.rolling(200).mean().iloc[-1]
+            atr = ta.atr(high_col, low_col, close_col, length=14).iloc[-1]
+            rsi = ta.rsi(close_col, length=14).iloc[-1]
 
-            # 3. Indicators
-            sma_50 = c.rolling(50).mean().iloc[-1]
-            sma_150 = c.rolling(150).mean().iloc[-1]
-            sma_200 = c.rolling(200).mean().iloc[-1]
-            atr = ta.atr(h, l, c, length=14).iloc[-1]
-            rsi = ta.rsi(c, length=14).iloc[-1]
+            high_52 = high_col.rolling(252).max().iloc[-1]
+            dist_to_high = (high_52 - curr_price) / high_52
 
-            # --- DECISION LOGIC ---
+            # --- STRATEGY LOGIC ---
             isa_signal = False
             options_signal = False
             setup_name = ""
-            metrics_display = ""
+            breakout_info = ""
+            days_ago_metric = 999 # Default high for sorting
 
-            # === ISA STRATEGY: FRESH BREAKOUTS (Momentum) ===
-            # Trend Check
-            trend_ok = (curr_price > sma_50) and (sma_50 > sma_150) and (sma_150 > sma_200)
+            # === ISA STRATEGY: BREAKOUTS (Fresh & Recent) ===
+            trend_aligned = (curr_price > sma_50) and (sma_50 > sma_150) and (sma_150 > sma_200)
 
-            if trend_ok:
-                # Event Check: Did it breakout in the last 12 days?
-                bo_date, days_ago, bo_level = self._find_fresh_breakout(df)
+            # Check Breakout (Window 15 days)
+            b_date, days_ago = self._find_breakout(df, lookback_days=20)
 
-                if bo_date:
-                    # Extension Check: Don't buy if > 15% above 50 SMA
-                    extension = (curr_price - sma_50) / sma_50
-                    if extension < 0.15:
-                        isa_signal = True
-                        setup_name = f"Fresh Breakout ({days_ago}d)"
-                        metrics_display = f"BO Date: {bo_date}"
+            if trend_aligned and b_date and days_ago <= 15:
+                # FILTER: Extension check.
+                # If breakout was 10 days ago, is price still chaseable? (<20% from 50SMA)
+                extension = (curr_price - sma_50) / sma_50
 
-            # === OPTIONS STRATEGY: MEAN REVERSION (Contrarian) ===
-            # Uptrending US stock that is oversold with high volatility
+                if extension < 0.25:
+                    isa_signal = True
+                    days_ago_metric = days_ago
+
+                    if days_ago <= 3:
+                        setup_name = f"🔥 FRESH BREAKOUT ({days_ago}d)"
+                    else:
+                        setup_name = f"Developing Trend ({days_ago}d)"
+
+                    breakout_info = b_date
+
+            # === OPTIONS STRATEGY: MEAN REVERSION ===
             atr_pct = (atr / curr_price) * 100
-
             if is_us and (curr_price > sma_200):
-                # Strict: RSI < 45 (Real Pullback)
-                # Strict: ATR% > 2.5 (High Premium)
                 if rsi < 45 and atr_pct > 2.5:
                     options_signal = True
-                    setup_name = "Vol Pullback (Put Sell)"
-                    metrics_display = f"ATR:{atr_pct:.1f}% RSI:{rsi:.0f}"
+                    setup_name = "Vol Pullback"
+                    days_ago_metric = 100 # Push to bottom
 
             if not isa_signal and not options_signal:
                 return None
 
-            # 4. Risk Management (The Kelly/Thorp Logic)
-            stop_loss = curr_price - (3 * atr) # Volatility-based stop
-
-            # Refine Stop for Breakouts: Use the Low of the breakout pivot
-            if isa_signal:
-                stop_loss = curr_price - (2.5 * atr)
-
+            # Sizing
+            stop_loss = curr_price - (3 * atr)
             risk_per_share = curr_price - stop_loss
             shares = 0
-
-            if isa_signal and risk_per_share > 0:
-                fx = 0.79 if is_us else 1.0 # FX buffer
-                # Account Sizing: Fixed Risk Amount
-                risk_amt = ISA_ACCOUNT_SIZE * RISK_PER_TRADE_PCT # £1,000 Risk
-                shares = int((risk_amt / fx) / risk_per_share)
-
-                # Portfolio Constraint: Max 20% position
-                max_pos_shares = int((ISA_ACCOUNT_SIZE * 0.20) / (curr_price * fx))
-                shares = min(shares, max_pos_shares)
+            if risk_per_share > 0 and isa_signal:
+                fx = 0.79 if is_us else 1.0
+                shares = int((ISA_ACCOUNT_SIZE * RISK_PER_TRADE_PCT / fx) / risk_per_share)
+                max_shares = int((ISA_ACCOUNT_SIZE * 0.20) / (curr_price * fx))
+                shares = min(shares, max_shares)
 
             return {
                 "Ticker": ticker,
@@ -210,18 +182,16 @@ class MasterScreener:
                 "Setup": setup_name,
                 "Action": f"Buy {shares}" if isa_signal else "Sell Put Spread",
                 "Stop Loss": round(stop_loss, 2),
-                "Metrics": metrics_display,
+                "Metrics": f"BO:{breakout_info}" if isa_signal else f"RSI:{rsi:.0f} ATR:{atr_pct:.1f}%",
                 "Regime": self.regime_color,
-                "volatility_pct": round(atr_pct, 2)
+                "volatility_pct": round(atr_pct, 2),
+                "sort_key": days_ago_metric # Hidden key for sorting
             }
 
-        except Exception:
+        except Exception as e:
             return None
 
     def run(self):
-        """
-        Execute scan.
-        """
         self._fetch_market_regime()
 
         if self.market_regime == "BEARISH":
@@ -233,35 +203,47 @@ class MasterScreener:
                 "Action": "CASH IS KING",
                 "Stop Loss": 0,
                 "Metrics": f"VIX: {self.vix_level:.2f}",
-                "Regime": "RED"
+                "Regime": "RED",
+                "sort_key": 0
             }]
 
         logger.info(f"Scanning {len(self.all_tickers)} tickers...")
 
+        # Batch Fetch (Chunk size 50 is safer for large lists like S&P500)
         chunk_size = 50
         results = []
 
         for i in range(0, len(self.all_tickers), chunk_size):
             chunk = self.all_tickers[i:i+chunk_size]
             try:
-                # auto_adjust=True is VITAL for correct breakout levels
                 data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
                 if len(chunk) == 1:
-                    res = self._process_stock(chunk[0], data)
+                    ticker = chunk[0]
+                    df = data
+                    # Handle MultiIndex if YF returns it even for single ticker
+                    if isinstance(data.columns, pd.MultiIndex) and ticker in data.columns:
+                         df = data[ticker]
+
+                    res = self._process_stock(ticker, df)
                     if res: results.append(res)
                 else:
                     for ticker in chunk:
                         try:
                             # Safe slice for MultiIndex
-                            df = data[ticker].dropna(how='all')
-                            res = self._process_stock(ticker, df)
-                            if res: results.append(res)
+                            # .dropna(how='all') might remove needed rows if not careful,
+                            # but usually valid trade days have data.
+                            if ticker in data.columns:
+                                df = data[ticker].dropna(how='all')
+                                res = self._process_stock(ticker, df)
+                                if res: results.append(res)
                         except: pass
             except Exception as e:
                 logger.error(f"Chunk failed: {e}")
 
-        # Sort Priority: ISA Buys first, then by Volatility
-        results.sort(key=lambda x: (x['Type'] != "ISA_BUY", -x.get('volatility_pct', 0)))
+        # SORTING MAGIC:
+        # 1. ISA Buys first
+        # 2. Inside ISA Buys: Sort by 'sort_key' (Days Since Breakout) ASCENDING
+        results.sort(key=lambda x: (x['Type'] != "ISA_BUY", x['sort_key']))
 
         return results

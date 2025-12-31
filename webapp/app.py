@@ -601,52 +601,43 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/master", methods=["GET"])
     def screen_master():
         """
-        THE COUNCIL SCREENER (Sniper Edition)
-        Handles Region Logic + Strict Filters
+        THE COUNCIL SCREENER (Updated)
         """
         try:
             region = request.args.get("region", "us")
-
-            # Unique Cache Key
-            cache_key = f"master_council_v3_{region}"
+            # Cache for 20 minutes
+            cache_key = ("master_council_v2", region) # Changed key version
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
-            # 1. Select Universe
             us_tickers = []
             uk_tickers = []
 
-            if region == "uk":
+            if region == "uk" or region == "uk_euro":
                 uk_tickers = get_uk_tickers()
-
             elif region == "us":
-                # US Liquid Only
+                # Only Liquid Options + Top Tech
                 us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
-
             elif region == "sp500":
-                # Full S&P 500
+                # === FIX: Use the new robust fetcher ===
+                from option_auditor.sp500_data import get_sp500_tickers
                 us_tickers = get_sp500_tickers()
-
-            elif region == "uk_euro":
-                # UK + Euro (Functionality to be added, defaults UK)
-                uk_tickers = get_uk_tickers()
-
+                print(f"DEBUG: S&P 500 Fetch returned {len(us_tickers)} tickers.", flush=True)
             else:
-                # Universal (Default)
+                # Default (Universal)
                 uk_tickers = get_uk_tickers()
                 us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
 
-            # 2. Run Engine
+            # Run the Council Screener
             council = MasterScreener(us_tickers, uk_tickers)
             results = council.run()
 
-            # 3. Cache & Serve
             cache_screener_result(cache_key, results)
             return jsonify(results)
 
         except Exception as e:
-            # Error handling for debugging
+            print(f"Master Screener Error: {e}", flush=True)
             import traceback
             traceback.print_exc()
             return jsonify({"error": str(e)}), 500
