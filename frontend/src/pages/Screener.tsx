@@ -993,9 +993,12 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                         {type === 'master' && (
                             <>
                                 <HeaderCell label="Type" sortKey="Type" align="center" />
+                                <HeaderCell label="Ticker" sortKey="Ticker" align="left" />
+                                <HeaderCell label="Price (Chg)" sortKey="Price" align="right" /> {/* Merged */}
                                 <HeaderCell label="Setup" sortKey="Setup" align="left" />
-                                <HeaderCell label="Action (Size)" sortKey="Action" align="right" />
-                                <HeaderCell label="Stop Loss" sortKey="Stop Loss" align="right" />
+                                <HeaderCell label="Action" sortKey="Action" align="right" />
+                                <HeaderCell label="Target" sortKey="Target" align="right" /> {/* New */}
+                                <HeaderCell label="Stop" sortKey="Stop Loss" align="right" />
                                 <HeaderCell label="Metrics" sortKey="Metrics" align="right" />
                                 <HeaderCell label="Regime" sortKey="Regime" align="center" />
                             </>
@@ -1201,30 +1204,39 @@ const ScreenerTable: React.FC<{ data: any[]; type: ScreenerType; filter?: string
                                             <>
                                                 <td className="px-4 py-3 text-center whitespace-nowrap">
                                                     <span className={clsx("px-2 py-1 rounded text-xs font-bold",
-                                                        row.Type === 'ISA_BUY' ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                                                            row.Type === 'OPT_SELL' ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
-                                                                "bg-gray-100 text-gray-800"
+                                                        row.Type.includes('ISA') ? "bg-green-100 text-green-800" :
+                                                        row.Type.includes('OPT') ? "bg-blue-100 text-blue-800" :
+                                                        "bg-gray-100 text-gray-800"
                                                     )}>
-                                                        {row.Type === 'ISA_BUY' ? '🇬🇧 ISA BUY' : '🇺🇸 OPT SELL'}
+                                                        {row.Type}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-left font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                                                <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">
+                                                    {row.Ticker}
+                                                </td>
+                                                <td className="px-4 py-3 text-right whitespace-nowrap">
+                                                    <div className="font-medium">{formatCurrency(row.Price, currency)}</div>
+                                                    <div className={clsx("text-xs", row['Change%'].startsWith('+') ? "text-green-600" : "text-red-600")}>
+                                                        {row['Change%']}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300">
                                                     {row.Setup}
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                                                <td className="px-4 py-3 text-right font-bold text-blue-600 dark:text-blue-400">
                                                     {row.Action}
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-mono text-xs text-red-600 dark:text-red-400 font-bold whitespace-nowrap">
-                                                    {row['Stop Loss'] ? formatCurrency(row['Stop Loss'], currency) : '-'}
+                                                <td className="px-4 py-3 text-right font-mono text-green-600 font-bold">
+                                                    {formatCurrency(row.Target, currency)}
                                                 </td>
-                                                <td className="px-4 py-3 text-right text-xs text-gray-500 whitespace-nowrap font-mono">
+                                                <td className="px-4 py-3 text-right font-mono text-red-600 font-bold">
+                                                    {formatCurrency(row['Stop Loss'], currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs text-gray-500 font-mono">
                                                     {row.Metrics}
                                                 </td>
-                                                <td className="px-4 py-3 text-center text-xs font-bold whitespace-nowrap">
-                                                    <span className={clsx(
-                                                        row.Regime === 'GREEN' ? "text-green-600" :
-                                                            row.Regime === 'RED' ? "text-red-600" : "text-yellow-600"
-                                                    )}>
+                                                <td className="px-4 py-3 text-center font-bold">
+                                                    <span className={clsx(row.Regime === 'GREEN' ? "text-green-500" : row.Regime === 'RED' ? "text-red-500" : "text-yellow-500")}>
                                                         {row.Regime}
                                                     </span>
                                                 </td>
