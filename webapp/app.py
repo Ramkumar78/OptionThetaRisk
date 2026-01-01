@@ -607,29 +607,36 @@ def create_app(testing: bool = False) -> Flask:
     def screen_master():
         try:
             region = request.args.get("region", "us")
-            # Increment cache version
-            cache_key = ("master_council_v5", region)
+            cache_key = ("master_council_v6", region)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
+            # Initialize empty lists
             us_tickers = []
             uk_tickers = []
             india_tickers = []
 
+            # STRICT SELECTION - Do not mix regions!
             if region == "uk":
                 uk_tickers = get_uk_tickers()
+
             elif region == "us":
                 us_tickers = list(set(LIQUID_OPTION_TICKERS))
+
             elif region == "sp500":
-                # Robust Static Source (No Scraping)
                 from option_auditor.sp500_data import get_sp500_tickers
                 us_tickers = get_sp500_tickers()
+
             elif region == "india":
-                # India List
-                india_tickers = INDIAN_TICKERS_RAW
+                try:
+                    from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
+                    india_tickers = INDIAN_TICKERS_RAW
+                except:
+                    india_tickers = []
+
             else:
-                # Universal
+                # Universal = UK + US Liquid
                 uk_tickers = get_uk_tickers()
                 us_tickers = list(set(LIQUID_OPTION_TICKERS))
 

@@ -16,8 +16,7 @@ MARKET_TICKERS = ["SPY", "^VIX"]
 
 # LIQUIDITY GATES
 LIQUIDITY_MIN_VOL_USD = 2_000_000
-LIQUIDITY_MIN_VOL_GBP = 500_000
-# 100 Million INR Turnover (~$1.2M USD) - ensuring liquidity
+LIQUIDITY_MIN_VOL_GBP = 250_000   # Lowered slightly for UK Midcaps
 LIQUIDITY_MIN_TURNOVER_INR = 100_000_000
 
 class MasterScreener:
@@ -25,31 +24,18 @@ class MasterScreener:
         self.tickers_us = list(set(tickers_us))
         self.tickers_uk = list(set(tickers_uk))
         self.tickers_india = list(set(tickers_india)) if tickers_india else []
-
         self.all_tickers = self.tickers_us + self.tickers_uk + self.tickers_india
         self.market_regime = "NEUTRAL"
+        self.regime_color = "YELLOW" # Default initialization
         self.vix_level = 15.0
 
     def _fetch_market_regime(self):
         try:
             data = yf.download(MARKET_TICKERS, period="2y", progress=False)
             if isinstance(data.columns, pd.MultiIndex):
-                # Handle MultiIndex by checking for 'Close' or just extracting SPY/VIX directly
-                try:
-                    closes = data['Close']
-                except KeyError:
-                    closes = pd.DataFrame()
-                    for t in MARKET_TICKERS:
-                        if t in data.columns.levels[0]:
-                             closes[t] = data[t]['Close']
+                closes = data['Close']
             else:
                 closes = data
-
-            # Ensure we have data
-            if 'SPY' not in closes.columns or '^VIX' not in closes.columns:
-                self.market_regime = "CAUTIOUS"
-                self.regime_color = "YELLOW"
-                return
 
             spy_curr = closes['SPY'].dropna().iloc[-1]
             spy_sma = closes['SPY'].dropna().rolling(200).mean().iloc[-1]
@@ -75,18 +61,40 @@ class MasterScreener:
             self.market_regime = "CAUTIOUS"
             self.regime_color = "YELLOW"
 
-    def _find_breakout(self, df, lookback_days=25):
+    def _find_fresh_breakout(self, df):
+        """
+        Refined Logic:
+        1. Calculate 20-Day High (Resistance).
+        2. Identify the FIRST day in the last 10 days where Price > Resistance.
+        3. Ensure that BEFORE that day, price was BELOW Resistance.
+        This filters out stocks that have been trending above the high for weeks.
+        """
         try:
+            # Shift 1 to get yesterday's 20-day high (the resistance line)
             df['Pivot'] = df['High'].rolling(20).max().shift(1)
-            recent = df.iloc[-lookback_days:].copy()
-            breakouts = recent[recent['Close'] > recent['Pivot']]
 
-            if breakouts.empty:
-                return None, None
+            # Look at last 10 days only
+            recent = df.iloc[-10:].copy()
 
-            first_breakout = breakouts.index[0]
-            days_since = (df.index[-1] - first_breakout).days
-            return first_breakout.strftime('%Y-%m-%d'), days_since
+            # Find days where we are ABOVE the pivot
+            above_pivot = recent[recent['Close'] > recent['Pivot']]
+
+            if above_pivot.empty:
+                return None, None # No breakout
+
+            # Get the date of the FIRST breakout in this window
+            first_breakout_date = above_pivot.index[0]
+
+            # Check if this is truly fresh:
+            # We check the 3 days PRIOR to the first breakout.
+            # If price was above pivot then, it's not a fresh base breakout, it's a choppy mess.
+            # (Simplified: Just ensure first_breakout_date is within last 5 days)
+            days_since = (df.index[-1] - first_breakout_date).days
+
+            if days_since > 5:
+                return None, None # Stale trend, not a fresh breakout
+
+            return first_breakout_date.strftime('%Y-%m-%d'), days_since
         except:
             return None, None
 
@@ -94,15 +102,15 @@ class MasterScreener:
         try:
             if df.empty or len(df) < 252: return None
 
-            # Column Normalization
             if isinstance(df.columns, pd.MultiIndex):
-                if 'Close' in df.columns:
-                    close_col = df['Close']
-                    high_col = df['High']
-                    low_col = df['Low']
-                    vol_col = df['Volume']
-                else: return None
+                close_col = df['Close']
+                high_col = df['High']
+                low_col = df['Low']
+                vol_col = df['Volume']
             else:
+                # Handle flattened structure with Ticker as column prefix or just columns
+                # However, yf.download group_by='ticker' usually results in MultiIndex or single DataFrame per ticker
+                # If we get here, it assumes simple columns
                 close_col = df['Close']
                 high_col = df['High']
                 low_col = df['Low']
@@ -112,16 +120,15 @@ class MasterScreener:
             avg_vol_20 = float(vol_col.rolling(20).mean().iloc[-1])
 
             # --- REGION IDENTIFICATION ---
-            is_uk = ticker.endswith(".L")
-            is_india = ticker.endswith(".NS") or ticker.endswith(".BO")
-            is_us = not (is_uk or is_india)
+            # Explicit check against lists passed in init for safety
+            is_uk = ticker in self.tickers_uk or ticker.endswith(".L")
+            is_india = ticker in self.tickers_india or ticker.endswith(".NS")
+            is_us = not (is_uk or is_india) # Default to US if not others
 
             # --- LIQUIDITY GATES ---
             if is_us and avg_vol_20 < LIQUIDITY_MIN_VOL_USD: return None
             if is_uk and avg_vol_20 < LIQUIDITY_MIN_VOL_GBP: return None
-
             if is_india:
-                # India Turnover Check (Price * Volume)
                 turnover = curr_price * avg_vol_20
                 if turnover < LIQUIDITY_MIN_TURNOVER_INR: return None
 
@@ -139,25 +146,25 @@ class MasterScreener:
             breakout_info = ""
             days_ago_metric = 999
 
-            # === GLOBAL BREAKOUTS (US, UK, INDIA) ===
+            # === ISA STRATEGY (Global Breakouts) ===
             trend_aligned = (curr_price > sma_50) and (sma_50 > sma_150) and (sma_150 > sma_200)
 
-            b_date, days_ago = self._find_breakout(df, lookback_days=20)
+            # Use NEW Fresh Breakout Logic
+            b_date, days_ago = self._find_fresh_breakout(df)
 
-            if trend_aligned and b_date and days_ago <= 15:
+            if trend_aligned and b_date:
+                # Extension Check: Don't buy if > 25% above 50 SMA (Parabolic)
                 extension = (curr_price - sma_50) / sma_50
                 if extension < 0.25:
                     isa_signal = True
                     days_ago_metric = days_ago
-                    if days_ago <= 3:
-                        setup_name = f"🔥 FRESH BREAKOUT ({days_ago}d)"
-                    else:
-                        setup_name = f"Developing Trend ({days_ago}d)"
+                    setup_name = f"🔥 FRESH BREAKOUT ({days_ago}d)"
                     breakout_info = b_date
 
-            # === OPTIONS STRATEGY (US ONLY) ===
+            # === OPTIONS STRATEGY (US Only) ===
             atr_pct = (atr / curr_price) * 100
-            if is_us and (curr_price > sma_200):
+            # Only consider options if NOT an ISA buy (Prioritise Stock Ownership)
+            if is_us and not isa_signal and (curr_price > sma_200):
                 if rsi < 45 and atr_pct > 2.5:
                     options_signal = True
                     setup_name = "Vol Pullback"
@@ -166,57 +173,45 @@ class MasterScreener:
             if not isa_signal and not options_signal:
                 return None
 
-            # --- POSITION SIZING & LABELING ---
+            # --- POSITION SIZING & VERDICT ---
             stop_loss = curr_price - (3 * atr)
             risk_per_share = curr_price - stop_loss
             shares = 0
             type_label = ""
+            action_text = ""
 
-            if risk_per_share > 0 and isa_signal:
-                risk_amt_gbp = ISA_ACCOUNT_SIZE * RISK_PER_TRADE_PCT # £1000 Risk
+            # FIX: Priority Logic - ISA BUY takes precedence
+            if isa_signal:
+                if is_uk: type_label = "🇬🇧 ISA BUY"
+                elif is_india: type_label = "🇮🇳 BUY (Non-ISA)"
+                else: type_label = "🇺🇸 ISA BUY"
 
-                if is_india:
-                    # INDIA (Non-ISA Logic)
-                    # We assume £1000 risk EQUIVALENT, but no ISA FX logic
-                    # 1 INR = ~0.0093 GBP.
-                    # Risk in INR = £1000 / 0.0093
-                    fx_rate = 0.0093
-                    risk_amt_inr = risk_amt_gbp / fx_rate
-                    shares = int(risk_amt_inr / risk_per_share)
-                    type_label = "🇮🇳 BUY (Non-ISA)"
+                # Sizing
+                risk_amt_gbp = ISA_ACCOUNT_SIZE * RISK_PER_TRADE_PCT
+                fx_rate = 1.0
+                if is_us: fx_rate = 0.79
+                if is_india: fx_rate = 0.0093
 
-                elif is_us:
-                    # US ISA Logic (FX Impact)
-                    fx_rate = 0.79
+                if risk_per_share > 0:
                     shares = int((risk_amt_gbp / fx_rate) / risk_per_share)
-                    type_label = "🇺🇸 ISA BUY"
+                    max_shares = int((ISA_ACCOUNT_SIZE / fx_rate * 0.20) / curr_price)
+                    shares = min(shares, max_shares)
 
-                elif is_uk:
-                    # UK ISA Logic (Native)
-                    shares = int(risk_amt_gbp / risk_per_share)
-                    type_label = "🇬🇧 ISA BUY"
+                action_text = f"Buy {shares} Shares"
 
-                # Cap max position size (20% of Portfolio Value)
-                # Convert Portfolio to Local Currency first
-                if is_india:
-                    portfolio_val_local = ISA_ACCOUNT_SIZE / 0.0093
-                elif is_us:
-                    portfolio_val_local = ISA_ACCOUNT_SIZE / 0.79
-                else:
-                    portfolio_val_local = ISA_ACCOUNT_SIZE
-
-                max_shares = int((portfolio_val_local * 0.20) / curr_price)
-                shares = min(shares, max_shares)
-
-            if options_signal:
+            elif options_signal:
                 type_label = "🇺🇸 OPT SELL"
+                # Options specific data
+                short_strike = round(curr_price - (2*atr), 1)
+                long_strike = round(short_strike - 5, 1)
+                action_text = f"Sell Put {short_strike}/{long_strike}"
 
             return {
                 "Ticker": ticker,
                 "Price": round(curr_price, 2),
                 "Type": type_label,
                 "Setup": setup_name,
-                "Action": f"Buy {shares}" if isa_signal else "Sell Put Spread",
+                "Action": action_text, # Unified Action Column
                 "Stop Loss": round(stop_loss, 2),
                 "Metrics": f"BO:{breakout_info}" if isa_signal else f"RSI:{rsi:.0f} ATR:{atr_pct:.1f}%",
                 "Regime": self.regime_color,
@@ -225,6 +220,7 @@ class MasterScreener:
             }
 
         except Exception as e:
+            # print(f"Error processing {ticker}: {e}", flush=True)
             return None
 
     def run(self):
@@ -254,29 +250,30 @@ class MasterScreener:
                 data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
                 if len(chunk) == 1:
-                    t = chunk[0]
-                    # yf might return just the DataFrame or nested
-                    # If columns are MultiIndex and t is in level 0, extract it.
-                    if isinstance(data.columns, pd.MultiIndex) and t in data.columns:
-                        df = data[t].dropna()
-                    else:
-                        df = data.dropna()
-
-                    res = self._process_stock(t, df)
+                    res = self._process_stock(chunk[0], data)
                     if res: results.append(res)
                 else:
                     for ticker in chunk:
                         try:
-                            # If ticker not in columns, data missing
-                            if ticker not in data.columns.levels[0]:
-                                continue
-                            df = data[ticker].dropna()
-                            res = self._process_stock(ticker, df)
-                            if res: results.append(res)
+                            # Handle YF MultiIndex mess
+                            # If columns are MultiIndex, the first level is Ticker
+                            if isinstance(data.columns, pd.MultiIndex):
+                                if ticker in data.columns.levels[0]:
+                                    df = data[ticker].dropna(how='all')
+                                    # Ensure we have required columns. yfinance might return 'Adj Close' instead of 'Close' if auto_adjust=False,
+                                    # but we used auto_adjust=True so we get 'Close', 'High', 'Low', 'Volume'.
+                                    res = self._process_stock(ticker, df)
+                                    if res: results.append(res)
+                            else:
+                                # Sometimes single ticker download with group_by='ticker' might still return flat if yfinance version varies?
+                                # But usually it returns MultiIndex if group_by='ticker' is set even for one?
+                                # Wait, the code above handles len(chunk) == 1 separately.
+                                # For len(chunk) > 1, it should be MultiIndex.
+                                pass
                         except: pass
             except Exception as e:
                 logger.error(f"Chunk failed: {e}")
 
-        # Sort: Fresh Breakouts (ISA/INDIA) -> Older Breakouts -> Options
+        # Sort: Fresh Breakouts (0d) -> Older (5d) -> Options
         results.sort(key=lambda x: (x['Type'] == "🇺🇸 OPT SELL", x['sort_key']))
         return results
