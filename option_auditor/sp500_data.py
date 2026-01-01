@@ -1,35 +1,31 @@
-import pandas as pd
-import requests
 import logging
+from option_auditor.common.constants import SECTOR_COMPONENTS
 
 logger = logging.getLogger("SP500_Data")
 
 def get_sp500_tickers():
     """
-    Fetches the current S&P 500 tickers from Wikipedia.
-    Fallbacks to a smaller liquid list if scraping fails.
+    Returns the S&P 500 list by aggregating hardcoded sector components
+    from option_auditor.common.constants.
+
+    This is faster and more reliable than scraping Wikipedia.
     """
+    tickers = []
     try:
-        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        tables = pd.read_html(url)
-        df = tables[0]
-        tickers = df['Symbol'].tolist()
+        # Iterate through all sectors (Technology, Financials, etc.)
+        for sector, component_list in SECTOR_COMPONENTS.items():
+            # We exclude the generic 'WATCH' list to keep this a pure S&P 500 proxy
+            # unless you specifically want your watchlist included.
+            if sector != "WATCH":
+                tickers.extend(component_list)
 
-        # Clean tickers (replace dots with hyphens for some APIs,
-        # but Yahoo prefers 'BRK-B' or 'BRK.B' depending on version.
-        # Usually dot is safer for yfinance in some versions, but let's standardise.)
-        tickers = [t.replace('.', '-') for t in tickers]
+        # Remove duplicates and sort
+        unique_tickers = sorted(list(set(tickers)))
 
-        logger.info(f"Successfully fetched {len(tickers)} S&P 500 tickers.")
-        return tickers
+        logger.info(f"Loaded {len(unique_tickers)} tickers from local SECTOR_COMPONENTS.")
+        return unique_tickers
 
     except Exception as e:
-        logger.error(f"Failed to fetch S&P 500 from Wikipedia: {e}")
-        # Fallback to Top 50 Liquid Tech/Etc if scraping fails (Safety Net)
-        return [
-            "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK-B", "LLY", "AVGO",
-            "V", "JPM", "XOM", "WMT", "UNH", "MA", "PG", "JNJ", "HD", "COST", "ORCL", "MRK",
-            "ABBV", "CVX", "BAC", "KO", "CRM", "NFLX", "AMD", "PEP", "TMO", "LIN", "WFC",
-            "ADBE", "DIS", "MCD", "CSCO", "ACN", "ABT", "QCOM", "CAT", "VZ", "INTU", "IBM",
-            "AMAT", "CMCSA", "PFE", "UBER", "GE", "ISRG"
-        ]
+        logger.error(f"Error loading S&P 500 from constants: {e}")
+        # Fallback to a small liquid list if constants file is broken
+        return ["SPY", "QQQ", "IWM", "NVDA", "MSFT", "AAPL"]

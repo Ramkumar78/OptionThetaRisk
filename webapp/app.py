@@ -19,6 +19,11 @@ from option_auditor.uk_stock_data import get_uk_tickers
 from option_auditor.master_screener import MasterScreener
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
+# Import India Data
+try:
+    from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
+except ImportError:
+    INDIAN_TICKERS_RAW = []
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
@@ -600,37 +605,35 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route("/screen/master", methods=["GET"])
     def screen_master():
-        """
-        THE COUNCIL SCREENER (Updated)
-        """
         try:
             region = request.args.get("region", "us")
-            # Cache for 20 minutes
-            cache_key = ("master_council_v2", region) # Changed key version
+            # Increment cache version
+            cache_key = ("master_council_v5", region)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
             us_tickers = []
             uk_tickers = []
+            india_tickers = []
 
-            if region == "uk" or region == "uk_euro":
+            if region == "uk":
                 uk_tickers = get_uk_tickers()
             elif region == "us":
-                # Only Liquid Options + Top Tech
-                us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
+                us_tickers = list(set(LIQUID_OPTION_TICKERS))
             elif region == "sp500":
-                # === FIX: Use the new robust fetcher ===
+                # Robust Static Source (No Scraping)
                 from option_auditor.sp500_data import get_sp500_tickers
                 us_tickers = get_sp500_tickers()
-                print(f"DEBUG: S&P 500 Fetch returned {len(us_tickers)} tickers.", flush=True)
+            elif region == "india":
+                # India List
+                india_tickers = INDIAN_TICKERS_RAW
             else:
-                # Default (Universal)
+                # Universal
                 uk_tickers = get_uk_tickers()
-                us_tickers = list(set(LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])))
+                us_tickers = list(set(LIQUID_OPTION_TICKERS))
 
-            # Run the Council Screener
-            council = MasterScreener(us_tickers, uk_tickers)
+            council = MasterScreener(us_tickers, uk_tickers, india_tickers)
             results = council.run()
 
             cache_screener_result(cache_key, results)
@@ -638,8 +641,6 @@ def create_app(testing: bool = False) -> Flask:
 
         except Exception as e:
             print(f"Master Screener Error: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
