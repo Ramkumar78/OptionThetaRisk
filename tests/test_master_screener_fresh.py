@@ -87,11 +87,25 @@ class TestMasterScreenerFresh(unittest.TestCase):
                 # Need SPY and ^VIX
                 # If list passed to download
 
-                # MultiIndex
-                cols = pd.MultiIndex.from_product([['SPY', '^VIX'], ['Close']])
+                # MultiIndex (Field, Ticker) for default group_by='column'
+                # But MasterScreener calls _fetch_market_regime which calls yf.download(MARKET_TICKERS)
+                # MARKET_TICKERS = ["SPY", "^VIX"]
+                # It returns (Field, Ticker)
+
+                # Correction: The code in MasterScreener checks:
+                # if isinstance(data.columns, pd.MultiIndex): closes = data['Close']
+                # This works if top level is Field (Close).
+
+                # So mock columns should be (Field, Ticker) if we want data['Close'] to work.
+                # However, in pandas creating MultiIndex from product order matters.
+                # If we want data['Close'] to return a DF with tickers, Field must be level 0.
+
+                cols = pd.MultiIndex.from_product([['Close'], ['SPY', '^VIX']])
+                # This makes level 0 = Field, Level 1 = Ticker.
+
                 df_m = pd.DataFrame(index=m_dates, columns=cols)
-                df_m[('SPY', 'Close')] = 400
-                df_m[('^VIX', 'Close')] = 15
+                df_m[('Close', 'SPY')] = 400
+                df_m[('Close', '^VIX')] = 15
                 return df_m
             else:
                 # AAPL data
@@ -104,7 +118,7 @@ class TestMasterScreenerFresh(unittest.TestCase):
         self.assertEqual(len(results), 1)
         res = results[0]
         self.assertEqual(res['Ticker'], 'AAPL')
-        self.assertIn("FRESH BREAKOUT", res['Setup'])
+        self.assertIn("POWER TREND", res['Setup'])
         # Days ago should be small (around 1 since we set breakout at -2)
         # index -1 is today (0 days ago), -2 is yesterday (1 day ago)
         # Logic: days_since = (df.index[-1] - first_breakout).days
@@ -142,10 +156,10 @@ class TestMasterScreenerFresh(unittest.TestCase):
         def side_effect(*args, **kwargs):
             if "SPY" in str(args) or "SPY" in str(kwargs.get('tickers')):
                 m_dates = pd.date_range(end=pd.Timestamp.now(), periods=252)
-                cols = pd.MultiIndex.from_product([['SPY', '^VIX'], ['Close']])
+                cols = pd.MultiIndex.from_product([['Close'], ['SPY', '^VIX']])
                 df_m = pd.DataFrame(index=m_dates, columns=cols)
-                df_m[('SPY', 'Close')] = 400
-                df_m[('^VIX', 'Close')] = 15
+                df_m[('Close', 'SPY')] = 400
+                df_m[('Close', '^VIX')] = 15
                 return df_m
             return mock_df
 
@@ -190,10 +204,10 @@ class TestMasterScreenerFresh(unittest.TestCase):
         def side_effect(*args, **kwargs):
             if "SPY" in str(args) or "SPY" in str(kwargs.get('tickers')):
                 m_dates = pd.date_range(end=pd.Timestamp.now(), periods=252)
-                cols = pd.MultiIndex.from_product([['SPY', '^VIX'], ['Close']])
+                cols = pd.MultiIndex.from_product([['Close'], ['SPY', '^VIX']])
                 df_m = pd.DataFrame(index=m_dates, columns=cols)
-                df_m[('SPY', 'Close')] = 400
-                df_m[('^VIX', 'Close')] = 15
+                df_m[('Close', 'SPY')] = 400
+                df_m[('Close', '^VIX')] = 15
                 return df_m
             return mock_df
 

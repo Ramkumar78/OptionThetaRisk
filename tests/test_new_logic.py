@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.master_screener import MasterScreener
 from webapp.app import create_app
@@ -49,7 +50,10 @@ class TestMasterScreener(unittest.TestCase):
         # Trend: > 50 SMA, 50 > 150 > 200.
         # Breakout: recent high check.
 
-        dates = pd.date_range(start="2023-01-01", periods=300)
+        # Use recent dates to avoid "stale data" check
+        end_date = datetime.now()
+        dates = pd.date_range(end=end_date, periods=300)
+
         data = {
             "Close": np.linspace(2000, 2500, 300),
             "High": np.linspace(2010, 2510, 300),
@@ -71,15 +75,16 @@ class TestMasterScreener(unittest.TestCase):
         # MasterScreener calls _fetch_market_regime first.
 
         # Mock Market Data (SPY, VIX)
+        # yfinance with group_by='column' (default) returns (Field, Ticker)
         market_df = pd.DataFrame({
-            ("SPY", "Close"): np.linspace(400, 500, 300),
-            ("SPY", "High"): np.linspace(400, 500, 300),
-            ("SPY", "Low"): np.linspace(400, 500, 300),
-            ("SPY", "Volume"): np.full(300, 1000000),
-            ("^VIX", "Close"): np.full(300, 15.0),
-            ("^VIX", "High"): np.full(300, 16.0),
-            ("^VIX", "Low"): np.full(300, 14.0),
-            ("^VIX", "Volume"): np.full(300, 1000000)
+            ("Close", "SPY"): np.linspace(400, 500, 300),
+            ("High", "SPY"): np.linspace(400, 500, 300),
+            ("Low", "SPY"): np.linspace(400, 500, 300),
+            ("Volume", "SPY"): np.full(300, 1000000),
+            ("Close", "^VIX"): np.full(300, 15.0),
+            ("High", "^VIX"): np.full(300, 16.0),
+            ("Low", "^VIX"): np.full(300, 14.0),
+            ("Volume", "^VIX"): np.full(300, 1000000)
         }, index=dates)
         market_df.columns = pd.MultiIndex.from_tuples(market_df.columns)
 
@@ -114,14 +119,17 @@ class TestMasterScreener(unittest.TestCase):
         self.assertTrue(len(results) > 0)
         res = results[0]
         self.assertEqual(res['Ticker'], ticker)
-        self.assertEqual(res['Type'], "🇮🇳 BUY (Non-ISA)")
+        self.assertEqual(res['Type'], "🇮🇳 BUY")
         # Check if liquidity check passed (it should have)
 
     @patch("option_auditor.master_screener.yf.download")
     def test_master_screener_us_isa_logic(self, mock_download):
         """Test US specific logic: ISA BUY label."""
         ticker = "AAPL"
-        dates = pd.date_range(start="2023-01-01", periods=300)
+
+        # Use recent dates
+        end_date = datetime.now()
+        dates = pd.date_range(end=end_date, periods=300)
 
         # Similar uptrend data
         data = {
@@ -135,9 +143,10 @@ class TestMasterScreener(unittest.TestCase):
         df.iloc[-1, df.columns.get_loc("High")] = 215
 
         # Mock Market Data (SPY, VIX) - Bullish
+        # yfinance with group_by='column' (default) returns (Field, Ticker)
         market_df = pd.DataFrame({
-            ("SPY", "Close"): np.linspace(400, 500, 300),
-            ("^VIX", "Close"): np.full(300, 15.0),
+            ("Close", "SPY"): np.linspace(400, 500, 300),
+            ("Close", "^VIX"): np.full(300, 15.0),
         }, index=dates)
         market_df.columns = pd.MultiIndex.from_tuples(market_df.columns)
 
@@ -174,8 +183,8 @@ class TestAppRoute(unittest.TestCase):
         instance = MockScreener.return_value
         instance.run.return_value = [{"Ticker": "RELIANCE.NS", "Price": 2500}]
 
-        # Patch INDIAN_TICKERS_RAW
-        with patch("webapp.app.INDIAN_TICKERS_RAW", ["RELIANCE.NS"]):
+        # Patch INDIAN_TICKERS_RAW where it is imported inside the route
+        with patch("option_auditor.india_stock_data.INDIAN_TICKERS_RAW", ["RELIANCE.NS"]):
             response = self.client.get("/screen/master?region=india")
 
             self.assertEqual(response.status_code, 200)

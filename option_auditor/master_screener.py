@@ -113,12 +113,6 @@ class MasterScreener:
             last_date = df.index[-1]
             if (datetime.now() - last_date).days > 5: return None
 
-            # Flatten columns if necessary
-            if isinstance(df.columns, pd.MultiIndex):
-                # Try to extract Close/High/etc assuming they are top level or second level
-                # But usually _process_stock receives a clean DF from run()
-                pass
-
             # Extract Series
             close_col = df['Close']
             high_col = df['High']
@@ -126,6 +120,12 @@ class MasterScreener:
             vol_col = df['Volume']
 
             curr_price = float(close_col.iloc[-1])
+            prev_close = float(close_col.iloc[-2])
+
+            # --- FIX: Calculate Change% for Frontend ---
+            change_pct = ((curr_price - prev_close) / prev_close) * 100
+            change_str = f"{'+' if change_pct > 0 else ''}{change_pct:.2f}%"
+
             if vol_col.iloc[-1] == 0: return None # No volume today
 
             avg_vol_20 = float(vol_col.rolling(20).mean().iloc[-1])
@@ -200,6 +200,11 @@ class MasterScreener:
 
             # --- SIZING & EXECUTION ---
             stop_loss = curr_price - (2.5 * atr) # Tightened from 3 ATR
+
+            # --- FIX: Calculate Target (2R) for Frontend ---
+            risk_amt = curr_price - stop_loss
+            target_price = curr_price + (2 * risk_amt) if risk_amt > 0 else curr_price * 1.10
+
             risk_per_share = curr_price - stop_loss
             shares = 0
             type_label = ""
@@ -234,15 +239,20 @@ class MasterScreener:
 
                 action_text = f"Sell Vert Put {short_strike}/{long_strike}"
 
+            # --- FIX: Metrics String for Frontend ---
+            vol_rel = round(vol_col.iloc[-1] / avg_vol_20, 1)
+            metrics_str = f"RSI:{int(rsi)} V:{vol_rel}x"
+
             return {
                 "Ticker": ticker,
                 "Price": round(curr_price, 2),
+                "Change%": change_str,  # REQUIRED by Frontend
                 "Type": type_label,
                 "Setup": setup_name,
                 "Action": action_text,
                 "Stop Loss": round(stop_loss, 2),
-                "RSI": round(rsi, 0),
-                "Vol_Rel": round(vol_col.iloc[-1] / avg_vol_20, 1),
+                "Target": round(target_price, 2), # REQUIRED by Frontend
+                "Metrics": metrics_str,           # REQUIRED by Frontend
                 "Regime": self.regime_color,
                 "sort_key": sort_metric
             }
@@ -272,7 +282,13 @@ class MasterScreener:
                 data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
                 if len(chunk) == 1:
-                    res = self._process_stock(chunk[0], data)
+                    df = data
+                    ticker = chunk[0]
+                    # Robust Handling for Single Ticker MultiIndex
+                    if isinstance(data.columns, pd.MultiIndex) and ticker in data.columns:
+                        df = data[ticker].dropna(how='all')
+
+                    res = self._process_stock(ticker, df)
                     if res: results.append(res)
                 else:
                     for ticker in chunk:
@@ -284,7 +300,6 @@ class MasterScreener:
                                     res = self._process_stock(ticker, df)
                                     if res: results.append(res)
                         except Exception as e:
-                            # Log specific ticker failure
                             pass
             except Exception as e:
                 logger.error(f"Batch download failed: {e}")
@@ -299,7 +314,7 @@ class MasterScreener:
             filename = f"scan_results_{timestamp}.csv"
 
             # Reorder columns for readability
-            cols = ["Ticker", "Action", "Price", "Type", "Setup", "Stop Loss", "RSI", "Vol_Rel", "Regime"]
+            cols = ["Ticker", "Action", "Price", "Type", "Setup", "Stop Loss", "Target", "Metrics", "Regime"]
             df_res = df_res[cols]
 
             df_res.to_csv(filename, index=False)
