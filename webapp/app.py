@@ -19,6 +19,7 @@ from option_auditor.uk_stock_data import get_uk_tickers
 from option_auditor.master_screener import MasterScreener
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
+from option_auditor.master_backtester import MasterBacktester
 # Import India Data
 try:
     from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
@@ -270,6 +271,20 @@ def create_app(testing: bool = False) -> Flask:
             "api_health": data_api_breaker.current_state, # 'closed', 'open', 'half-open'
             "is_fallback": data_api_breaker.current_state == 'open'
         })
+
+    @app.route('/backtest/master', methods=['GET'])
+    def backtest_master():
+        ticker = request.args.get('ticker')
+        if not ticker:
+            return jsonify({"error": "Ticker required"}), 400
+
+        try:
+            backtester = MasterBacktester(ticker)
+            result = backtester.run()
+            return jsonify(result)
+        except Exception as e:
+            app.logger.error(f"Backtest Failed: {e}")
+            return jsonify({"error": str(e)}), 500
 
     # API Routes for Screener
     @app.route("/screen", methods=["POST"])
@@ -809,10 +824,9 @@ def create_app(testing: bool = False) -> Flask:
                         try:
                             # Handling yfinance structure (MultiIndex or Flat)
                             # If single ticker, it might be flat or have Ticker as column level
-                            close_series = hist['Close']
-
-                            # If MultiIndex (Date, Ticker), selecting 'Close' returns a DataFrame with tickers as columns
                             # If Single Index (Date), selecting 'Close' returns a Series
+
+                            close_series = hist['Close']
 
                             val = None
                             if isinstance(close_series, pd.DataFrame):

@@ -1,72 +1,25 @@
 import React, { useState } from 'react';
 import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, runFourierScreener, runHybridScreener } from '../api';
 import clsx from 'clsx';
+import { formatCurrency } from '../utils/formatting';
 
 interface ScreenerProps { }
 
 type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master' | 'fortress' | 'quantum';
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
-    master: {
-        title: "The Council's Master Screen",
-        subtitle: "High Probability Convergences",
-        description: "The ultimate filter. Combines 'Soros Regime' detection, 'Griffin Liquidity' gates, and separate logic for Trend (ISA) vs. Volatility Selling (Options)."
-    },
-    fortress: {
-        title: "Fortress Options",
-        subtitle: "VIX-Adjusted Spreads",
-        description: "Mathematically derived Bull Put Spreads using dynamic safety multipliers based on the VIX. Targets high-liquidity US options."
-    },
-    quantum: {
-        title: 'Quantum Screener',
-        subtitle: 'Statistical Regimes',
-        description: 'Utilizes Hurst Exponent and Entropy to identify market regimes (Trending vs Mean Reverting) and potential turning points.'
-    },
-    market: {
-        title: 'Market Screener',
-        subtitle: 'Volatility & RSI',
-        description: 'Scans for liquid US options with specific IV Rank and RSI thresholds. Good for general idea generation.'
-    },
-    turtle: {
-        title: 'Turtle Trading',
-        subtitle: 'Trend Breakouts',
-        description: 'Classic 20-Day Donchian Channel breakouts. Best for catching major trends in moving markets.'
-    },
-    darvas: {
-        title: 'Darvas Box',
-        subtitle: 'Momentum Boxes',
-        description: 'Identifies consolidation "boxes" near 52-week highs. Buys when price breaks the ceiling on volume.'
-    },
-    mms: {
-        title: 'MMS / OTE',
-        subtitle: 'Smart Money Concepts',
-        description: 'Identifies structural shifts and retracements into premium/discount zones (62-79%).'
-    },
-    ema: {
-        title: 'EMA Crossovers',
-        subtitle: 'Moving Average Trend',
-        description: '5/13 and 5/21 Exponential Moving Average crossovers for trend catching.'
-    },
-    bull_put: {
-        title: 'Bull Put Spreads',
-        subtitle: 'Income Generation',
-        description: 'Finds bullish setups suitable for selling credit spreads. Targets ~45 DTE, 30 Delta puts.'
-    },
-    isa: {
-        title: 'ISA Trend Follower',
-        subtitle: 'Long-Term Growth',
-        description: 'Robust long-only strategy. Requires Price > 200 SMA and a breakout above the 50-day High.'
-    },
-    fourier: {
-        title: 'Harmonic Cycles',
-        subtitle: 'Cycle Analysis',
-        description: 'Deconstructs price into sine waves to find cyclical bottoms.'
-    },
-    hybrid: {
-        title: 'Hybrid (Trend + Cycle)',
-        subtitle: 'High Probability',
-        description: 'Combines ISA Trend direction with Fourier Cycle timing. "Buy the dip" in an uptrend.'
-    }
+    master: { title: "Master Protocol", subtitle: "High Probability Convergences", description: "Combines Regime Filters, Liquidity Gates, and Trend/Vol Logic." },
+    fortress: { title: "Fortress Options", subtitle: "Income Generation", description: "VIX-Adjusted Bull Put Spreads on liquid US tickers." },
+    quantum: { title: 'Quantum Screener', subtitle: 'Statistical Regimes', description: 'Hurst Exponent & Entropy analysis for regime detection.' },
+    market: { title: 'Market Screener', subtitle: 'Volatility & RSI', description: 'Scans for IV Rank and RSI extremes.' },
+    turtle: { title: 'Turtle Trading', subtitle: 'Trend Breakouts', description: '20-Day Donchian Channel Breakouts.' },
+    darvas: { title: 'Darvas Box', subtitle: 'Momentum Boxes', description: 'Consolidation breakouts near 52-week highs.' },
+    mms: { title: 'MMS / OTE', subtitle: 'Smart Money', description: 'Market Maker Models & Optimal Trade Entries.' },
+    ema: { title: 'EMA Crossovers', subtitle: 'Trend Following', description: '5/13 & 5/21 EMA Crossovers.' },
+    bull_put: { title: 'Bull Put (Classic)', subtitle: 'Credit Spreads', description: 'Standard bullish credit spreads.' },
+    isa: { title: 'ISA Trend', subtitle: 'Long Term Growth', description: 'Investment grade trend following (Price > 200 SMA).' },
+    fourier: { title: 'Harmonic Cycles', subtitle: 'Swing Timing', description: 'Cycle analysis to find market bottoms.' },
+    hybrid: { title: 'Hybrid', subtitle: 'Trend + Cycle', description: 'Combines ISA Trend with Fourier Timing.' }
 };
 
 const StrategyTile = ({ tab, active, onClick }: { tab: { id: ScreenerType, label: string, subLabel?: string }, active: boolean, onClick: (id: ScreenerType) => void }) => (
@@ -91,31 +44,42 @@ const Screener: React.FC<ScreenerProps> = () => {
     const [activeTab, setActiveTab] = useState<ScreenerType>('master');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [loading, setLoading] = useState(false);
-
-    // Results Data
     const [results, setResults] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
-
-    // Inputs
     const [region, setRegion] = useState('us');
 
-    // --- CSV DOWNLOADER ---
+    // --- BACKTEST STATE ---
+    const [btTicker, setBtTicker] = useState('');
+    const [btLoading, setBtLoading] = useState(false);
+    const [btResult, setBtResult] = useState<any>(null);
+
+    const runBacktest = async () => {
+        if (!btTicker) return;
+        setBtLoading(true);
+        setBtResult(null);
+        try {
+            const res = await fetch(`/backtest/master?ticker=${btTicker}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setBtResult(data);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setBtLoading(false);
+        }
+    };
+
     const downloadCSV = () => {
         if (!results) return;
-
         let dataToExport: any[] = [];
         const timestamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
         let filename = `${activeTab}_scan_${timestamp}.csv`;
 
-        // 1. Flatten Data Structure based on Screener Type
         if (activeTab === 'market' && results.results) {
-            // Market screener returns grouped results
             Object.values(results.results).forEach((arr: any) => dataToExport.push(...arr));
         } else if (Array.isArray(results)) {
-            // Standard list results (Master, Turtle, etc.)
             dataToExport = results;
         } else if (results.results && Array.isArray(results.results)) {
-            // ISA / Hybrid wrapper
             dataToExport = results.results;
         }
 
@@ -124,38 +88,25 @@ const Screener: React.FC<ScreenerProps> = () => {
             return;
         }
 
-        // 2. Extract Headers dynamically
         const headers = Object.keys(dataToExport[0]);
-
-        // 3. Convert to CSV String
         const csvContent = [
-            headers.join(','), // Header Row
+            headers.join(','),
             ...dataToExport.map(row =>
                 headers.map(header => {
                     let val = row[header];
-                    // Handle nulls/undefined
                     if (val === null || val === undefined) return '';
-                    // Handle strings with commas
                     const valStr = String(val);
-                    if (valStr.includes(',') || valStr.includes('\n')) {
-                        return `"${valStr.replace(/"/g, '""')}"`;
-                    }
+                    if (valStr.includes(',') || valStr.includes('\n')) return `"${valStr.replace(/"/g, '""')}"`;
                     return valStr;
                 }).join(',')
             )
         ].join('\n');
 
-        // 4. Trigger Download
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
         link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
     };
 
     const handleRunScreener = async () => {
@@ -164,7 +115,6 @@ const Screener: React.FC<ScreenerProps> = () => {
         setResults(null);
         try {
             let data;
-            // Map strategy to API call
             if (activeTab === 'master') {
                 const res = await fetch(`/screen/master?region=${region}`);
                 data = await res.json();
@@ -196,7 +146,7 @@ const Screener: React.FC<ScreenerProps> = () => {
             }
             setResults(data);
         } catch (err: any) {
-            setError(err.message || 'Screener failed');
+            setError(err.message || 'Screener failed. Check connection.');
         } finally {
             setLoading(false);
         }
@@ -219,7 +169,6 @@ const Screener: React.FC<ScreenerProps> = () => {
 
     return (
         <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-80px)]">
-            {/* Sidebar */}
             <aside className="hidden md:flex md:flex-col w-64 flex-shrink-0 space-y-3 sticky top-6 h-fit">
                 <h2 className="text-xl font-bold mb-4 px-2 text-gray-900 dark:text-white">Strategies</h2>
                 <div className="grid grid-cols-1 gap-3">
@@ -234,7 +183,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                 </div>
             </aside>
 
-            {/* Mobile Sidebar Toggle */}
+            {/* Mobile Toggle */}
             <button className="md:hidden fixed bottom-6 right-6 z-50 p-4 bg-primary-600 text-white rounded-full shadow-lg" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
             </button>
@@ -252,7 +201,6 @@ const Screener: React.FC<ScreenerProps> = () => {
                 </div>
             )}
 
-            {/* Main Content */}
             <main className="flex-1 w-full max-w-full overflow-hidden">
                 <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-8 rounded-2xl mb-6 shadow-xl relative overflow-hidden">
                     <div className="relative z-10">
@@ -276,10 +224,61 @@ const Screener: React.FC<ScreenerProps> = () => {
                             disabled={loading}
                             className="w-full md:w-auto px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-md disabled:opacity-50 transition-all"
                         >
-                            {loading ? 'Scanning Markets...' : 'Run Screener'}
+                            {loading ? 'Scanning...' : 'Run Screener'}
                         </button>
                     </div>
                 </div>
+
+                {/* --- BACKTEST LAB (Only on Master Tab) --- */}
+                {activeTab === 'master' && (
+                    <div className="mb-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-6 border border-indigo-100 dark:border-indigo-800">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                            Strategy Lab (Backtest)
+                        </h3>
+                        <div className="flex gap-4 items-end">
+                            <div className="flex-1 max-w-xs">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Test Ticker</label>
+                                <input
+                                    type="text"
+                                    value={btTicker}
+                                    onChange={(e) => setBtTicker(e.target.value.toUpperCase())}
+                                    placeholder="e.g. NVDA"
+                                    className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg p-2.5 dark:bg-gray-800 dark:border-gray-600 dark:text-white uppercase font-mono font-bold"
+                                />
+                            </div>
+                            <button
+                                onClick={runBacktest}
+                                disabled={btLoading || !btTicker}
+                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm disabled:opacity-50"
+                            >
+                                {btLoading ? 'Simulating...' : 'Run Backtest'}
+                            </button>
+                        </div>
+
+                        {btResult && !btResult.error && (
+                            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
+                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <div className="text-xs text-gray-500 uppercase">Strategy Return</div>
+                                    <div className={clsx("text-2xl font-bold", btResult.strategy_return > btResult.buy_hold_return ? "text-green-600" : "text-gray-900 dark:text-white")}>
+                                        {btResult.strategy_return}%
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">vs Buy & Hold: {btResult.buy_hold_return}%</div>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <div className="text-xs text-gray-500 uppercase">Win Rate</div>
+                                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{btResult.win_rate}</div>
+                                    <div className="text-xs text-gray-400 mt-1">{btResult.trades} Round Trips</div>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <div className="text-xs text-gray-500 uppercase">Final Equity</div>
+                                    <div className="text-2xl font-bold text-indigo-600">{formatCurrency(btResult.final_equity, '$')}</div>
+                                    <div className="text-xs text-gray-400 mt-1">Start: $10,000</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {error && (
                     <div className="p-4 mb-6 text-sm text-red-800 bg-red-50 dark:bg-red-900/30 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800">
@@ -288,34 +287,23 @@ const Screener: React.FC<ScreenerProps> = () => {
                 )}
 
                 {results && (
-                    <div className="space-y-6 animate-fadeIn">
-                        {/* Download Button Area */}
-                        <div className="flex justify-end">
+                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                            <span className="font-bold text-sm">Found {Array.isArray(results) ? results.length : 'Multiple'} Results</span>
                             <button
                                 onClick={downloadCSV}
-                                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm transition-colors"
+                                className="text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-xs px-4 py-2 dark:bg-green-600 dark:hover:bg-green-700"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 12.75l-3-3m0 0l3-3m-3 3h12" />
-                                </svg>
-                                Download Results CSV
+                                Download CSV ⬇️
                             </button>
                         </div>
-
-                        {/* Table Display */}
-                        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-x-auto">
-                            {/* Render different tables based on format */}
+                        <div className="overflow-x-auto p-4">
                             {activeTab === 'market' ? (
-                                <div className="p-4">
-                                    <h3 className="font-bold mb-2 text-gray-900 dark:text-white">Sector Analysis</h3>
-                                    {/* Market Screener Table Component would go here */}
-                                    <p className="text-gray-500 italic">Market results loaded. Use 'Download CSV' to view full data or check console.</p>
-                                </div>
+                                <pre className="text-xs">{JSON.stringify(results, null, 2)}</pre>
                             ) : (
                                 <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                                     <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                                         <tr>
-                                            {/* Dynamic Headers */}
                                             {results[0] && Object.keys(results[0]).map(key => (
                                                 <th key={key} className="px-4 py-3 whitespace-nowrap">{key.replace(/_/g, ' ')}</th>
                                             ))}
