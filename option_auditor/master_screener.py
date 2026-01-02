@@ -11,15 +11,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("MasterScreener")
 
 # --- CONFIGURATION (HARDENED FOR 100K GBP / 9.5K USD) ---
-ISA_ACCOUNT_SIZE = 100000.0  # GBP
+ISA_ACCOUNT_SIZE = 100000.0 # GBP
 OPTIONS_ACCOUNT_SIZE = 9500.0 # USD
-RISK_PER_TRADE_PCT = 0.0125  # 1.25% Risk (Kelly/Thorp sizing)
+RISK_PER_TRADE_PCT = 0.0125 # 1.25% Risk (Kelly/Thorp sizing)
 
 MARKET_TICKERS = ["SPY", "^VIX"]
 
 # LIQUIDITY GATES - THE 100K RULE
 LIQUIDITY_MIN_VOL_USD = 10_000_000 # Raised to $10M to ensure easy exit
-LIQUIDITY_MIN_VOL_GBP = 500_000    # Raised to £500k to minimize spread cost
+LIQUIDITY_MIN_VOL_GBP = 500_000 # Raised to £500k to minimize spread cost
 LIQUIDITY_MIN_TURNOVER_INR = 150_000_000
 
 class MasterScreener:
@@ -122,7 +122,7 @@ class MasterScreener:
             curr_price = float(close_col.iloc[-1])
             prev_close = float(close_col.iloc[-2])
 
-            # --- FIX: Calculate Change% for Frontend ---
+            # --- METRICS CALCULATION ---
             change_pct = ((curr_price - prev_close) / prev_close) * 100
             change_str = f"{'+' if change_pct > 0 else ''}{change_pct:.2f}%"
 
@@ -201,7 +201,7 @@ class MasterScreener:
             # --- SIZING & EXECUTION ---
             stop_loss = curr_price - (2.5 * atr) # Tightened from 3 ATR
 
-            # --- FIX: Calculate Target (2R) for Frontend ---
+            # Target (2R) for Frontend
             risk_amt = curr_price - stop_loss
             target_price = curr_price + (2 * risk_amt) if risk_amt > 0 else curr_price * 1.10
 
@@ -239,27 +239,30 @@ class MasterScreener:
 
                 action_text = f"Sell Vert Put {short_strike}/{long_strike}"
 
-            # --- FIX: Metrics String for Frontend ---
+            # Metrics String for Frontend
             vol_rel = round(vol_col.iloc[-1] / avg_vol_20, 1)
             metrics_str = f"RSI:{int(rsi)} V:{vol_rel}x"
 
             return {
                 "Ticker": ticker,
                 "Price": round(curr_price, 2),
-                "Change%": change_str,  # REQUIRED by Frontend
+                "Change%": change_str,
                 "Type": type_label,
                 "Setup": setup_name,
                 "Action": action_text,
                 "Stop Loss": round(stop_loss, 2),
-                "Target": round(target_price, 2), # REQUIRED by Frontend
-                "Metrics": metrics_str,           # REQUIRED by Frontend
+                "Target": round(target_price, 2),
+                "Metrics": metrics_str,
                 "Regime": self.regime_color,
-                "sort_key": sort_metric
+                "sort_key": sort_metric,
+
+                # --- FIELDS TO POPULATE EMPTY COLUMNS ---
+                "atr_value": round(atr, 2),
+                "breakout_date": b_date if isa_signal else "-",
+                "pct_change_1d": change_pct
             }
 
         except Exception as e:
-            # We log failures now instead of swallowing them
-            # logger.warning(f"Error processing {ticker}: {e}")
             return None
 
     def run(self):
@@ -282,13 +285,7 @@ class MasterScreener:
                 data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
                 if len(chunk) == 1:
-                    df = data
-                    ticker = chunk[0]
-                    # Robust Handling for Single Ticker MultiIndex
-                    if isinstance(data.columns, pd.MultiIndex) and ticker in data.columns:
-                        df = data[ticker].dropna(how='all')
-
-                    res = self._process_stock(ticker, df)
+                    res = self._process_stock(chunk[0], data)
                     if res: results.append(res)
                 else:
                     for ticker in chunk:
@@ -313,9 +310,11 @@ class MasterScreener:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M")
             filename = f"scan_results_{timestamp}.csv"
 
-            # Reorder columns for readability
-            cols = ["Ticker", "Action", "Price", "Type", "Setup", "Stop Loss", "Target", "Metrics", "Regime"]
-            df_res = df_res[cols]
+            # Reorder columns for readability (Frontend doesn't care about CSV order, just keys)
+            cols = ["Ticker", "Action", "Price", "Type", "Setup", "Stop Loss", "Target", "Metrics", "Regime", "breakout_date", "atr_value"]
+            # Filter to only existing cols to avoid errors if logic changes
+            existing_cols = [c for c in cols if c in df_res.columns]
+            df_res = df_res[existing_cols]
 
             df_res.to_csv(filename, index=False)
             logger.info(f"✅ Results saved to {filename}")
