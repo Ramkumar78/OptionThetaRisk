@@ -211,15 +211,15 @@ def test_parse_tasty_datetime_methods():
 
     from unittest.mock import patch
     with patch("option_auditor.parsers.datetime") as mock_datetime:
-        mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 0)
+        # Use current system year to match dateutil's default behavior
+        current_year = datetime.now().year
+        mock_datetime.now.return_value = datetime(current_year, 1, 1, 12, 0)
         mock_datetime.strptime = datetime.strptime
 
         # Future: Jan 10
-        # "1/10 12:00 p"
-        # parsed -> Jan 10 2025.
-        # Now+2 -> Jan 3 2025.
-        # Jan 10 > Jan 3.
-        # Result -> Jan 10 2024.
+        # "1/10 12:00 p" -> Parsed as Jan 10 {current_year}
+        # Mock Now + 2 days -> Jan 3 {current_year}
+        # Jan 10 > Jan 3 -> Subtract 1 year -> {current_year - 1}
 
         res = parser._parse_tasty_datetime("1/10 12:00 p")
-        assert res.year == 2024
+        assert res.year == current_year - 1
