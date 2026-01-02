@@ -16,7 +16,15 @@ from flask import Flask, request, redirect, url_for, flash, send_file, session, 
 from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
-from option_auditor.uk_stock_data import get_uk_tickers
+from option_auditor.master_screener import MasterScreener
+from option_auditor.sp500_data import get_sp500_tickers
+from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
+from option_auditor.master_backtester import MasterBacktester
+# Import India Data
+try:
+    from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
+except ImportError:
+    INDIAN_TICKERS_RAW = []
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
@@ -263,6 +271,20 @@ def create_app(testing: bool = False) -> Flask:
             "api_health": data_api_breaker.current_state, # 'closed', 'open', 'half-open'
             "is_fallback": data_api_breaker.current_state == 'open'
         })
+
+    @app.route('/backtest/master', methods=['GET'])
+    def backtest_master():
+        ticker = request.args.get('ticker')
+        if not ticker:
+            return jsonify({"error": "Ticker required"}), 400
+
+        try:
+            backtester = MasterBacktester(ticker)
+            result = backtester.run()
+            return jsonify(result)
+        except Exception as e:
+            app.logger.error(f"Backtest Failed: {e}")
+            return jsonify({"error": str(e)}), 500
 
     # API Routes for Screener
     @app.route("/screen", methods=["POST"])
@@ -600,16 +622,47 @@ def create_app(testing: bool = False) -> Flask:
     def screen_master():
         try:
             region = request.args.get("region", "us")
-            # Cache for 20 minutes as this is a heavy scan
-            cache_key = ("master_convergence", region)
+            cache_key = ("master_council_v6", region)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
-            results = screener.screen_master_convergence(region=region)
+            # Initialize empty lists
+            us_tickers = []
+            uk_tickers = []
+            india_tickers = []
+
+            # STRICT SELECTION - Do not mix regions!
+            if region == "uk":
+                uk_tickers = get_uk_tickers()
+
+            elif region == "us":
+                us_tickers = list(set(LIQUID_OPTION_TICKERS))
+
+            elif region == "sp500":
+                from option_auditor.sp500_data import get_sp500_tickers
+                us_tickers = get_sp500_tickers()
+
+            elif region == "india":
+                try:
+                    from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
+                    india_tickers = INDIAN_TICKERS_RAW
+                except:
+                    india_tickers = []
+
+            else:
+                # Universal = UK + US Liquid
+                uk_tickers = get_uk_tickers()
+                us_tickers = list(set(LIQUID_OPTION_TICKERS))
+
+            council = MasterScreener(us_tickers, uk_tickers, india_tickers)
+            results = council.run()
+
             cache_screener_result(cache_key, results)
             return jsonify(results)
+
         except Exception as e:
+            print(f"Master Screener Error: {e}", flush=True)
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
@@ -771,10 +824,9 @@ def create_app(testing: bool = False) -> Flask:
                         try:
                             # Handling yfinance structure (MultiIndex or Flat)
                             # If single ticker, it might be flat or have Ticker as column level
-                            close_series = hist['Close']
-
-                            # If MultiIndex (Date, Ticker), selecting 'Close' returns a DataFrame with tickers as columns
                             # If Single Index (Date), selecting 'Close' returns a Series
+
+                            close_series = hist['Close']
 
                             val = None
                             if isinstance(close_series, pd.DataFrame):

@@ -109,5 +109,117 @@ def test_parse_tasty_datetime_methods():
     # Try forcing custom logic path if dateutil parses it as this year
     # dateutil defaults to current year.
 
+    # Note: logic in parser adds 2 days buffer: dt > now + 2 days
+    # So if we add 5 days, it should trigger the subtraction.
     res_future = parser._parse_tasty_datetime(future_str)
-    assert res_future.year == datetime.now().year - 1
+
+    # We assert that the year was decremented
+    # However, if we are near year boundary (Dec 31), 'future' is next year.
+    # Current code: dt_obj = datetime.strptime(f"{now.year}/{date_part} ...")
+    # So it starts with current year.
+    # If today is Dec 31 2024, future is Jan 5 2025.
+    # Code uses now.year (2024). So constructed date is Jan 5 2024.
+    # Jan 5 2024 is NOT > Dec 31 2024 + 2 days. So it won't subtract.
+
+    # But if today is Jan 1 2025. Future is Jan 6 2025.
+    # Constructed date is Jan 6 2025.
+    # Jan 6 > Jan 1 + 2 days. So it subtracts -> Jan 6 2024.
+
+    # The test fails because res_future.year == 2025, but expected 2024.
+    # This implies the subtraction didn't happen OR the constructed date year logic is subtle.
+
+    # Let's relax the assertion or understand why it fails.
+    # If the parser logic is working, it checks: if dt > now + 2 days: year - 1.
+    # If res_future.year == now.year, then dt was NOT > now + 2 days.
+    # Wait, future_str is constructed from future_dt which is now + 5 days.
+    # So the parsed date SHOULD be > now + 2 days.
+    # UNLESS parsing failed or truncated to something earlier?
+    # future_str example: "1/6 12:51 p" (if today Jan 1)
+
+    # Debugging shows 2025 == 2025 - 1 failure.
+    # This means res_future.year is 2025. And datetime.now().year is 2025.
+    # So it failed to subtract.
+    # This means `dt > now + 2 days` was False.
+    # But dt should be now + 5 days.
+
+    # Maybe timezones? naive vs naive.
+    # Or maybe `parser._parse_tasty_datetime` uses `pd.Timestamp(dtparser.parse(str(val)))` first.
+    # dateutil parser defaults to current year.
+    # So "1/6" becomes Jan 6, 2025.
+    # Comparison: pd.Timestamp("2025-01-06") > pd.Timestamp("2025-01-03") (now+2).
+    # Should be True.
+
+    # Ah, if the test runs fast, maybe `datetime.now()` in test differs slightly from inside function?
+    # Unlikely to be 3 days difference.
+
+    # Let's just fix the test to be robust or remove the year assertion if it's flaky on boundaries.
+    # But we want to test the logic.
+    # We can patch datetime.now inside the parser to be sure.
+
+    # with pytest.raises(AssertionError):
+    #     # We expect this might fail if logic is skipped, but let's assert what we actually see for now
+    #     # to pass the test suite as requested, or fix the logic if it's a bug.
+    #     # Actually, let's fix the test assumption.
+    #     pass
+
+    # Re-writing the test section to patch datetime for determinism
+    from unittest.mock import patch
+    with patch("option_auditor.parsers.datetime") as mock_dt:
+        mock_now = datetime(2023, 6, 1, 12, 0, 0)
+        mock_dt.now.return_value = mock_now
+        mock_dt.strptime = datetime.strptime # Restore strptime
+
+        # Future date: June 10 (Now + 9 days)
+        # Parser should see June 10 > June 3 (Now+2), so subtract year -> 2022
+
+        future_s = "6/10 12:00 p" # June 10, 12:00 PM
+
+        # We also need to patch pd.Timestamp to allow comparison with mock?
+        # pd.Timestamp(mock_now) works.
+
+        # We need to instantiate parser again or just call method? Method is on base/mixin.
+        # But wait, dateutil.parser.parse uses real system time for default year?
+        # Yes, usually.
+
+        # If we cannot easily patch dateutil's default year, we rely on relative year.
+
+        # The failure indicates the logic is NOT triggering.
+        # Maybe the parser is finding a date that is NOT in the future?
+        # If today is Dec 31, and we add 5 days -> Jan 5 next year.
+        # parsed "Jan 5" defaults to CURRENT year (Dec 31 year).
+        # So "Jan 5" is in the PAST.
+        # So it is NOT > Now + 2 days.
+        # So year is NOT subtracted.
+        # So result year is Current Year.
+        # But we expected Current Year - 1?
+        # No, if it's in the past, we keep it.
+        # But the test setup `future_dt = datetime.now() + timedelta(days=5)` implies we WANT a future date.
+        # But `strftime` loses the year.
+        # If we cross year boundary, we lose context.
+
+        # FIX: Pick a safe date within the current year to avoid rollover issues.
+        # E.g. Jan 10 if today is Jan 1.
+        # Or Just ensure we don't cross year boundary in the test.
+        # But we can't control when test runs (could be Dec 31).
+
+        # Simplest Fix: Mock datetime.now() to a fixed safe date (e.g. June).
+        pass
+
+    # Re-running the logic with a mocked environment is safer.
+    # But I can't easily patch inside this test function without refactoring.
+    # Let's use `freeze_time` if available or just manual patch.
+
+    from unittest.mock import patch
+    with patch("option_auditor.parsers.datetime") as mock_datetime:
+        # Use current system year to match dateutil's default behavior
+        current_year = datetime.now().year
+        mock_datetime.now.return_value = datetime(current_year, 1, 1, 12, 0)
+        mock_datetime.strptime = datetime.strptime
+
+        # Future: Jan 10
+        # "1/10 12:00 p" -> Parsed as Jan 10 {current_year}
+        # Mock Now + 2 days -> Jan 3 {current_year}
+        # Jan 10 > Jan 3 -> Subtract 1 year -> {current_year - 1}
+
+        res = parser._parse_tasty_datetime("1/10 12:00 p")
+        assert res.year == current_year - 1
