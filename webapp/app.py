@@ -603,51 +603,24 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/screen/master", methods=["GET"])
+    @app.route('/screen/master', methods=['GET'])
     def screen_master():
         try:
-            region = request.args.get("region", "us")
-            cache_key = ("master_council_v6", region)
-            cached = get_cached_screener_result(cache_key)
-            if cached:
-                return jsonify(cached)
+            region = request.args.get('region', 'us')
 
-            # Initialize empty lists
-            us_tickers = []
-            uk_tickers = []
-            india_tickers = []
+            # Define Tickers based on Region
+            tickers_us = ["NVDA", "TSLA", "AAPL", "AMD", "AMZN", "MSFT", "GOOGL", "META", "NFLX", "COIN", "MSTR", "PLTR", "SOFI", "MARA", "RIOT", "DKNG", "HOOD", "UBER", "ABNB", "RBLX", "NET", "TTD", "UPST", "AFRM", "SHOP", "SQ", "ROKU", "SE", "U", "DDOG", "SNOW", "ZS", "CRWD", "PANW", "FTNT", "NET", "TEAM", "WDAY", "NOW", "INTU", "ADBE", "CRM", "ORCL", "IBM", "CSCO", "INTC", "QCOM", "TXN", "ADI", "NXPI", "MCHP", "ON", "MU", "LRCX", "KLAC", "AMAT", "ASML", "TSM", "AVGO", "NVDA", "AMD", "INTC"]
+            tickers_uk = ["RR.L", "BP.L", "SHELL.L", "HSBA.L", "LLOY.L", "BARC.L", "NWG.L", "VOD.L", "BT-A.L", "GSK.L", "AZN.L", "ULVR.L", "DGE.L", "BATS.L", "IMB.L", "RIO.L", "GLEN.L", "AAL.L", "ANTO.L", "NG.L", "SSE.L", "CNA.L", "UU.L", "SVT.L", "TSCO.L", "SBRY.L", "OCDO.L", "MKS.L", "NXT.L", "JD.L", "ABF.L", "WTB.L", "IAG.L", "EZJ.L", "RYA.L", "WIZZ.L", "TUI.L", "IHG.L", "CPG.L", "EXPN.L", "REL.L", "WPP.L", "INF.L", "PSON.L", "AUTO.L", "RMV.L", "SPX.L", "WEIR.L", "SMIN.L", "GKN.L", "MEL.L", "ROAR.L", "QQ.L"]
 
-            # STRICT SELECTION - Do not mix regions!
-            if region == "uk":
-                uk_tickers = get_uk_tickers()
+            # Initialize and Run
+            screener = MasterScreener(tickers_us, tickers_uk)
+            results = screener.run()
 
-            elif region == "us":
-                us_tickers = list(set(LIQUID_OPTION_TICKERS))
-
-            elif region == "sp500":
-                from option_auditor.sp500_data import get_sp500_tickers
-                us_tickers = get_sp500_tickers()
-
-            elif region == "india":
-                try:
-                    from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
-                    india_tickers = INDIAN_TICKERS_RAW
-                except:
-                    india_tickers = []
-
-            else:
-                # Universal = UK + US Liquid
-                uk_tickers = get_uk_tickers()
-                us_tickers = list(set(LIQUID_OPTION_TICKERS))
-
-            council = MasterScreener(us_tickers, uk_tickers, india_tickers)
-            results = council.run()
-
-            cache_screener_result(cache_key, results)
+            # CRITICAL: Return the results as JSON so the Frontend receives them
             return jsonify(results)
 
         except Exception as e:
-            print(f"Master Screener Error: {e}", flush=True)
+            app.logger.error(f"Master Screener Failed: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
