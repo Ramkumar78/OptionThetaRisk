@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, runFourierScreener, runHybridScreener } from '../api';
 import clsx from 'clsx';
-import { formatCurrency } from '../utils/formatting';
+import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 interface ScreenerProps { }
 
@@ -9,15 +9,15 @@ type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' 
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
     master: { title: "Master Protocol", subtitle: "High Probability Convergences", description: "Combines Regime Filters, Liquidity Gates, and Trend/Vol Logic." },
+    turtle: { title: 'Turtle Trading', subtitle: 'Trend Breakouts', description: 'Classic Trend Following. Buy 20-Day Highs, Exit 10-Day Lows.' },
+    isa: { title: 'ISA Trend', subtitle: 'Long Term Growth', description: 'Investment grade trend following (Price > 200 SMA) with volatility stops.' },
     fortress: { title: "Fortress Options", subtitle: "Income Generation", description: "VIX-Adjusted Bull Put Spreads on liquid US tickers." },
     quantum: { title: 'Quantum Screener', subtitle: 'Statistical Regimes', description: 'Hurst Exponent & Entropy analysis for regime detection.' },
     market: { title: 'Market Screener', subtitle: 'Volatility & RSI', description: 'Scans for IV Rank and RSI extremes.' },
-    turtle: { title: 'Turtle Trading', subtitle: 'Trend Breakouts', description: '20-Day Donchian Channel Breakouts.' },
     darvas: { title: 'Darvas Box', subtitle: 'Momentum Boxes', description: 'Consolidation breakouts near 52-week highs.' },
     mms: { title: 'MMS / OTE', subtitle: 'Smart Money', description: 'Market Maker Models & Optimal Trade Entries.' },
     ema: { title: 'EMA Crossovers', subtitle: 'Trend Following', description: '5/13 & 5/21 EMA Crossovers.' },
     bull_put: { title: 'Bull Put (Classic)', subtitle: 'Credit Spreads', description: 'Standard bullish credit spreads.' },
-    isa: { title: 'ISA Trend', subtitle: 'Long Term Growth', description: 'Investment grade trend following (Price > 200 SMA).' },
     fourier: { title: 'Harmonic Cycles', subtitle: 'Swing Timing', description: 'Cycle analysis to find market bottoms.' },
     hybrid: { title: 'Hybrid', subtitle: 'Trend + Cycle', description: 'Combines ISA Trend with Fourier Timing.' }
 };
@@ -58,12 +58,13 @@ const Screener: React.FC<ScreenerProps> = () => {
         setBtLoading(true);
         setBtResult(null);
         try {
-            const res = await fetch(`/backtest/master?ticker=${btTicker}`);
+            // Use the generic /backtest/run endpoint
+            const res = await fetch(`/backtest/run?ticker=${btTicker}&strategy=${activeTab}`);
             const data = await res.json();
             if (data.error) throw new Error(data.error);
             setBtResult(data);
         } catch (err: any) {
-            alert(err.message);
+            alert(err.message || 'Backtest failed');
         } finally {
             setBtLoading(false);
         }
@@ -146,7 +147,7 @@ const Screener: React.FC<ScreenerProps> = () => {
             }
             setResults(data);
         } catch (err: any) {
-            setError(err.message || 'Screener failed. Check connection.');
+            setError(err.message || 'Screener failed. Ensure backend is running.');
         } finally {
             setLoading(false);
         }
@@ -154,10 +155,10 @@ const Screener: React.FC<ScreenerProps> = () => {
 
     const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
         { id: 'master', label: '⚡ Master Screen', subLabel: 'Best of All' },
+        { id: 'isa', label: 'ISA Trend', subLabel: 'Growth' },
+        { id: 'turtle', label: 'Turtle Trading', subLabel: 'Classic' },
         { id: 'fortress', label: 'Options: Fortress', subLabel: 'Income' },
         { id: 'quantum', label: 'Quantum', subLabel: 'Stats' },
-        { id: 'isa', label: 'ISA Trend', subLabel: 'Growth' },
-        { id: 'turtle', label: 'Turtle Trading' },
         { id: 'bull_put', label: 'Bull Put Spreads' },
         { id: 'market', label: 'Market Scanner' },
         { id: 'fourier', label: 'Fourier Cycles' },
@@ -166,6 +167,9 @@ const Screener: React.FC<ScreenerProps> = () => {
         { id: 'mms', label: 'MMS / SMC' },
         { id: 'ema', label: 'EMA Cross' },
     ];
+
+    // Check if current tab supports backtesting
+    const showBacktest = ['master', 'turtle', 'isa'].includes(activeTab);
 
     return (
         <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-80px)]">
@@ -177,7 +181,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                             key={tab.id}
                             tab={tab}
                             active={activeTab === tab.id}
-                            onClick={(id) => { setActiveTab(id); setResults(null); }}
+                            onClick={(id) => { setActiveTab(id); setResults(null); setBtResult(null); }}
                         />
                     ))}
                 </div>
@@ -192,7 +196,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                     <h2 className="text-xl font-bold text-white mb-4">Select Strategy</h2>
                     <div className="space-y-2">
                         {tabs.map(tab => (
-                            <div key={tab.id} onClick={() => { setActiveTab(tab.id); setIsSidebarOpen(false); }} className="p-3 bg-gray-800 text-white rounded-lg border border-gray-700">
+                            <div key={tab.id} onClick={() => { setActiveTab(tab.id); setIsSidebarOpen(false); setResults(null); }} className="p-3 bg-gray-800 text-white rounded-lg border border-gray-700">
                                 {tab.label}
                             </div>
                         ))}
@@ -229,12 +233,12 @@ const Screener: React.FC<ScreenerProps> = () => {
                     </div>
                 </div>
 
-                {/* --- BACKTEST LAB (Only on Master Tab) --- */}
-                {activeTab === 'master' && (
+                {/* --- STRATEGY LAB (BACKTESTER) --- */}
+                {showBacktest && (
                     <div className="mb-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-6 border border-indigo-100 dark:border-indigo-800">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                             <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-                            Strategy Lab (Backtest)
+                            Strategy Lab: {screenerInfo[activeTab].title}
                         </h3>
                         <div className="flex gap-4 items-end">
                             <div className="flex-1 max-w-xs">
@@ -275,6 +279,30 @@ const Screener: React.FC<ScreenerProps> = () => {
                                     <div className="text-2xl font-bold text-indigo-600">{formatCurrency(btResult.final_equity, '$')}</div>
                                     <div className="text-xs text-gray-400 mt-1">Start: $10,000</div>
                                 </div>
+                            </div>
+                        )}
+                        {btResult && btResult.log && (
+                            <div className="mt-4 overflow-x-auto">
+                                <table className="w-full text-xs text-left text-gray-500 dark:text-gray-400">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                                        <tr>
+                                            <th className="px-2 py-1">Date</th>
+                                            <th className="px-2 py-1">Type</th>
+                                            <th className="px-2 py-1 text-right">Price</th>
+                                            <th className="px-2 py-1 text-right">Info</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {btResult.log.map((trade: any, idx: number) => (
+                                            <tr key={idx} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                                                <td className="px-2 py-1">{trade.date}</td>
+                                                <td className={clsx("px-2 py-1 font-bold", trade.type === 'BUY' ? 'text-green-600' : 'text-red-600')}>{trade.type}</td>
+                                                <td className="px-2 py-1 text-right">{trade.price}</td>
+                                                <td className="px-2 py-1 text-right">{trade.reason || trade.stop}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         )}
                     </div>

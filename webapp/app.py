@@ -19,7 +19,7 @@ from option_auditor.uk_stock_data import get_uk_tickers
 from option_auditor.master_screener import MasterScreener
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
-from option_auditor.master_backtester import MasterBacktester
+from option_auditor.unified_backtester import UnifiedBacktester
 # Import India Data
 try:
     from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
@@ -272,14 +272,16 @@ def create_app(testing: bool = False) -> Flask:
             "is_fallback": data_api_breaker.current_state == 'open'
         })
 
-    @app.route('/backtest/master', methods=['GET'])
-    def backtest_master():
+    @app.route('/backtest/run', methods=['GET'])
+    def run_backtest():
         ticker = request.args.get('ticker')
+        strategy = request.args.get('strategy', 'master') # master, turtle, isa
+
         if not ticker:
             return jsonify({"error": "Ticker required"}), 400
 
         try:
-            backtester = MasterBacktester(ticker)
+            backtester = UnifiedBacktester(ticker, strategy_type=strategy)
             result = backtester.run()
             return jsonify(result)
         except Exception as e:
