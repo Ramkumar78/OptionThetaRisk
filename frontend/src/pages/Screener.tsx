@@ -249,8 +249,8 @@ const Screener: React.FC<ScreenerProps> = () => {
                             <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                             Strategy Lab: {screenerInfo[activeTab].title}
                         </h3>
-                        <div className="flex gap-4 items-end">
-                            <div className="flex-1 max-w-xs">
+                        <div className="flex flex-col sm:flex-row gap-4 items-end">
+                            <div className="flex-1 w-full sm:w-auto">
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Test Ticker</label>
                                 <input
                                     type="text"
@@ -263,55 +263,72 @@ const Screener: React.FC<ScreenerProps> = () => {
                             <button
                                 onClick={runBacktest}
                                 disabled={btLoading || !btTicker}
-                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm disabled:opacity-50"
+                                className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm disabled:opacity-50"
                             >
                                 {btLoading ? 'Simulating...' : 'Run Backtest'}
                             </button>
                         </div>
 
                         {btResult && !btResult.error && (
-                            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
-                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <div className="text-xs text-gray-500 uppercase">Strategy Return</div>
-                                    <div className={clsx("text-2xl font-bold", btResult.strategy_return > btResult.buy_hold_return ? "text-green-600" : "text-gray-900 dark:text-white")}>
-                                        {btResult.strategy_return}%
+                            <div className="mt-6 space-y-4 animate-fadeIn">
+                                {/* Date Range Header */}
+                                <div className="flex justify-between items-center text-xs text-gray-500 border-b border-gray-200 dark:border-gray-700 pb-2">
+                                    <span>Backtest Period:</span>
+                                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{btResult.start_date} → {btResult.end_date}</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                        <div className="text-xs text-gray-500 uppercase">Strategy Return</div>
+                                        <div className={clsx("text-2xl font-bold", btResult.strategy_return > btResult.buy_hold_return ? "text-green-600" : "text-gray-900 dark:text-white")}>
+                                            {btResult.strategy_return}%
+                                        </div>
+                                        <div className="text-xs text-gray-400 mt-1">vs Buy & Hold: {btResult.buy_hold_return}%</div>
                                     </div>
-                                    <div className="text-xs text-gray-400 mt-1">vs Buy & Hold: {btResult.buy_hold_return}%</div>
+                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                        <div className="text-xs text-gray-500 uppercase">Win Rate</div>
+                                        <div className="text-2xl font-bold text-gray-900 dark:text-white">{btResult.win_rate}</div>
+                                        <div className="text-xs text-gray-400 mt-1">{btResult.trades} Round Trips</div>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                        <div className="text-xs text-gray-500 uppercase">Final Equity</div>
+                                        <div className="text-2xl font-bold text-indigo-600">{formatCurrency(btResult.final_equity, '$')}</div>
+                                        <div className="text-xs text-gray-400 mt-1">Start: $10,000</div>
+                                    </div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <div className="text-xs text-gray-500 uppercase">Win Rate</div>
-                                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{btResult.win_rate}</div>
-                                    <div className="text-xs text-gray-400 mt-1">{btResult.trades} Round Trips</div>
-                                </div>
-                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <div className="text-xs text-gray-500 uppercase">Final Equity</div>
-                                    <div className="text-2xl font-bold text-indigo-600">{formatCurrency(btResult.final_equity, '$')}</div>
-                                    <div className="text-xs text-gray-400 mt-1">Start: $10,000</div>
-                                </div>
-                            </div>
-                        )}
-                        {btResult && btResult.log && (
-                            <div className="mt-4 overflow-x-auto max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-                                <table className="w-full text-xs text-left text-gray-500 dark:text-gray-400">
-                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0">
-                                        <tr>
-                                            <th className="px-2 py-1">Date</th>
-                                            <th className="px-2 py-1">Type</th>
-                                            <th className="px-2 py-1 text-right">Price</th>
-                                            <th className="px-2 py-1 text-right">Info</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {btResult.log.map((trade: any, idx: number) => (
-                                            <tr key={idx} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
-                                                <td className="px-2 py-1">{trade.date}</td>
-                                                <td className={clsx("px-2 py-1 font-bold", trade.type === 'BUY' ? 'text-green-600' : 'text-red-600')}>{trade.type}</td>
-                                                <td className="px-2 py-1 text-right">{trade.price}</td>
-                                                <td className="px-2 py-1 text-right">{trade.reason || trade.stop}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+
+                                {btResult.log && (
+                                    <div className="mt-4">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Trade Log ({btResult.log.length} Transactions)</h4>
+                                        <div className="overflow-y-auto max-h-60 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
+                                            <table className="w-full text-xs text-left text-gray-500 dark:text-gray-400">
+                                                <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
+                                                    <tr>
+                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800">Date</th>
+                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800">Type</th>
+                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-right">Price</th>
+                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-right">Context</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                                                    {btResult.log.map((trade: any, idx: number) => (
+                                                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                            <td className="px-3 py-2 font-mono">{trade.date}</td>
+                                                            <td className="px-3 py-2">
+                                                                <span className={clsx("px-1.5 py-0.5 rounded text-[10px] font-bold",
+                                                                    trade.type === 'BUY' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400')}>
+                                                                    {trade.type}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-300">{trade.price}</td>
+                                                            <td className="px-3 py-2 text-right text-gray-500 italic">{trade.reason || `Stop: ${trade.stop}`}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
