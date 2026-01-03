@@ -277,18 +277,23 @@ const Screener: React.FC<ScreenerProps> = () => {
                                     <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{btResult.start_date} → {btResult.end_date}</span>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                                         <div className="text-xs text-gray-500 uppercase">Strategy Return</div>
                                         <div className={clsx("text-2xl font-bold", btResult.strategy_return > btResult.buy_hold_return ? "text-green-600" : "text-gray-900 dark:text-white")}>
                                             {btResult.strategy_return}%
                                         </div>
-                                        <div className="text-xs text-gray-400 mt-1">vs Buy & Hold: {btResult.buy_hold_return}%</div>
+                                        <div className="text-xs text-gray-400 mt-1">vs Buy & Hold: {btResult.buy_hold_return}% ({btResult.buy_hold_days}d)</div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                                         <div className="text-xs text-gray-500 uppercase">Win Rate</div>
                                         <div className="text-2xl font-bold text-gray-900 dark:text-white">{btResult.win_rate}</div>
                                         <div className="text-xs text-gray-400 mt-1">{btResult.trades} Round Trips</div>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                        <div className="text-xs text-gray-500 uppercase">Avg Duration</div>
+                                        <div className="text-2xl font-bold text-blue-600">{btResult.avg_days_held}d</div>
+                                        <div className="text-xs text-gray-400 mt-1">Per Trade</div>
                                     </div>
                                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                                         <div className="text-xs text-gray-500 uppercase">Final Equity</div>
@@ -307,6 +312,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                                                         <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800">Date</th>
                                                         <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800">Type</th>
                                                         <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-right">Price</th>
+                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-center">Duration</th>
                                                         <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-right">Context</th>
                                                     </tr>
                                                 </thead>
@@ -321,6 +327,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                                                                 </span>
                                                             </td>
                                                             <td className="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-300">{trade.price}</td>
+                                                            <td className="px-3 py-2 text-center text-gray-500">{trade.days !== '-' ? `${trade.days}d` : '-'}</td>
                                                             <td className="px-3 py-2 text-right text-gray-500 italic">{trade.reason || `Stop: ${trade.stop}`}</td>
                                                         </tr>
                                                     ))}
