@@ -29,3 +29,5 @@ def get_sp500_tickers():
         logger.error(f"Error loading S&P 500 from constants: {e}")
         # Fallback to a small liquid list if constants file is broken
         return ["SPY", "QQQ", "IWM", "NVDA", "MSFT", "AAPL"]
+
+SP500_TICKERS = get_sp500_tickers()
