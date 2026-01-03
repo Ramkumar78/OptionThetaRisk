@@ -34,6 +34,7 @@ def create_mock_df():
     # High is just slightly above Close, Low slightly below
     high = [p + 0.5 for p in price]
     low = [p - 0.5 for p in price]
+    open_p = [p - 0.1 for p in price] # Open slightly below close (Green candles)
 
     # Create SPY (Bullish Regime)
     spy_price = np.linspace(300, 450, 750)
@@ -45,12 +46,14 @@ def create_mock_df():
         ('Close', 'TEST'): price,
         ('High', 'TEST'): high,
         ('Low', 'TEST'): low,
+        ('Open', 'TEST'): open_p,
         ('Volume', 'TEST'): [1000000] * 750,
         ('Close', 'SPY'): spy_price,
         ('Close', '^VIX'): vix_price,
         ('High', 'SPY'): spy_price, # Dummy
         ('Low', 'SPY'): spy_price, # Dummy
         ('Volume', 'SPY'): [1] * 750, # Dummy
+        ('Open', 'SPY'): spy_price, # Dummy
     }
 
     # MultiIndex Columns as expected by yfinance
@@ -72,6 +75,7 @@ def test_fetch_data_success(mock_yf_download):
     assert "close" in df.columns
     assert "spy" in df.columns
     assert "vix" in df.columns
+    assert "open" in df.columns
 
 def test_fetch_data_failure(mock_yf_download):
     mock_yf_download.side_effect = Exception("API Error")
@@ -88,6 +92,7 @@ def test_calculate_indicators():
         'close': np.linspace(100, 150, 250),
         'high': np.linspace(102, 152, 250),
         'low': np.linspace(98, 148, 250),
+        'open': np.linspace(99, 149, 250),
         'volume': [1000] * 250,
         'spy': np.linspace(300, 400, 250),
         'vix': [15] * 250

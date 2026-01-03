@@ -24,11 +24,12 @@ class TestUnifiedBacktesterNew(unittest.TestCase):
             'Close': close,
             'High': close + 5,
             'Low': close - 5,
+            'Open': close, # Simplified
             'Volume': np.ones(1000) * 1000000
         }, index=dates)
 
         # Create MultiIndex columns as expected by the new yf
-        columns = pd.MultiIndex.from_product([['Close', 'High', 'Low', 'Volume'], [self.ticker, 'SPY', '^VIX']])
+        columns = pd.MultiIndex.from_product([['Close', 'High', 'Low', 'Open', 'Volume'], [self.ticker, 'SPY', '^VIX']])
         # Just replicate data for all columns for simplicity
         mock_df = pd.DataFrame(np.tile(data.values, (1, 3)), index=dates, columns=columns)
 
@@ -66,9 +67,10 @@ class TestUnifiedBacktesterNew(unittest.TestCase):
             'Close': close,
             'High': close + 5,
             'Low': close - 5,
+            'Open': close,
             'Volume': np.ones(1000) * 1000000
         }, index=dates)
-        columns = pd.MultiIndex.from_product([['Close', 'High', 'Low', 'Volume'], [self.ticker, 'SPY', '^VIX']])
+        columns = pd.MultiIndex.from_product([['Close', 'High', 'Low', 'Open', 'Volume'], [self.ticker, 'SPY', '^VIX']])
         mock_df = pd.DataFrame(np.tile(data.values, (1, 3)), index=dates, columns=columns)
         mock_download.return_value = mock_df
 
