@@ -16,7 +16,7 @@ class UnifiedBacktester:
         self.shares = 0
         self.state = "OUT"
         self.trade_log = []
-        self.entry_date = None  # Track entry date for duration calc
+        self.entry_date = None
 
     def fetch_data(self):
         try:
@@ -28,6 +28,7 @@ class UnifiedBacktester:
                 close = data['Close']
                 high = data['High']
                 low = data['Low']
+                open_price = data['Open']
                 vol = data['Volume']
             else:
                 return None
@@ -40,6 +41,7 @@ class UnifiedBacktester:
                 'close': get_series(close, self.ticker),
                 'high': get_series(high, self.ticker),
                 'low': get_series(low, self.ticker),
+                'open': get_series(open_price, self.ticker),
                 'volume': get_series(vol, self.ticker),
                 'spy': get_series(close, 'SPY'),
                 'vix': get_series(close, '^VIX')
@@ -55,20 +57,44 @@ class UnifiedBacktester:
         df['sma200'] = df['close'].rolling(200).mean()
         df['sma50'] = df['close'].rolling(50).mean()
         df['sma150'] = df['close'].rolling(150).mean()
-        df['sma20'] = df['close'].rolling(20).mean() # For fast re-entry
+        df['sma20'] = df['close'].rolling(20).mean()
 
-        # --- Volatility ---
+        # --- Volatility & ATR ---
         df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
 
-        # --- Market Regime ---
-        df['spy_sma200'] = df['spy'].rolling(200).mean()
+        # --- NEW MASTER PROTOCOL METRICS ---
 
-        # --- Breakout Channels ---
-        # Donchian Channels (shifted by 1 to represent "Yesterday's" levels)
+        # 1. Relative Strength (RS) vs SPY (Mansfield Proxy)
+        # Ratio of Stock/SPY compared to 60 days ago
+        rs_ratio = df['close'] / df['spy']
+        df['rs_score'] = (rs_ratio / rs_ratio.shift(60)) - 1.0
+
+        # 2. Volatility Contraction Pattern (VCP)
+        # Ratio of 10-day StdDev to 50-day StdDev
+        vol_10 = df['close'].rolling(10).std()
+        vol_50 = df['close'].rolling(50).std()
+        df['vcp_ratio'] = vol_10 / vol_50
+
+        # 3. Volume Metrics
+        df['vol_avg_20'] = df['volume'].rolling(20).mean()
+
+        # Pocket Pivot Helper: Max Down Volume in last 10 days
+        # We define "Down Day" as close < previous close
+        # We need a rolling window max of volume ONLY on down days.
+        # Easier approximation: Max volume of last 10 days, checked in loop or mostly accurate here.
+        # Strict vectorization of "Max Down Vol" is complex, we will approximate in loop or use a column.
+        is_down = df['close'] < df['close'].shift(1)
+        down_vol = df['volume'].where(is_down, 0)
+        df['max_down_vol_10'] = down_vol.rolling(10).max().shift(1) # Shift 1 to represent "Prior 10 days"
+
+        # --- Breakout Channels (Legacy/Turtle Support) ---
         df['high_20'] = df['high'].rolling(20).max().shift(1)
         df['low_10'] = df['low'].rolling(10).min().shift(1)
         df['high_50'] = df['high'].rolling(50).max().shift(1)
         df['low_20'] = df['low'].rolling(20).min().shift(1)
+
+        # --- Market Regime ---
+        df['spy_sma200'] = df['spy'].rolling(200).mean()
 
         return df.dropna()
 
@@ -79,24 +105,18 @@ class UnifiedBacktester:
         df = self.calculate_indicators(df)
 
         # --- EXACT SIMULATION WINDOW ---
-        # We start exactly 2 years ago
         start_date = pd.Timestamp.now() - pd.Timedelta(days=730)
         sim_data = df[df.index >= start_date].copy()
 
         if sim_data.empty: return {"error": "Not enough history"}
 
-        # Get Actual Start/End Dates for Report
         actual_start_str = sim_data.index[0].strftime('%Y-%m-%d')
         actual_end_str = sim_data.index[-1].strftime('%Y-%m-%d')
-
-        # Calculate Buy & Hold Duration
         buy_hold_days = (sim_data.index[-1] - sim_data.index[0]).days
 
         # --- FAIR COMPARISON: BUY & HOLD ---
-        # Invest 100% of capital on Day 1 Open/Close
         initial_price = sim_data['close'].iloc[0]
         final_price = sim_data['close'].iloc[-1]
-
         bnh_shares = int(self.initial_capital / initial_price)
         bnh_final_value = self.initial_capital - (bnh_shares * initial_price) + (bnh_shares * final_price)
         bnh_return = ((bnh_final_value - self.initial_capital) / self.initial_capital) * 100
@@ -110,8 +130,6 @@ class UnifiedBacktester:
             sell_signal = False
             current_stop_reason = "STOP"
 
-            # --- COMMON CONDITIONS ---
-            is_bullish_market = (row['spy'] > row['spy_sma200']) and (row['vix'] < 25)
             is_strong_trend = (price > row['sma50'] > row['sma150'] > row['sma200'])
 
             # ==============================
@@ -119,26 +137,33 @@ class UnifiedBacktester:
             # ==============================
 
             if self.strategy_type == 'master':
-                # 1. Breakout Entry: New 20 Day High
-                is_breakout = price > row['high_20']
+                # --- NEW MASTER PROTOCOL ---
 
-                # 2. Re-Entry Protocol: If Trend is Intact (>50, >150, >200) but we are flat,
-                #    enter on SMA 20 Cross instead of waiting for High 20.
-                is_reentry = (price > row['sma20']) and is_strong_trend
+                # 1. Edge Criteria
+                has_rs_edge = row['rs_score'] > 0.0 # Outperforming SPY over last quarter
+                is_squeeze = row['vcp_ratio'] < 0.60 # Volatility Compression
 
-                # Combined Buy Logic
-                if is_bullish_market and (is_breakout or is_reentry) and is_strong_trend:
+                # 2. Volume Demand
+                vol_spike = row['volume'] > (1.5 * row['vol_avg_20'])
+                # FIX: Pocket Pivot requires higher close than recent down day, and generally a green day (Close > Open)
+                # Original provided code had logical error: price > row['close'] which is impossible.
+                # Assuming intent was "Price > Open" (Green Day)
+                pocket_pivot = (row['volume'] > row['max_down_vol_10']) and (row['close'] > row['open'])
+                has_demand = vol_spike or pocket_pivot
+
+                # 3. Entry Trigger
+                # We buy if we have Squeeze + RS Edge + Demand + Trend
+                if is_strong_trend and has_rs_edge and is_squeeze and has_demand:
                     buy_signal = True
 
-                # Exit Logic: Trend Break or Stop
-                if price < row['sma200']:
+                # Exit Logic (Master): Trailing Stop or Trend Break
+                if price < row['sma50']: # Tighter exit for VCP (Trend following)
                     sell_signal = True
-                    current_stop_reason = "TREND BREAK (<200)"
+                    current_stop_reason = "TREND BREAK (<50)"
 
             elif self.strategy_type == 'turtle':
-                if price > row['high_20']:
-                    buy_signal = True
-
+                # Classic Donchian
+                if price > row['high_20']: buy_signal = True
                 if self.state == "IN" and price < row['low_10']:
                     sell_signal = True
                     current_stop_reason = "10d LOW EXIT"
@@ -146,10 +171,7 @@ class UnifiedBacktester:
             elif self.strategy_type == 'isa':
                 is_breakout_50 = price > row['high_50']
                 is_isa_reentry = (price > row['sma50']) and (price > row['sma200'])
-
-                if (price > row['sma200']) and (is_breakout_50 or is_isa_reentry):
-                    buy_signal = True
-
+                if (price > row['sma200']) and (is_breakout_50 or is_isa_reentry): buy_signal = True
                 if self.state == "IN" and price < row['low_20']:
                     sell_signal = True
                     current_stop_reason = "20d LOW EXIT"
@@ -162,14 +184,15 @@ class UnifiedBacktester:
                 self.shares = int(self.equity / price)
                 self.equity -= (self.shares * price)
                 self.state = "IN"
-                self.entry_date = date # Capture Entry Date
+                self.entry_date = date
 
                 # Set Initial Stop
                 if self.strategy_type == 'master':
-                    stop_loss = price - (2.5 * row['atr'])
+                    # VCP Stops are tight: Low of recent volatility (approx 0.5 ATR or low of day)
+                    stop_loss = price - (1.5 * row['atr'])
                 elif self.strategy_type == 'isa':
                     stop_loss = row['low_20']
-                else: # Turtle
+                else:
                     stop_loss = row['low_10']
 
                 self.trade_log.append({
@@ -181,9 +204,8 @@ class UnifiedBacktester:
             elif self.state == "IN":
                 # Trailing Stop Management
                 if self.strategy_type == 'master':
-                    atr_stop = price - (2.5 * row['atr'])
-                    donchian_stop = row['low_20']
-                    new_stop = max(atr_stop, donchian_stop)
+                    # Master VCP trails the 20MA or Breakeven aggressively
+                    new_stop = max(stop_loss, row['sma20']) # Trail 20MA
                     if new_stop > stop_loss: stop_loss = new_stop
 
                 elif self.strategy_type == 'isa':
@@ -200,9 +222,7 @@ class UnifiedBacktester:
                     self.shares = 0
                     self.state = "OUT"
 
-                    # Calculate Days Held
                     days_held = (date - self.entry_date).days
-
                     reason = current_stop_reason if sell_signal else "STOP HIT"
 
                     self.trade_log.append({
@@ -212,11 +232,9 @@ class UnifiedBacktester:
                         "days": days_held
                     })
 
-        # Final Valuation
         final_eq = self.equity + (self.shares * final_price)
         strat_return = ((final_eq - self.initial_capital) / self.initial_capital) * 100
 
-        # Calculate Average Days Held
         sell_trades = [t['days'] for t in self.trade_log if t['type'] == 'SELL' and isinstance(t['days'], int)]
         avg_days_held = round(sum(sell_trades) / len(sell_trades)) if sell_trades else 0
 

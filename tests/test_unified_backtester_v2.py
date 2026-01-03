@@ -44,6 +44,7 @@ def create_reentry_mock_df():
 
     high = price + 2
     low = price - 2
+    open_p = price # Simple open = close for this test
 
     # SPY: Bullish
     spy = np.linspace(300, 500, 800)
@@ -54,12 +55,14 @@ def create_reentry_mock_df():
         ('Close', 'TEST'): price,
         ('High', 'TEST'): high,
         ('Low', 'TEST'): low,
+        ('Open', 'TEST'): open_p,
         ('Volume', 'TEST'): [1000000] * 800,
         ('Close', 'SPY'): spy,
         ('Close', '^VIX'): vix,
         # Dummy cols for SPY/VIX extra levels
         ('High', 'SPY'): spy,
         ('Low', 'SPY'): spy,
+        ('Open', 'SPY'): spy,
         ('Volume', 'SPY'): [1] * 800,
     }
 
@@ -99,25 +102,13 @@ def test_exact_date_alignment(mock_yf_download):
     mock_yf_download.return_value = mock_df
 
     bt = UnifiedBacktester("TEST", strategy_type="master")
-    bt.fetch_data = MagicMock(return_value=bt.calculate_indicators(bt.fetch_data()))
+    # We need to ensure fetch_data returns the mock DF
+    # Note: calculate_indicators is a method, not a mock, so we can't easily mock fetch_data to call it.
+    # But we can just rely on the mock_yf_download and run the real methods.
 
-    # Actually, let's just run it and check the 'period' in result
     result = bt.run()
-    # The 'period' key was removed in favor of start_date/end_date in the new implementation
-    # or it is there but maybe I removed it?
-    # Let's check the implementation I wrote.
-    # Ah, I see in my implementation I removed "period": "2 Years (Fixed)"
-    # and replaced it with start_date and end_date in the return dictionary.
-    # Wait, looking at the code I wrote for unified_backtester.py:
-    # return {
-    #     "ticker": self.ticker,
-    #     "strategy": self.strategy_type.upper(),
-    #     "start_date": actual_start_str,
-    #     "end_date": actual_end_str,
-    #     ...
-    # }
-    # So 'period' key is gone. I should update the test to check start_date/end_date.
 
+    # Check start_date and end_date keys exist
     assert "start_date" in result
     assert "end_date" in result
 
