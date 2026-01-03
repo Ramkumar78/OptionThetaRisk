@@ -19,11 +19,10 @@ class UnifiedBacktester:
 
     def fetch_data(self):
         try:
-            # We need SPY/VIX for Master/ISA regimes, just Ticker for Turtle
+            # Fetch 3 years to ensure 200 SMA is ready before the 2-year backtest starts
             symbols = [self.ticker, "SPY", "^VIX"]
             data = yf.download(symbols, period="3y", auto_adjust=True, progress=False)
 
-            # Handle MultiIndex vs Single Index
             if isinstance(data.columns, pd.MultiIndex):
                 close = data['Close']
                 high = data['High']
@@ -32,10 +31,9 @@ class UnifiedBacktester:
             else:
                 return None
 
-            # Safe extraction
             def get_series(df, sym):
                 if sym in df.columns: return df[sym]
-                return df.iloc[:, 0] # Fallback
+                return df.iloc[:, 0]
 
             df = pd.DataFrame({
                 'close': get_series(close, self.ticker),
@@ -52,26 +50,24 @@ class UnifiedBacktester:
             return None
 
     def calculate_indicators(self, df):
-        # --- Common Indicators ---
+        # --- Trend Moving Averages ---
         df['sma200'] = df['close'].rolling(200).mean()
         df['sma50'] = df['close'].rolling(50).mean()
         df['sma150'] = df['close'].rolling(150).mean()
+        df['sma20'] = df['close'].rolling(20).mean() # NEW: For fast re-entry
+
+        # --- Volatility ---
         df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
 
         # --- Market Regime ---
         df['spy_sma200'] = df['spy'].rolling(200).mean()
 
-        # --- Strategy Specifics ---
-
-        # 1. Turtle (20 High / 10 Low)
+        # --- Breakout Channels ---
+        # Donchian Channels (shifted by 1 to represent "Yesterday's" levels)
         df['high_20'] = df['high'].rolling(20).max().shift(1)
         df['low_10'] = df['low'].rolling(10).min().shift(1)
-
-        # 2. ISA (50 High / 20 Low)
         df['high_50'] = df['high'].rolling(50).max().shift(1)
         df['low_20'] = df['low'].rolling(20).min().shift(1)
-
-        # 3. Master (Minervini Trend) is covered by SMAs above
 
         return df.dropna()
 
@@ -81,17 +77,24 @@ class UnifiedBacktester:
 
         df = self.calculate_indicators(df)
 
-        # Simulation Window (Last 2 Years)
-        start_date = pd.Timestamp.now() - pd.DateOffset(years=2)
+        # --- EXACT SIMULATION WINDOW ---
+        # We start exactly 2 years ago (730 days)
+        start_date = pd.Timestamp.now() - pd.Timedelta(days=730)
         sim_data = df[df.index >= start_date].copy()
 
         if sim_data.empty: return {"error": "Not enough history"}
 
-        # Buy & Hold Logic
+        # --- FAIR COMPARISON: BUY & HOLD ---
+        # Assumes buying at the Open of the first available day in the window
         initial_price = sim_data['close'].iloc[0]
         final_price = sim_data['close'].iloc[-1]
-        bnh_return = ((final_price - initial_price) / initial_price) * 100
 
+        # Calculate max shares we could buy on day 1
+        bnh_shares = int(self.initial_capital / initial_price)
+        bnh_final_value = self.initial_capital - (bnh_shares * initial_price) + (bnh_shares * final_price)
+        bnh_return = ((bnh_final_value - self.initial_capital) / self.initial_capital) * 100
+
+        # --- STRATEGY LOOP ---
         stop_loss = 0.0
 
         for date, row in sim_data.iterrows():
@@ -100,27 +103,34 @@ class UnifiedBacktester:
             sell_signal = False
             current_stop_reason = "STOP"
 
+            # --- COMMON CONDITIONS ---
+            is_bullish_market = (row['spy'] > row['spy_sma200']) and (row['vix'] < 25)
+            # Minervini Trend: Price > 50 > 150 > 200
+            is_strong_trend = (price > row['sma50'] > row['sma150'] > row['sma200'])
+
             # ==============================
-            # STRATEGY LOGIC SWITCH
+            # STRATEGY LOGIC
             # ==============================
 
             if self.strategy_type == 'master':
-                # RULES: Bullish Market + Minervini Trend + 20d Breakout
-                is_bullish_market = (row['spy'] > row['spy_sma200']) and (row['vix'] < 25)
-                is_trending = (price > row['sma50'] > row['sma150'] > row['sma200'])
+                # 1. Breakout Entry: New 20 Day High
                 is_breakout = price > row['high_20']
 
-                if is_bullish_market and is_trending and is_breakout:
-                    buy_signal = True
-                    # Master uses 2.5 ATR trailing or Low 20? Let's use 2.5 ATR Fixed on entry
-                    # Actually user asked for "Pro use", usually trailing.
-                    # We will calculate stop dynamically below.
+                # 2. Re-Entry Protocol: If Trend is Intact but we stopped out,
+                #    enter on SMA 20 Cross instead of waiting for High 20.
+                is_reentry = (price > row['sma20']) and is_strong_trend
 
-                # Exit: Trend Break or Stop
-                if price < row['sma200']: sell_signal = True; current_stop_reason = "TREND BREAK"
+                # Combined Buy Logic
+                if is_bullish_market and (is_breakout or is_reentry) and is_strong_trend:
+                    buy_signal = True
+
+                # Exit Logic: Trend Break or Stop
+                if price < row['sma200']:
+                    sell_signal = True
+                    current_stop_reason = "TREND BREAK (<200)"
 
             elif self.strategy_type == 'turtle':
-                # RULES: Price > 20d High. Exit Price < 10d Low.
+                # Pure Price Action
                 if price > row['high_20']:
                     buy_signal = True
 
@@ -129,9 +139,13 @@ class UnifiedBacktester:
                     current_stop_reason = "10d LOW EXIT"
 
             elif self.strategy_type == 'isa':
-                # RULES: Price > 200 SMA + Price > 50d High. Exit < 20d Low.
-                trend_ok = price > row['sma200']
-                if trend_ok and price > row['high_50']:
+                # Trend Following
+                is_breakout_50 = price > row['high_50']
+                # ISA Re-Entry: Price > 50SMA and > 200SMA
+                is_isa_reentry = (price > row['sma50']) and (price > row['sma200'])
+
+                # Only buy if trend is long-term up
+                if (price > row['sma200']) and (is_breakout_50 or is_isa_reentry):
                     buy_signal = True
 
                 if self.state == "IN" and price < row['low_20']:
@@ -139,7 +153,7 @@ class UnifiedBacktester:
                     current_stop_reason = "20d LOW EXIT"
 
             # ==============================
-            # EXECUTION ENGINE
+            # EXECUTION
             # ==============================
 
             if self.state == "OUT" and buy_signal:
@@ -147,7 +161,7 @@ class UnifiedBacktester:
                 self.equity -= (self.shares * price)
                 self.state = "IN"
 
-                # Initial Stop Setting
+                # Set Initial Stop
                 if self.strategy_type == 'master':
                     stop_loss = price - (2.5 * row['atr'])
                 elif self.strategy_type == 'isa':
@@ -163,8 +177,15 @@ class UnifiedBacktester:
             elif self.state == "IN":
                 # Trailing Stop Management
                 if self.strategy_type == 'master':
-                    # Trail stop up if price moves up (Donchian 20 floor)
-                    if row['low_20'] > stop_loss: stop_loss = row['low_20']
+                    # Hybrid Trail: Use wider of (2.5 ATR) or (20-Day Low)
+                    # This allows room to breathe but locks in profit on strong runs
+                    atr_stop = price - (2.5 * row['atr'])
+                    donchian_stop = row['low_20']
+
+                    # Logic: If price moves up, drag stop up. Never lower it.
+                    new_stop = max(atr_stop, donchian_stop)
+                    if new_stop > stop_loss: stop_loss = new_stop
+
                 elif self.strategy_type == 'isa':
                     stop_loss = row['low_20']
                 elif self.strategy_type == 'turtle':
@@ -187,20 +208,20 @@ class UnifiedBacktester:
                         "equity": round(self.equity, 0)
                     })
 
-        # Final Valuation
+        # Final Valuation (Mark to Market)
         final_eq = self.equity + (self.shares * final_price)
         strat_return = ((final_eq - self.initial_capital) / self.initial_capital) * 100
 
         return {
             "ticker": self.ticker,
             "strategy": self.strategy_type.upper(),
-            "period": "2 Years",
+            "period": "2 Years (Fixed)",
             "strategy_return": round(strat_return, 2),
             "buy_hold_return": round(bnh_return, 2),
             "trades": len(self.trade_log) // 2,
             "win_rate": self._calculate_win_rate(),
             "final_equity": round(final_eq, 2),
-            "log": self.trade_log[-5:]
+            "log": self.trade_log[-6:] # Show last few
         }
 
     def _calculate_win_rate(self):

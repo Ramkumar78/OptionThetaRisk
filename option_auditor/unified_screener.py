@@ -89,7 +89,6 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
 
     # Initialize Strategies
     turtle_strat = TurtleStrategy()
-    isa_strat = IsaStrategy()
     fourier_strat = FourierStrategy()
 
     def process_ticker(ticker):
@@ -107,7 +106,11 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
 
             # Run Strategies
             turtle_res = turtle_strat.analyze(df)
-            isa_res = isa_strat.analyze(df)
+
+            # ISA Strategy requires ticker and df in init
+            isa_strat = IsaStrategy(ticker, df)
+            isa_res = isa_strat.analyze()
+
             fourier_res = fourier_strat.analyze(df)
 
             # Collate Verdict (Confluence)
@@ -120,14 +123,14 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
             # Fourier Buy = Cycle Low
 
             # Count positive signals (BUY or strong HOLD/WATCH)
-            if turtle_res['signal'] in ["BUY", "WATCH"]: buy_signals += 1
-            if isa_res['signal'] in ["BUY", "WATCH", "HOLD"]: buy_signals += 1
-            if fourier_res['signal'] == "BUY": buy_signals += 1
+            if turtle_res and turtle_res.get('signal') in ["BUY", "WATCH"]: buy_signals += 1
+            if isa_res and isa_res.get('Signal') in ["BUY BREAKOUT", "WATCHLIST"]: buy_signals += 1
+            if fourier_res and fourier_res.get('signal') == "BUY": buy_signals += 1
 
-            if turtle_res['signal'] == "SELL": sell_signals += 1
+            if turtle_res and turtle_res.get('signal') == "SELL": sell_signals += 1
             # ISA doesn't short usually, but if AVOID/EXIT?
-            if isa_res['signal'] == "EXIT": sell_signals += 0.5
-            if fourier_res['signal'] == "SELL": sell_signals += 1
+            # Isa returns Signal usually. Let's assume None means no signal.
+            if fourier_res and fourier_res.get('signal') == "SELL": sell_signals += 1
 
             master_verdict = "WAIT"
             master_color = "gray"
@@ -140,7 +143,7 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
                 master_color = "green"
             elif buy_signals == 1:
                 # Which one?
-                if fourier_res['signal'] == "BUY":
+                if fourier_res and fourier_res.get('signal') == "BUY":
                     master_verdict = "🌊 DIP BUY (Cycle Only)"
                     master_color = "blue"
                 else:
