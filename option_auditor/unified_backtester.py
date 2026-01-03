@@ -54,7 +54,7 @@ class UnifiedBacktester:
         df['sma200'] = df['close'].rolling(200).mean()
         df['sma50'] = df['close'].rolling(50).mean()
         df['sma150'] = df['close'].rolling(150).mean()
-        df['sma20'] = df['close'].rolling(20).mean() # NEW: For fast re-entry
+        df['sma20'] = df['close'].rolling(20).mean() # For fast re-entry
 
         # --- Volatility ---
         df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
@@ -78,18 +78,21 @@ class UnifiedBacktester:
         df = self.calculate_indicators(df)
 
         # --- EXACT SIMULATION WINDOW ---
-        # We start exactly 2 years ago (730 days)
+        # We start exactly 2 years ago
         start_date = pd.Timestamp.now() - pd.Timedelta(days=730)
         sim_data = df[df.index >= start_date].copy()
 
         if sim_data.empty: return {"error": "Not enough history"}
 
+        # Get Actual Start/End Dates for Report
+        actual_start_str = sim_data.index[0].strftime('%Y-%m-%d')
+        actual_end_str = sim_data.index[-1].strftime('%Y-%m-%d')
+
         # --- FAIR COMPARISON: BUY & HOLD ---
-        # Assumes buying at the Open of the first available day in the window
+        # Invest 100% of capital on Day 1 Open/Close
         initial_price = sim_data['close'].iloc[0]
         final_price = sim_data['close'].iloc[-1]
 
-        # Calculate max shares we could buy on day 1
         bnh_shares = int(self.initial_capital / initial_price)
         bnh_final_value = self.initial_capital - (bnh_shares * initial_price) + (bnh_shares * final_price)
         bnh_return = ((bnh_final_value - self.initial_capital) / self.initial_capital) * 100
@@ -105,7 +108,6 @@ class UnifiedBacktester:
 
             # --- COMMON CONDITIONS ---
             is_bullish_market = (row['spy'] > row['spy_sma200']) and (row['vix'] < 25)
-            # Minervini Trend: Price > 50 > 150 > 200
             is_strong_trend = (price > row['sma50'] > row['sma150'] > row['sma200'])
 
             # ==============================
@@ -116,7 +118,7 @@ class UnifiedBacktester:
                 # 1. Breakout Entry: New 20 Day High
                 is_breakout = price > row['high_20']
 
-                # 2. Re-Entry Protocol: If Trend is Intact but we stopped out,
+                # 2. Re-Entry Protocol: If Trend is Intact (>50, >150, >200) but we are flat,
                 #    enter on SMA 20 Cross instead of waiting for High 20.
                 is_reentry = (price > row['sma20']) and is_strong_trend
 
@@ -130,7 +132,6 @@ class UnifiedBacktester:
                     current_stop_reason = "TREND BREAK (<200)"
 
             elif self.strategy_type == 'turtle':
-                # Pure Price Action
                 if price > row['high_20']:
                     buy_signal = True
 
@@ -139,12 +140,9 @@ class UnifiedBacktester:
                     current_stop_reason = "10d LOW EXIT"
 
             elif self.strategy_type == 'isa':
-                # Trend Following
                 is_breakout_50 = price > row['high_50']
-                # ISA Re-Entry: Price > 50SMA and > 200SMA
                 is_isa_reentry = (price > row['sma50']) and (price > row['sma200'])
 
-                # Only buy if trend is long-term up
                 if (price > row['sma200']) and (is_breakout_50 or is_isa_reentry):
                     buy_signal = True
 
@@ -177,12 +175,8 @@ class UnifiedBacktester:
             elif self.state == "IN":
                 # Trailing Stop Management
                 if self.strategy_type == 'master':
-                    # Hybrid Trail: Use wider of (2.5 ATR) or (20-Day Low)
-                    # This allows room to breathe but locks in profit on strong runs
                     atr_stop = price - (2.5 * row['atr'])
                     donchian_stop = row['low_20']
-
-                    # Logic: If price moves up, drag stop up. Never lower it.
                     new_stop = max(atr_stop, donchian_stop)
                     if new_stop > stop_loss: stop_loss = new_stop
 
@@ -208,20 +202,21 @@ class UnifiedBacktester:
                         "equity": round(self.equity, 0)
                     })
 
-        # Final Valuation (Mark to Market)
+        # Final Valuation
         final_eq = self.equity + (self.shares * final_price)
         strat_return = ((final_eq - self.initial_capital) / self.initial_capital) * 100
 
         return {
             "ticker": self.ticker,
             "strategy": self.strategy_type.upper(),
-            "period": "2 Years (Fixed)",
+            "start_date": actual_start_str,
+            "end_date": actual_end_str,
             "strategy_return": round(strat_return, 2),
             "buy_hold_return": round(bnh_return, 2),
             "trades": len(self.trade_log) // 2,
             "win_rate": self._calculate_win_rate(),
             "final_equity": round(final_eq, 2),
-            "log": self.trade_log[-6:] # Show last few
+            "log": self.trade_log  # RETURN FULL LOG (No more [-6:])
         }
 
     def _calculate_win_rate(self):
