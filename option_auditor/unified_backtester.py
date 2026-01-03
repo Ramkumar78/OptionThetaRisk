@@ -28,7 +28,7 @@ class UnifiedBacktester:
                 close = data['Close']
                 high = data['High']
                 low = data['Low']
-                open_price = data['Open']
+                open_price = data['Open'] # Added to fix missing 'open'
                 vol = data['Volume']
             else:
                 return None
@@ -41,7 +41,7 @@ class UnifiedBacktester:
                 'close': get_series(close, self.ticker),
                 'high': get_series(high, self.ticker),
                 'low': get_series(low, self.ticker),
-                'open': get_series(open_price, self.ticker),
+                'open': get_series(open_price, self.ticker), # Added to fix missing 'open'
                 'volume': get_series(vol, self.ticker),
                 'spy': get_series(close, 'SPY'),
                 'vix': get_series(close, '^VIX')
@@ -62,7 +62,7 @@ class UnifiedBacktester:
         # --- Volatility & ATR ---
         df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
 
-        # --- NEW MASTER PROTOCOL METRICS ---
+        # --- MASTER PROTOCOL METRICS ---
 
         # 1. Relative Strength (RS) vs SPY (Mansfield Proxy)
         # Ratio of Stock/SPY compared to 60 days ago
@@ -73,25 +73,22 @@ class UnifiedBacktester:
         # Ratio of 10-day StdDev to 50-day StdDev
         vol_10 = df['close'].rolling(10).std()
         vol_50 = df['close'].rolling(50).std()
-        df['vcp_ratio'] = vol_10 / vol_50
+        # Avoid division by zero
+        df['vcp_ratio'] = vol_10 / (vol_50 + 0.0001)
 
         # 3. Volume Metrics
         df['vol_avg_20'] = df['volume'].rolling(20).mean()
 
-        # Pocket Pivot Helper: Max Down Volume in last 10 days
-        # We define "Down Day" as close < previous close
-        # We need a rolling window max of volume ONLY on down days.
-        # Easier approximation: Max volume of last 10 days, checked in loop or mostly accurate here.
-        # Strict vectorization of "Max Down Vol" is complex, we will approximate in loop or use a column.
+        # Pocket Pivot: Max Down Volume in last 10 days
         is_down = df['close'] < df['close'].shift(1)
         down_vol = df['volume'].where(is_down, 0)
-        df['max_down_vol_10'] = down_vol.rolling(10).max().shift(1) # Shift 1 to represent "Prior 10 days"
+        df['max_down_vol_10'] = down_vol.rolling(10).max().shift(1)
 
-        # --- Breakout Channels (Legacy/Turtle Support) ---
+        # --- Donchian Channels (Breakout Confirmation) ---
         df['high_20'] = df['high'].rolling(20).max().shift(1)
-        df['low_10'] = df['low'].rolling(10).min().shift(1)
-        df['high_50'] = df['high'].rolling(50).max().shift(1)
         df['low_20'] = df['low'].rolling(20).min().shift(1)
+        df['low_10'] = df['low'].rolling(10).min().shift(1)
+        df['high_50'] = df['high'].rolling(50).max().shift(1) # Added high_50
 
         # --- Market Regime ---
         df['spy_sma200'] = df['spy'].rolling(200).mean()
@@ -130,46 +127,47 @@ class UnifiedBacktester:
             sell_signal = False
             current_stop_reason = "STOP"
 
-            is_strong_trend = (price > row['sma50'] > row['sma150'] > row['sma200'])
+            is_strong_trend = (price > row['sma50'] > row['sma200'])
 
             # ==============================
             # STRATEGY LOGIC
             # ==============================
 
             if self.strategy_type == 'master':
-                # --- NEW MASTER PROTOCOL ---
+                # --- MASTER PROTOCOL (Hybrid) ---
 
-                # 1. Edge Criteria
-                has_rs_edge = row['rs_score'] > 0.0 # Outperforming SPY over last quarter
-                is_squeeze = row['vcp_ratio'] < 0.60 # Volatility Compression
+                # A. The "Sniper" Setup (VCP + Edge)
+                has_rs_edge = row['rs_score'] > 0.0
+                is_squeeze = row['vcp_ratio'] < 0.75 # Relaxed from 0.60 to capture more moves
 
-                # 2. Volume Demand
-                vol_spike = row['volume'] > (1.5 * row['vol_avg_20'])
-                # FIX: Pocket Pivot requires higher close than recent down day, and generally a green day (Close > Open)
-                # Original provided code had logical error: price > row['close'] which is impossible.
-                # Assuming intent was "Price > Open" (Green Day)
-                pocket_pivot = (row['volume'] > row['max_down_vol_10']) and (row['close'] > row['open'])
-                has_demand = vol_spike or pocket_pivot
+                vol_spike = row['volume'] > (1.2 * row['vol_avg_20']) # Relaxed Vol Req
+                has_demand = vol_spike or (price > row['high_20']) # Breakout is volume enough
 
-                # 3. Entry Trigger
-                # We buy if we have Squeeze + RS Edge + Demand + Trend
-                if is_strong_trend and has_rs_edge and is_squeeze and has_demand:
+                # B. The "Trend" Setup (Don't miss the bus)
+                # If we are in a Mega Trend, we take the 20-day breakout even without VCP
+                is_mega_trend = (price > row['sma50']) and (row['sma50'] > row['sma200'])
+                is_breakout = price > row['high_20']
+
+                # ENTRY TRIGGER:
+                # 1. Perfect VCP Setup OR
+                # 2. Strong Trend Breakout (Participation)
+                if (has_rs_edge and is_squeeze and has_demand) or (is_mega_trend and is_breakout):
                     buy_signal = True
 
-                # Exit Logic (Master): Trailing Stop or Trend Break
-                if price < row['sma50']: # Tighter exit for VCP (Trend following)
+                # EXIT LOGIC:
+                # 1. Trend Break: Close below SMA 50
+                if price < row['sma50']:
                     sell_signal = True
                     current_stop_reason = "TREND BREAK (<50)"
 
             elif self.strategy_type == 'turtle':
-                # Classic Donchian
                 if price > row['high_20']: buy_signal = True
                 if self.state == "IN" and price < row['low_10']:
                     sell_signal = True
                     current_stop_reason = "10d LOW EXIT"
 
             elif self.strategy_type == 'isa':
-                is_breakout_50 = price > row['high_50']
+                is_breakout_50 = row['close'] > row['high_50'] # Use row['high_50'] from indicators
                 is_isa_reentry = (price > row['sma50']) and (price > row['sma200'])
                 if (price > row['sma200']) and (is_breakout_50 or is_isa_reentry): buy_signal = True
                 if self.state == "IN" and price < row['low_20']:
@@ -186,10 +184,10 @@ class UnifiedBacktester:
                 self.state = "IN"
                 self.entry_date = date
 
-                # Set Initial Stop
+                # Set Initial Stop (Wider for Master to avoid noise)
                 if self.strategy_type == 'master':
-                    # VCP Stops are tight: Low of recent volatility (approx 0.5 ATR or low of day)
-                    stop_loss = price - (1.5 * row['atr'])
+                    # 3.0 ATR allows for normal volatility without shaking us out
+                    stop_loss = price - (3.0 * row['atr'])
                 elif self.strategy_type == 'isa':
                     stop_loss = row['low_20']
                 else:
@@ -204,9 +202,10 @@ class UnifiedBacktester:
             elif self.state == "IN":
                 # Trailing Stop Management
                 if self.strategy_type == 'master':
-                    # Master VCP trails the 20MA or Breakeven aggressively
-                    new_stop = max(stop_loss, row['sma20']) # Trail 20MA
-                    if new_stop > stop_loss: stop_loss = new_stop
+                    # Hybrid Trail: Donchian 20 Low (Classic) or 3 ATR
+                    # This lets the stock "breathe"
+                    trail_stop = max(row['low_20'], price - (3.0 * row['atr']))
+                    if trail_stop > stop_loss: stop_loss = trail_stop
 
                 elif self.strategy_type == 'isa':
                     stop_loss = row['low_20']
