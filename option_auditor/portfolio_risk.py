@@ -66,9 +66,28 @@ def analyze_portfolio_risk(positions: list) -> dict:
                 pass
         else:
             # Fallback for single ticker or simple df
-            closes = price_data['Close'] if 'Close' in price_data.columns else price_data
+            if 'Close' in price_data.columns:
+                # Likely single ticker OHLC
+                # If we have only one ticker, we can map it
+                if len(ticker_list) == 1:
+                   closes = price_data[['Close']].rename(columns={'Close': ticker_list[0]})
+                else:
+                   # Fallback, but keep as DF to avoid crash, though column name might be 'Close'
+                   closes = price_data[['Close']]
+            else:
+                 closes = price_data
+
+    # Ensure closes is DataFrame
+    if isinstance(closes, pd.Series):
+        closes = closes.to_frame()
 
     # Filter to only the tickers we asked for
+    # If columns don't match tickers (e.g. 'Close'), try to be smart or just use what we have if 1:1
+    if len(ticker_list) == 1 and len(closes.columns) == 1:
+        # Assume it's the one
+        if closes.columns[0] != ticker_list[0]:
+             closes.columns = [ticker_list[0]]
+
     valid_tickers = [t for t in ticker_list if t in closes.columns]
     closes = closes[valid_tickers]
 

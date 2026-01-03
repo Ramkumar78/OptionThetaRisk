@@ -1,41 +1,55 @@
-# Stage 1: Build React Frontend
-FROM node:20-slim AS frontend-builder
+# [Stage 1: Frontend - Standard Build]
+FROM node:20.11-slim AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci --silent
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Python Backend
+# [Stage 2: Backend - Robust Build]
 FROM python:3.12-slim
 
-# Set the working directory in the container
+# Set work directory
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
+# 1. Install System Dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Upgrade PIP (Vital for better networking handling)
+RUN pip install --upgrade pip
+
+# Copy requirements file
 COPY requirements.txt .
 
-# Install any needed packages specified in requirements.txt
-# We also install gunicorn for a production-ready WSGI server
-# Use --pre to allow installation of pre-release versions (required for pandas_ta)
-RUN pip install --no-cache-dir --pre -r requirements.txt gunicorn
+# 3. INSTALL HEAVY LIBRARIES FIRST (With 1000s Timeout)
+# We install these separately so if one fails, we don't restart the whole build.
+# This fixes the "ReadTimeoutError" on slow connections.
+RUN pip install --default-timeout=1000 --no-cache-dir \
+    "numpy>=1.24.0" \
+    "pandas>=2.1.4" \
+    "scipy>=1.10.0" \
+    "pyarrow>=14.0.0"
 
-# Copy the backend code
-COPY . .
+# 4. Install the rest of the requirements
+# We use --pre for pandas-ta compatibility
+RUN pip install --default-timeout=1000 --no-cache-dir --pre -r requirements.txt gunicorn
 
-# Copy built frontend assets from the previous stage
+# 5. Copy Backend Code
+COPY option_auditor ./option_auditor
+COPY webapp ./webapp
+COPY *.py .
+
+# 6. Copy Built Frontend Assets
 COPY --from=frontend-builder /app/frontend/dist /app/webapp/static/react_build
 
-# Set environment variables
+# 7. Setup Environment
 ENV PYTHONPATH=/app
 ENV PORT=5000
-# Ensure output is sent directly to terminal (avoids buffering issues)
 ENV PYTHONUNBUFFERED=1
 
-# Expose the port the app runs on
 EXPOSE 5000
 
-# Run the application using Gunicorn
-# Use WEB_CONCURRENCY env var for workers, default to 1 for safety with SQLite
-# Increased timeout to 120s to prevent screener timeouts
-CMD sh -c "gunicorn --log-level warning -w ${WEB_CONCURRENCY:-1} --timeout 120 -b 0.0.0.0:${PORT:-5000} webapp.app:app"
+# 8. Run Application
+CMD sh -c "gunicorn --log-level warning -w 1 --timeout 120 -b 0.0.0.0:${PORT:-5000} webapp.app:app"

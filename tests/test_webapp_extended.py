@@ -4,7 +4,7 @@ import uuid
 import time
 import io
 from unittest.mock import patch, MagicMock, ANY
-from webapp.app import create_app, get_cached_screener_result, cache_screener_result, SCREENER_CACHE, _get_env_or_docker_default, send_email_notification
+from webapp.app import create_app, get_cached_screener_result, cache_screener_result, screener_cache, _get_env_or_docker_default, send_email_notification
 
 @pytest.fixture
 def client():
@@ -19,7 +19,7 @@ def mock_storage():
 
 def test_cache_logic():
     # Test caching mechanism directly
-    SCREENER_CACHE.clear()
+    screener_cache.cache.clear()
     key = "test_key"
     data = {"test": "data"}
 
@@ -33,7 +33,7 @@ def test_cache_logic():
     # Cache expiration - Manual injection
     # We simulate an old entry
     old_timestamp = time.time() - 2000 # Older than 600s
-    SCREENER_CACHE[key] = (old_timestamp, data)
+    screener_cache.cache[key] = (data, old_timestamp)
 
     assert get_cached_screener_result(key) is None
 

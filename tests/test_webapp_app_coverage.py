@@ -3,7 +3,7 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 from flask import g, session
-from webapp.app import create_app, get_storage_provider, send_email_notification, _get_env_or_docker_default, cleanup_job, SCREENER_CACHE
+from webapp.app import create_app, get_storage_provider, send_email_notification, _get_env_or_docker_default, cleanup_job, screener_cache
 
 @pytest.fixture
 def client():

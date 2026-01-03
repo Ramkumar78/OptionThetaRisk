@@ -24,12 +24,13 @@ def client_with_mock_storage():
             yield client, mock_provider
 
 def test_cache_logic():
-    from webapp.app import get_cached_screener_result, cache_screener_result, SCREENER_CACHE, SCREENER_CACHE_TIMEOUT
+    from webapp.app import get_cached_screener_result, cache_screener_result, screener_cache
 
     key = "test_key"
     data = {"foo": "bar"}
 
     # Test Cache Miss
+    screener_cache.cache.clear()
     assert get_cached_screener_result(key) is None
 
     # Test Cache Hit
@@ -39,7 +40,8 @@ def test_cache_logic():
     # Test Cache Expiry
     # We can't easily patch time.time locally for just one call inside the function if we use the real function
     # Instead, we manipulate the cache manually to simulate old data
-    SCREENER_CACHE[key] = (time.time() - SCREENER_CACHE_TIMEOUT - 1, data)
+    # Cache format: key -> (value, timestamp)
+    screener_cache.cache[key] = (data, time.time() - screener_cache.ttl - 1)
     assert get_cached_screener_result(key) is None
 
 def test_send_email_notification_missing_key():

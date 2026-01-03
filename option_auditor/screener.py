@@ -1,12 +1,20 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
+import math
 from datetime import datetime, timedelta
+from scipy.signal import hilbert, detrend
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
+import traceback
+from option_auditor.quant_engine import QuantPhysicsEngine
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+# Export centralized verdict logic for unified_screener
+generate_human_verdict = QuantPhysicsEngine.generate_human_verdict
 
 # Import Unified Screener (Lazy import inside function to avoid circular dep if needed, or top level)
 # We will expose it via this module for backward compatibility/ease of use.
@@ -24,6 +32,20 @@ except ImportError:
 
 # Update with S&P 500 Names if available in constants?
 # Constants.py updates TICKER_NAMES with SP500_NAMES already.
+
+def _get_market_regime():
+    """
+    Fetches VIX to determine market regime.
+    Returns current VIX level.
+    """
+    try:
+        # 5 day history to get a smoothing or just last close
+        vix = yf.download("^VIX", period="5d", progress=False)
+        if not vix.empty:
+            return float(vix['Close'].iloc[-1])
+    except:
+        pass
+    return 15.0 # Safe default
 
 def _calculate_trend_breakout_date(df: pd.DataFrame) -> str:
     """
@@ -187,21 +209,18 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
         return base_tickers
 
     # Iterate through the downloaded data to check criteria
-    # fetch_batch_data_safe returns a DataFrame where columns are usually MultiIndex (Ticker, Price) or flat if single ticker
-    # But for multiple tickers it's MultiIndex.
+    # OPTIMIZED ITERATION
+    if isinstance(data.columns, pd.MultiIndex):
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
+    else:
+        # Fallback for single ticker result (rare)
+        iterator = [(base_tickers[0], data)] if not data.empty and len(base_tickers)==1 else []
 
-    # We iterate base_tickers because they are the keys
-    for ticker in base_tickers:
+    for ticker, df in iterator:
         try:
-            df = pd.DataFrame()
-            # Extract single DF safely
-            if isinstance(data.columns, pd.MultiIndex):
-                if ticker in data.columns.levels[0]:
-                        df = data[ticker].copy()
-            elif ticker in data.columns: # fallback
-                    df = data[ticker].copy()
-            else:
-                continue # Ticker failed to download
+             # CLEANUP: Drop the top level index to make it a standard OHLVC df
+            if isinstance(df.columns, pd.MultiIndex):
+                df = df.droplevel(0, axis=1)
 
             df = df.dropna(how='all')
             if len(df) < 20: continue
@@ -270,18 +289,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     # If daily, try batch download first
     if not is_intraday and tickers:
         try:
-            # Optimization: Try to load from "market_scan_v1" cache ONLY if the list is likely the S&P 500 set.
-            # Blindly using it for any list > 50 is risky if the user scans e.g. Russell 2000 subset.
-            # However, since we don't know the intent, we can check intersection coverage?
-            # For now, we only use it if the cache covers the request.
-            # But calculating coverage requires loading the cache.
-            # Safe heuristics: If list > 400 (likely full scan) OR if we can verify coverage.
-
-            # Revised Strategy:
-            # 1. Try loading master cache if list is large.
-            # 2. If loaded, check if it contains our tickers.
-            # 3. If coverage is poor, discard and download fresh.
-
             if len(tickers) > 100:
                 cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
                 if not cached.empty:
@@ -289,13 +296,9 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                     # MultiIndex columns (Ticker, Price)
                     if isinstance(cached.columns, pd.MultiIndex):
                         available_tickers = cached.columns.levels[0]
-                        # If more than 80% of requested tickers are in cache, use it
                         intersection = len(set(tickers).intersection(available_tickers))
                         if intersection / len(tickers) > 0.8:
                             batch_data = cached
-                    else:
-                        # Flat cache (single ticker?) unlikely for market_scan
-                        pass
 
             # If no cache or cache empty/insufficient, fetch fresh
             if batch_data is None:
@@ -312,7 +315,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             if df is None: return None
 
             # Volume Filter: If scanning daily/weekly (not intraday), skip illiquid stocks (< 500k avg volume)
-            # This prevents wasting CPU on stocks we can't trade and reduces risk of stale data issues.
             if not is_intraday and len(df) >= 20:
                 avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
                 if avg_vol < 500000:
@@ -324,20 +326,16 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
 
             try:
                 if is_intraday:
-                    # Logic for Intraday Data
                     unique_dates = sorted(list(set(df.index.date)))
 
                     if len(unique_dates) > 1:
-                        # Find the last bar of the previous trading day
                         prev_date = unique_dates[-2]
-                        # Filter for prev date
                         prev_day_df = df[df.index.date == prev_date]
                         if not prev_day_df.empty:
                             prev_close = float(prev_day_df['Close'].iloc[-1])
                             curr_close = float(df['Close'].iloc[-1])
                             pct_change_1d = ((curr_close - prev_close) / prev_close) * 100
 
-                    # 1W Change: Approx 5 trading days ago
                     if len(unique_dates) > 5:
                          week_ago_date = unique_dates[-6] # 5 days ago approx
                          week_df = df[df.index.date == week_ago_date]
@@ -346,43 +344,27 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                              curr_close = float(df['Close'].iloc[-1])
                              pct_change_1w = ((curr_close - week_close) / week_close) * 100
                 else:
-                    # Logic for Daily/Weekly/Monthly Data
-                    # 1D Change: Last bar vs Previous bar
                     if len(df) >= 2:
                         prev_close = float(df['Close'].iloc[-2])
                         curr_close = float(df['Close'].iloc[-1])
                         pct_change_1d = ((curr_close - prev_close) / prev_close) * 100
 
-                    # 1W Change: Look back 5 bars if daily, else relative
                     if yf_interval == "1d":
                         if len(df) >= 6:
                             week_close = float(df['Close'].iloc[-6])
                             curr_close = float(df['Close'].iloc[-1])
                             pct_change_1w = ((curr_close - week_close) / week_close) * 100
                     elif yf_interval == "1wk":
-                         # For weekly, pct_change_1d is essentially 1W change
-                         # pct_change_1w (meaning a longer lookback) could be 1 month?
-                         # Let's keep logic simple: 1W change for weekly IS the 1D change
-                         # But to fill the UI column "1W %", we might copy it?
-                         # Let's leave pct_change_1w as None or try 4 weeks back?
                          if len(df) >= 5:
                              month_close = float(df['Close'].iloc[-5])
                              curr_close = float(df['Close'].iloc[-1])
                              pct_change_1w = ((curr_close - month_close) / month_close) * 100
-                    elif yf_interval == "1mo":
-                        # For monthly, pct_change_1d is 1 Month change
-                        pass
             except Exception as e:
                 logger.debug(f"Error calculating % change for {symbol}: {e}")
                 pass
 
-            # Resample is handled in helper if resample_rule passed, but let's double check logic.
-            # _prepare_data_for_ticker does resampling.
-
             # 3. Calculate Indicators
-            # Check length for SMA 50
             if len(df) < 50:
-                # Can't calculate SMA 50
                 return None
 
             rsi_series = ta.rsi(df['Close'], length=14)
@@ -439,7 +421,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             # Calculate Breakout Date (Trend Age)
             breakout_date = _calculate_trend_breakout_date(df)
 
-            # Rate limiting sleep
             time.sleep(0.1)
 
             return {
@@ -1099,30 +1080,12 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             curr_volume = float(df['Volume'].iloc[-1]) if 'Volume' in df.columns else 0
 
             # 1. 52-Week High Check (Momentum Filter)
-            # If intraday, we might not have full 52-week data in `df` (only 1mo).
-            # So we rely on the data we have. For proper Darvas, 1y daily is best.
-            # If intraday, we assume the user accepts the "local" high as the filter or we skip.
-            # Let's use the max of the available data.
             period_high = df['High'].max()
-            # If we are within 5% of the high
             if curr_close < period_high * 0.90 and not check_mode:
-                # Darvas requires new highs. If we are deep in drawdown, ignore.
-                # Exception: Early stage breakout from a base might be slightly lower.
-                # Strictest rule: Must be making a new high.
-                # Let's relax to: Near High (> 90%).
                 pass # Just a filter, but we proceed to check boxes
 
             # 2. Identify Box (Ceiling & Floor)
             # We iterate back to find the most recent valid Box.
-            # A valid box has a Ceiling (Top) and a Floor (Bottom).
-
-            # Logic:
-            # Find the most recent "Pivot High" (Ceiling).
-            # A Top at index T is valid if High[T] >= High[T-3...T-1] AND High[T] >= High[T+1...T+3].
-
-            # Optimization: We only need the last established box.
-            # We scan backwards from T-3.
-
             ceiling = None
             floor = None
 
@@ -1132,21 +1095,11 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             closes = df['Close'].values
             volumes = df['Volume'].values if 'Volume' in df.columns else np.zeros(len(df))
 
-            # Look back window: last 60 bars (approx 3 months)
             lookback = min(len(df), 60)
-
-            # Find potential Tops
-            # We iterate backwards
             found_top_idx = -1
 
             for i in range(len(df) - 4, len(df) - lookback, -1):
-                # Check for Pivot High at i
-                # Left neighbors (i-3 to i-1)
                 if i < 3: break
-
-                # Check if High[i] is >= High[i-1] AND High[i] >= High[i-2] AND High[i] >= High[i-3] AND
-                # High[i] >= High[i+1] AND High[i] >= High[i+2] AND High[i] >= High[i+3]
-                # Note: i+3 must exist.
                 if i + 3 >= len(df): continue
 
                 curr_h = highs[i]
@@ -1160,20 +1113,9 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             if found_top_idx == -1:
                 return None # No defined top recently
 
-            # Find Floor (Bottom) AFTER the Top
-            # Darvas: "The point where it stops dropping... becomes the bottom"
-            # So we look for a Pivot Low in the range (found_top_idx + 1 ... Today)
-            # But the pivot low also needs 3 days confirmation.
-
             found_bot_idx = -1
 
             for j in range(found_top_idx + 1, len(df) - 3):
-                # Check for Pivot Low at j
-                # Left neighbors?
-                # Actually, Darvas establishes the floor *after* the ceiling.
-                # Condition: Low[j] <= Low[j-3...j-1] AND Low[j] <= Low[j+1...j+3]
-                # And Low[j] < Ceiling
-
                 if j < 3: continue
                 if j + 3 >= len(df): continue
 
@@ -1185,14 +1127,9 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
 
                     found_bot_idx = j
                     floor = curr_l
-                    # We take the *first* valid bottom after top? Or the lowest?
-                    # Darvas boxes are usually defined by the first consolidation range.
-                    # Let's assume the first valid pivot low establishes the floor.
                     break
 
             if floor is None:
-                # We have a Top but no confirmed Floor yet.
-                # We are likely "In Formation".
                 pass
 
             # Calc ATR, 52wk
@@ -1205,25 +1142,18 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             signal = "WAIT"
 
             # 3. Check for Breakout
-            # If we have a valid Box [Floor, Ceiling]
             if ceiling and floor:
-                # Check if we are breaking out NOW (last bar)
-                # Breakout: Close > Ceiling
                 if closes[-1] > ceiling and closes[-2] <= ceiling:
                      signal = "📦 DARVAS BREAKOUT"
 
-                # Check for Breakdown (Stop Loss)
                 elif closes[-1] < floor and closes[-2] >= floor:
                      signal = "📉 BOX BREAKDOWN"
 
                 elif closes[-1] > ceiling:
-                     # Already broken out, sustaining high?
                      if (closes[-1] - ceiling) / ceiling < 0.05:
                          signal = "🚀 MOMENTUM (Post-Breakout)"
 
             elif ceiling and not floor:
-                # Setup phase?
-                # Price is between Top and (undefined) Bottom.
                 pass
 
             if signal == "WAIT" and not check_mode:
@@ -1233,45 +1163,30 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             is_valid_volume = True
             vol_ma_ratio = 1.0
             if "BREAKOUT" in signal and not check_mode:
-                # Volume > 150% of 20-day MA
                 vol_ma = np.mean(volumes[-21:-1]) if len(volumes) > 21 else np.mean(volumes)
                 if vol_ma > 0:
                     vol_ma_ratio = curr_volume / vol_ma
-                    if curr_volume < vol_ma * 1.2: # Relaxed to 1.2x
-                        # signal += " (Low Vol)"
-                        # Maybe filter it out strictly?
-                        # Darvas insisted on volume.
+                    if curr_volume < vol_ma * 1.2:
                         is_valid_volume = False
 
             if not is_valid_volume and not check_mode:
                 return None
 
-            # 52-Week High check (Strict for Entry)
             if "BREAKOUT" in signal and not check_mode:
                 if curr_close < period_high * 0.95:
-                     # Breakout of a box, but far from 52w high?
-                     # Might be a recovery box. Darvas preferred ATH.
-                     # We label it differently?
                      pass
 
-            # Calculate metrics
-            # pct_change_1d is already calculated above
-
-            # atr is already calculated as current_atr
             volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
             stop_loss = floor if floor else (ceiling - 2*current_atr if ceiling else curr_close * 0.95)
-            # Target = Breakout + Box Height
             box_height = (ceiling - floor) if (ceiling and floor) else (4 * current_atr)
             target = ceiling + box_height if ceiling else curr_close * 1.2
 
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
 
-            # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
-            # Rate limiting sleep
             time.sleep(0.1)
 
             return {
@@ -1340,11 +1255,6 @@ def _detect_fvgs(df: pd.DataFrame) -> list:
     Returns a list of dicts: {'type': 'bull/bear', 'top': float, 'bottom': float, 'index': datetime}
     """
     fvgs = []
-    # Iterate through recent candles (last 50 is enough for active setups)
-    # We need index access, so we convert to records or iterate by index
-    # Logic:
-    # Bearish FVG: Low of candle[i-2] > High of candle[i]. Gap is between them.
-    # Bullish FVG: High of candle[i-2] < Low of candle[i]. Gap is between them.
 
     if len(df) < 3:
         return []
@@ -1357,22 +1267,16 @@ def _detect_fvgs(df: pd.DataFrame) -> list:
     start_idx = max(2, len(df) - 30)
 
     for i in range(start_idx, len(df)):
-        # Bearish FVG (Down move)
-        # Candle i (current), i-1 (displacement), i-2 (high anchor)
-        # Gap exists if Low[i-2] > High[i]
         if lows[i-2] > highs[i]:
             gap_size = lows[i-2] - highs[i]
-            # Filter tiny gaps (noise) - e.g., < 0.02% price
             if gap_size > (highs[i] * 0.0002):
                 fvgs.append({
                     "type": "BEARISH",
                     "top": lows[i-2],
                     "bottom": highs[i],
-                    "ts": times[i-1] # Timestamp of the big candle
+                    "ts": times[i-1]
                 })
 
-        # Bullish FVG (Up move)
-        # Gap exists if High[i-2] < Low[i]
         if highs[i-2] < lows[i]:
             gap_size = lows[i] - highs[i-2]
             if gap_size > (lows[i] * 0.0002):
@@ -1387,14 +1291,6 @@ def _detect_fvgs(df: pd.DataFrame) -> list:
 def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for ICT Market Maker Models + OTE (Optimal Trade Entry).
-
-    Strategy:
-    1.  Bias: Daily Trend.
-    2.  Setup:
-        -   Price Sweeps a Swing High/Low (Liquidity Raid).
-        -   Reverses with DISPLACEMENT (leaving an FVG).
-        -   Breaks Structure (MSS).
-    3.  Trigger: Price is currently retracing into the OTE Zone (62-79% Fib).
     """
     import pandas as pd
     import numpy as np
@@ -1403,16 +1299,13 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
     if ticker_list is None:
         ticker_list = _resolve_region_tickers(region)
 
-    # For OTE, we usually want Intraday data to see the displacement clearly.
-    # 1h (60m) is a good balance for Swing Trading this model.
     yf_interval = "1h"
     period = "60d" # Max 60d for 1h data in yfinance
     is_intraday = True
 
-    # Override for different timeframes
     if time_frame == "15m":
         yf_interval = "15m"
-        period = "1mo" # Max 1mo for 15m
+        period = "1mo"
     elif time_frame == "1d":
         yf_interval = "1d"
         period = "1y"
@@ -1423,7 +1316,6 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
     # Bulk download
     data = None
     try:
-        # Use safe batch fetch
         data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
     except Exception as e:
         logger.error(f"Failed to batch download for OTE: {e}")
@@ -1433,84 +1325,49 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
 
     def _process_ote(ticker):
         try:
-            # Prepare data from batch
             df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
 
-            min_length = 50 if check_mode else 50 # OTE needs enough history for swings and fibs
+            min_length = 50 if check_mode else 50
             if df is None or len(df) < min_length:
                 return None
 
             curr_close = float(df['Close'].iloc[-1])
 
-            # Calc ATR
             import pandas_ta as ta
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
             current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
             volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
-            # 2. Identify Structure (Swings)
             df = _identify_swings(df, lookback=3)
 
-            # Get last valid Swing High and Low
             last_swings_high = df[df['Swing_High'].notna()]
             last_swings_low = df[df['Swing_Low'].notna()]
 
             if last_swings_high.empty or last_swings_low.empty:
                 return None
 
-            # ---------------------------------------------------------
-            # BEARISH SETUP (Market Maker Sell Model)
-            # ---------------------------------------------------------
-            # Logic:
-            # A. Find the Highest High in recent window (Liquidity Pool)
-            # B. Check if price swept it and rejected.
-            # C. Check for displacement down.
-
             signal = "WAIT"
             setup_details = {}
 
-            # Look at the last major swing high (e.g., from 10-50 bars ago)
-            # We want a sweep of a SIGNIFICANT level, not just the last candle.
-
-            recent_highs = last_swings_high.tail(5) # Get last 5 swing highs
-
-            # Iterate backwards to find a setup
-            # We look for a "Leg" that created a High, then broke a Low.
-
-            # Simplified Logic for Screener:
-            # 1. Find the highest point in the last 40 bars (extended from 20 to catch session highs).
             peak_idx = df['High'].iloc[-40:].idxmax()
             peak_high = df.loc[peak_idx, 'High']
 
-            # 2. Verify displacement AFTER peak
-            # Find lowest low AFTER the peak
             after_peak = df.loc[peak_idx:]
-            if len(after_peak) < 3: return None # Too fresh
+            if len(after_peak) < 3: return None
 
             valley_idx = after_peak['Low'].idxmin()
             valley_low = df.loc[valley_idx, 'Low']
 
-            # 3. Calculate Fibonacci of this range (High -> Low)
-            # Range for Bearish OTE: We draw Fib from High to Low.
-            # OTE is retracement back UP to 62-79%.
             range_size = peak_high - valley_low
             fib_62 = peak_high - (range_size * 0.618)
             fib_79 = peak_high - (range_size * 0.79)
 
-            # 4. Check if current price is IN the OTE zone
-            # Bearish OTE: Price is between 62% and 79% retracement
-            # (Which means it is HIGHER than the low)
-
-            # Also check for FVG in the down leg
             fvgs = _detect_fvgs(after_peak)
             bearish_fvgs = [f for f in fvgs if f['type'] == "BEARISH"]
             has_fvg = len(bearish_fvgs) > 0
 
             if has_fvg and (fib_79 <= curr_close <= fib_62):
-                 # One more check: Did we break structure?
-                 # Ideally, the 'valley_low' should be lower than a PREVIOUS swing low (MSS)
-                 # Find swing low BEFORE peak
-                 before_peak = df.loc[:peak_idx].iloc[:-1] # exclude peak itself
+                 before_peak = df.loc[:peak_idx].iloc[:-1]
                  if not before_peak.empty:
                      prev_swing_lows = before_peak[before_peak['Swing_Low'].notna()]
                      if not prev_swing_lows.empty:
@@ -1524,62 +1381,29 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                                  "target": valley_low - range_size # -1.0 extension
                              }
 
-            # ---------------------------------------------------------
-            # BULLISH SETUP (Market Maker Buy Model)
-            # ---------------------------------------------------------
             if signal == "WAIT":
-                # 1. Find the lowest low (The "Turtle Soup" / Raid) in the last 40 bars
                 trough_idx = df['Low'].iloc[-40:].idxmin()
                 trough_low = df.loc[trough_idx, 'Low']
 
-                # 2. Find the Highest High *AFTER* that low (The Displacement High)
-                # We need a rally that has essentially "finished" and is now pulling back
                 after_trough = df.loc[trough_idx:]
 
-                if len(after_trough) >= 5: # Need enough data for Low -> High -> Pullback
+                if len(after_trough) >= 5:
                     peak_up_idx = after_trough['High'].idxmax()
                     peak_up_high = df.loc[peak_up_idx, 'High']
 
-                    # 3. Valid Setup Check: The High must be significantly above the Low
-                    # and the *current* price must be below that High (Pullback phase)
                     if peak_up_high > trough_low and curr_close < peak_up_high:
 
-                        # 4. Fibs (Low to High)
                         range_up = peak_up_high - trough_low
                         fib_62_up = trough_low + (range_up * 0.618)
                         fib_79_up = trough_low + (range_up * 0.79)
 
-                        # 5. Check OTE Zone (Price is between 62% and 79% down from high)
-                        # Note: In bullish OTE, we buy when price drops TO these levels.
-                        # Price should be > 79% level (stop) and < 62% level (entry start)
-                        # Correct Logic: We want price to be LOW (near 79%), but not below 100%.
-                        # Usually OTE entry is defined as retracing *at least* 62%.
-
-                        # Current Price <= 61.8% Retracement Price (Cheap)
-                        # Current Price >= 79% Retracement Price (Not broken)
-
-                        # Fix the fib comparison logic:
-                        # 62% retracement means price dropped 0.62 of the range?
-                        # No, usually OTE means price is at the 0.618 to 0.786 retracement level.
-                        # So for Buy: Entry is at (Low + 0.382*Range) ??
-                        # ICT OTE is measured from Low to High.
-                        # Retracement down 62% = Price is at (High - 0.62*Range) = (Low + 0.38*Range)
-                        # WAIT! Standard Fib tool draws 0 at High, 1 at Low for pullbacks?
-                        # Let's stick to price levels:
-                        # We want a DEEP pullback.
-                        # Deep pullback means price is closer to Low than High.
-
                         retracement_pct = (peak_up_high - curr_close) / range_up
 
                         if 0.618 <= retracement_pct <= 0.79:
-                             # 6. Check MSS (Did we break a prior High?)
-                             # We look for a swing high *before* the trough that is LOWER than our new peak
                              before_trough = df.loc[:trough_idx].iloc[:-1]
                              valid_mss = False
 
                              if not before_trough.empty:
-                                 # Find the most recent significant high before the crash
-                                 # Simply: Was the peak_up_high higher than the high immediately preceding the low?
                                  last_pre_crash_high = before_trough['High'].tail(10).max()
                                  if peak_up_high > last_pre_crash_high:
                                      valid_mss = True
@@ -1592,19 +1416,14 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                                      "target": peak_up_high + range_up
                                  }
 
-            # Rate limiting sleep
             time.sleep(0.1)
 
-            # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
-            # Additional Calcs for Consistency
-            # current_atr is already calculated above
             high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
             low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
             
             if signal != "WAIT" or check_mode:
-                # Calculate % Change
                 pct_change_1d = None
                 if len(df) >= 2:
                     try:
@@ -1636,7 +1455,6 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
             return None
         return None
 
-    # Threaded execution
     with ThreadPoolExecutor(max_workers=4) as executor:
         future_to_symbol = {executor.submit(_process_ote, sym): sym for sym in ticker_list}
         for future in as_completed(future_to_symbol):
@@ -1663,7 +1481,6 @@ def _norm_cdf(x):
 def _calculate_put_delta(S, K, T, r, sigma):
     """
     Estimates Put Delta using Black-Scholes.
-    S: Spot Price, K: Strike, T: Time to Expiry (years), r: Risk-free rate, sigma: IV
     """
     if T <= 0 or sigma <= 0: return -0.5 # Fallback
     d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
@@ -1672,13 +1489,6 @@ def _calculate_put_delta(S, K, T, r, sigma):
 def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for 45 DTE, 30-Delta Bull Put Spreads ($5 Wide).
-
-    Logic:
-    1. Filter for Bullish Trend (Price > SMA 50).
-    2. Find Expiry closest to 45 DTE.
-    3. Calculate Deltas to find Short Strike (~0.30 Delta).
-    4. Find Long Strike ($5 lower).
-    5. Calculate ROI (Credit / Collateral).
     """
     import yfinance as yf
     import pandas_ta as ta
@@ -1698,17 +1508,14 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
     def _process_spread(ticker):
         try:
             # 1. Trend Filter (Fast Fail)
-            # Create Ticker object (Thread-safe usage compared to yf.download batch issues)
             tk = yf.Ticker(ticker)
 
-            # We need ~6 months of data for SMA 50 and stability check
             df = tk.history(period="6mo", interval="1d", auto_adjust=True)
             if df.empty: return None
 
-            min_length = 50 if check_mode else 50 # Need 50 bars for SMA 50
+            min_length = 50 if check_mode else 50
             if len(df) < min_length: return None
 
-            # Flatten columns if needed (history usually returns simple index but just in case)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
 
@@ -1719,7 +1526,6 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
             volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
 
-            # Trend Check: Only sell puts if stock is above SMA 50 (Bullish/Neutral)
             if curr_price < sma_50 and not check_mode:
                 return None
 
@@ -1727,7 +1533,6 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             expirations = tk.options
             if not expirations: return None
 
-            # Find date closest to 45 DTE
             today = date.today()
             best_date = None
             min_diff = 999
@@ -1740,7 +1545,6 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
                     min_diff = diff
                     best_date = exp_str
 
-            # Filter: Ensure DTE is reasonably close (e.g. 30 to 60 days)
             actual_dte = (pd.to_datetime(best_date).date() - today).days
             if not (25 <= actual_dte <= 75) and not check_mode: return None
 
@@ -1751,65 +1555,49 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             if puts.empty: return None
 
             # 4. Find 30 Delta Strike
-            # yfinance gives us 'impliedVolatility'. We calculate delta ourselves.
-            # T in years
             T_years = actual_dte / 365.0
 
-            # Calculate Delta for each row
             puts['calc_delta'] = puts.apply(
                 lambda row: _calculate_put_delta(
                     curr_price, row['strike'], T_years, RISK_FREE_RATE, row['impliedVolatility']
                 ), axis=1
             )
 
-            # Find the row closest to -0.30
-            # Sort by distance to target delta
             puts['delta_dist'] = (puts['calc_delta'] - TARGET_DELTA).abs()
             short_leg_row = puts.loc[puts['delta_dist'].idxmin()]
 
             short_strike = short_leg_row['strike']
-            short_bid = short_leg_row['bid'] # We sell at bid (conservatively) or mid
+            short_bid = short_leg_row['bid']
             short_delta = short_leg_row['calc_delta']
 
             # 5. Find Long Strike ($5 Lower)
             long_strike_target = short_strike - SPREAD_WIDTH
 
-            # Find strike closest to target (exact match preferred)
             puts['strike_dist'] = (puts['strike'] - long_strike_target).abs()
             long_leg_row = puts.loc[puts['strike_dist'].idxmin()]
 
             long_strike = long_leg_row['strike']
-            long_ask = long_leg_row['ask'] # We buy at ask
+            long_ask = long_leg_row['ask']
 
-            # Check if we actually found a $5 wide spread (allow small variance for weird strikes)
             actual_width = short_strike - long_strike
             if abs(actual_width - SPREAD_WIDTH) > 1.0 and not check_mode:
-                return None # Could not find the defined spread width
+                return None
 
             # 6. Calc Metrics
-            # Credit = Price Sold - Price Bought
-            # Note: yfinance data can be delayed/wide. We use midpoint if bid/ask is messy,
-            # but strictly: Credit = Short_Bid - Long_Ask
-
-            # Fallback to lastPrice if bid/ask is zero (market closed/illiquid)
             s_price = short_bid if short_bid > 0 else short_leg_row['lastPrice']
             l_price = long_ask if long_ask > 0 else long_leg_row['lastPrice']
 
             credit = s_price - l_price
-
-            # Max Risk = Width - Credit
             risk = actual_width - credit
 
-            if (risk <= 0 or credit <= 0) and not check_mode: return None # Yield too low
+            if (risk <= 0 or credit <= 0) and not check_mode: return None
 
             roi = credit / risk
 
-            if roi < min_roi and not check_mode: return None # Yield too low
+            if roi < min_roi and not check_mode: return None
 
-            # Rate limiting sleep
             time.sleep(0.1)
 
-            # Calculate % Change
             pct_change_1d = None
             if len(df) >= 2:
                 try:
@@ -1818,11 +1606,8 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
                 except Exception:
                     pass
 
-            # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
-            # Additional Calcs for Consistency
-            # current_atr is already calculated above
             high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
             low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
 
@@ -1853,7 +1638,6 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             logger.error(f"Error processing bull put spread for {ticker}: {e}")
             return None
 
-    # Multi-threaded Execution
     import concurrent.futures
     final_list = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
@@ -1862,7 +1646,6 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             res = future.result()
             if res: final_list.append(res)
 
-    # Sort by ROI
     final_list.sort(key=lambda x: x['roi_pct'], reverse=True)
     return final_list
 
@@ -1874,50 +1657,35 @@ def resolve_ticker(query: str) -> str:
     if not query: return ""
     query = query.strip().upper()
 
-    # 1. Exact Ticker Match
     if query in TICKER_NAMES:
         return query
 
-    # 2. Check suffix variations (.L, .NS)
-    # If query has no suffix, check if query.L or query.NS exists in TICKER_NAMES
     if "." not in query:
         if f"{query}.L" in TICKER_NAMES: return f"{query}.L"
         if f"{query}.NS" in TICKER_NAMES: return f"{query}.NS"
 
-    # 3. Name Search (Exact then Partial)
-    # Exact Name
     for k, v in TICKER_NAMES.items():
         if v.upper() == query:
             return k
 
-    # Partial Name
     for k, v in TICKER_NAMES.items():
         if query in v.upper():
             return k
 
-    # 4. Fallback: Assume it is a valid ticker if no match found
     return query
 
 def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False) -> list:
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).
-    Based on Seykota/Dennis (Breakouts) and Tharp (Risk).
-
-    Rules:
-    1. Trend: Price > 200 SMA.
-    2. Entry: Price >= 50-Day High.
-    3. Exit/Stop: Trailing 3x ATR or 20-Day Low.
     """
     import yfinance as yf
     import pandas_ta as ta
     import pandas as pd
 
-    # Input Validation: Ensure risk_per_trade_pct is within sane bounds (0.1% to 10%)
     if not (0.001 <= risk_per_trade_pct <= 0.10):
         logger.warning(f"risk_per_trade_pct {risk_per_trade_pct} out of bounds (0.001-0.1). Resetting to 0.01.")
         risk_per_trade_pct = 0.01
 
-    # Default to a mix of US and UK liquid stocks if none provided
     if ticker_list is None:
         if region == "uk_euro":
             ticker_list = get_uk_euro_tickers()
@@ -1927,15 +1695,10 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         elif region == "india":
             ticker_list = get_indian_tickers()
         elif region == "sp500":
-             # S&P 500 filtered
-             # For S&P 500, we specifically return filtered S&P 500 stocks.
-             # We might add Watch list as well if requested, but separation implies purity.
              sp500 = _get_filtered_sp500(check_trend=True)
-             # Also include WATCH list as per global logic "Always scan High Interest"
              watch_list = SECTOR_COMPONENTS.get("WATCH", [])
              ticker_list = list(set(sp500 + watch_list))
         else: # us / combined default
-            # "US Market" = High Liquid Sector Components + Watch List
             all_tickers = []
             for t_list in SECTOR_COMPONENTS.values():
                 all_tickers.extend(t_list)
@@ -1944,16 +1707,13 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     results = []
 
     # 1. Fetch Data
-    # Use cached loader with region-specific key to prevent bans (especially India)
     cache_key = f"market_scan_{region}"
     data = pd.DataFrame()
 
     try:
         if len(ticker_list) > 50:
-            # Use robust cached loader for large lists (handles chunking/sleep)
             data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_key)
         else:
-            # Small lists can go direct, ensuring threads=True and grouping
             data = yf.download(ticker_list, period="2y", progress=False, threads=True, auto_adjust=True, group_by='ticker')
 
     except Exception as e:
@@ -1961,185 +1721,58 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         return []
     
     if data.empty:
-        # Only log error if list wasn't empty to begin with
         if ticker_list:
             logger.error("❌ Yahoo returned NO DATA. You might be rate limited.")
         return []
 
-    for ticker in ticker_list:
-        try:
-            # Robust extraction using shared utility
-            df = _prepare_data_for_ticker(ticker, data, "1d", "2y", "1d", None, False)
+    # OPTIMIZED ITERATION
+    if isinstance(data.columns, pd.MultiIndex):
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
+    else:
+        # If single ticker requested and returned, make it behave like an iterator
+        if len(ticker_list) == 1 and not data.empty:
+             iterator = [(ticker_list[0], data)]
+        else:
+             iterator = [] # Can't iterate flat easily without knowing columns, usually safe to skip or assume
 
-            if df is None or df.empty: continue
+    # If simple df and multiple tickers requested but flat returned, yfinance failed to group or only 1 valid.
+    # We fallback to standard iteration if needed, but groupby is cleaner for mass scans.
 
-            # Clean and validate
-            df = df.dropna(how='all')
-            # If check_mode is ON, we relax length requirements strictly for basic data
-            min_length = 50 if check_mode else 200
-            if len(df) < min_length: continue
+    # Wait, if we requested 1 ticker, data is flat (Open, High, Low...)
+    # If we requested >1, data is MultiIndex (Ticker -> (Open...))
 
-            # Get latest price
-            curr_close = float(df['Close'].iloc[-1])
-            
-            # Additional Calcs
-            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
-            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
-            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
-            pct_change_1d = ((curr_close - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
+    # Logic to handle both:
+    if not isinstance(data.columns, pd.MultiIndex) and len(ticker_list) > 1:
+         # Something weird, maybe only 1 valid ticker returned?
+         # Check intersection
+         pass
 
-            # Liquidity Filter: Average Daily Dollar Volume > $5M
-            # (Simons says: Liquidity First)
-            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-            if not check_mode and (avg_vol * curr_close) < 5_000_000:
-                continue
+    # Use a loop over ticker_list and slice? No, groupby is faster for iteration if it IS MultiIndex.
+    # If it is NOT MultiIndex, it is a single ticker frame.
 
-            # Trend Filter: 200 SMA
-            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+    if isinstance(data.columns, pd.MultiIndex):
+        for ticker, df in [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]:
+            try:
+                # Droplevel is implicit when accessing by top level key in MultiIndex columns
+                # df = df.droplevel(0, axis=1) # No longer needed with direct access
 
-            # Breakout Levels: 50-Day High (Entry) & 20-Day Low (Exit)
-            # Shift(1) because we want the high of the *previous* window to compare against today
-            # We calculate rolling series for Breakout Date logic later
-            df['High_50'] = df['High'].rolling(50).max().shift(1)
-            df['Low_20'] = df['Low'].rolling(20).min().shift(1)
+                # Check if ticker matches what we wanted (groupby yields all in dataframe)
+                # If data contains more than we asked (e.g. cache has full market), we filter?
+                # Yes, but usually we pass the list to get_cached_market_data.
+                # But get_cached_market_data returns the whole cache if it hits.
+                if ticker not in ticker_list: continue
 
-            high_50 = df['High_50'].iloc[-1]
-            low_20 = df['Low_20'].iloc[-1]
-
-            # Volatility: ATR 20
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
-            atr_20 = float(df['ATR'].iloc[-1])
-
-            # 3. Apply The "Legend" Rules
-            signal = "WAIT"
-
-            # RULE 1: Long Term Trend
-            if curr_close > sma_200:
-
-                # RULE 2: Breakout Entry (Donchian Channel)
-                if curr_close >= high_50:
-                    signal = "🚀 ENTER LONG (50d Breakout)"
-
-                # Watchlist: Price is near breakout (within 2%)
-                elif curr_close >= high_50 * 0.98:
-                    signal = "👀 WATCH (Near Breakout)"
-
-                # Holding: Price is above exit
-                elif curr_close > low_20:
-                    signal = "✅ HOLD (Trend Active)"
-
-                # Rule 3: Exit (Trailing Stop)
-                elif curr_close <= low_20:
-                    signal = "🛑 EXIT (Stop Hit)"
-            else:
-                signal = "❌ SELL/AVOID (Downtrend)"
-
-            # 4. Van Tharp Risk Calculation
-            # Stop Loss is 3 ATRs below price
-            stop_price = curr_close - (3 * atr_20)
-
-            # If entering, stop is 3 ATR below ENTRY (current price)
-            # If holding, user should use trailing stop (low_20) OR 3 ATR?
-            # The prompt says: "Exit... Trailing Stop. If price closes below the 20-Day Low... Initial Stop Loss = 3 x ATR"
-            # So for New Entries, we report 3 ATR stop. For existing, we report 20d Low?
-            # Let's report both or the relevant one.
-            # We will return the 3ATR stop for the "Setup".
-
-            risk_per_share = curr_close - stop_price
-
-            # Distance from Stop
-            # If entering, we look at Initial Stop (3 ATR).
-            # If holding, we look at Trailing Stop (20d Low).
-            effective_stop = stop_price
-            if "HOLD" in signal or "EXIT" in signal:
-                effective_stop = low_20
-
-            dist_to_stop_pct = 0.0
-            if curr_close > 0:
-                dist_to_stop_pct = ((curr_close - effective_stop) / curr_close) * 100
-
-            # --- VAN THARP SIZING CHECK ---
-            # User Rule: Fixed 4% Position Sizing
-            position_size_pct = 0.04
-
-            # How much total equity is at risk?
-            # Risk = Position Size * Distance to Stop
-            risk_dist = max(0.0, dist_to_stop_pct)
-            total_equity_risk_pct = position_size_pct * (risk_dist / 100.0)
-
-            # Tharp's Limit: Never risk more than 1% of total equity on a trade
-            is_tharp_safe = bool(total_equity_risk_pct <= 0.01)
-
-            tharp_verdict = "✅ SAFE" if is_tharp_safe else f"⚠️ RISKY (Risks {total_equity_risk_pct*100:.1f}% Equity)"
-            if dist_to_stop_pct <= 0:
-                 tharp_verdict = "🛑 STOPPED OUT"
-
-            suggested_size_val = 0.0
-            if risk_dist > 0:
-                 suggested_size_val = min(4.0, 1.0 / (risk_dist / 100.0))
-            else:
-                 suggested_size_val = 4.0
-
-            max_position_size_str = f"{suggested_size_val:.1f}%"
-
-            # Position Sizing Logic (The 4% Rule)
-            # This is calculated by caller or frontend, but we provide metrics.
-
-            volatility_pct = (atr_20 / curr_close) * 100
-
-            # Additional: 1D Change
-            # pct_change_1d is already calculated above
-
-            # --- Breakout Date Logic ---
-            breakout_date = _calculate_trend_breakout_date(df)
-
-
-            # Filter results?
-            # We return ENTER, WATCH, HOLD, and EXIT signals.
-            # We skip AVOID (Downtrend) to reduce noise, unless explicitly requested?
-            # The user wants to know "whether i should hold now".
-            # If the stock is in a downtrend (AVOID) or Stop Hit (EXIT), it should be shown if the user searches for it.
-            # However, showing 500 "AVOID" stocks is clutter.
-            # We will include EXIT signals.
-            # We will also include AVOID signals but flag them clearly.
-            # Actually, let's include all so the user can audit any stock in the list.
-
-            # Identify name
-            # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-            results.append({
-                "ticker": ticker,
-                "company_name": company_name,
-                "price": curr_close,
-                "pct_change_1d": pct_change_1d,
-                "signal": signal,
-                "trend_200sma": "Bullish", # We filtered for this inside the signal logic
-                "breakout_level": round(high_50, 2),
-                "stop_loss_3atr": round(stop_price, 2),
-                "trailing_exit_20d": round(low_20, 2),
-                "volatility_pct": round(volatility_pct, 2),
-                "atr_20": round(atr_20, 2),
-                "atr_value": round(atr_20, 2),
-                "risk_per_share": round(risk_per_share, 2),
-                "dist_to_stop_pct": round(dist_to_stop_pct, 2),
-                "tharp_verdict": tharp_verdict,
-                "max_position_size": max_position_size_str,
-                "breakout_date": breakout_date,
-                "safe_to_trade": is_tharp_safe,
-                "atr": round(current_atr, 2),
-                "52_week_high": round(high_52wk, 2) if high_52wk else None,
-                "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                "sector_change": pct_change_1d
-            })
-
-        except Exception as e:
-            logger.error(f"ISA screener error for {ticker}: {e}")
-            continue
+                # Process
+                res = _process_isa_ticker(ticker, df, check_mode)
+                if res: results.append(res)
+            except: continue
+    else:
+        # Single Ticker Case
+        if len(ticker_list) == 1:
+             res = _process_isa_ticker(ticker_list[0], data, check_mode)
+             if res: results.append(res)
 
     # Sort by signal priority
-    # ENTER first, then WATCH, then HOLD
     def sort_key(x):
         s = x['signal']
         if "ENTER" in s: return 0
@@ -2149,177 +1782,288 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     results.sort(key=sort_key)
     return results
 
+def _process_isa_ticker(ticker, df, check_mode):
+    try:
+        import pandas_ta as ta
+        df = df.dropna(how='all')
+        min_length = 50 if check_mode else 200
+        if len(df) < min_length: return None
+
+        curr_close = float(df['Close'].iloc[-1])
+
+        current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
+        high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+        low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+        pct_change_1d = ((curr_close - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
+
+        avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+        if not check_mode and (avg_vol * curr_close) < 5_000_000:
+            return None
+
+        sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+
+        df['High_50'] = df['High'].rolling(50).max().shift(1)
+        df['Low_20'] = df['Low'].rolling(20).min().shift(1)
+
+        high_50 = df['High_50'].iloc[-1]
+        low_20 = df['Low_20'].iloc[-1]
+
+        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
+        atr_20 = float(df['ATR'].iloc[-1])
+
+        signal = "WAIT"
+
+        if curr_close > sma_200:
+            if curr_close >= high_50:
+                signal = "🚀 ENTER LONG (50d Breakout)"
+            elif curr_close >= high_50 * 0.98:
+                signal = "👀 WATCH (Near Breakout)"
+            elif curr_close > low_20:
+                signal = "✅ HOLD (Trend Active)"
+            elif curr_close <= low_20:
+                signal = "🛑 EXIT (Stop Hit)"
+        else:
+            signal = "❌ SELL/AVOID (Downtrend)"
+
+        stop_price = curr_close - (3 * atr_20)
+
+        risk_per_share = curr_close - stop_price
+
+        effective_stop = stop_price
+        if "HOLD" in signal or "EXIT" in signal:
+            effective_stop = low_20
+
+        dist_to_stop_pct = 0.0
+        if curr_close > 0:
+            dist_to_stop_pct = ((curr_close - effective_stop) / curr_close) * 100
+
+        position_size_pct = 0.04
+        risk_dist = max(0.0, dist_to_stop_pct)
+        total_equity_risk_pct = position_size_pct * (risk_dist / 100.0)
+
+        is_tharp_safe = bool(total_equity_risk_pct <= 0.01)
+
+        tharp_verdict = "✅ SAFE" if is_tharp_safe else f"⚠️ RISKY (Risks {total_equity_risk_pct*100:.1f}% Equity)"
+        if dist_to_stop_pct <= 0:
+             tharp_verdict = "🛑 STOPPED OUT"
+
+        suggested_size_val = 0.0
+        if risk_dist > 0:
+             suggested_size_val = min(4.0, 1.0 / (risk_dist / 100.0))
+        else:
+             suggested_size_val = 4.0
+
+        max_position_size_str = f"{suggested_size_val:.1f}%"
+        volatility_pct = (atr_20 / curr_close) * 100
+
+        breakout_date = _calculate_trend_breakout_date(df)
+
+        base_ticker = ticker.split('.')[0]
+        company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+        return {
+            "ticker": ticker,
+            "company_name": company_name,
+            "price": curr_close,
+            "pct_change_1d": pct_change_1d,
+            "signal": signal,
+            "trend_200sma": "Bullish",
+            "breakout_level": round(high_50, 2),
+            "stop_loss_3atr": round(stop_price, 2),
+            "trailing_exit_20d": round(low_20, 2),
+            "volatility_pct": round(volatility_pct, 2),
+            "atr_20": round(atr_20, 2),
+            "atr_value": round(atr_20, 2),
+            "risk_per_share": round(risk_per_share, 2),
+            "dist_to_stop_pct": round(dist_to_stop_pct, 2),
+            "tharp_verdict": tharp_verdict,
+            "max_position_size": max_position_size_str,
+            "breakout_date": breakout_date,
+            "safe_to_trade": is_tharp_safe,
+            "atr": round(current_atr, 2),
+            "52_week_high": round(high_52wk, 2) if high_52wk else None,
+            "52_week_low": round(low_52wk, 2) if low_52wk else None,
+            "sector_change": pct_change_1d
+        }
+    except Exception as e:
+        # logger.error(f"ISA ticker error: {e}")
+        return None
+
 # -------------------------------------------------------------------------
 #  FOURIER / CYCLE ANALYSIS HELPERS
 # -------------------------------------------------------------------------
 import numpy as np
 
+def _calculate_hilbert_phase(prices):
+    """
+    Calculates Instantaneous Phase using the Hilbert Transform.
+    FIX: Replaces rigid FFT with Analytic Signal for non-stationary data.
+    Returns:
+        - phase: (-pi to +pi) where -pi/pi is a trough/peak.
+        - strength: Magnitude of the cycle (Amplitude).
+    """
+    try:
+        if len(prices) < 30: return None, None
+
+        # 1. Log Returns to normalize magnitude
+        # We work with price deviations, but log prices are safer for trends
+        log_prices = np.log(prices)
+
+        # 2. Detrend (Linear) to isolate oscillatory component
+        # 'linear' detrending removes the primary trend so we see the cycle
+        detrended = detrend(log_prices, type='linear')
+
+        # 3. Apply Hilbert Transform to get Analytic Signal
+        analytic_signal = hilbert(detrended)
+
+        # 4. Extract Phase (Angle) and Amplitude (Abs)
+        # Phase ranges from -pi to +pi radians
+        phase = np.angle(analytic_signal)[-1]
+        amplitude = np.abs(analytic_signal)[-1]
+
+        return phase, amplitude
+
+    except Exception:
+        return None, None
+
 def _calculate_dominant_cycle(prices):
     """
     Uses FFT to find the dominant cycle period (in days) of a price series.
     Returns: (period_days, current_phase_position)
-
-    current_phase_position:
-       0.0 = Bottom (Trough) -> Ideal Buy
-       0.5 = Top (Peak)      -> Ideal Sell
-       (Approximate sine wave mapping)
     """
-    # 1. Prepare Data
-    # We need a fixed window. Let's look at the last 64 or 128 days (power of 2 is faster for FFT)
     N = len(prices)
     if N < 64: return None
 
-    # Use most recent 64 days for cycle detection (short-term cycles)
-    # or 128/256 for longer cycles.
     window_size = 64
     y = np.array(prices[-window_size:])
     x = np.arange(window_size)
 
-    # 2. Detrend (Remove the linear trend so we just see waves)
-    # Simple linear regression detrending
     p = np.polyfit(x, y, 1)
     trend = np.polyval(p, x)
     detrended = y - trend
 
-    # Apply a window function (Hanning) to reduce edge leakage
     windowed = detrended * np.hanning(window_size)
 
-    # 3. FFT
     fft_output = np.fft.rfft(windowed)
     frequencies = np.fft.rfftfreq(window_size)
 
-    # 4. Find Dominant Frequency (ignore DC component at index 0)
-    # We look for the peak amplitude
     amplitudes = np.abs(fft_output)
 
-    # Skip low frequencies (trends) and very high frequencies (noise)
-    # We want cycles between 3 days and 30 days usually.
-    # Index 0 is trend.
     peak_idx = np.argmax(amplitudes[1:]) + 1
 
     dominant_freq = frequencies[peak_idx]
     period = 1.0 / dominant_freq if dominant_freq > 0 else 0
 
-    # 5. Determine Phase (Where are we now?)
-    # Reconstruct the dominant wave
-    # Sine wave: A * sin(2*pi*f*t + phase)
-    # We check the phase of the last point (t = window_size - 1)
-
-    # Simple Heuristic: Check the detrended value relative to recent range
-    # If detrended[-1] is near the minimum of the last cycle, we are at trough.
-
     current_val = detrended[-1]
     cycle_range = np.max(detrended) - np.min(detrended)
 
-    # Normalized position (-1.0 to 1.0)
     rel_pos = current_val / (cycle_range / 2.0) if cycle_range > 0 else 0
 
     return round(period, 1), rel_pos
 
 def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
-    Screens for stocks at the BOTTOM of their dominant time cycle (Fourier).
-    Best for 'Swing Trading' in sideways or gently trending markets.
+    Screens for Cyclical Turns using Instantaneous Phase (Hilbert Transform).
+    FIX: Removed fixed period limits (5-60d). Now detects geometric turns.
     """
-    import yfinance as yf
     import pandas as pd
+    import numpy as np # Ensure numpy is imported
 
     if ticker_list is None:
         ticker_list = _resolve_region_tickers(region)
 
     results = []
 
-    # Fetch Data (Need history for FFT)
+    # Batch fetch logic remains same ...
     try:
-        # Use safe batch fetch
         data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d", chunk_size=100)
     except:
         return []
 
-    for ticker in ticker_list:
+    # Iterator setup ...
+    if isinstance(data.columns, pd.MultiIndex):
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
+    else:
+        iterator = [(ticker_list[0], data)] if len(ticker_list)==1 and not data.empty else []
+
+    for ticker, df in iterator:
         try:
-            df = pd.DataFrame()
-            if isinstance(data.columns, pd.MultiIndex):
-                if ticker in data.columns.levels[0]:
-                    df = data[ticker].copy()
-            else:
-                df = data.copy()
+            if isinstance(df.columns, pd.MultiIndex):
+                df = df.droplevel(0, axis=1)
 
             df = df.dropna(how='all')
-            if len(df) < 100: continue
+            if len(df) < 50: continue
+            if ticker not in ticker_list: continue
 
-            closes = df['Close'].tolist()
+            # --- DSP PHYSICS CALCULATION ---
+            # Use 'Close' series values
+            closes = df['Close'].values
 
-            import pandas_ta as ta
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-            volatility_pct = (current_atr / float(closes[-1]) * 100) if float(closes[-1]) > 0 else 0.0
+            phase, strength = _calculate_hilbert_phase(closes)
 
-            # --- FOURIER CALC ---
-            cycle_data = _calculate_dominant_cycle(closes)
-            if not cycle_data: continue
+            if phase is None: continue
 
-            period, rel_pos = cycle_data
+            # --- SIGNAL LOGIC (Based on Radians) ---
+            # Phase -3.14 (or 3.14) is the TROUGH (Bottom)
+            # Phase 0 is the ZERO CROSSING (Midpoint/Trend)
+            # Phase 1.57 (pi/2) is the PEAK (Top)
 
-            # Calculate % Change
-            pct_change_1d = None
-            if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    curr_close = float(df['Close'].iloc[-1])
-                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
-
-            # Interpret Result
-            # Period: Length of cycle (e.g., 14.2 days)
-            # Rel Pos: -1.0 (Bottom) to 1.0 (Top)
+            # Normalize phase for display (-1 to 1 scale roughly)
+            norm_phase = phase / np.pi
 
             signal = "WAIT"
             verdict_color = "gray"
 
-            # Trading Rules:
-            # 1. Cycle must be actionable (e.g., 5 to 40 days).
-            #    If period is 2 days, it's noise. If 200 days, it's a trend.
-            if 5 <= period <= 60:
-                if rel_pos <= -0.8:
-                    signal = "🌊 CYCLICAL LOW (Buy)"
-                    verdict_color = "green"
-                elif rel_pos >= 0.8:
-                    signal = "🏔️ CYCLICAL HIGH (Sell)"
-                    verdict_color = "red"
-                elif -0.2 <= rel_pos <= 0.2:
-                    signal = "➡️ MID-CYCLE (Neutral)"
-            else:
-                # Cycle is too short (noise) or too long (trend) to trade as a cycle
-                continue
+            # Sine Wave Cycle logic:
+            # We want to catch the turn UP from the bottom.
+            # Bottom is +/- pi. As it crosses from negative to positive?
+            # Actually, Hilbert Phase moves continuously.
+            # Deep cycle low is typically near +/- pi boundaries depending on convention.
 
-            # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+            # DEFINITION:
+            # Phase close to +/- Pi = Trough (Oversold Cycle)
+            # Phase close to 0 = Peak (Overbought Cycle) in some implementations,
+            # BUT standard Hilbert on detrended data:
+            # Real part max = Peak, Real part min = Trough.
+            # Phase transitions align with the wave.
 
-            # Calculate Trend Breakout Date
-            breakout_date = _calculate_trend_breakout_date(df)
+            # Simplify: If Phase is turning from Negative to Positive (Sine wave bottom)
+
+            if 0.8 <= abs(norm_phase) <= 1.0:
+                signal = "🌊 CYCLICAL LOW (Bottoming)"
+                verdict_color = "green"
+            elif 0.0 <= abs(norm_phase) <= 0.2:
+                signal = "🏔️ CYCLICAL HIGH (Topping)"
+                verdict_color = "red"
+
+            # Filter weak cycles (Noise)
+            if strength < 0.02: # 2% Amplitude threshold
+                signal = "WAIT (Weak Cycle)"
+                verdict_color = "gray"
+
+            pct_change_1d = None
+            if len(df) >= 2:
+                pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
+
+            # Calculate dominant period for context
+            period, rel_pos = _calculate_dominant_cycle(closes) or (0, 0)
 
             results.append({
                 "ticker": ticker,
-                "company_name": company_name,
                 "price": float(closes[-1]),
                 "pct_change_1d": pct_change_1d,
                 "signal": signal,
-                "cycle_period": f"{period} Days",
-                "cycle_position": f"{rel_pos:.2f} (-1 Low, +1 High)",
+                "cycle_phase": f"{phase:.2f} rad",
+                "cycle_strength": f"{strength*100:.1f}%", # Volatility of the cycle
                 "verdict_color": verdict_color,
-                "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2),
-                "breakout_date": breakout_date
+                "method": "Hilbert (Non-Stationary)",
+                "cycle_period": f"{period} days" # Legacy compatibility for tests
             })
 
         except Exception:
             continue
 
-    # Sort: Buys first
-    results.sort(key=lambda x: x['cycle_position'])
+    results.sort(key=lambda x: x.get('cycle_strength', 0), reverse=True)
     return results
 
 class StrategyAnalyzer:
@@ -2360,11 +2104,7 @@ class StrategyAnalyzer:
         if self.len < 14: return "NEUTRAL"
         # Simple RSI check
         import pandas_ta as ta
-        # Check if RSI column exists, if not calculate
-        # We need to be careful not to modify the original df if it is used elsewhere without copying
-        # But here we pass a copy usually.
 
-        # Check if 'RSI_14' or 'RSI' exists
         rsi_val = None
         if 'RSI_14' in self.df.columns:
              rsi_val = self.df['RSI_14'].iloc[-1]
@@ -2372,7 +2112,6 @@ class StrategyAnalyzer:
              rsi_val = self.df['RSI'].iloc[-1]
         else:
              try:
-                 # Calculate temp
                  rsi_s = ta.rsi(self.df['Close'], length=14)
                  if rsi_s is not None and not rsi_s.empty:
                     rsi_val = rsi_s.iloc[-1]
@@ -2389,7 +2128,6 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     """
     Robust Hybrid Screener with CHUNKING to prevent API Timeouts.
     Combines ISA Trend Following with Fourier Cycle Analysis.
-    Goal: Find 'Buy the Dip' opportunities in strong uptrends.
     """
     import yfinance as yf
     import pandas_ta as ta
@@ -2399,17 +2137,13 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     if ticker_list is None:
         ticker_list = _resolve_region_tickers(region)
     
-    # Ensure tickers are uppercase to match yfinance index
     if ticker_list:
         ticker_list = [t.upper() for t in ticker_list]
         
     results = []
 
-    # Sort out Cache Logic
     is_large_scan = False
     if ticker_list and len(ticker_list) > 100: is_large_scan = True
-
-    print(f"DEBUG: screen_hybrid_strategy region={region} ticker_len={len(ticker_list) if ticker_list else 0}", flush=True)
 
     cache_name = "watchlist_scan"
     if region == "india":
@@ -2421,278 +2155,212 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     elif is_large_scan:
          cache_name = "market_scan_v1"
 
-    print(f"DEBUG: using cache_name={cache_name}", flush=True)
-
-    # Only use cache for daily timeframe (intraday needs fresh data)
     if check_mode:
-        # Force fresh fetch for individual checks
         all_data = fetch_batch_data_safe(ticker_list, period="2y", interval=time_frame)
     elif time_frame == "1d":
         all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     else:
-        # Intraday
         all_data = fetch_batch_data_safe(ticker_list, period="5d", interval=time_frame)
 
-    print(f"DEBUG: all_data type={type(all_data)} empty={all_data.empty if isinstance(all_data, pd.DataFrame) else 'N/A'}", flush=True)
-    if isinstance(all_data, pd.DataFrame):
-         print(f"DEBUG: all_data columns={all_data.columns}", flush=True)
-
-    # Process Data
-    # Get list of successfully downloaded tickers
+    # Optimized Iteration
     if isinstance(all_data.columns, pd.MultiIndex):
-        valid_tickers = all_data.columns.levels[0].intersection(ticker_list)
+        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
     else:
-        # Fallback if only 1 ticker in list or flat structure
-        if not all_data.empty:
-             val_tickers = [] # placeholder
-             # If flat and we requested multiple, it might be weird.
-             # But if we requested 1 ticker, it is flat.
-             # If we requested multiple and only 1 came back, it might be flat or multi.
-             # yfinance usually returns MultiIndex for >1 ticker.
-             # If only 1 ticker in the list passed to download, it returns flat.
-             # Here we accumulate.
-             valid_tickers = ticker_list if len(ticker_list) == 1 else []
+        # Fallback for single or flat
+        if not all_data.empty and len(ticker_list) == 1:
+            iterator = [(ticker_list[0], all_data)]
         else:
-             valid_tickers = []
+            iterator = []
 
-    for ticker in valid_tickers:
+    for ticker, df in iterator:
         try:
-            df = pd.DataFrame()
-            if isinstance(all_data.columns, pd.MultiIndex):
-                if ticker in all_data.columns.levels[0]:
-                    df = all_data[ticker].copy()
-            else:
-                # If only one ticker was requested/returned
-                df = all_data.copy()
+            if isinstance(df.columns, pd.MultiIndex):
+                df = df.droplevel(0, axis=1)
+
+            if ticker not in ticker_list: continue
 
             df = df.dropna(how='all')
-            
-            # If check_mode is ON, we relax length requirements strictly for basic data
             min_length = 50 if check_mode else 200
             if len(df) < min_length: continue
 
-            curr_close = float(df['Close'].iloc[-1])
-            closes = df['Close'].tolist()
+            # Process logic
+            res = _process_hybrid_ticker(ticker, df, time_frame, check_mode)
+            if res: results.append(res)
+        except Exception: continue
 
-            # --- STEP 1: ISA TREND ANALYSIS ---
-            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-            high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
-
-            # New Metrics for User
-            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
-            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
-            
-            # Simple Sector Change Placeholder (future enhancement: map real sector performance)
-            # For now, just return this stock's change as a proxy or null if unknown
-            sector_change_pct = None
-            
-            trend_verdict = "NEUTRAL"
-            if curr_close > sma_200:
-                trend_verdict = "BULLISH"
-            else:
-                trend_verdict = "BEARISH"
-
-            # Check Breakout status
-            is_breakout = curr_close >= high_50
-
-            # --- STEP 2: FOURIER CYCLE ANALYSIS ---
-            cycle_data = _calculate_dominant_cycle(closes) # Re-using your helper
-
-            cycle_state = "NEUTRAL"
-            cycle_score = 0.0 # -1.0 (Low) to 1.0 (High)
-            period = 0
-
-            if cycle_data:
-                period, rel_pos = cycle_data
-                cycle_score = rel_pos
-
-                # Define Cycle States
-                if rel_pos <= -0.7:
-                    cycle_state = "BOTTOM"
-                elif rel_pos >= 0.7:
-                    cycle_state = "TOP"
-                else:
-                    cycle_state = "MID"
-
-            # Volume Filter (Anti-Double-Tap Fix):
-            # If scanning daily (1d), ensure we aren't wasting time on illiquid stocks (<500k avg vol).
-            # Skip this check for WATCH list items (High Interest) OR if check_mode is ON.
-            if time_frame == "1d" and not check_mode:
-                watch_list = SECTOR_COMPONENTS.get("WATCH", [])
-                if ticker not in watch_list:
-                    # Calculate 20-day Avg Volume
-                    if 'Volume' in df.columns:
-                        avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-                        if avg_vol < 500000:
-                            continue
-
-            # --- STEP 3: SAFETY CHECKS (The "Anti-Falling Knife" Logic) ---
-
-            # 1. Get Price Action Data
-            today_open = float(df['Open'].iloc[-1])
-            yesterday_close = float(df['Close'].iloc[-2])
-            yesterday_low = float(df['Low'].iloc[-2])
-
-            # 2. Falling Knife Guards
-            # Guard 1: The "Green Candle" Rule (Buyers must step in)
-            is_green_candle = curr_close > today_open
-
-            # Guard 2: The "Panic" Rule (ATR)
-            # If today's range is huge (> 2x ATR), it's a crash/panic.
-            # Ensure ATR is calculated first
-            if 'ATR' not in df.columns:
-                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-
-            current_atr = 0.0
-            if 'ATR' in df.columns and not df['ATR'].empty:
-                 current_atr = df['ATR'].iloc[-1]
-            if pd.isna(current_atr): current_atr = 0.0
-
-            volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
-
-            daily_range = df['High'].iloc[-1] - df['Low'].iloc[-1]
-            is_panic_selling = daily_range > (2.0 * current_atr) if current_atr > 0 else False
-
-            # Guard 3: Momentum Hook
-            # Don't buy if we made a lower low than yesterday and closed near it
-            is_making_lower_lows = curr_close < yesterday_low
-
-            # Calculate % Change
-            pct_change_1d = None
-            if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
-
-            # --- STEP 4: SYNTHESIZE VERDICT ---
-            final_signal = "WAIT"
-            color = "gray"
-            score = 0 # 0 to 100 confidence
-
-            # --- STEP 5: CALCULATE EXITS (Risk Management) ---
-
-            stop_loss_price = curr_close - (3 * current_atr) # 3 ATR below entry
-
-            # Cycle Target (Projected)
-            target_price = curr_close + (2 * current_atr)
-
-            # Risk/Reward Ratio Check
-            potential_reward = target_price - curr_close
-            potential_risk = curr_close - stop_loss_price
-            rr_ratio = potential_reward / potential_risk if potential_risk > 0 else 0
-
-            rr_verdict = "✅ GOOD" if rr_ratio >= 1.5 else "⚠️ POOR R/R"
-
-            # Scenario A: Bullish Trend + Cycle Bottom (High Probability Setup)
-            if trend_verdict == "BULLISH" and cycle_state == "BOTTOM":
-                # Apply Safety Checks
-                if is_panic_selling:
-                    final_signal = "🛑 CRASH DETECTED (High Volatility) - WAIT"
-                    color = "red"
-                    score = 20
-                elif is_making_lower_lows:
-                    final_signal = "⚠️ WAIT (Falling Knife - Making Lower Lows)"
-                    color = "orange"
-                    score = 40
-                elif not is_green_candle:
-                    final_signal = "⏳ WATCHING (Waiting for Green Candle)"
-                    color = "yellow"
-                    score = 60
-                else:
-                    # Confirmed Turn
-                    final_signal = "🚀 PERFECT BUY (Confirmed Turn)"
-                    color = "green"
-                    score = 95
-
-            # Scenario B: Bullish Trend + Breakout (Momentum Buy)
-            elif trend_verdict == "BULLISH" and is_breakout:
-                # If breakout but cycle is TOP, it's risky but still a buy
-                if cycle_state == "TOP":
-                    final_signal = "⚠️ MOMENTUM BUY (Cycle High)"
-                    color = "orange"
-                    score = 75
-                else:
-                    final_signal = "✅ BREAKOUT BUY"
-                    color = "green"
-                    score = 85
-
-            # Scenario C: Bearish Trend + Cycle Top (Perfect Short)
-            elif trend_verdict == "BEARISH" and cycle_state == "TOP":
-                final_signal = "📉 PERFECT SHORT (Rally in Downtrend)"
-                color = "red"
-                score = 90
-
-            # Scenario D: Conflicts
-            elif trend_verdict == "BULLISH" and cycle_state == "TOP":
-                final_signal = "🛑 WAIT (Extended)"
-                color = "yellow"
-            elif trend_verdict == "BEARISH" and cycle_state == "BOTTOM":
-                final_signal = "🛑 WAIT (Oversold Downtrend)"
-                color = "yellow"
-
-            # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-            # Calculate Trend Breakout Date
-            breakout_date = _calculate_trend_breakout_date(df)
-
-            results.append({
-                "ticker": ticker,
-                "company_name": company_name,
-                "price": curr_close,
-                "verdict": final_signal,
-                "trend": trend_verdict,
-                "cycle": f"{cycle_state} ({cycle_score:.2f})",
-                "period_days": period,
-                "score": score,
-                "color": color,
-                "signal": final_signal, # For frontend compatibility with 'signal' key
-                "pct_change_1d": pct_change_1d,
-                "stop_loss": round(stop_loss_price, 2),   # <--- THE STOP
-                "target": round(target_price, 2),         # <--- THE TARGET
-                "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})", # <--- IS IT WORTH IT?
-                "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2),
-                "breakout_date": breakout_date,
-                "atr": round(current_atr, 2),
-                "52_week_high": round(high_52wk, 2) if high_52wk else None,
-                "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                "sector_change": pct_change_1d
-            })
-
-        except Exception as e:
-            # logger.debug(f"Hybrid screener error for {ticker}: {e}")
-            continue
-
-    # Sort by 'Score' descending (best setups first)
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
+
+def _process_hybrid_ticker(ticker, df, time_frame, check_mode):
+    try:
+        import pandas_ta as ta
+        import pandas as pd
+        import numpy as np
+
+        curr_close = float(df['Close'].iloc[-1])
+        closes = df['Close'].tolist()
+
+        sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+        high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
+        high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
+        low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
+
+        trend_verdict = "NEUTRAL"
+        if curr_close > sma_200:
+            trend_verdict = "BULLISH"
+        else:
+            trend_verdict = "BEARISH"
+
+        is_breakout = curr_close >= high_50
+
+        cycle_data = _calculate_dominant_cycle(closes)
+
+        cycle_state = "NEUTRAL"
+        cycle_score = 0.0
+        period = 0
+
+        if cycle_data:
+            period, rel_pos = cycle_data
+            cycle_score = rel_pos
+
+            if rel_pos <= -0.7:
+                cycle_state = "BOTTOM"
+            elif rel_pos >= 0.7:
+                cycle_state = "TOP"
+            else:
+                cycle_state = "MID"
+
+        if time_frame == "1d" and not check_mode:
+            watch_list = SECTOR_COMPONENTS.get("WATCH", [])
+            if ticker not in watch_list:
+                if 'Volume' in df.columns:
+                    avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+                    if avg_vol < 500000:
+                        return None
+
+        today_open = float(df['Open'].iloc[-1])
+        yesterday_low = float(df['Low'].iloc[-2])
+
+        is_green_candle = curr_close > today_open
+
+        if 'ATR' not in df.columns:
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+
+        current_atr = 0.0
+        if 'ATR' in df.columns and not df['ATR'].empty:
+                current_atr = df['ATR'].iloc[-1]
+        if pd.isna(current_atr): current_atr = 0.0
+
+        volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
+
+        daily_range = df['High'].iloc[-1] - df['Low'].iloc[-1]
+        is_panic_selling = daily_range > (2.0 * current_atr) if current_atr > 0 else False
+
+        is_making_lower_lows = curr_close < yesterday_low
+
+        pct_change_1d = None
+        if len(df) >= 2:
+            try:
+                prev_close_px = float(df['Close'].iloc[-2])
+                pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
+            except Exception:
+                pass
+
+        final_signal = "WAIT"
+        color = "gray"
+        score = 0
+
+        stop_loss_price = curr_close - (3 * current_atr)
+        target_price = curr_close + (2 * current_atr)
+
+        potential_reward = target_price - curr_close
+        potential_risk = curr_close - stop_loss_price
+        rr_ratio = potential_reward / potential_risk if potential_risk > 0 else 0
+
+        rr_verdict = "✅ GOOD" if rr_ratio >= 1.5 else "⚠️ POOR R/R"
+
+        if trend_verdict == "BULLISH" and cycle_state == "BOTTOM":
+            if is_panic_selling:
+                final_signal = "🛑 CRASH DETECTED (High Volatility) - WAIT"
+                color = "red"
+                score = 20
+            elif is_making_lower_lows:
+                final_signal = "⚠️ WAIT (Falling Knife - Making Lower Lows)"
+                color = "orange"
+                score = 40
+            elif not is_green_candle:
+                final_signal = "⏳ WATCHING (Waiting for Green Candle)"
+                color = "yellow"
+                score = 60
+            else:
+                final_signal = "🚀 PERFECT BUY (Confirmed Turn)"
+                color = "green"
+                score = 95
+
+        elif trend_verdict == "BULLISH" and is_breakout:
+            if cycle_state == "TOP":
+                final_signal = "⚠️ MOMENTUM BUY (Cycle High)"
+                color = "orange"
+                score = 75
+            else:
+                final_signal = "✅ BREAKOUT BUY"
+                color = "green"
+                score = 85
+
+        elif trend_verdict == "BEARISH" and cycle_state == "TOP":
+            final_signal = "📉 PERFECT SHORT (Rally in Downtrend)"
+            color = "red"
+            score = 90
+
+        elif trend_verdict == "BULLISH" and cycle_state == "TOP":
+            final_signal = "🛑 WAIT (Extended)"
+            color = "yellow"
+        elif trend_verdict == "BEARISH" and cycle_state == "BOTTOM":
+            final_signal = "🛑 WAIT (Oversold Downtrend)"
+            color = "yellow"
+
+        base_ticker = ticker.split('.')[0]
+        company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+        breakout_date = _calculate_trend_breakout_date(df)
+
+        return {
+            "ticker": ticker,
+            "company_name": company_name,
+            "price": curr_close,
+            "verdict": final_signal,
+            "trend": trend_verdict,
+            "cycle": f"{cycle_state} ({cycle_score:.2f})",
+            "period_days": 0, # Placeholder or calc
+            "score": score,
+            "color": color,
+            "signal": final_signal,
+            "pct_change_1d": pct_change_1d,
+            "stop_loss": round(stop_loss_price, 2),
+            "target": round(target_price, 2),
+            "rr_ratio": f"{rr_ratio:.2f} ({rr_verdict})",
+            "atr_value": round(current_atr, 2),
+            "volatility_pct": round(volatility_pct, 2),
+            "breakout_date": breakout_date,
+            "atr": round(current_atr, 2),
+            "52_week_high": round(high_52wk, 2) if high_52wk else None,
+            "52_week_low": round(low_52wk, 2) if low_52wk else None,
+            "sector_change": pct_change_1d
+        }
+    except Exception: return None
 
 def screen_master_convergence(ticker_list: list = None, region: str = "us", check_mode: bool = False) -> list:
     """
     Runs ALL strategies on the dataset to find CONFLUENCE.
-    Uses Caching to prevent timeouts on S&P 500 scans.
     """
-    # 1. Determine Ticker List
     if ticker_list is None:
         if region == "sp500":
-             # OPTIMIZATION: Avoid _get_filtered_sp500 as it triggers a synchronous download.
-             # Instead, get ALL S&P 500 tickers and rely on get_cached_market_data to serve from cache.
-             # Filtering will happen inside the loop below.
              base_tickers = get_sp500_tickers()
-
-             # Also include WATCH list
              watch_list = SECTOR_COMPONENTS.get("WATCH", [])
              ticker_list = list(set(base_tickers + watch_list))
         else:
              ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
 
-    # 2. Download Data (CACHE IMPLEMENTATION)
-    # Using 'market_scan_v1' cache ensures we reuse the data fetched by the background worker
-    # Logic update: Use list length or region
     is_large = len(ticker_list) > 100 or region == "sp500"
     cache_name = "market_scan_v1" if is_large else "watchlist_scan"
 
@@ -2700,11 +2368,6 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
         if check_mode:
              all_data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
         else:
-            # This replaces the entire slow "chunking" loop you had before
-            # Note: If region=sp500, we are requesting ~500 tickers.
-            # get_cached_market_data will check cache "market_scan_v1".
-            # This cache is populated by refresh_cache.py with get_sp500_tickers().
-            # So it should be a hit.
             all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
     except Exception as e:
         logger.error(f"Master screener data fetch failed: {e}")
@@ -2712,34 +2375,28 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
 
     results = []
 
-    # Handle empty data
     if all_data.empty:
         return []
 
-    # 3. Process Data (Existing Logic)
     if isinstance(all_data.columns, pd.MultiIndex):
-        # Intersect with ticker_list to ensure we only process what we asked for
         valid_tickers = [t for t in ticker_list if t in all_data.columns.levels[0]]
+        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
     else:
         valid_tickers = ticker_list if not all_data.empty else []
+        iterator = [(ticker_list[0], all_data)] if len(ticker_list)==1 else []
 
     watch_list = SECTOR_COMPONENTS.get("WATCH", [])
 
-    for ticker in valid_tickers:
+    for ticker, df in iterator:
         try:
-            df = pd.DataFrame()
-            if isinstance(all_data.columns, pd.MultiIndex):
-                if ticker in all_data.columns.levels[0]:
-                    df = all_data[ticker].copy()
-            else:
-                df = all_data.copy()
+            if isinstance(df.columns, pd.MultiIndex):
+                df = df.droplevel(0, axis=1)
+
+            if ticker not in valid_tickers: continue
 
             df = df.dropna(how='all')
             if len(df) < 200: continue
 
-            # Volume Filter (Optimization):
-            # If region is S&P 500, we skipped pre-filtering. So we filter here.
-            # Skip for WATCH list items.
             if region == "sp500" and ticker not in watch_list:
                 if 'Volume' in df.columns:
                      avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
@@ -2752,7 +2409,6 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
             fourier, f_score = analyzer.check_fourier()
             momentum = analyzer.check_momentum()
 
-            # Confluence Score
             score = 0
             signals = []
 
@@ -2769,15 +2425,12 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
             elif score == 2: final_verdict = "✅ BUY"
             elif isa_trend == "BEARISH" and fourier == "TOP": final_verdict = "📉 STRONG SELL"
 
-            # Identify name
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
-            # Extract price safely
             curr_price = df['Close'].iloc[-1]
             if pd.isna(curr_price): continue
 
-            # Calculate % Change
             pct_change_1d = None
             if len(df) >= 2:
                 try:
@@ -2786,13 +2439,11 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
                 except Exception:
                     pass
 
-            # Calculate ATR for reporting
             import pandas_ta as ta
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
             current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
             volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
 
-            # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
 
             results.append({
@@ -2816,20 +2467,20 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
     results.sort(key=lambda x: x['confluence_score'], reverse=True)
     return results
 
-def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 100):
+def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 1000):
     """
-    Project stock price 30 days out using Monte Carlo (GBM).
-    Useful for seeing if a 'Short Put' strike is safe.
+    Project stock price 30 days out using Monte Carlo with Historical Bootstrapping.
+    FIX: Replaces Gaussian GBM with Bootstrapping to capture Fat Tails.
     """
     import numpy as np
+    import pandas as pd
     import yfinance as yf
 
     try:
-        # Get historical volatility
-        df = yf.download(ticker, period="1y", progress=False)
-        if df.empty or len(df) < 30: return None
+        # Fetch sufficient history to capture tail events (2 years minimum)
+        df = yf.download(ticker, period="2y", progress=False)
+        if df.empty or len(df) < 100: return None
 
-        # Flatten MultiIndex if present
         if isinstance(df.columns, pd.MultiIndex):
             try:
                 if ticker in df.columns.levels[0]:
@@ -2838,43 +2489,45 @@ def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 100):
                     df.columns = df.columns.get_level_values(0)
             except: pass
 
-        returns = df['Close'].pct_change().dropna()
-        if returns.empty: return None
+        # Calculate Log Returns
+        log_returns = np.log(df['Close'] / df['Close'].shift(1)).dropna()
+        if log_returns.empty: return None
 
         last_price = float(df['Close'].iloc[-1])
 
-        # Calculate daily drift and volatility
-        mu = returns.mean()
-        sigma = returns.std()
+        # BOOTSTRAPPING: Sample from ACTUAL past returns with replacement.
+        # This preserves skewness and kurtosis (fat tails).
+        random_returns = np.random.choice(log_returns, size=(days, sims), replace=True)
 
-        # Simulation
-        # Price_t = Price_0 * exp( (mu - 0.5*sigma^2)t + sigma * W_t )
-        # Generate random paths
-        # Shape: (days, sims)
-        daily_returns = np.random.normal(mu, sigma, (days, sims)) + 1
-        price_paths = last_price * daily_returns.cumprod(axis=0)
+        # Reconstruct Price Paths
+        # Cumulative sum of log returns -> cumulative product of price
+        price_paths = last_price * np.exp(np.cumsum(random_returns, axis=0))
 
-        # Outcomes
         final_prices = price_paths[-1]
-        prob_below_90pct = np.mean(final_prices < (last_price * 0.90)) * 100
+
+        # Probability of Drop > 10%
+        # Measures how many simulation paths ended below 90% of current price
+        prob_drop_10pct = np.mean(final_prices < (last_price * 0.90)) * 100
+
+        median_forecast = np.median(final_prices)
+
+        # Annualized Volatility for context
+        vol_annual = log_returns.std() * np.sqrt(252)
 
         return {
             "ticker": ticker,
             "current": last_price,
-            "median_forecast": np.median(final_prices),
-            "prob_drop_10pct": f"{prob_below_90pct:.1f}%",
-            "volatility_annual": f"{sigma * np.sqrt(252) * 100:.1f}%"
+            "median_forecast": median_forecast,
+            "prob_drop_10pct": f"{prob_drop_10pct:.1f}%",
+            "volatility_annual": f"{vol_annual * 100:.1f}%",
+            "method": "Historical Bootstrapping (Fat Tails)"
         }
-    except Exception as e:
-        logger.debug(f"Monte Carlo forecast error for {ticker}: {e}")
+    except Exception:
         return None
 
 def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     """
     YIELD-OPTIMIZED STRATEGY:
-    - Tightens strikes in low VIX regimes to ensure decent premiums.
-    - FILTERS OUT low-volatility stocks (Dead Money).
-    - Focuses on High Beta names where implied volatility pays well.
     """
     import pandas as pd
     import pandas_ta as ta
@@ -2884,20 +2537,13 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     from option_auditor.common.constants import LIQUID_OPTION_TICKERS
 
     # --- 1. GET VIX & REGIME ---
-    try:
-        vix_df = yf.download("^VIX", period="5d", progress=False)
-        current_vix = float(vix_df['Close'].iloc[-1])
-    except:
-        current_vix = 14.0 # Default to "Low-ish" if fail
+    current_vix = _get_market_regime()
 
     # --- 2. THE NEW "YIELD" MATH ---
-    # In low VIX, we must get closer to the fire to feel the heat (premium).
-    # Floor at 1.5x ATR, Cap at 3.0x ATR.
     safety_k = 1.5 + ((current_vix - 12) / 15.0)
 
-    # Clamping
-    if safety_k < 1.5: safety_k = 1.5  # Never get closer than 1.5 ATR (Gamma Risk)
-    if safety_k > 3.0: safety_k = 3.0  # Cap max distance
+    if safety_k < 1.5: safety_k = 1.5
+    if safety_k > 3.0: safety_k = 3.0
 
     # --- 3. FILTER UNIVERSE ---
     if ticker_list is None:
@@ -2909,20 +2555,23 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
     today = datetime.now()
     manage_date = today + timedelta(days=24)
 
-    # MultiIndex Handler
+    # OPTIMIZED ITERATION
     if isinstance(all_data.columns, pd.MultiIndex):
-        valid_tickers = all_data.columns.levels[0]
+        # This iterator yields (ticker, dataframe)
+        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
     else:
-        valid_tickers = ticker_list
+        # Fallback for single ticker result (rare) or flat
+        if not all_data.empty and len(ticker_list)==1:
+             iterator = [(ticker_list[0], all_data)]
+        else:
+             iterator = []
 
-    for ticker in valid_tickers:
+    for ticker, df in iterator:
         try:
-            df = pd.DataFrame()
-            if isinstance(all_data.columns, pd.MultiIndex):
-                if ticker in all_data.columns.levels[0]:
-                    df = all_data[ticker].copy()
-            else:
-                df = all_data.copy()
+            if isinstance(df.columns, pd.MultiIndex):
+                df = df.droplevel(0, axis=1)
+
+            if ticker not in ticker_list: continue
 
             df = df.dropna(how='all')
             if len(df) < 100: continue
@@ -2935,53 +2584,43 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
 
             atr_pct = (atr / curr_close) * 100
 
-            # IF STOCK IS TOO BORING (<2% Volatility), OPTIONS ARE WORTHLESS. SKIP IT.
             if atr_pct < 2.0 and current_vix < 20:
                 continue
 
-            # Trend Check (Only Bullish)
             sma_50 = df['Close'].rolling(50).mean().iloc[-1]
             sma_200 = df['Close'].rolling(200).mean().iloc[-1]
 
-            trend_status = "Bullish" if curr_close > sma_200 else "Neutral" # Or specific based on SMA
+            trend_status = "Bullish" if curr_close > sma_200 else "Neutral"
 
-            # Relaxed Trend: Price > SMA50 (Momentum) is enough for 45DTE trades
             if curr_close < sma_50: continue
 
             # --- STRIKE CALCULATION ---
-            # Using EMA(20) as it tracks price tighter than SMA
             ema_20 = ta.ema(df['Close'], length=20).iloc[-1]
 
-            # Strike Floor
             safe_floor = ema_20 - (safety_k * atr)
 
             if safe_floor >= curr_close: continue
 
-            # Rounding to actionable strikes
             if curr_close < 100:
-                short_strike = float(int(safe_floor)) # Round down to nearest $1
-                spread_width = 1.0 # Tight spread for cheap stocks
+                short_strike = float(int(safe_floor))
+                spread_width = 1.0
             elif curr_close < 300:
-                short_strike = float(int(safe_floor / 2.5) * 2.5) # Nearest $2.50
+                short_strike = float(int(safe_floor / 2.5) * 2.5)
                 spread_width = 5.0
             else:
-                short_strike = float(int(safe_floor / 5) * 5) # Nearest $5
+                short_strike = float(int(safe_floor / 5) * 5)
                 spread_width = 10.0
 
             long_strike = short_strike - spread_width
 
-            # --- SCORING ---
-            # We score by "Juice" (Volatility)
             score = atr_pct * 10
-
-            # Bonus for strong uptrend (Price > SMA200 too)
             if curr_close > sma_200: score += 15
 
             results.append({
                 "ticker": ticker,
                 "price": round(curr_close, 2),
                 "vix_ref": round(current_vix, 2),
-                "volatility_pct": f"{atr_pct:.1f}%", # Show me the juice
+                "volatility_pct": f"{atr_pct:.1f}%",
                 "safety_mult": f"{safety_k:.1f}x",
                 "sell_strike": short_strike,
                 "buy_strike": long_strike,
@@ -2992,6 +2631,211 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
 
         except Exception: continue
 
-    # Sort by Score (High Volatility First) -> The ones that actually pay money
     results.sort(key=lambda x: x['score'], reverse=True)
+    return results
+
+# --- CRITICAL FIX: Sanitize Function ---
+def sanitize(val):
+    """
+    Converts NaN, Infinity, and -Infinity to None (JSON null).
+    Also converts numpy floats to standard Python floats.
+    This prevents the 'Out of range float values are not JSON compliant' error.
+    """
+    try:
+        if val is None: return None
+        # Handle numpy types and standard floats
+        if isinstance(val, (float, np.floating)):
+            if np.isnan(val) or np.isinf(val):
+                return None
+            return float(val) # Force conversion to python float
+        return val
+    except:
+        return None
+
+def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
+    # ... (Keep existing imports and LIQUID_OPTION_TICKERS logic) ...
+    try:
+        from option_auditor.common.constants import LIQUID_OPTION_TICKERS
+    except ImportError:
+        LIQUID_OPTION_TICKERS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL"] # Fallback
+
+    # 1. Resolve Ticker List based on Region
+    if ticker_list is None:
+        if region == "us":
+            ticker_list = LIQUID_OPTION_TICKERS
+        else:
+            ticker_list = _resolve_region_tickers(region)
+
+    # Resolve tickers (Fix for Ticker Resolution Failure)
+    if ticker_list:
+        # Apply region-specific suffixes if missing
+        if region == 'india':
+            ticker_list = [t if t.endswith('.NS') else f"{t}.NS" for t in ticker_list]
+        elif region == 'uk':
+            ticker_list = [t if t.endswith('.L') else f"{t}.L" for t in ticker_list]
+
+        ticker_list = [resolve_ticker(t) for t in ticker_list]
+
+    # 2. Determine appropriate cache name
+    cache_name = "market_scan_us_liquid"
+    if region == "uk":
+        cache_name = "market_scan_uk"
+    elif region == "india":
+        cache_name = "market_scan_india"
+    elif region == "uk_euro":
+        cache_name = "market_scan_europe"
+    elif region == "sp500":
+        cache_name = "market_scan_v1" # S&P 500 uses v1
+
+    try:
+        all_data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_name)
+    except Exception as e:
+        logger.warning(f"Cache fetch failed for Quantum: {e}")
+        all_data = pd.DataFrame()
+
+    # Fallback to Live Data if Cache Missing/Empty
+    if all_data.empty:
+        try:
+            logger.info("Quantum: Falling back to live batch download...")
+            all_data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
+        except Exception as e:
+            logger.error(f"Live fetch failed for Quantum: {e}")
+            return []
+
+    if all_data.empty: return []
+
+    # FIX 3: Robust Multi-Ticker vs Flat Data Handling
+    # Use a helper to normalize the dataframe structure
+    valid_tickers = []
+
+    # Logic to ensure we have a list of (ticker, df) tuples
+    ticker_data_map = {}
+
+    if isinstance(all_data.columns, pd.MultiIndex):
+        # Standard Batch Result
+        for t in all_data.columns.levels[0]:
+            if t in ticker_list:
+                ticker_data_map[t] = all_data[t]
+    else:
+        # Flat Result (Single Ticker or Identity Ambiguity)
+        if len(ticker_list) == 1:
+            ticker_data_map[ticker_list[0]] = all_data
+        else:
+            # Ambiguous: We asked for 10, got 1 flat DF.
+            # Safe Failover: Skip batch, try to match columns?
+            # Or just fail gracefully.
+            logger.warning("Quantum Screener received ambiguous flat data for multiple tickers. Skipping.")
+            return []
+
+    valid_tickers = list(ticker_data_map.keys())
+
+    def process_ticker(ticker):
+        try:
+            df = ticker_data_map.get(ticker)
+            if df is None or df.empty: return None
+
+            # Clean Data
+            df = df.dropna(how='all')
+            # Check Hurst Requirement (120 days)
+            if len(df) < 120: return None
+
+            close = df['Close']
+            curr_price = float(close.iloc[-1])
+
+            # --- PHYSICS ENGINE CALLS ---
+            hurst = QuantPhysicsEngine.calculate_hurst(close)
+
+            # Fast Failover: If Hurst failed (e.g. flat line), skip
+            if hurst is None: return None
+
+            entropy = QuantPhysicsEngine.shannon_entropy(close)
+            kalman = QuantPhysicsEngine.kalman_filter(close)
+
+            # --- FIX 4: Correct Slope Calculation (Percentage) ---
+            # We compare current Kalman value vs 10 days ago
+            lookback = 10
+            k_slope = 0.0
+
+            if len(kalman) > lookback:
+                curr_k = float(kalman.iloc[-1])
+                prev_k = float(kalman.iloc[-1 - lookback])
+
+                # Avoid div by zero
+                if prev_k > 0:
+                    k_slope = (curr_k - prev_k) / prev_k
+                else:
+                    k_slope = 0.0
+
+            # --- VERDICT GENERATION ---
+            ai_verdict, ai_rationale = QuantPhysicsEngine.generate_human_verdict(hurst, entropy, k_slope, curr_price)
+
+            # Colors
+            verdict_color = "gray"
+            if "BUY" in ai_verdict: verdict_color = "green"
+            elif "SHORT" in ai_verdict: verdict_color = "red"
+            elif "RANDOM" in ai_verdict: verdict_color = "gray" # Explicitly Gray out casino zone
+
+            # --- RISK MANAGEMENT (ATR) ---
+            import pandas_ta as ta
+            # Calculate ATR locally if not present
+            atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = atr_series.iloc[-1] if atr_series is not None else (curr_price * 0.01)
+
+            # Set Stops/Targets based on Regime
+            stop_loss = 0.0
+            target_price = 0.0
+
+            if "BUY" in ai_verdict:
+                stop_loss = curr_price - (2.5 * current_atr) # Wider stop for trends
+                target_price = curr_price + (4.0 * current_atr)
+            elif "SHORT" in ai_verdict:
+                stop_loss = curr_price + (2.5 * current_atr)
+                target_price = curr_price - (4.0 * current_atr)
+            else:
+                # Default brackets for context
+                stop_loss = curr_price - (2.0 * current_atr)
+                target_price = curr_price + (2.0 * current_atr)
+
+            # --- SCORING (For Sorting) ---
+            score = 50
+            if "Strong" in ai_verdict: score = 90
+            elif "BUY" in ai_verdict: score = 80
+            elif "SHORT" in ai_verdict: score = 80
+            elif "REVERSAL" in ai_verdict: score = 60
+            elif "RANDOM" in ai_verdict: score = 0 # Push to bottom
+
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            return {
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": sanitize(curr_price),
+                "hurst": sanitize(hurst),
+                "entropy": sanitize(entropy),
+                "kalman_diff": sanitize(k_slope), # Returns decimal (e.g. 0.015)
+                "human_verdict": ai_verdict,
+                "rationale": ai_rationale,
+                "verdict_color": verdict_color,
+                "score": score,
+                "ATR": sanitize(round(current_atr, 2)),
+                "Stop Loss": sanitize(round(stop_loss, 2)),
+                "Target": sanitize(round(target_price, 2)),
+                "volatility_pct": sanitize(round((current_atr/curr_price)*100, 2))
+            }
+
+        except Exception as e:
+            # logger.error(f"Error processing {ticker}: {e}")
+            return None
+
+    # Threaded Execution
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        temp_results = list(executor.map(process_ticker, valid_tickers))
+
+    # Filter None results
+    results = [r for r in temp_results if r is not None]
+
+    # Sort: High Scores first
+    results.sort(key=lambda x: (x.get('score', 0)), reverse=True)
+
     return results

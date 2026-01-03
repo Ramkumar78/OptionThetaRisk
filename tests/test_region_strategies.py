@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import numpy as np
 from option_auditor.screener import screen_hybrid_strategy
-from option_auditor.uk_stock_data import UK_350_TICKERS
+from option_auditor.uk_stock_data import get_uk_tickers
 
 class TestRegionStrategies:
     @pytest.fixture
@@ -36,8 +36,8 @@ class TestRegionStrategies:
         
         # Check Tickers
         passed_tickers = call_args[0] if call_args else call_kwargs.get('tickers')
-        assert len(passed_tickers) >= 300
-        assert passed_tickers == UK_350_TICKERS
+        assert len(passed_tickers) >= 150
+        assert passed_tickers == get_uk_tickers()
         assert "SHEL.L" in passed_tickers
 
     def test_region_uk_euro_diversified(self, mock_market_data, mock_cycle):

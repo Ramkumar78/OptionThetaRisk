@@ -96,5 +96,42 @@ class TestPortfolioRisk(unittest.TestCase):
         result = portfolio_risk.analyze_portfolio_risk([{'foo': 'bar'}])
         self.assertIn('error', result)
 
+
+
+    def test_analyze_zero_total_value(self):
+        # Case where total value sums to 0
+        positions = [{'ticker': 'A', 'value': 0}, {'ticker': 'B', 'value': 0}]
+        result = portfolio_risk.analyze_portfolio_risk(positions)
+        self.assertIn('error', result)
+        self.assertEqual(result['error'], "Total portfolio value is zero.")
+
+    def test_analyze_single_asset_diversification(self):
+        # Single asset should range diversification score to 0
+        positions = [{'ticker': 'NVDA', 'value': 10000}]
+        # We need to mock get_cached_market_data to return data for NVDA
+        with patch('option_auditor.portfolio_risk.get_cached_market_data') as mock_data:
+            df = pd.DataFrame({'Close': [100, 101, 102]}, index=pd.date_range('2023-01-01', periods=3))
+            # get_cached_market_data usually returns a simple DF for single ticker if configured that way,
+            # but let's see how the code handles it.
+            # Code: closes = price_data['Close'] if 'Close' in price_data.columns else price_data
+            # So if we return a DF with 'Close' column, it works.
+            mock_data.return_value = df
+            
+            result = portfolio_risk.analyze_portfolio_risk(positions)
+            self.assertEqual(result['diversification_score'], 0)
+
+    @patch('option_auditor.portfolio_risk.get_cached_market_data')
+    def test_analyze_missing_market_data(self, mock_get_data):
+        # Mock empty return from market data
+        mock_get_data.return_value = pd.DataFrame()
+        
+        result = portfolio_risk.analyze_portfolio_risk(self.positions)
+        
+        # Should still return structure but with 0 div score and no correlation matrix
+        self.assertEqual(result['diversification_score'], 0)
+        self.assertEqual(result['correlation_matrix'], {})
+        # Should still have concentration warnings because that depends on input, not market data
+        self.assertTrue(len(result['concentration_warnings']) > 0)
+
 if __name__ == '__main__':
     unittest.main()

@@ -7,6 +7,7 @@ import threading
 import time
 import json
 from typing import Optional
+from collections import OrderedDict
 
 import pandas as pd
 import yfinance as yf
@@ -15,7 +16,26 @@ from flask import Flask, request, redirect, url_for, flash, send_file, session, 
 from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
-from option_auditor.uk_stock_data import get_uk_tickers
+from option_auditor.master_screener import MasterScreener
+from option_auditor.sp500_data import get_sp500_tickers
+from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
+from option_auditor.unified_backtester import UnifiedBacktester
+
+# Import Strategies
+from option_auditor.strategies.isa import IsaStrategy
+from option_auditor.strategies.turtle import TurtleStrategy
+from option_auditor.common.data_utils import get_cached_market_data
+
+# Import Data Lists
+from option_auditor.sp500_data import SP500_TICKERS
+from option_auditor.uk_stock_data import UK_TICKERS
+from option_auditor.india_stock_data import INDIA_TICKERS
+
+# Import India Data (Compat)
+try:
+    from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
+except ImportError:
+    INDIAN_TICKERS_RAW = []
 from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
@@ -31,9 +51,59 @@ CLEANUP_INTERVAL = 1200 # 20 minutes
 # Max age of reports in seconds
 MAX_REPORT_AGE = 1200 # 20 minutes
 
-# Screener Cache
-SCREENER_CACHE = {}
-SCREENER_CACHE_TIMEOUT = 600  # 10 minutes
+# --- MEMORY SAFE CACHE (LRU) ---
+class LRUCache:
+    def __init__(self, capacity: int, ttl_seconds: int):
+        self.cache = OrderedDict()
+        self.capacity = capacity
+        self.ttl = ttl_seconds
+
+    def get(self, key):
+        if key not in self.cache:
+            return None
+
+        value, timestamp = self.cache[key]
+
+        # Check Expiry
+        if time.time() - timestamp > self.ttl:
+            self.cache.pop(key)
+            return None
+
+        # Move to end (Recently Used)
+        self.cache.move_to_end(key)
+        return value
+
+    def set(self, key, value):
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        self.cache[key] = (value, time.time())
+        self.cache.move_to_end(key)
+
+        # Evict if full
+        if len(self.cache) > self.capacity:
+            self.cache.popitem(last=False)
+
+# Init Cache (Max 50 results, 10 min expiry)
+screener_cache = LRUCache(capacity=50, ttl_seconds=600)
+
+def get_cached_screener_result(key):
+    return screener_cache.get(key)
+
+def cache_screener_result(key, data):
+    screener_cache.set(key, data)
+
+# --- HELPER: Get Tickers by Region ---
+def get_tickers_for_region(region):
+    region = region.lower()
+    if region == 'uk':
+        return list(set(UK_TICKERS)) # Ensure unique
+    elif region == 'india':
+        return list(set(INDIA_TICKERS))
+    elif region == 'uk_euro':
+        # Combine UK with some major Euro tickers if available, for now just UK + placeholders
+        return list(set(UK_TICKERS))
+    else: # Default 'us'
+        return list(set(SP500_TICKERS))
 
 # Cached storage provider singleton at application level (if appropriate)
 # Since we might rely on app context (e.g. SQLite path), we use Flask's `g` or memoize based on app instance.
@@ -51,18 +121,6 @@ def get_storage_provider(app):
         g.storage_provider = _get_storage_provider(app)
     return g.storage_provider
 
-def get_cached_screener_result(key):
-    if key in SCREENER_CACHE:
-        timestamp, data = SCREENER_CACHE[key]
-        if time.time() - timestamp < SCREENER_CACHE_TIMEOUT:
-            return data
-        else:
-            del SCREENER_CACHE[key]
-    return None
-
-def cache_screener_result(key, data):
-    SCREENER_CACHE[key] = (time.time(), data)
-
 # Helper Function for Email
 def _get_env_or_docker_default(key, default=None):
     """
@@ -79,7 +137,7 @@ def _get_env_or_docker_default(key, default=None):
         if os.path.exists(docker_compose_path):
             with open(docker_compose_path, 'r') as f:
                 content = f.read()
-                # Regex to find specific key pattern: key=${key:-value}
+                # Regex to find specific key pattern: key=${key:-(.*?)}
                 # Handles lines like: - SMTP_USER=${SMTP_USER:-tradeauditor9@gmail.com}
                 import re
                 match = re.search(fr"{key}=\${{{key}:-(.*?)}}", content)
@@ -238,6 +296,22 @@ def create_app(testing: bool = False) -> Flask:
             "is_fallback": data_api_breaker.current_state == 'open'
         })
 
+    @app.route('/backtest/run', methods=['GET'])
+    def run_backtest():
+        ticker = request.args.get('ticker')
+        strategy = request.args.get('strategy', 'master') # master, turtle, isa
+
+        if not ticker:
+            return jsonify({"error": "Ticker required"}), 400
+
+        try:
+            backtester = UnifiedBacktester(ticker, strategy_type=strategy)
+            result = backtester.run()
+            return jsonify(result)
+        except Exception as e:
+            app.logger.error(f"Backtest Failed: {e}")
+            return jsonify({"error": str(e)}), 500
+
     # API Routes for Screener
     @app.route("/screen", methods=["POST"])
     def screen():
@@ -276,35 +350,31 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/screen/turtle", methods=["GET"])
+    @app.route('/screen/turtle', methods=['GET'])
     def screen_turtle():
+        region = request.args.get('region', 'us')
+        tickers = get_tickers_for_region(region)
+
+        results = []
+        # Reuse data fetching pattern...
         try:
-            time_frame = request.args.get("time_frame", "1d")
-            region = request.args.get("region", "us")
+            data = get_cached_market_data(tickers, period="1y")
+            for ticker in tickers:
+                try:
+                    df = None
+                    if isinstance(data.columns, pd.MultiIndex) and ticker in data.columns.levels[0]:
+                        df = data[ticker].dropna()
+                    elif not isinstance(data.columns, pd.MultiIndex):
+                         df = data
 
-            cache_key = ("turtle", region, time_frame)
-            cached = get_cached_screener_result(cache_key)
-            if cached:
-                return jsonify(cached)
-
-            ticker_list = None
-            if region == "uk_euro":
-                ticker_list = screener.get_uk_euro_tickers()
-            elif region == "uk":
-                ticker_list = get_uk_tickers()
-            elif region == "india":
-                ticker_list = screener.get_indian_tickers()
-            elif region == "sp500":
-                # For Turtle, YES S&P 500. Use Filtered list (Trend + Volume)
-                # "Filter 2 (Trend): Only pass stocks to the heavy logic... if they are above 200 SMA."
-                # Turtle IS heavy logic/trend following.
-                filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
-                # Merge with WATCH list
-                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-                ticker_list = list(set(filtered_sp500 + watch_list))
-
-            results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
-            cache_screener_result(cache_key, results)
+                    if df is not None:
+                        # Fix: TurtleStrategy does not take args in init, and analyze needs df
+                        strat = TurtleStrategy()
+                        res = strat.analyze(df)
+                        if res and res.get('signal') != 'WAIT':
+                            res['Ticker'] = ticker # Attach ticker
+                            results.append(res)
+                except: pass
             return jsonify(results)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -380,44 +450,39 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/screen/isa", methods=["GET"])
+    @app.route('/screen/isa', methods=['GET'])
     def screen_isa():
+        region = request.args.get('region', 'us')
+        tickers = get_tickers_for_region(region)
+
+        results = []
         try:
-            region = request.args.get("region", "us")
-            cache_key = ("isa_trend", region)
-            cached = get_cached_screener_result(cache_key)
-            if cached:
-                return jsonify(cached)
+            # Batch fetch data
+            data = get_cached_market_data(tickers, period="2y")
 
-            results = screener.screen_trend_followers_isa(region=region)
+            if data.empty: return jsonify([])
 
-            # Market Regime Analysis
-            bearish_count = 0
-            total_count = len(results)
-            suggestion = None
+            for ticker in tickers:
+                try:
+                    # Robust extraction
+                    df = None
+                    if isinstance(data.columns, pd.MultiIndex):
+                        if ticker in data.columns.levels[0]:
+                            df = data[ticker].dropna()
+                    else:
+                        df = data # Single ticker case? Unlikely for list.
 
-            if total_count > 0:
-                for r in results:
-                    sig = r.get('signal', '')
-                    if "SELL" in sig or "AVOID" in sig or "EXIT" in sig:
-                        bearish_count += 1
+                    if df is not None:
+                        strategy = IsaStrategy(ticker, df)
+                        res = strategy.analyze()
+                        if res and res['Signal'] != 'WAIT':
+                            results.append(res)
+                except Exception as e:
+                    continue
 
-                bearish_ratio = bearish_count / total_count
-
-                if bearish_ratio > 0.5:
-                    suggestion = {
-                        "type": "bearish",
-                        "message": f"⚠️ Market appears Bearish/Choppy ({bearish_ratio*100:.0f}% Negative). Consider using 'Harmonic Cycles' (Fourier) for Mean Reversion opportunities instead of Trend Following."
-                    }
-
-            response_data = {
-                "results": results,
-                "regime_suggestion": suggestion
-            }
-
-            cache_screener_result(cache_key, response_data)
-            return jsonify(response_data)
+            return jsonify({"results": results})
         except Exception as e:
+            app.logger.error(f"ISA Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/bull_put", methods=["GET"])
@@ -570,20 +635,22 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/screen/master", methods=["GET"])
+    @app.route('/screen/master', methods=['GET'])
     def screen_master():
-        try:
-            region = request.args.get("region", "us")
-            # Cache for 20 minutes as this is a heavy scan
-            cache_key = ("master_convergence", region)
-            cached = get_cached_screener_result(cache_key)
-            if cached:
-                return jsonify(cached)
+        region = request.args.get('region', 'us')
+        # MasterScreener needs US and UK tickers passed explicitly
+        # We filter based on the region requested to avoid crossover
 
-            results = screener.screen_master_convergence(region=region)
-            cache_screener_result(cache_key, results)
+        us_subset = get_tickers_for_region('us') if region == 'us' else []
+        uk_subset = get_tickers_for_region('uk') if region == 'uk' else []
+        in_subset = get_tickers_for_region('india') if region == 'india' else []
+
+        try:
+            screener = MasterScreener(us_subset, uk_subset, in_subset)
+            results = screener.run()
             return jsonify(results)
         except Exception as e:
+            app.logger.error(f"Master Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
@@ -664,6 +731,49 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/quantum", methods=["GET"])
+    def screen_quantum():
+        try:
+            region = request.args.get("region", "us")
+            cache_key = ("quantum", region)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            results = screener.screen_quantum_setups(region=region)
+
+            # Transform to the requested API contract
+            api_results = [
+                {
+                    "ticker": r["ticker"],
+                    "price": r["price"],
+                    "hurst": round(r["hurst"], 2),
+                    "entropy": round(r["entropy"], 2),
+                    "verdict": r["signal"],  # Mapping signal to verdict as per instruction
+                    "score": r["score"],
+                    # Keeping other useful fields
+                    "company_name": r.get("company_name"),
+                    "kalman_diff": round(r["kalman_diff"], 2),
+                    "phase": round(r["phase"], 2),
+                    "verdict_color": r.get("verdict_color"),
+                    "atr_value": r.get("atr_value"),
+                    "volatility_pct": r.get("volatility_pct"),
+                    "pct_change_1d": r.get("pct_change_1d"),
+                    "breakout_date": r.get("breakout_date"),
+                    "kalman_signal": r.get("kalman_signal"),
+                    "human_verdict": r.get("human_verdict"),
+                    "rationale": r.get("rationale")
+                } for r in results
+            ]
+
+            cache_screener_result(cache_key, api_results)
+            return jsonify(api_results)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in /screen/quantum: {e}", flush=True)
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/check", methods=["GET"])
     def check_unified_stock():
         try:
@@ -702,10 +812,9 @@ def create_app(testing: bool = False) -> Flask:
                         try:
                             # Handling yfinance structure (MultiIndex or Flat)
                             # If single ticker, it might be flat or have Ticker as column level
-                            close_series = hist['Close']
-
-                            # If MultiIndex (Date, Ticker), selecting 'Close' returns a DataFrame with tickers as columns
                             # If Single Index (Date), selecting 'Close' returns a Series
+
+                            close_series = hist['Close']
 
                             val = None
                             if isinstance(close_series, pd.DataFrame):
