@@ -16,6 +16,7 @@ class UnifiedBacktester:
         self.shares = 0
         self.state = "OUT"
         self.trade_log = []
+        self.entry_date = None  # Track entry date for duration calc
 
     def fetch_data(self):
         try:
@@ -88,6 +89,9 @@ class UnifiedBacktester:
         actual_start_str = sim_data.index[0].strftime('%Y-%m-%d')
         actual_end_str = sim_data.index[-1].strftime('%Y-%m-%d')
 
+        # Calculate Buy & Hold Duration
+        buy_hold_days = (sim_data.index[-1] - sim_data.index[0]).days
+
         # --- FAIR COMPARISON: BUY & HOLD ---
         # Invest 100% of capital on Day 1 Open/Close
         initial_price = sim_data['close'].iloc[0]
@@ -158,6 +162,7 @@ class UnifiedBacktester:
                 self.shares = int(self.equity / price)
                 self.equity -= (self.shares * price)
                 self.state = "IN"
+                self.entry_date = date # Capture Entry Date
 
                 # Set Initial Stop
                 if self.strategy_type == 'master':
@@ -169,7 +174,8 @@ class UnifiedBacktester:
 
                 self.trade_log.append({
                     "date": date.strftime('%Y-%m-%d'), "type": "BUY",
-                    "price": round(price, 2), "stop": round(stop_loss, 2)
+                    "price": round(price, 2), "stop": round(stop_loss, 2),
+                    "days": "-"
                 })
 
             elif self.state == "IN":
@@ -194,17 +200,25 @@ class UnifiedBacktester:
                     self.shares = 0
                     self.state = "OUT"
 
+                    # Calculate Days Held
+                    days_held = (date - self.entry_date).days
+
                     reason = current_stop_reason if sell_signal else "STOP HIT"
 
                     self.trade_log.append({
                         "date": date.strftime('%Y-%m-%d'), "type": "SELL",
                         "price": round(price, 2), "reason": reason,
-                        "equity": round(self.equity, 0)
+                        "equity": round(self.equity, 0),
+                        "days": days_held
                     })
 
         # Final Valuation
         final_eq = self.equity + (self.shares * final_price)
         strat_return = ((final_eq - self.initial_capital) / self.initial_capital) * 100
+
+        # Calculate Average Days Held
+        sell_trades = [t['days'] for t in self.trade_log if t['type'] == 'SELL' and isinstance(t['days'], int)]
+        avg_days_held = round(sum(sell_trades) / len(sell_trades)) if sell_trades else 0
 
         return {
             "ticker": self.ticker,
@@ -213,10 +227,12 @@ class UnifiedBacktester:
             "end_date": actual_end_str,
             "strategy_return": round(strat_return, 2),
             "buy_hold_return": round(bnh_return, 2),
+            "buy_hold_days": buy_hold_days,
+            "avg_days_held": avg_days_held,
             "trades": len(self.trade_log) // 2,
             "win_rate": self._calculate_win_rate(),
             "final_equity": round(final_eq, 2),
-            "log": self.trade_log  # RETURN FULL LOG (No more [-6:])
+            "log": self.trade_log
         }
 
     def _calculate_win_rate(self):
