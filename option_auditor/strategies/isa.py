@@ -1,56 +1,78 @@
-from .base import BaseStrategy
 import pandas as pd
 import pandas_ta as ta
-from option_auditor.quant_engine import QuantPhysicsEngine
+import numpy as np
 
-class IsaStrategy(BaseStrategy):
-    def analyze(self, df: pd.DataFrame) -> dict:
-        if df is None or len(df) < 200:
-            return {'signal': 'WAIT'}
+class IsaStrategy:
+    """
+    ISA Trend Strategy:
+    - Long Term Trend: Price > 200 SMA
+    - Momentum: Price within 15% of 52-week High
+    - Breakout: Price crosses 50-day High (Donchian Channel)
+    - Volatility: ATR logic for stops
+    """
+    def __init__(self, ticker, df):
+        self.ticker = ticker
+        self.df = df
 
-        df = df.copy()
-
-        curr_close = float(df['Close'].iloc[-1])
-
-        # UPGRADE: Replace SMA with Kalman DSP
-        # We need numpy array for Kalman
+    def analyze(self):
         try:
-            kalman_trend = QuantPhysicsEngine.kalman_filter(df['Close'])
-            df['Kalman_Trend'] = kalman_trend
-            current_kalman = float(kalman_trend.iloc[-1])
-        except Exception:
-            # Fallback if Kalman fails (e.g. library issue)
-            current_kalman = df['Close'].rolling(200).mean().iloc[-1]
+            # Check data sufficiency
+            if self.df.empty or len(self.df) < 200:
+                return None
 
-        # Breakout Levels
-        high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
-        low_20 = df['Low'].rolling(20).min().shift(1).iloc[-1]
+            close = self.df['Close']
+            high = self.df['High']
+            low = self.df['Low']
 
-        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
-        atr_20 = float(df['ATR'].iloc[-1]) if not df['ATR'].empty else 0.0
+            curr_price = float(close.iloc[-1])
 
-        signal = "WAIT"
+            # --- INDICATORS ---
+            sma_50 = close.rolling(50).mean().iloc[-1]
+            sma_150 = close.rolling(150).mean().iloc[-1]
+            sma_200 = close.rolling(200).mean().iloc[-1]
+            atr = ta.atr(high, low, close, length=14).iloc[-1]
 
-        # New physical condition for entry: Price > Kalman Trend
-        if curr_close > current_kalman:
-            if curr_close >= high_50:
-                signal = "BUY"
-            elif curr_close >= high_50 * 0.98:
-                signal = "WATCH"
-            elif curr_close > low_20:
-                signal = "HOLD"
-            elif curr_close <= low_20:
-                signal = "EXIT"
-        else:
-            signal = "AVOID" # Downtrend
+            # 52 Week High Logic
+            high_52w = high.rolling(252).max().iloc[-1]
+            dist_to_52w = (high_52w - curr_price) / curr_price
 
-        stop_loss_3atr = curr_close - (3 * atr_20)
+            # 50 Day Breakout Logic (Entry Signal)
+            high_50d = high.rolling(50).max().shift(1).iloc[-1]
+            is_breakout = curr_price > high_50d
 
-        return {
-            "signal": signal,
-            "trend_200sma": "BULLISH" if curr_close > current_kalman else "BEARISH", # Label kept as 200sma for compatibility
-            "breakout_level": high_50,
-            "stop_loss_3atr": stop_loss_3atr,
-            "trailing_exit_20d": low_20,
-            "kalman_trend": current_kalman
-        }
+            # Trailing Exit (20 Day Low)
+            low_20d = low.rolling(20).min().shift(1).iloc[-1]
+
+            # --- RULES ---
+            # 1. Trend Alignment (Minervini Template Lite)
+            trend_ok = (curr_price > sma_200) and (sma_50 > sma_200)
+
+            # 2. Near Highs (Must be within 25% of 52w highs to be a leader)
+            near_highs = dist_to_52w < 0.25
+
+            signal = "WAIT"
+            if trend_ok and near_highs and is_breakout:
+                signal = "BUY BREAKOUT"
+            elif trend_ok and near_highs:
+                signal = "WATCHLIST"
+
+            # Stop Loss (3 ATR)
+            stop_loss = curr_price - (3 * atr)
+
+            # Formatting for Frontend
+            return {
+                "Ticker": self.ticker,
+                "Price": round(curr_price, 2),
+                "Signal": signal,
+                "breakout_level": round(high_50d, 2),
+                "stop_loss_3atr": round(stop_loss, 2),
+                "trailing_exit_20d": round(low_20d, 2),
+                "volatility_pct": round((atr / curr_price) * 100, 2),
+                "risk_per_share": round(curr_price - stop_loss, 2),
+                "tharp_verdict": "BULL" if trend_ok else "BEAR",
+                "max_position_size": "20%" # Hardcoded safe limit
+            }
+
+        except Exception as e:
+            # print(f"ISA Error {self.ticker}: {e}")
+            return None

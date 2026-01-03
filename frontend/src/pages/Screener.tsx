@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { runMarketScreener, runTurtleScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runIsaTrendScreener, runFourierScreener, runHybridScreener } from '../api';
+import { runMarketScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runFourierScreener, runHybridScreener } from '../api';
 import clsx from 'clsx';
 import { formatCurrency } from '../utils/formatting';
 
@@ -9,15 +9,15 @@ type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' 
 
 const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
     master: { title: "Master Protocol", subtitle: "High Probability Convergences", description: "Combines Regime Filters, Liquidity Gates, and Trend/Vol Logic." },
-    turtle: { title: 'Turtle Trading', subtitle: 'Trend Breakouts', description: 'Classic Trend Following. Buy 20-Day Highs, Exit 10-Day Lows.' },
-    isa: { title: 'ISA Trend', subtitle: 'Long Term Growth', description: 'Investment grade trend following (Price > 200 SMA) with volatility stops.' },
     fortress: { title: "Fortress Options", subtitle: "Income Generation", description: "VIX-Adjusted Bull Put Spreads on liquid US tickers." },
     quantum: { title: 'Quantum Screener', subtitle: 'Statistical Regimes', description: 'Hurst Exponent & Entropy analysis for regime detection.' },
     market: { title: 'Market Screener', subtitle: 'Volatility & RSI', description: 'Scans for IV Rank and RSI extremes.' },
+    turtle: { title: 'Turtle Trading', subtitle: 'Trend Breakouts', description: '20-Day Donchian Channel Breakouts.' },
     darvas: { title: 'Darvas Box', subtitle: 'Momentum Boxes', description: 'Consolidation breakouts near 52-week highs.' },
     mms: { title: 'MMS / OTE', subtitle: 'Smart Money', description: 'Market Maker Models & Optimal Trade Entries.' },
     ema: { title: 'EMA Crossovers', subtitle: 'Trend Following', description: '5/13 & 5/21 EMA Crossovers.' },
     bull_put: { title: 'Bull Put (Classic)', subtitle: 'Credit Spreads', description: 'Standard bullish credit spreads.' },
+    isa: { title: 'ISA Trend', subtitle: 'Long Term Growth', description: 'Investment grade trend following (Price > 200 SMA).' },
     fourier: { title: 'Harmonic Cycles', subtitle: 'Swing Timing', description: 'Cycle analysis to find market bottoms.' },
     hybrid: { title: 'Hybrid', subtitle: 'Trend + Cycle', description: 'Combines ISA Trend with Fourier Timing.' }
 };
@@ -58,7 +58,6 @@ const Screener: React.FC<ScreenerProps> = () => {
         setBtLoading(true);
         setBtResult(null);
         try {
-            // Use the generic /backtest/run endpoint
             const res = await fetch(`/backtest/run?ticker=${btTicker}&strategy=${activeTab}`);
             const data = await res.json();
             if (data.error) throw new Error(data.error);
@@ -116,22 +115,25 @@ const Screener: React.FC<ScreenerProps> = () => {
         setResults(null);
         try {
             let data;
+
+            // CONSOLIDATED ROUTING WITH REGION
             if (activeTab === 'master') {
                 const res = await fetch(`/screen/master?region=${region}`);
                 data = await res.json();
+            } else if (activeTab === 'isa') {
+                const res = await fetch(`/screen/isa?region=${region}`);
+                data = await res.json();
+            } else if (activeTab === 'turtle') {
+                const res = await fetch(`/screen/turtle?region=${region}`);
+                data = await res.json();
             } else if (activeTab === 'fortress') {
-                const res = await fetch(`/screen/fortress`);
+                const res = await fetch(`/screen/fortress`); // Fortress is US Options only
                 data = await res.json();
             } else if (activeTab === 'quantum') {
                 const res = await fetch(`/screen/quantum?region=${region}`);
                 data = await res.json();
             } else if (activeTab === 'market') {
                 data = await runMarketScreener(30, 50, '1d', region);
-            } else if (activeTab === 'turtle') {
-                data = await runTurtleScreener(region, '1d');
-            } else if (activeTab === 'isa') {
-                const response = await runIsaTrendScreener(region);
-                data = response.results || response;
             } else if (activeTab === 'bull_put') {
                 data = await runBullPutScreener(region);
             } else if (activeTab === 'fourier') {
@@ -145,7 +147,14 @@ const Screener: React.FC<ScreenerProps> = () => {
             } else if (activeTab === 'mms') {
                 data = await runMmsScreener(region, '1d');
             }
-            setResults(data);
+
+            // Normalize response
+            if (data.results) {
+                setResults(data.results);
+            } else {
+                setResults(data);
+            }
+
         } catch (err: any) {
             setError(err.message || 'Screener failed. Ensure backend is running.');
         } finally {
@@ -168,7 +177,6 @@ const Screener: React.FC<ScreenerProps> = () => {
         { id: 'ema', label: 'EMA Cross' },
     ];
 
-    // Check if current tab supports backtesting
     const showBacktest = ['master', 'turtle', 'isa'].includes(activeTab);
 
     return (
@@ -218,8 +226,9 @@ const Screener: React.FC<ScreenerProps> = () => {
                         <div className="w-full md:w-1/3">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region / Universe</label>
                             <select value={region} onChange={(e) => setRegion(e.target.value)} className="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                                <option value="us">United States</option>
-                                <option value="uk">UK (LSE)</option>
+                                <option value="us">United States (US)</option>
+                                <option value="uk">UK 350 (LSE)</option>
+                                <option value="uk_euro">UK / Europe</option>
                                 <option value="india">India (NSE)</option>
                             </select>
                         </div>
@@ -247,7 +256,7 @@ const Screener: React.FC<ScreenerProps> = () => {
                                     type="text"
                                     value={btTicker}
                                     onChange={(e) => setBtTicker(e.target.value.toUpperCase())}
-                                    placeholder="e.g. NVDA"
+                                    placeholder="e.g. NVDA or TSCO.L"
                                     className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg p-2.5 dark:bg-gray-800 dark:border-gray-600 dark:text-white uppercase font-mono font-bold"
                                 />
                             </div>
@@ -282,9 +291,9 @@ const Screener: React.FC<ScreenerProps> = () => {
                             </div>
                         )}
                         {btResult && btResult.log && (
-                            <div className="mt-4 overflow-x-auto">
+                            <div className="mt-4 overflow-x-auto max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
                                 <table className="w-full text-xs text-left text-gray-500 dark:text-gray-400">
-                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0">
                                         <tr>
                                             <th className="px-2 py-1">Date</th>
                                             <th className="px-2 py-1">Type</th>

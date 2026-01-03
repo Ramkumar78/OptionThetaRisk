@@ -20,7 +20,18 @@ from option_auditor.master_screener import MasterScreener
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
 from option_auditor.unified_backtester import UnifiedBacktester
-# Import India Data
+
+# Import Strategies
+from option_auditor.strategies.isa import IsaStrategy
+from option_auditor.strategies.turtle import TurtleStrategy
+from option_auditor.common.data_utils import get_cached_market_data
+
+# Import Data Lists
+from option_auditor.sp500_data import SP500_TICKERS
+from option_auditor.uk_stock_data import UK_TICKERS
+from option_auditor.india_stock_data import INDIA_TICKERS
+
+# Import India Data (Compat)
 try:
     from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
 except ImportError:
@@ -81,6 +92,19 @@ def get_cached_screener_result(key):
 def cache_screener_result(key, data):
     screener_cache.set(key, data)
 
+# --- HELPER: Get Tickers by Region ---
+def get_tickers_for_region(region):
+    region = region.lower()
+    if region == 'uk':
+        return list(set(UK_TICKERS)) # Ensure unique
+    elif region == 'india':
+        return list(set(INDIA_TICKERS))
+    elif region == 'uk_euro':
+        # Combine UK with some major Euro tickers if available, for now just UK + placeholders
+        return list(set(UK_TICKERS))
+    else: # Default 'us'
+        return list(set(SP500_TICKERS))
+
 # Cached storage provider singleton at application level (if appropriate)
 # Since we might rely on app context (e.g. SQLite path), we use Flask's `g` or memoize based on app instance.
 # But `get_storage_provider` in `storage.py` is a factory.
@@ -113,7 +137,7 @@ def _get_env_or_docker_default(key, default=None):
         if os.path.exists(docker_compose_path):
             with open(docker_compose_path, 'r') as f:
                 content = f.read()
-                # Regex to find specific key pattern: key=${key:-value}
+                # Regex to find specific key pattern: key=${key:-(.*?)}
                 # Handles lines like: - SMTP_USER=${SMTP_USER:-tradeauditor9@gmail.com}
                 import re
                 match = re.search(fr"{key}=\${{{key}:-(.*?)}}", content)
@@ -326,35 +350,31 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/screen/turtle", methods=["GET"])
+    @app.route('/screen/turtle', methods=['GET'])
     def screen_turtle():
+        region = request.args.get('region', 'us')
+        tickers = get_tickers_for_region(region)
+
+        results = []
+        # Reuse data fetching pattern...
         try:
-            time_frame = request.args.get("time_frame", "1d")
-            region = request.args.get("region", "us")
+            data = get_cached_market_data(tickers, period="1y")
+            for ticker in tickers:
+                try:
+                    df = None
+                    if isinstance(data.columns, pd.MultiIndex) and ticker in data.columns.levels[0]:
+                        df = data[ticker].dropna()
+                    elif not isinstance(data.columns, pd.MultiIndex):
+                         df = data
 
-            cache_key = ("turtle", region, time_frame)
-            cached = get_cached_screener_result(cache_key)
-            if cached:
-                return jsonify(cached)
-
-            ticker_list = None
-            if region == "uk_euro":
-                ticker_list = screener.get_uk_euro_tickers()
-            elif region == "uk":
-                ticker_list = get_uk_tickers()
-            elif region == "india":
-                ticker_list = screener.get_indian_tickers()
-            elif region == "sp500":
-                # For Turtle, YES S&P 500. Use Filtered list (Trend + Volume)
-                # "Filter 2 (Trend): Only pass stocks to the heavy logic... if they are above 200 SMA."
-                # Turtle IS heavy logic/trend following.
-                filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
-                # Merge with WATCH list
-                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-                ticker_list = list(set(filtered_sp500 + watch_list))
-
-            results = screener.screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)
-            cache_screener_result(cache_key, results)
+                    if df is not None:
+                        # Fix: TurtleStrategy does not take args in init, and analyze needs df
+                        strat = TurtleStrategy()
+                        res = strat.analyze(df)
+                        if res and res.get('signal') != 'WAIT':
+                            res['Ticker'] = ticker # Attach ticker
+                            results.append(res)
+                except: pass
             return jsonify(results)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -430,44 +450,39 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/screen/isa", methods=["GET"])
+    @app.route('/screen/isa', methods=['GET'])
     def screen_isa():
+        region = request.args.get('region', 'us')
+        tickers = get_tickers_for_region(region)
+
+        results = []
         try:
-            region = request.args.get("region", "us")
-            cache_key = ("isa_trend", region)
-            cached = get_cached_screener_result(cache_key)
-            if cached:
-                return jsonify(cached)
+            # Batch fetch data
+            data = get_cached_market_data(tickers, period="2y")
 
-            results = screener.screen_trend_followers_isa(region=region)
+            if data.empty: return jsonify([])
 
-            # Market Regime Analysis
-            bearish_count = 0
-            total_count = len(results)
-            suggestion = None
+            for ticker in tickers:
+                try:
+                    # Robust extraction
+                    df = None
+                    if isinstance(data.columns, pd.MultiIndex):
+                        if ticker in data.columns.levels[0]:
+                            df = data[ticker].dropna()
+                    else:
+                        df = data # Single ticker case? Unlikely for list.
 
-            if total_count > 0:
-                for r in results:
-                    sig = r.get('signal', '')
-                    if "SELL" in sig or "AVOID" in sig or "EXIT" in sig:
-                        bearish_count += 1
+                    if df is not None:
+                        strategy = IsaStrategy(ticker, df)
+                        res = strategy.analyze()
+                        if res and res['Signal'] != 'WAIT':
+                            results.append(res)
+                except Exception as e:
+                    continue
 
-                bearish_ratio = bearish_count / total_count
-
-                if bearish_ratio > 0.5:
-                    suggestion = {
-                        "type": "bearish",
-                        "message": f"⚠️ Market appears Bearish/Choppy ({bearish_ratio*100:.0f}% Negative). Consider using 'Harmonic Cycles' (Fourier) for Mean Reversion opportunities instead of Trend Following."
-                    }
-
-            response_data = {
-                "results": results,
-                "regime_suggestion": suggestion
-            }
-
-            cache_screener_result(cache_key, response_data)
-            return jsonify(response_data)
+            return jsonify({"results": results})
         except Exception as e:
+            app.logger.error(f"ISA Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/bull_put", methods=["GET"])
@@ -620,51 +635,22 @@ def create_app(testing: bool = False) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/screen/master", methods=["GET"])
+    @app.route('/screen/master', methods=['GET'])
     def screen_master():
+        region = request.args.get('region', 'us')
+        # MasterScreener needs US and UK tickers passed explicitly
+        # We filter based on the region requested to avoid crossover
+
+        us_subset = get_tickers_for_region('us') if region == 'us' else []
+        uk_subset = get_tickers_for_region('uk') if region == 'uk' else []
+        in_subset = get_tickers_for_region('india') if region == 'india' else []
+
         try:
-            region = request.args.get("region", "us")
-            cache_key = ("master_council_v6", region)
-            cached = get_cached_screener_result(cache_key)
-            if cached:
-                return jsonify(cached)
-
-            # Initialize empty lists
-            us_tickers = []
-            uk_tickers = []
-            india_tickers = []
-
-            # STRICT SELECTION - Do not mix regions!
-            if region == "uk":
-                uk_tickers = get_uk_tickers()
-
-            elif region == "us":
-                us_tickers = list(set(LIQUID_OPTION_TICKERS))
-
-            elif region == "sp500":
-                from option_auditor.sp500_data import get_sp500_tickers
-                us_tickers = get_sp500_tickers()
-
-            elif region == "india":
-                try:
-                    from option_auditor.india_stock_data import INDIAN_TICKERS_RAW
-                    india_tickers = INDIAN_TICKERS_RAW
-                except:
-                    india_tickers = []
-
-            else:
-                # Universal = UK + US Liquid
-                uk_tickers = get_uk_tickers()
-                us_tickers = list(set(LIQUID_OPTION_TICKERS))
-
-            council = MasterScreener(us_tickers, uk_tickers, india_tickers)
-            results = council.run()
-
-            cache_screener_result(cache_key, results)
+            screener = MasterScreener(us_subset, uk_subset, in_subset)
+            results = screener.run()
             return jsonify(results)
-
         except Exception as e:
-            print(f"Master Screener Error: {e}", flush=True)
+            app.logger.error(f"Master Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
