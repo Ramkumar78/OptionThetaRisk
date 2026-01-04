@@ -1,392 +1,264 @@
 import React, { useState } from 'react';
-import { runMarketScreener, runEmaScreener, runDarvasScreener, runMmsScreener, runBullPutScreener, runFourierScreener, runHybridScreener } from '../api';
-import clsx from 'clsx';
 import { formatCurrency } from '../utils/formatting';
 
-interface ScreenerProps { }
-
-type ScreenerType = 'market' | 'turtle' | 'ema' | 'darvas' | 'mms' | 'bull_put' | 'isa' | 'fourier' | 'hybrid' | 'master' | 'fortress' | 'quantum';
-
-const screenerInfo: Record<ScreenerType, { title: string; subtitle: string; description: string }> = {
-    master: { title: "Master Protocol", subtitle: "High Probability Convergences", description: "Combines Regime Filters, Liquidity Gates, and Trend/Vol Logic." },
-    fortress: { title: "Fortress Options", subtitle: "Income Generation", description: "VIX-Adjusted Bull Put Spreads on liquid US tickers." },
-    quantum: { title: 'Quantum Screener', subtitle: 'Statistical Regimes', description: 'Hurst Exponent & Entropy analysis for regime detection.' },
-    market: { title: 'Market Screener', subtitle: 'Volatility & RSI', description: 'Scans for IV Rank and RSI extremes.' },
-    turtle: { title: 'Turtle Trading', subtitle: 'Trend Breakouts', description: '20-Day Donchian Channel Breakouts.' },
-    darvas: { title: 'Darvas Box', subtitle: 'Momentum Boxes', description: 'Consolidation breakouts near 52-week highs.' },
-    mms: { title: 'MMS / OTE', subtitle: 'Smart Money', description: 'Market Maker Models & Optimal Trade Entries.' },
-    ema: { title: 'EMA Crossovers', subtitle: 'Trend Following', description: '5/13 & 5/21 EMA Crossovers.' },
-    bull_put: { title: 'Bull Put (Classic)', subtitle: 'Credit Spreads', description: 'Standard bullish credit spreads.' },
-    isa: { title: 'ISA Trend', subtitle: 'Long Term Growth', description: 'Investment grade trend following (Price > 200 SMA).' },
-    fourier: { title: 'Harmonic Cycles', subtitle: 'Swing Timing', description: 'Cycle analysis to find market bottoms.' },
-    hybrid: { title: 'Hybrid', subtitle: 'Trend + Cycle', description: 'Combines ISA Trend with Fourier Timing.' }
-};
-
-const StrategyTile = ({ tab, active, onClick }: { tab: { id: ScreenerType, label: string, subLabel?: string }, active: boolean, onClick: (id: ScreenerType) => void }) => (
-    <button
-        onClick={() => onClick(tab.id)}
-        className={clsx(
-            "relative flex flex-col items-start p-4 rounded-xl transition-all duration-300 border-2 w-full text-left group",
-            active
-                ? "bg-primary-600/10 border-primary-600 scale-[1.02] shadow-lg"
-                : "bg-gray-800 border-transparent hover:bg-gray-700 hover:translate-x-2"
-        )}
-    >
-        <span className={clsx("text-base font-bold transition-colors", active ? "text-primary-500" : "text-white group-hover:text-gray-200")}>
-            {tab.label}
-        </span>
-        {tab.subLabel && <span className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-medium">{tab.subLabel}</span>}
-        {active && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-primary-600 animate-pulse" />}
-    </button>
-);
-
-const Screener: React.FC<ScreenerProps> = () => {
-    const [activeTab, setActiveTab] = useState<ScreenerType>('master');
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+const Screener: React.FC = () => {
     const [loading, setLoading] = useState(false);
-    const [results, setResults] = useState<any>(null);
+    const [results, setResults] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
-    const [region, setRegion] = useState('us');
+    const [region, setRegion] = useState('us_uk_mix');
 
-    // --- BACKTEST STATE ---
-    const [btTicker, setBtTicker] = useState('');
+    // Backtest State
+    const [backtestTicker, setBacktestTicker] = useState('');
+    const [backtestStrategy, setBacktestStrategy] = useState('grandmaster');
+    const [backtestResult, setBacktestResult] = useState<any | null>(null);
     const [btLoading, setBtLoading] = useState(false);
-    const [btResult, setBtResult] = useState<any>(null);
-
-    const runBacktest = async () => {
-        if (!btTicker) return;
-        setBtLoading(true);
-        setBtResult(null);
-        try {
-            const res = await fetch(`/backtest/run?ticker=${btTicker}&strategy=${activeTab}`);
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            setBtResult(data);
-        } catch (err: any) {
-            alert(err.message || 'Backtest failed');
-        } finally {
-            setBtLoading(false);
-        }
-    };
-
-    const downloadCSV = () => {
-        if (!results) return;
-        let dataToExport: any[] = [];
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
-        let filename = `${activeTab}_scan_${timestamp}.csv`;
-
-        if (activeTab === 'market' && results.results) {
-            Object.values(results.results).forEach((arr: any) => dataToExport.push(...arr));
-        } else if (Array.isArray(results)) {
-            dataToExport = results;
-        } else if (results.results && Array.isArray(results.results)) {
-            dataToExport = results.results;
-        }
-
-        if (dataToExport.length === 0) {
-            alert("No data to download.");
-            return;
-        }
-
-        const headers = Object.keys(dataToExport[0]);
-        const csvContent = [
-            headers.join(','),
-            ...dataToExport.map(row =>
-                headers.map(header => {
-                    let val = row[header];
-                    if (val === null || val === undefined) return '';
-                    const valStr = String(val);
-                    if (valStr.includes(',') || valStr.includes('\n')) return `"${valStr.replace(/"/g, '""')}"`;
-                    return valStr;
-                }).join(',')
-            )
-        ].join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-    };
 
     const handleRunScreener = async () => {
         setLoading(true);
         setError(null);
-        setResults(null);
+        setResults([]);
         try {
-            let data;
+            const res = await fetch(`/screen/master?region=${region}`);
+            const data = await res.json();
 
-            // CONSOLIDATED ROUTING WITH REGION
-            if (activeTab === 'master') {
-                const res = await fetch(`/screen/master?region=${region}`);
-                data = await res.json();
-            } else if (activeTab === 'isa') {
-                const res = await fetch(`/screen/isa?region=${region}`);
-                data = await res.json();
-            } else if (activeTab === 'turtle') {
-                const res = await fetch(`/screen/turtle?region=${region}`);
-                data = await res.json();
-            } else if (activeTab === 'fortress') {
-                const res = await fetch(`/screen/fortress`); // Fortress is US Options only
-                data = await res.json();
-            } else if (activeTab === 'quantum') {
-                const res = await fetch(`/screen/quantum?region=${region}`);
-                data = await res.json();
-            } else if (activeTab === 'market') {
-                data = await runMarketScreener(30, 50, '1d', region);
-            } else if (activeTab === 'bull_put') {
-                data = await runBullPutScreener(region);
-            } else if (activeTab === 'fourier') {
-                data = await runFourierScreener(region, '1d');
-            } else if (activeTab === 'hybrid') {
-                data = await runHybridScreener(region, '1d');
-            } else if (activeTab === 'ema') {
-                data = await runEmaScreener(region, '1d');
-            } else if (activeTab === 'darvas') {
-                data = await runDarvasScreener(region, '1d');
-            } else if (activeTab === 'mms') {
-                data = await runMmsScreener(region, '1d');
-            }
-
-            // Normalize response
             if (data.results) {
                 setResults(data.results);
-            } else {
+            } else if (Array.isArray(data)) {
                 setResults(data);
+            } else {
+                setResults([]);
             }
-
         } catch (err: any) {
-            setError(err.message || 'Screener failed. Ensure backend is running.');
+            setError('System Error: ' + err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const tabs: { id: ScreenerType; label: string; subLabel?: string }[] = [
-        { id: 'master', label: '⚡ Master Screen', subLabel: 'Best of All' },
-        { id: 'isa', label: 'ISA Trend', subLabel: 'Growth' },
-        { id: 'turtle', label: 'Turtle Trading', subLabel: 'Classic' },
-        { id: 'fortress', label: 'Options: Fortress', subLabel: 'Income' },
-        { id: 'quantum', label: 'Quantum', subLabel: 'Stats' },
-        { id: 'bull_put', label: 'Bull Put Spreads' },
-        { id: 'market', label: 'Market Scanner' },
-        { id: 'fourier', label: 'Fourier Cycles' },
-        { id: 'hybrid', label: 'Hybrid' },
-        { id: 'darvas', label: 'Darvas Box' },
-        { id: 'mms', label: 'MMS / SMC' },
-        { id: 'ema', label: 'EMA Cross' },
-    ];
-
-    const showBacktest = ['master', 'turtle', 'isa'].includes(activeTab);
+    const handleBacktest = async () => {
+        if (!backtestTicker) return;
+        setBtLoading(true);
+        setBacktestResult(null);
+        try {
+            const res = await fetch(`/backtest/run?ticker=${backtestTicker}&strategy=${backtestStrategy}`);
+            const data = await res.json();
+            if (data.error) {
+                setError("Backtest Failed: " + data.error);
+            } else {
+                setBacktestResult(data);
+                setError(null);
+            }
+        } catch (err: any) {
+            setError("Backtest Error: " + err.message);
+        } finally {
+            setBtLoading(false);
+        }
+    };
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-80px)]">
-            <aside className="hidden md:flex md:flex-col w-64 flex-shrink-0 space-y-3 sticky top-6 h-fit">
-                <h2 className="text-xl font-bold mb-4 px-2 text-gray-900 dark:text-white">Strategies</h2>
-                <div className="grid grid-cols-1 gap-3">
-                    {tabs.map(tab => (
-                        <StrategyTile
-                            key={tab.id}
-                            tab={tab}
-                            active={activeTab === tab.id}
-                            onClick={(id) => { setActiveTab(id); setResults(null); setBtResult(null); }}
-                        />
-                    ))}
-                </div>
-            </aside>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+            <header className="mb-8">
+                <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">
+                    THE COUNCIL <span className="text-primary-600">PROTOCOL</span>
+                </h1>
+                <p className="text-gray-500 mt-2 font-mono text-sm">
+                    ISA GROWTH (£100k)  |  US OPTIONS INCOME ($9.5k)
+                </p>
+            </header>
 
-            {/* Mobile Toggle */}
-            <button className="md:hidden fixed bottom-6 right-6 z-50 p-4 bg-primary-600 text-white rounded-full shadow-lg" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
-            </button>
-            {isSidebarOpen && (
-                <div className="fixed inset-0 z-40 bg-gray-900/90 p-6 md:hidden overflow-y-auto">
-                    <h2 className="text-xl font-bold text-white mb-4">Select Strategy</h2>
-                    <div className="space-y-2">
-                        {tabs.map(tab => (
-                            <div key={tab.id} onClick={() => { setActiveTab(tab.id); setIsSidebarOpen(false); setResults(null); }} className="p-3 bg-gray-800 text-white rounded-lg border border-gray-700">
-                                {tab.label}
-                            </div>
-                        ))}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Universe</label>
+                        <select
+                            value={region}
+                            onChange={(e) => setRegion(e.target.value)}
+                            className="w-full bg-gray-100 border-none rounded-lg p-3 font-bold text-gray-900 dark:bg-gray-700 dark:text-white"
+                        >
+                            <option value="us_uk_mix">Global Mix (US Leaders + UK 350)</option>
+                            <option value="us">United States Only</option>
+                            <option value="uk">UK Only (LSE)</option>
+                        </select>
                     </div>
-                    <button className="mt-6 w-full py-3 bg-gray-700 text-white rounded-lg" onClick={() => setIsSidebarOpen(false)}>Close</button>
+                    <button
+                        onClick={handleRunScreener}
+                        disabled={loading}
+                        className="px-8 py-3 bg-black dark:bg-white dark:text-black text-white font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                        {loading ? 'AUDITING MARKET...' : 'RUN PROTOCOL'}
+                    </button>
+                </div>
+
+                {/* STATUS BAR */}
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-6 text-xs font-mono text-gray-500">
+                    <span>REGIME CHECK: {results.length > 0 ? results[0].regime : 'WAITING'}</span>
+                    <span>ISA RISK: 1.0%</span>
+                    <span>OPT RISK: 2.0%</span>
+                </div>
+            </div>
+
+            {error && <div className="p-4 bg-red-100 text-red-800 rounded-lg mb-6">{error}</div>}
+
+            {results.length > 0 && (
+                <div className="overflow-x-auto rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+                    <table className="w-full text-sm text-left text-gray-600 dark:text-gray-300">
+                        <thead className="text-xs text-gray-500 uppercase bg-gray-100 dark:bg-gray-800 border-b dark:border-gray-700">
+                            <tr>
+                                <th className="px-6 py-4">Ticker</th>
+                                <th className="px-6 py-4">Price</th>
+                                <th className="px-6 py-4">Verdict</th>
+                                <th className="px-6 py-4">Action</th>
+                                <th className="px-6 py-4">Stop Loss</th>
+                                <th className="px-6 py-4 text-right">Quality</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                            {results.map((r, i) => (
+                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                    <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-white">
+                                        {r.ticker}
+                                        <div className="text-[10px] text-gray-400 font-normal">{r.company_name}</div>
+                                    </td>
+                                    <td className="px-6 py-4">{formatCurrency(r.price, r.ticker.includes('.L') ? '£' : '$')}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                            r.master_verdict.includes('ISA') ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                                        }`}>
+                                            {r.master_verdict}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{r.action}</td>
+                                    <td className="px-6 py-4 text-red-600 font-mono">{r.stop_loss}</td>
+                                    <td className="px-6 py-4 text-right font-mono">{r.quality_score}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 
-            <main className="flex-1 w-full max-w-full overflow-hidden">
-                <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-8 rounded-2xl mb-6 shadow-xl relative overflow-hidden">
-                    <div className="relative z-10">
-                        <h1 className="text-3xl font-black text-white">{screenerInfo[activeTab].title}</h1>
-                        <p className="text-gray-300 mt-2">{screenerInfo[activeTab].description}</p>
+            {/* BACKTEST LAB SECTION */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+                <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span className="text-xl">🧪</span> STRATEGY LAB (BACKTEST)
+                </h3>
+                <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Ticker</label>
+                        <input
+                            type="text"
+                            value={backtestTicker}
+                            onChange={(e) => setBacktestTicker(e.target.value.toUpperCase())}
+                            placeholder="e.g. NVDA"
+                            className="w-full bg-gray-100 border-none rounded-lg p-3 font-bold text-gray-900 dark:bg-gray-700 dark:text-white uppercase"
+                        />
                     </div>
-                </div>
-
-                <div className="bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm mb-6">
-                    <div className="flex flex-col md:flex-row gap-4 justify-between items-end">
-                        <div className="w-full md:w-1/3">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Region / Universe</label>
-                            <select value={region} onChange={(e) => setRegion(e.target.value)} className="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                                <option value="us">United States (US)</option>
-                                <option value="uk">UK 350 (LSE)</option>
-                                <option value="uk_euro">UK / Europe</option>
-                                <option value="india">India (NSE)</option>
-                            </select>
-                        </div>
-                        <button
-                            onClick={handleRunScreener}
-                            disabled={loading}
-                            className="w-full md:w-auto px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-md disabled:opacity-50 transition-all"
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Strategy</label>
+                        <select
+                            value={backtestStrategy}
+                            onChange={(e) => setBacktestStrategy(e.target.value)}
+                            className="w-full bg-gray-100 border-none rounded-lg p-3 font-bold text-gray-900 dark:bg-gray-700 dark:text-white"
                         >
-                            {loading ? 'Scanning...' : 'Run Screener'}
-                        </button>
+                            <option value="grandmaster">Grandmaster (Council Protocol)</option>
+                            <option value="turtle">Turtle (20-Day Breakout)</option>
+                            <option value="isa">ISA Classic (Trend)</option>
+                        </select>
                     </div>
+                    <button
+                        onClick={handleBacktest}
+                        disabled={btLoading || !backtestTicker}
+                        className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                        {btLoading ? 'RUNNING SIM...' : 'BACKTEST'}
+                    </button>
                 </div>
 
-                {/* --- STRATEGY LAB (BACKTESTER) --- */}
-                {showBacktest && (
-                    <div className="mb-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-6 border border-indigo-100 dark:border-indigo-800">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-                            Strategy Lab: {screenerInfo[activeTab].title}
-                        </h3>
-                        <div className="flex flex-col sm:flex-row gap-4 items-end">
-                            <div className="flex-1 w-full sm:w-auto">
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Test Ticker</label>
-                                <input
-                                    type="text"
-                                    value={btTicker}
-                                    onChange={(e) => setBtTicker(e.target.value.toUpperCase())}
-                                    placeholder="e.g. NVDA or TSCO.L"
-                                    className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg p-2.5 dark:bg-gray-800 dark:border-gray-600 dark:text-white uppercase font-mono font-bold"
-                                />
+                {backtestResult && (
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-center">
+                            <div className="p-3 bg-white dark:bg-gray-800 rounded shadow-sm">
+                                <div className="text-xs text-gray-500 uppercase">Strategy Return</div>
+                                <div className={`text-xl font-black ${backtestResult.strategy_return >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {backtestResult.strategy_return}%
+                                </div>
                             </div>
-                            <button
-                                onClick={runBacktest}
-                                disabled={btLoading || !btTicker}
-                                className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm disabled:opacity-50"
-                            >
-                                {btLoading ? 'Simulating...' : 'Run Backtest'}
-                            </button>
+                            <div className="p-3 bg-white dark:bg-gray-800 rounded shadow-sm">
+                                <div className="text-xs text-gray-500 uppercase">Buy & Hold</div>
+                                <div className="text-xl font-bold text-gray-700 dark:text-gray-300">
+                                    {backtestResult.buy_hold_return}%
+                                </div>
+                            </div>
+                            <div className="p-3 bg-white dark:bg-gray-800 rounded shadow-sm">
+                                <div className="text-xs text-gray-500 uppercase">Win Rate</div>
+                                <div className="text-xl font-bold text-indigo-500">
+                                    {backtestResult.win_rate}
+                                </div>
+                            </div>
+                            <div className="p-3 bg-white dark:bg-gray-800 rounded shadow-sm">
+                                <div className="text-xs text-gray-500 uppercase">Trades</div>
+                                <div className="text-xl font-bold text-gray-700 dark:text-gray-300">
+                                    {backtestResult.trades}
+                                </div>
+                            </div>
                         </div>
 
-                        {btResult && !btResult.error && (
-                            <div className="mt-6 space-y-4 animate-fadeIn">
-                                {/* Date Range Header */}
-                                <div className="flex justify-between items-center text-xs text-gray-500 border-b border-gray-200 dark:border-gray-700 pb-2">
-                                    <span>Backtest Period:</span>
-                                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{btResult.start_date} → {btResult.end_date}</span>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                        <div className="text-xs text-gray-500 uppercase">Strategy Return</div>
-                                        <div className={clsx("text-2xl font-bold", btResult.strategy_return > btResult.buy_hold_return ? "text-green-600" : "text-gray-900 dark:text-white")}>
-                                            {btResult.strategy_return}%
-                                        </div>
-                                        <div className="text-xs text-gray-400 mt-1">vs Buy & Hold: {btResult.buy_hold_return}% ({btResult.buy_hold_days}d)</div>
-                                    </div>
-                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                        <div className="text-xs text-gray-500 uppercase">Win Rate</div>
-                                        <div className="text-2xl font-bold text-gray-900 dark:text-white">{btResult.win_rate}</div>
-                                        <div className="text-xs text-gray-400 mt-1">{btResult.trades} Round Trips</div>
-                                    </div>
-                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                        <div className="text-xs text-gray-500 uppercase">Avg Duration</div>
-                                        <div className="text-2xl font-bold text-blue-600">{btResult.avg_days_held}d</div>
-                                        <div className="text-xs text-gray-400 mt-1">Per Trade</div>
-                                    </div>
-                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                        <div className="text-xs text-gray-500 uppercase">Final Equity</div>
-                                        <div className="text-2xl font-bold text-indigo-600">{formatCurrency(btResult.final_equity, '$')}</div>
-                                        <div className="text-xs text-gray-400 mt-1">Start: $10,000</div>
-                                    </div>
-                                </div>
-
-                                {btResult.log && (
-                                    <div className="mt-4">
-                                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Trade Log ({btResult.log.length} Transactions)</h4>
-                                        <div className="overflow-y-auto max-h-60 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
-                                            <table className="w-full text-xs text-left text-gray-500 dark:text-gray-400">
-                                                <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm">
-                                                    <tr>
-                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800">Date</th>
-                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800">Type</th>
-                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-right">Price</th>
-                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-center">Duration</th>
-                                                        <th className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-right">Context</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                                                    {btResult.log.map((trade: any, idx: number) => (
-                                                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                                            <td className="px-3 py-2 font-mono">{trade.date}</td>
-                                                            <td className="px-3 py-2">
-                                                                <span className={clsx("px-1.5 py-0.5 rounded text-[10px] font-bold",
-                                                                    trade.type === 'BUY' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400')}>
-                                                                    {trade.type}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-3 py-2 text-right font-mono text-gray-900 dark:text-gray-300">{trade.price}</td>
-                                                            <td className="px-3 py-2 text-center text-gray-500">{trade.days !== '-' ? `${trade.days}d` : '-'}</td>
-                                                            <td className="px-3 py-2 text-right text-gray-500 italic">{trade.reason || `Stop: ${trade.stop}`}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {error && (
-                    <div className="p-4 mb-6 text-sm text-red-800 bg-red-50 dark:bg-red-900/30 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800">
-                        Error: {error}
-                    </div>
-                )}
-
-                {results && (
-                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                            <span className="font-bold text-sm">Found {Array.isArray(results) ? results.length : 'Multiple'} Results</span>
-                            <button
-                                onClick={downloadCSV}
-                                className="text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-xs px-4 py-2 dark:bg-green-600 dark:hover:bg-green-700"
-                            >
-                                Download CSV ⬇️
-                            </button>
-                        </div>
-                        <div className="overflow-x-auto p-4">
-                            {activeTab === 'market' ? (
-                                <pre className="text-xs">{JSON.stringify(results, null, 2)}</pre>
-                            ) : (
-                                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                        {backtestResult.log && backtestResult.log.length > 0 && (
+                            <div className="mt-4 max-h-60 overflow-y-auto">
+                                <table className="w-full text-xs text-left text-gray-500">
+                                    <thead className="text-xs text-gray-400 uppercase bg-gray-100 dark:bg-gray-800 sticky top-0">
                                         <tr>
-                                            {results[0] && Object.keys(results[0]).map(key => (
-                                                <th key={key} className="px-4 py-3 whitespace-nowrap">{key.replace(/_/g, ' ')}</th>
-                                            ))}
+                                            <th className="px-4 py-2">Date</th>
+                                            <th className="px-4 py-2">Type</th>
+                                            <th className="px-4 py-2">Price</th>
+                                            <th className="px-4 py-2">Reason</th>
+                                            <th className="px-4 py-2 text-right">Equity</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        {Array.isArray(results) && results.map((row: any, i: number) => (
-                                            <tr key={i} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                {Object.values(row).map((val: any, j) => (
-                                                    <td key={j} className="px-4 py-3 font-medium whitespace-nowrap">
-                                                        {typeof val === 'number' ? val.toFixed(2) : val}
-                                                    </td>
-                                                ))}
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        {backtestResult.log.slice().reverse().map((trade: any, i: number) => (
+                                            <tr key={i} className="hover:bg-white dark:hover:bg-gray-800">
+                                                <td className="px-4 py-2">{trade.date}</td>
+                                                <td className={`px-4 py-2 font-bold ${trade.type === 'BUY' ? 'text-green-600' : 'text-red-600'}`}>{trade.type}</td>
+                                                <td className="px-4 py-2">{trade.price}</td>
+                                                <td className="px-4 py-2">{trade.reason || trade.stop || '-'}</td>
+                                                <td className="px-4 py-2 text-right">{trade.equity || '-'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
                 )}
-            </main>
+            </div>
+
+            {/* LEGEND / DOCS AT BOTTOM */}
+            <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 text-gray-500 text-sm">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4">PROTOCOL LEGEND</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h4 className="font-bold mb-2">ISA GROWTH Criteria (UK/US Stocks)</h4>
+                        <ul className="list-disc pl-5 space-y-1 text-xs">
+                            <li>Market Regime: SPY &gt; 200 SMA & VIX &lt; 25.</li>
+                            <li>Trend: Price &gt; 50 &gt; 200 SMA.</li>
+                            <li>Momentum: Within 25% of 52-week Highs.</li>
+                            <li>Trigger: Volume Breakout of 20-Day High.</li>
+                            <li>Risk: 1% of £100k Account.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 className="font-bold mb-2">US OPTIONS INCOME Criteria</h4>
+                        <ul className="list-disc pl-5 space-y-1 text-xs">
+                            <li>Strategy: Bull Put Verticals.</li>
+                            <li>Trend: Price &gt; 50 SMA (Bullish).</li>
+                            <li>Timing: RSI &lt; 55 (Pullback).</li>
+                            <li>Implied Vol: ATR &gt; 2% of Price.</li>
+                            <li>Risk: 2% of $9.5k Account.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

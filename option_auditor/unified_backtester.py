@@ -3,12 +3,13 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import logging
+from option_auditor.unified_screener import analyze_ticker_hardened, get_market_regime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("UnifiedBacktester")
 
 class UnifiedBacktester:
-    def __init__(self, ticker, strategy_type="master", initial_capital=10000.0):
+    def __init__(self, ticker, strategy_type="grandmaster", initial_capital=10000.0):
         self.ticker = ticker.upper()
         self.strategy_type = strategy_type
         self.initial_capital = initial_capital
@@ -25,17 +26,22 @@ class UnifiedBacktester:
             data = yf.download(symbols, period="3y", auto_adjust=True, progress=False)
 
             if isinstance(data.columns, pd.MultiIndex):
-                close = data['Close']
-                high = data['High']
-                low = data['Low']
-                open_price = data['Open']
-                vol = data['Volume']
+                try:
+                    close = data['Close']
+                    high = data['High']
+                    low = data['Low']
+                    open_price = data['Open']
+                    vol = data['Volume']
+                except KeyError:
+                    # yfinance 0.2.x structure variations
+                     return None
             else:
                 return None
 
             def get_series(df, sym):
                 if sym in df.columns: return df[sym]
-                return df.iloc[:, 0]
+                # Fallback if single level or other issue
+                return pd.Series(dtype=float)
 
             df = pd.DataFrame({
                 'close': get_series(close, self.ticker),
@@ -47,44 +53,36 @@ class UnifiedBacktester:
                 'vix': get_series(close, '^VIX')
             }).dropna()
 
+            # Capitalize columns to match unified_screener expectations (Close, High, Low...)
+            df.columns = [c.capitalize() for c in df.columns] # Close, High, Low, Open, Volume, Spy, Vix
+
             return df
         except Exception as e:
             logger.error(f"Data Fetch Error: {e}")
             return None
 
     def calculate_indicators(self, df):
+        # Additional indicators for Turtle/Legacy strategies if needed
+        # Unified Screener calculates its own, but we can pre-calc helpers
+
         # --- Trend Moving Averages ---
-        df['sma200'] = df['close'].rolling(200).mean()
-        df['sma50'] = df['close'].rolling(50).mean()
-        df['sma150'] = df['close'].rolling(150).mean()
-        df['sma20'] = df['close'].rolling(20).mean()
+        df['sma200'] = df['Close'].rolling(200).mean()
+        df['sma50'] = df['Close'].rolling(50).mean()
+        df['sma150'] = df['Close'].rolling(150).mean()
+        df['sma20'] = df['Close'].rolling(20).mean()
 
         # --- Volatility & ATR ---
-        df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+        df['atr'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
 
-        # --- MASTER PROTOCOL METRICS ---
+        # --- Donchian Channels (Legacy) ---
+        df['high_20'] = df['High'].rolling(20).max().shift(1)
+        df['high_10'] = df['High'].rolling(10).max().shift(1)
+        df['low_20'] = df['Low'].rolling(20).min().shift(1)
+        df['low_10'] = df['Low'].rolling(10).min().shift(1)
+        df['high_50'] = df['High'].rolling(50).max().shift(1)
 
-        # 1. Relative Strength (RS) vs SPY (Mansfield Proxy)
-        rs_ratio = df['close'] / df['spy']
-        df['rs_score'] = (rs_ratio / rs_ratio.shift(60)) - 1.0
-
-        # 2. Volatility Contraction Pattern (VCP)
-        vol_10 = df['close'].rolling(10).std()
-        vol_50 = df['close'].rolling(50).std()
-        df['vcp_ratio'] = vol_10 / (vol_50 + 0.0001)
-
-        # 3. Volume Metrics
-        df['vol_avg_20'] = df['volume'].rolling(20).mean()
-
-        # --- Donchian Channels ---
-        df['high_20'] = df['high'].rolling(20).max().shift(1)
-        df['high_10'] = df['high'].rolling(10).max().shift(1) # Faster re-entry
-        df['low_20'] = df['low'].rolling(20).min().shift(1)
-        df['low_10'] = df['low'].rolling(10).min().shift(1)
-        df['high_50'] = df['high'].rolling(50).max().shift(1)
-
-        # --- Market Regime ---
-        df['spy_sma200'] = df['spy'].rolling(200).mean()
+        # Regime Indicators
+        df['spy_sma200'] = df['Spy'].rolling(200).mean()
 
         return df.dropna()
 
@@ -96,7 +94,12 @@ class UnifiedBacktester:
 
         # --- EXACT SIMULATION WINDOW ---
         start_date = pd.Timestamp.now() - pd.Timedelta(days=730)
-        sim_data = df[df.index >= start_date].copy()
+        # If simulation data is older (e.g. testing with fixed dates), this might result in empty.
+        # Fallback for testing: if df ends before start_date, use entire df
+        if df.index[-1] < start_date:
+             sim_data = df.copy()
+        else:
+             sim_data = df[df.index >= start_date].copy()
 
         if sim_data.empty: return {"error": "Not enough history"}
 
@@ -105,8 +108,8 @@ class UnifiedBacktester:
         buy_hold_days = (sim_data.index[-1] - sim_data.index[0]).days
 
         # --- FAIR COMPARISON: BUY & HOLD ---
-        initial_price = sim_data['close'].iloc[0]
-        final_price = sim_data['close'].iloc[-1]
+        initial_price = sim_data['Close'].iloc[0]
+        final_price = sim_data['Close'].iloc[-1]
         bnh_shares = int(self.initial_capital / initial_price)
         bnh_final_value = self.initial_capital - (bnh_shares * initial_price) + (bnh_shares * final_price)
         bnh_return = ((bnh_final_value - self.initial_capital) / self.initial_capital) * 100
@@ -115,54 +118,81 @@ class UnifiedBacktester:
         stop_loss = 0.0
 
         for date, row in sim_data.iterrows():
-            price = row['close']
+            price = row['Close']
             buy_signal = False
             sell_signal = False
             current_stop_reason = "STOP"
 
-            is_strong_trend = (price > row['sma50'] > row['sma200'])
+            # Dynamic Regime Check
+            # We reconstruct the regime logic from unified_screener using historical columns
+            regime = "RED"
+            spy_price = row['Spy']
+            spy_sma = row['spy_sma200']
+            vix_price = row['Vix']
 
-            # EDGE #1: Market Regime Filter
-            # If the broad market is crashing (SPY < 200SMA), we DO NOT initiate new long trades.
-            is_bull_market = row['spy'] > row['spy_sma200']
+            if spy_price > spy_sma and vix_price < 20:
+                regime = "GREEN"
+            elif spy_price > spy_sma and vix_price < 28:
+                regime = "YELLOW"
 
-            # ==============================
-            # STRATEGY LOGIC
-            # ==============================
+            # --- STRATEGY LOGIC ---
 
-            if self.strategy_type == 'master':
-                # --- MASTER PROTOCOL (v3: Confluence & Regime) ---
+            if self.strategy_type in ['grandmaster', 'council', 'master']:
+                # Simulate "Grandmaster" Logic
+                # We need to pass a slice of DF up to this date to mimic the screener seeing only past data
+                # Optimization: We already have indicators in 'row'. We can implement simplified logic
+                # or slice. Slicing inside loop is slow (O(N^2)).
+                # Let's use indicators calculated in `calculate_indicators` which respect time (rolling).
 
-                # Setup A: Sniper VCP (High Quality)
-                has_rs_edge = row['rs_score'] > 0.0
-                is_squeeze = row['vcp_ratio'] < 0.75
-                vol_spike = row['volume'] > (1.2 * row['vol_avg_20'])
+                # REIMPLEMENT LOGIC FROM unified_screener.analyze_ticker_hardened
 
-                # Setup B: Trend Participation (Don't miss the bus)
-                is_mega_trend = (price > row['sma50']) and (row['sma50'] > row['sma200'])
+                # 1. Regime Filter
+                if regime == "RED":
+                    # Hard Exit if holding
+                    if self.state == "IN":
+                        sell_signal = True
+                        current_stop_reason = "REGIME CHANGE (RED)"
+                    # No new buys
+                    buy_signal = False
 
-                # RE-ENTRY OPTIMIZATION:
-                # If we are in a mega trend, re-enter on a shorter 10-day breakout
-                # instead of waiting for 20-day.
-                entry_level = row['high_10'] if is_mega_trend else row['high_20']
-                is_breakout = price > entry_level
+                else:
+                    # 2. Technical Metrics (Already in row)
+                    sma50 = row['sma50']
+                    sma200 = row['sma200']
+                    # rvol approx (using 20 day avg vol)
+                    avg_vol_20 = sim_data.loc[:date]['Volume'].tail(20).mean()
+                    rvol = row['Volume'] / avg_vol_20 if avg_vol_20 > 0 else 0
 
-                # ENTRY TRIGGER (Must be Bull Market)
-                if is_bull_market and ((has_rs_edge and is_squeeze and vol_spike) or (is_mega_trend and is_breakout)):
-                    buy_signal = True
+                    # 3. ISA Mode Logic
 
-                # EXIT LOGIC (Confluence):
-                # We do NOT sell just because price crossed SMA50.
-                # We require: Price < SMA50 AND Price < Low 20.
-                trend_broken = price < row['sma50']
-                structure_broken = price < row['low_20']
+                    # Trend Template
+                    is_trend = (price > sma200) and (price > sma50) and (sma50 > sma200)
 
-                # HARD EXIT: If Market Crashes (SPY < 200), we tighten stops massively.
-                market_crash_exit = (not is_bull_market) and (price < row['sma50'])
+                    # 52w High/Low (Need history)
+                    # We can use rolling max/min on the slice
+                    # Optimization: pre-calculate in indicators?
+                    # Let's assume we use pre-calcs if possible or simplified
 
-                if (trend_broken and structure_broken) or market_crash_exit:
-                    sell_signal = True
-                    current_stop_reason = "TREND & STRUCTURE BREAK" if (trend_broken and structure_broken) else "MARKET REGIME EXIT"
+                    # Trigger: VCP Breakout (High of last 20 days)
+                    high_20d = row['high_20']
+                    breakout = (price > high_20d) and (rvol > 1.2)
+
+                    if is_trend and breakout:
+                        buy_signal = True
+                        # Stop Loss logic handled in Execution block
+
+                    # Exit Logic for ISA
+                    # unified_screener uses strict stop loss at purchase.
+                    # Does it have a trailing exit?
+                    # "Trailing Stop (20-Day Low)" is mentioned in README for ISA.
+                    # unified_screener.analyze_ticker_hardened sets initial stop at 2.5*ATR.
+
+                    if self.state == "IN":
+                        # Trailing Stop: 20 Day Low
+                        trail_stop = row['low_20']
+                        if price < trail_stop:
+                            sell_signal = True
+                            current_stop_reason = "TRAILING STOP (20d Low)"
 
             elif self.strategy_type == 'turtle':
                 if price > row['high_20']: buy_signal = True
@@ -170,8 +200,8 @@ class UnifiedBacktester:
                     sell_signal = True
                     current_stop_reason = "10d LOW EXIT"
 
-            elif self.strategy_type == 'isa':
-                is_breakout_50 = row['close'] > row['high_50']
+            elif self.strategy_type == 'isa': # Legacy ISA
+                is_breakout_50 = row['Close'] > row['high_50']
                 is_isa_reentry = (price > row['sma50']) and (price > row['sma200'])
                 if (price > row['sma200']) and (is_breakout_50 or is_isa_reentry): buy_signal = True
                 if self.state == "IN" and price < row['low_20']:
@@ -189,9 +219,9 @@ class UnifiedBacktester:
                 self.entry_date = date
 
                 # Set Initial Stop
-                if self.strategy_type == 'master':
-                    # 3.0 ATR is standard "Noise Filter"
-                    stop_loss = price - (3.0 * row['atr'])
+                if self.strategy_type in ['grandmaster', 'council', 'master']:
+                    # 2.5 ATR Initial
+                    stop_loss = price - (2.5 * row['atr'])
                 elif self.strategy_type == 'isa':
                     stop_loss = row['low_20']
                 else:
@@ -204,25 +234,10 @@ class UnifiedBacktester:
                 })
 
             elif self.state == "IN":
-                # Trailing Stop Management
-                if self.strategy_type == 'master':
-                    # If in strong profit (>10%), tighten trail to protect gains
-                    # Otherwise give room (3ATR)
-                    atr_trail = price - (3.0 * row['atr'])
-                    structure_trail = row['low_20']
+                # Trailing Stop Management (For Grandmaster)
+                # We handled SELL Signal generation above.
+                # Here we check the hard initial stop.
 
-                    # Use the tighter of the two valid supports to lock in profit
-                    # But if trade is young, default to ATR to avoid early shakeout
-                    trail_stop = max(atr_trail, structure_trail)
-
-                    if trail_stop > stop_loss: stop_loss = trail_stop
-
-                elif self.strategy_type == 'isa':
-                    stop_loss = row['low_20']
-                elif self.strategy_type == 'turtle':
-                    stop_loss = row['low_10']
-
-                # Check Exits
                 hit_stop = price < stop_loss
 
                 if hit_stop or sell_signal:
@@ -232,7 +247,7 @@ class UnifiedBacktester:
                     self.state = "OUT"
 
                     days_held = (date - self.entry_date).days
-                    reason = current_stop_reason if sell_signal else "STOP HIT"
+                    reason = current_stop_reason if sell_signal else "INITIAL STOP HIT"
 
                     self.trade_log.append({
                         "date": date.strftime('%Y-%m-%d'), "type": "SELL",

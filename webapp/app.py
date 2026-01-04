@@ -25,6 +25,7 @@ from option_auditor.unified_backtester import UnifiedBacktester
 from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.strategies.turtle import TurtleStrategy
 from option_auditor.common.data_utils import get_cached_market_data
+from option_auditor.unified_screener import screen_universal_dashboard
 
 # Import Data Lists
 from option_auditor.sp500_data import SP500_TICKERS
@@ -637,17 +638,18 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route('/screen/master', methods=['GET'])
     def screen_master():
-        region = request.args.get('region', 'us')
-        # MasterScreener needs US and UK tickers passed explicitly
-        # We filter based on the region requested to avoid crossover
+        region = request.args.get('region', 'us_uk_mix')
 
-        us_subset = get_tickers_for_region('us') if region == 'us' else []
-        uk_subset = get_tickers_for_region('uk') if region == 'uk' else []
-        in_subset = get_tickers_for_region('india') if region == 'india' else []
+        ticker_list = None
+        if region == 'us':
+            ticker_list = get_tickers_for_region('us')
+        elif region == 'uk':
+            ticker_list = get_tickers_for_region('uk')
+
+        # If 'us_uk_mix' (default), we pass None to let unified_screener use its default curated list.
 
         try:
-            screener = MasterScreener(us_subset, uk_subset, in_subset)
-            results = screener.run()
+            results = screen_universal_dashboard(ticker_list=ticker_list)
             return jsonify(results)
         except Exception as e:
             app.logger.error(f"Master Screen Error: {e}")
