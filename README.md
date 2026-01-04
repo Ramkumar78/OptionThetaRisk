@@ -192,3 +192,15 @@ The Option Auditor is an educational tool designed to analyze past trading perfo
 **No Warranty:** The software is provided "as is." Calculations (including PnL, Theta, and Risk) are estimates based on heuristics and third-party data sources (yfinance) which may be inaccurate or delayed.
 
 **Risk Warning:** Options trading involves high risk and you can lose more than your initial investment. Always consult a qualified financial professional before trading.
+
+## 🛡️ The Investment Council Rules (Hardened)
+
+1.  **Regime First:** If SPY is below the 200 SMA, the ISA Logic returns 0 results. Cash is a position.
+2.  **Liquidity Gates:**
+    -   US: >$20M Daily Volume.
+    -   UK: >£1M Daily Volume.
+3.  **Earnings Protection:** No entries allowed within 7 days of earnings reports.
+4.  **Sizing:**
+    -   ISA: Max 1% Risk per trade, Max 20% Portfolio Weight.
+    -   Options: Max 2% Risk per trade.
+5.  **Rejection:** If a stock is "waiting," it is hidden. We only want actionable "Green Light" signals.

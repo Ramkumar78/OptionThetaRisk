@@ -1,256 +1,288 @@
 import pandas as pd
+import pandas_ta as ta
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
-import time
+from datetime import datetime, timedelta
 
+# Import Strategy Logic (Keep specific calc logic, but we govern execution here)
 from option_auditor.strategies.turtle import TurtleStrategy
-from option_auditor.strategies.isa import IsaStrategy
-from option_auditor.strategies.fourier import FourierStrategy
 from option_auditor.common.constants import TICKER_NAMES, SECTOR_COMPONENTS
-from option_auditor.optimization import PortfolioOptimizer
-from option_auditor.quant_engine import QuantPhysicsEngine
-# Use centralized verdict logic from QuantPhysicsEngine to avoid circular import with screener.py
-generate_human_verdict = QuantPhysicsEngine.generate_human_verdict
 
 logger = logging.getLogger(__name__)
 
-def run_quantum_audit(ticker, df, tech_result):
+# --- CONFIGURATION FOR 100K GBP ISA & 9.5K USD OPTIONS ---
+ISA_CONFIG = {
+    "capital": 100000.0,
+    "currency": "GBP",
+    "risk_per_trade": 0.01, # 1% Risk
+    "max_pos_size": 0.20,   # Max 20% in one stock
+    "min_price": 10.0,
+    "min_vol_gbp": 1000000, # £1M daily turnover
+    "min_vol_usd": 20000000 # $20M daily turnover
+}
+
+OPTIONS_CONFIG = {
+    "capital": 9500.0,
+    "currency": "USD",
+    "risk_per_trade": 0.02, # 2% Risk (More aggressive on small acc)
+    "min_iv_rank": 20,
+    "min_vol_usd": 30000000
+}
+
+def get_market_regime():
+    """
+    DALIO / SOROS CHECK:
+    Returns 'GREEN', 'YELLOW', 'RED'.
+    If SPY < 200SMA or VIX > 25, we do NOT buy stocks.
+    """
     try:
-        prices = df['Close'].values
-        close_series = df['Close']
+        tickers = ["SPY", "^VIX"]
+        data = yf.download(tickers, period="1y", progress=False, auto_adjust=True)
 
-        # Calculate physical stats
-        h = QuantPhysicsEngine.calculate_hurst(close_series)
-        s = QuantPhysicsEngine.shannon_entropy(close_series)
-        decay_days = QuantPhysicsEngine.calculate_momentum_decay(prices)
+        # Handle multi-index columns from yfinance
+        if isinstance(data.columns, pd.MultiIndex):
+            # yfinance returns (Price, Ticker) MultiIndex
+            try:
+                spy = data['Close']['SPY']
+                vix = data['Close']['^VIX']
+            except KeyError:
+                 # Try reverse (Ticker, Price) just in case
+                spy = data['SPY']['Close']
+                vix = data['^VIX']['Close']
+        else:
+            # Fallback if download structure changes
+            return "YELLOW", "Data Error"
 
-        # Calculate Kalman Slope for consistency with main screener
-        kalman = QuantPhysicsEngine.kalman_filter(close_series)
-        k_slope = (kalman.iloc[-1] - kalman.iloc[-3]) / 2.0
+        spy_price = spy.iloc[-1]
+        spy_sma200 = spy.rolling(200).mean().iloc[-1]
+        vix_price = vix.iloc[-1]
 
-        # USE CENTRALIZED LOGIC
-        # We replace the hardcoded "EXHAUSTED" logic with the shared "human verdict"
-        verdict, rationale = generate_human_verdict(h, s, k_slope, float(close_series.iloc[-1]))
+        if spy_price > spy_sma200 and vix_price < 20:
+            return "GREEN", f"Bullish (VIX {vix_price:.1f})"
+        elif spy_price > spy_sma200 and vix_price < 28:
+            return "YELLOW", f"Volatile Bull (VIX {vix_price:.1f})"
+        else:
+            return "RED", f"Bearish/Crash (VIX {vix_price:.1f})"
+    except Exception as e:
+        logger.error(f"Regime Check Failed: {e}")
+        return "YELLOW", "Check Failed"
 
-        # Map back to Dashboard format
-        final_verdict = tech_result.get('master_verdict', 'WAIT')
-        if "BUY" in verdict:
-             final_verdict = f"🚀 QUANTUM {final_verdict}"
-        elif "SHORT" in verdict:
-             final_verdict = f"📉 QUANTUM SHORT"
+def analyze_ticker_hardened(ticker, df, regime, mode="ISA"):
+    """
+    The Single Reliable Analysis Pipeline.
+    """
+    try:
+        # 1. DATA HYGIENE
+        if df.empty or len(df) < 252: return None
+
+        close = df['Close']
+        high = df['High']
+        low = df['Low']
+        volume = df['Volume']
+
+        curr_price = float(close.iloc[-1])
+
+        # 2. LIQUIDITY GATES (Institutional)
+        avg_vol_20 = float(volume.rolling(20).mean().iloc[-1])
+        turnover = curr_price * avg_vol_20
+
+        is_uk = ticker.endswith(".L")
+
+        if is_uk:
+            # Normalize Pence to Pounds for turnover calc if needed, usually Yahoo sends pence
+            # Assuming Yahoo sends pence for LSE stocks < 20gbp typically
+            turnover_gbp = (turnover / 100) if curr_price > 500 else turnover
+            if turnover_gbp < ISA_CONFIG["min_vol_gbp"]: return None
+        else:
+            if turnover < ISA_CONFIG["min_vol_usd"]: return None
+
+        # 3. REGIME FILTER (The Kill Switch)
+        # If Regime is RED, we only look for Short setups or Deep Value (not covered here).
+        # We return None to enforce discipline.
+        if regime == "RED":
+            return None
+
+        # 4. TECHNICAL METRICS
+        sma50 = close.rolling(50).mean().iloc[-1]
+        sma200 = close.rolling(200).mean().iloc[-1]
+        atr = ta.atr(high, low, close, length=14).iloc[-1]
+        rsi = ta.rsi(close, length=14).iloc[-1]
+
+        # Relative Volume
+        rvol = volume.iloc[-1] / avg_vol_20
+
+        # 5. STRATEGY SELECTION BASED ON MODE
+
+        setup_type = None
+        action = None
+        stop_loss = 0.0
+
+        # --- MODE: ISA (Long Only Equity) ---
+        if mode == "ISA":
+            # TREND TEMPLATE (Minervini)
+            # 1. Price > 200 SMA
+            # 2. Price > 50 SMA
+            # 3. 50 SMA > 200 SMA
+            # 4. Price at least 25% above 52-week low (Momentum)
+            # 5. Price within 25% of 52-week high (Near leaders)
+
+            low_52w = low.rolling(252).min().iloc[-1]
+            high_52w = high.rolling(252).max().iloc[-1]
+
+            is_trend = (curr_price > sma200) and (curr_price > sma50) and (sma50 > sma200)
+            is_leader = (curr_price > 1.25 * low_52w) and (curr_price > 0.75 * high_52w)
+
+            # TRIGGER: VCP Breakout or Pocket Pivot
+            # Simple Trigger: Consolidation breakout (Close > 20 Day High) + Volume
+            high_20d = high.rolling(20).max().shift(1).iloc[-1]
+            breakout = (curr_price > high_20d) and (rvol > 1.2)
+
+            if is_trend and is_leader and breakout:
+                setup_type = "🚀 ISA LEADER BREAKOUT"
+                stop_loss = curr_price - (2.5 * atr) # Wide swing stop
+
+                # POSITION SIZING (Kelly/Fixed Ratio)
+                risk_amt = ISA_CONFIG["capital"] * ISA_CONFIG["risk_per_trade"]
+                risk_per_share = curr_price - stop_loss
+                if risk_per_share <= 0: risk_per_share = curr_price * 0.10
+
+                # FX Conversion for US stocks in ISA
+                fx_rate = 1.0 if is_uk else 0.79 # USD to GBP approx
+
+                shares = int((risk_amt) / (risk_per_share * fx_rate))
+
+                # Cap at max allocation
+                max_shares = int((ISA_CONFIG["capital"] * ISA_CONFIG["max_pos_size"]) / (curr_price * fx_rate))
+                shares = min(shares, max_shares)
+
+                action = f"BUY {shares} QTY"
+
+        # --- MODE: OPTIONS (US Income) ---
+        elif mode == "OPTIONS" and not is_uk:
+            # BULL PUT SPREAD (Thorp/Income)
+            # 1. Trend is Up (Price > 50SMA)
+            # 2. Not Overbought (RSI < 70)
+            # 3. High IV Rank (Implied here by ATR ratio > 2.5% of price)
+
+            atr_pct = (atr / curr_price) * 100
+            is_uptrend = curr_price > sma50
+            pullback = rsi < 55 and rsi > 40 # Slight dip in uptrend
+
+            if is_uptrend and pullback and atr_pct > 2.0:
+                setup_type = "🛡️ BULL PUT SPREAD"
+                short_strike = round(low.rolling(10).min().iloc[-1], 1) # Support level
+                long_strike = round(short_strike - 5, 1)
+                credit_est = (curr_price - short_strike) * 0.15 # Rough est
+
+                setup_type += f" ({short_strike}/{long_strike})"
+                action = "SELL VERTICAL PUT"
+
+        if not setup_type:
+            return None
+
+        # SCORE: Risk Adjusted Momentum
+        # (Slope of 90d reg / ATR) - measures smoothness of trend
+        slope = (curr_price - close.iloc[-90]) / 90
+        quality_score = (slope / atr) * 100
 
         return {
-            **tech_result,
-            "master_verdict": final_verdict,
-            "hurst": h,
-            "entropy": s,
-            "quantum_note": rationale # Add the rationale to the dashboard
+            "ticker": ticker,
+            "company_name": TICKER_NAMES.get(ticker, ticker),
+            "price": curr_price,
+            "master_verdict": setup_type,
+            "action": action,
+            "stop_loss": round(stop_loss, 2),
+            "vol_scan": f"{rvol:.1f}x Vol",
+            "rsi": round(rsi, 0),
+            "quality_score": round(quality_score, 2),
+            "master_color": "green" if "ISA" in mode else "blue"
         }
+
     except Exception as e:
-        logger.error(f"Quantum audit failed for {ticker}: {e}")
-        return tech_result
+        return None
 
 def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> list:
     """
-    Runs ALL strategies on the provided ticker list using a single data fetch.
-    Returns a unified "Master Signal" matrix.
+    The Single Entry Point.
+    1. Checks Regime.
+    2. Scans UK/US Universes.
+    3. Returns enriched list.
     """
+    # 1. DETERMINE REGIME
+    regime_status, regime_note = get_market_regime()
+
+    # 2. DEFINE UNIVERSE
+    # Expand the default list to be useful.
     if ticker_list is None:
-        # Default to a mix if not provided
-        ticker_list = ["SPY", "QQQ", "IWM", "AAPL", "NVDA", "MSFT", "TSLA", "AMD", "AMZN", "GOOGL"]
+        # Default mix of US Tech + UK Blue Chips
+        ticker_list = [
+            "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "META", "TSLA", "AMD", "NFLX", # US Leaders
+            "LLOY.L", "AZN.L", "SHEL.L", "HSBA.L", "BP.L", "RIO.L", "GSK.L", "ULVR.L", # UK Leaders
+            "SPY", "QQQ", "IWM", "GLD" # ETFs
+        ]
+        # Add Sector Watch
         if "WATCH" in SECTOR_COMPONENTS:
              ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
 
-    # 1. Download Data ONCE
-    # Use 2 years to satisfy ISA (200 SMA) and Fourier
-    period = "2y"
-    yf_interval = "1d"
-
-    # Adjust for timeframe if needed (though universal dashboard implies daily macro view usually)
-    if time_frame != "1d":
-        # Logic for intraday?
-        # For now, let's assume this is a Daily Dashboard tool as described in "Morning Meeting".
-        pass
-
-    # 1. Download Data in Chunks using robust fetcher
+    # 3. FETCH DATA
     from option_auditor.common.data_utils import fetch_batch_data_safe
+    data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
 
-    try:
-        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval, chunk_size=50)
-    except Exception as e:
-        logger.error(f"Universal dashboard data fetch failed: {e}")
-        return []
-
-    if data.empty:
-        return []
+    if data.empty: return []
 
     results = []
 
-    # Initialize Strategies
-    turtle_strat = TurtleStrategy()
-    fourier_strat = FourierStrategy()
-
-    def process_ticker(ticker):
+    def process(ticker):
         try:
-            # Prepare DF
+            # Extract DF
             df = pd.DataFrame()
             if isinstance(data.columns, pd.MultiIndex):
-                if ticker in data.columns.levels[0]:
-                    df = data[ticker].copy()
+                # Try both level orders (Price, Ticker) vs (Ticker, Price)
+                try:
+                    df = data.xs(ticker, axis=1, level=1).copy()
+                except KeyError:
+                    try:
+                        df = data.xs(ticker, axis=1, level=0).copy()
+                    except KeyError:
+                         # Ticker not found in columns
+                         pass
             else:
                 df = data.copy()
 
             df = df.dropna(how='all')
-            if len(df) < 50: return None
 
-            # Run Strategies
-            turtle_res = turtle_strat.analyze(df)
+            # DETECT MODE
+            mode = "ISA" # Default
+            if ticker not in ["LLOY.L", "AZN.L"] and not ticker.endswith(".L"):
+                # If it's a US stock, we might want Options or ISA
+                # For this One Screener, we calculate BOTH and return the best
+                pass
 
-            # ISA Strategy requires ticker and df in init
-            isa_strat = IsaStrategy(ticker, df)
-            isa_res = isa_strat.analyze()
+            # Check ISA Fit
+            res_isa = analyze_ticker_hardened(ticker, df, regime_status, mode="ISA")
+            if res_isa: return res_isa
 
-            fourier_res = fourier_strat.analyze(df)
+            # Check Options Fit (If US)
+            if not ticker.endswith(".L"):
+                res_opt = analyze_ticker_hardened(ticker, df, regime_status, mode="OPTIONS")
+                if res_opt: return res_opt
 
-            # Collate Verdict (Confluence)
-            confluence_score = 0
-            buy_signals = 0
-            sell_signals = 0
-
-            # Weighted Scoring?
-            # Turtle Buy + ISA Buy = Strong Trend
-            # Fourier Buy = Cycle Low
-
-            # Count positive signals (BUY or strong HOLD/WATCH)
-            if turtle_res and turtle_res.get('signal') in ["BUY", "WATCH"]: buy_signals += 1
-            if isa_res and isa_res.get('Signal') in ["BUY BREAKOUT", "WATCHLIST"]: buy_signals += 1
-            if fourier_res and fourier_res.get('signal') == "BUY": buy_signals += 1
-
-            if turtle_res and turtle_res.get('signal') == "SELL": sell_signals += 1
-            # ISA doesn't short usually, but if AVOID/EXIT?
-            # Isa returns Signal usually. Let's assume None means no signal.
-            if fourier_res and fourier_res.get('signal') == "SELL": sell_signals += 1
-
-            master_verdict = "WAIT"
-            master_color = "gray"
-
-            if buy_signals == 3:
-                master_verdict = "🚀 STRONG BUY (3/3)"
-                master_color = "green"
-            elif buy_signals == 2:
-                master_verdict = "✅ BUY (2/3 Confluence)"
-                master_color = "green"
-            elif buy_signals == 1:
-                # Which one?
-                if fourier_res and fourier_res.get('signal') == "BUY":
-                    master_verdict = "🌊 DIP BUY (Cycle Only)"
-                    master_color = "blue"
-                else:
-                    master_verdict = "👀 WATCH (Trend Start)"
-                    master_color = "yellow"
-
-            if sell_signals >= 2:
-                master_verdict = "🛑 STRONG SELL / AVOID"
-                master_color = "red"
-
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-            tech_result = {
-                "ticker": ticker,
-                "company_name": company_name,
-                "price": float(df['Close'].iloc[-1]),
-                "master_verdict": master_verdict,
-                "master_color": master_color,
-                "confluence_score": f"{buy_signals}/3",
-                "strategies": {
-                    "turtle": turtle_res,
-                    "isa": isa_res,
-                    "fourier": fourier_res
-                }
-            }
-
-            # --- QUANTUM AUDIT ---
-            quantum_result = run_quantum_audit(ticker, df, tech_result)
-            return quantum_result
-
-        except Exception as e:
-            # logger.error(f"Error processing universal {ticker}: {e}")
             return None
 
-    # Threaded Execution
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        future_to_symbol = {executor.submit(process_ticker, sym): sym for sym in ticker_list}
-        for future in as_completed(future_to_symbol):
-            try:
-                res = future.result()
-                if res: results.append(res)
-            except: pass
+        except:
+            return None
 
-    # Sort by Buy Confluence (and maybe Quantum Score/Hurst if we had it numerically easier)
-    # Just sort by text score for now
-    results.sort(key=lambda x: x['confluence_score'], reverse=True)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process, t): t for t in ticker_list}
+        for future in as_completed(futures):
+            res = future.result()
+            if res:
+                # Inject Regime Note
+                res['regime'] = regime_note
+                results.append(res)
 
-    # --- NEW: Enrich only the output ---
-    from option_auditor.screener import enrich_with_fundamentals
-
-    # Only enrich the top 30 results to keep UI snappy
-    top_results = results[:30]
-    remaining = results[30:]
-
-    enriched_top = enrich_with_fundamentals(top_results)
-
-    results = enriched_top + remaining
-
-    # --- OPTIMIZATION STEP ---
-    # 1. Identify "BUY" candidates for optimization
-    buy_candidates = []
-    expected_returns = {}
-
-    for r in results:
-        # Extract signal counts
-        buy_count = int(r['confluence_score'].split('/')[0])
-
-        # Check Quantum status
-        is_quantum = "QUANTUM" in r.get('master_verdict', '')
-        is_valid = "RANDOM" not in r.get('verdict', '') and "HEAT DEATH" not in r.get('verdict', '') and "EXHAUSTED" not in r.get('verdict', '')
-
-        # Simple Logic: Only optimize allocation for Strong Buys (2/3 or 3/3) AND Valid Physics
-        if buy_count >= 2 and is_valid:
-            ticker = r['ticker']
-            buy_candidates.append(ticker)
-
-            # Map Confluence to Expected Return (Heuristic)
-            # 3/3 = 40% Annualized Exp Return
-            # 2/3 = 20% Annualized Exp Return
-            # Bonus for Quantum
-            base_return = 0.40 if buy_count == 3 else 0.20
-            if is_quantum:
-                base_return += 0.10
-
-            expected_returns[ticker] = base_return
-
-    # 2. Run Optimizer if we have candidates
-    if len(buy_candidates) >= 2:
-        try:
-            optimizer = PortfolioOptimizer(buy_candidates)
-            # Reuse existing data to avoid double download
-            optimizer.set_data(data)
-
-            # Maximize Sharpe Ratio
-            allocations = optimizer.optimize_weights(expected_returns_map=expected_returns)
-
-            # 3. Enrich Results with Allocation
-            for r in results:
-                t = r['ticker']
-                if t in allocations:
-                    weight = allocations[t]
-                    r['optimized_weight'] = f"{weight*100:.1f}%"
-                    r['allocation_note'] = "Optimal MVO"
-                elif t in buy_candidates:
-                    r['optimized_weight'] = "0.0%" # Optimized out
-        except Exception as e:
-            logger.error(f"Portfolio Optimization failed in Dashboard: {e}")
+    # Sort by Quality Score (Smooth Momentum)
+    results.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
 
     return results
