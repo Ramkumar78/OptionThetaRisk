@@ -16,7 +16,7 @@ from flask import Flask, request, redirect, url_for, flash, send_file, session, 
 from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
-from option_auditor.master_screener import MasterScreener
+from option_auditor.master_screener import QuantMasterScreener
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
 from option_auditor.unified_backtester import UnifiedBacktester
@@ -653,6 +653,28 @@ def create_app(testing: bool = False) -> Flask:
             return jsonify(results)
         except Exception as e:
             app.logger.error(f"Master Screen Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/screen/quant', methods=['GET'])
+    def screen_quant():
+        try:
+            region = request.args.get('region', 'us')
+            ticker_list = get_tickers_for_region(region)
+
+            # Use new Quant Engine
+            screener = QuantMasterScreener(use_ibkr=False)
+            df_results = screener.run_screen(ticker_list)
+
+            # Convert DF to list of dicts for JSON
+            if df_results.empty:
+                return jsonify([])
+
+            # Replace NaN with None for JSON compliance
+            df_results = df_results.where(pd.notnull(df_results), None)
+
+            return jsonify(df_results.to_dict(orient='records'))
+        except Exception as e:
+            app.logger.error(f"Quant Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
