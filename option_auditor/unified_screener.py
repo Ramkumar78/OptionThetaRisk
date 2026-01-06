@@ -38,7 +38,8 @@ def get_market_regime():
     """
     try:
         tickers = ["SPY", "^VIX"]
-        data = yf.download(tickers, period="1y", progress=False, auto_adjust=True)
+        # FIX: Changed period from "1y" to "2y" to ensure 200SMA has enough data points
+        data = yf.download(tickers, period="2y", progress=False, auto_adjust=True)
 
         # Handle multi-index columns from yfinance
         if isinstance(data.columns, pd.MultiIndex):
@@ -54,9 +55,18 @@ def get_market_regime():
             # Fallback if download structure changes
             return "YELLOW", "Data Error"
 
+        # Check if we have enough data
+        if len(spy) < 200:
+             # Fallback if download is short, but "2y" should prevent this
+             return "YELLOW", "Insufficient SPY History"
+
         spy_price = spy.iloc[-1]
         spy_sma200 = spy.rolling(200).mean().iloc[-1]
         vix_price = vix.iloc[-1]
+
+        # Safety check for NaN
+        if pd.isna(spy_sma200):
+             return "YELLOW", "SMA Calculation Error"
 
         if spy_price > spy_sma200 and vix_price < 20:
             return "GREEN", f"Bullish (VIX {vix_price:.1f})"
