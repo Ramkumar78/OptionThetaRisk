@@ -17,8 +17,8 @@ def test_api_endpoints_return_json(client):
     mock_market_data = [{"ticker": "AAPL", "price": 150.0}]
     mock_sector_data = [{"name": "Tech", "ticker": "XLK", "price": 100.0}]
 
-    with patch('option_auditor.screener.screen_market', return_value=mock_market_data) as mock_screen, \
-         patch('option_auditor.screener.screen_sectors', return_value=mock_sector_data) as mock_sectors:
+    with patch('webapp.app.screener.screen_market', return_value=mock_market_data) as mock_screen, \
+         patch('webapp.app.screener.screen_sectors', return_value=mock_sector_data) as mock_sectors:
 
         # Market Screener
         resp = client.post("/screen", data={"iv_rank": 50})
@@ -30,14 +30,20 @@ def test_api_endpoints_return_json(client):
         assert data["results"] == mock_market_data
         assert data["sector_results"] == mock_sector_data
 
-    with patch('option_auditor.screener.screen_turtle_setups', return_value=[]) as mock_turtle:
-        # Turtle Screener
-        resp = client.get("/screen/turtle")
-        assert resp.status_code == 200
-        assert resp.is_json
-        assert resp.json == []
+    # Patch 'webapp.app.get_cached_market_data' to prevent data fetch, OR patch 'screener.screen_turtle_setups'
+    # The failure suggests real logic ran because patching failed or wrong path
+    with patch('webapp.app.screener.screen_turtle_setups', return_value=[]) as mock_turtle:
+        # Also patch get_tickers_for_region inside app or just let it return [] if we patch the screener
+        # Wait, if we patch `webapp.app.screener.screen_turtle_setups`, `screen_turtle_setups` logic inside `screener` won't run.
+        # So we should get [].
+        # But if `screen_turtle` route calls `get_cached_market_data` first...
+        with patch('webapp.app.get_cached_market_data', return_value=MagicMock(empty=True)):
+             resp = client.get("/screen/turtle")
+             assert resp.status_code == 200
+             assert resp.is_json
+             assert resp.json == []
 
-    with patch('option_auditor.screener.screen_5_13_setups', return_value=[]) as mock_ema:
+    with patch('webapp.app.screener.screen_5_13_setups', return_value=[]) as mock_ema:
         # EMA Screener
         resp = client.get("/screen/ema")
         assert resp.status_code == 200

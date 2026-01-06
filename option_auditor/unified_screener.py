@@ -202,12 +202,16 @@ def analyze_ticker_hardened(ticker, df, regime, mode="ISA"):
     except Exception as e:
         return None
 
-def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> list:
+def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> dict:
     """
     The Single Entry Point.
     1. Checks Regime.
     2. Scans UK/US Universes.
-    3. Returns enriched list.
+    3. Returns enriched list in dictionary format:
+       {
+          "regime": "GREEN/YELLOW/RED ...",
+          "results": [...]
+       }
     """
     # 1. DETERMINE REGIME
     regime_status, regime_note = get_market_regime()
@@ -229,7 +233,9 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
     from option_auditor.common.data_utils import fetch_batch_data_safe
     data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
 
-    if data.empty: return []
+    # If NO DATA at all, return empty results but still return the regime
+    if data.empty:
+        return {"regime": regime_note, "results": []}
 
     results = []
 
@@ -278,11 +284,10 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
         for future in as_completed(futures):
             res = future.result()
             if res:
-                # Inject Regime Note
-                res['regime'] = regime_note
+                # We no longer inject regime here
                 results.append(res)
 
     # Sort by Quality Score (Smooth Momentum)
     results.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
 
-    return results
+    return {"regime": regime_note, "results": results}
