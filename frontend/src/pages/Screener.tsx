@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { formatCurrency } from '../utils/formatting';
+import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 const Screener: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<any[]>([]);
+    const [regime, setRegime] = useState<string>('WAITING');
     const [error, setError] = useState<string | null>(null);
     const [region, setRegion] = useState('us_uk_mix');
 
@@ -17,14 +18,22 @@ const Screener: React.FC = () => {
         setLoading(true);
         setError(null);
         setResults([]);
+        setRegime('WAITING');
         try {
             const res = await fetch(`/screen/master?region=${region}`);
             const data = await res.json();
+
+            if (data.regime) {
+                setRegime(data.regime);
+            }
 
             if (data.results) {
                 setResults(data.results);
             } else if (Array.isArray(data)) {
                 setResults(data);
+                if (data.length > 0 && data[0].regime) {
+                     setRegime(data[0].regime);
+                }
             } else {
                 setResults([]);
             }
@@ -91,7 +100,9 @@ const Screener: React.FC = () => {
 
                 {/* STATUS BAR */}
                 <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-6 text-xs font-mono text-gray-500">
-                    <span>REGIME CHECK: {results.length > 0 ? results[0].regime : 'WAITING'}</span>
+                    <span className={regime.includes("RED") ? "text-red-500 font-bold" : ""}>
+                        REGIME CHECK: {regime}
+                    </span>
                     <span>ISA RISK: 1.0%</span>
                     <span>OPT RISK: 2.0%</span>
                 </div>
@@ -113,25 +124,36 @@ const Screener: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
-                            {results.map((r, i) => (
-                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                                    <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-white">
-                                        {r.ticker}
-                                        <div className="text-[10px] text-gray-400 font-normal">{r.company_name}</div>
-                                    </td>
-                                    <td className="px-6 py-4">{formatCurrency(r.price, r.ticker.includes('.L') ? '£' : '$')}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                            r.master_verdict.includes('ISA') ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                                        }`}>
-                                            {r.master_verdict}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{r.action}</td>
-                                    <td className="px-6 py-4 text-red-600 font-mono">{r.stop_loss}</td>
-                                    <td className="px-6 py-4 text-right font-mono">{r.quality_score}</td>
-                                </tr>
-                            ))}
+                            {results.map((r, i) => {
+                                // Defensive programming to prevent crashes
+                                const ticker = r?.ticker || 'UNKNOWN';
+                                const company = r?.company_name || '';
+                                const verdict = r?.master_verdict || '';
+                                const action = r?.action || '-';
+                                const stop = r?.stop_loss || '-';
+                                const score = r?.quality_score || 0;
+                                const currency = ticker.includes && ticker.includes('.L') ? '£' : '$';
+
+                                return (
+                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                        <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-white">
+                                            {ticker}
+                                            <div className="text-[10px] text-gray-400 font-normal">{company}</div>
+                                        </td>
+                                        <td className="px-6 py-4">{formatCurrency(r?.price, currency)}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                                verdict.includes && verdict.includes('ISA') ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                                            }`}>
+                                                {verdict}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{action}</td>
+                                        <td className="px-6 py-4 text-red-600 font-mono">{stop}</td>
+                                        <td className="px-6 py-4 text-right font-mono">{score}</td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

@@ -38,7 +38,8 @@ def get_market_regime():
     """
     try:
         tickers = ["SPY", "^VIX"]
-        data = yf.download(tickers, period="1y", progress=False, auto_adjust=True)
+        # FIX: Changed period from "1y" to "2y" to ensure 200SMA has enough data points
+        data = yf.download(tickers, period="2y", progress=False, auto_adjust=True)
 
         # Handle multi-index columns from yfinance
         if isinstance(data.columns, pd.MultiIndex):
@@ -54,9 +55,21 @@ def get_market_regime():
             # Fallback if download structure changes
             return "YELLOW", "Data Error"
 
+        # Check if we have enough data
+        if len(spy) < 200:
+             # Fallback if download is short, but "2y" should prevent this
+             return "YELLOW", "Insufficient SPY History"
+
         spy_price = spy.iloc[-1]
         spy_sma200 = spy.rolling(200).mean().iloc[-1]
         vix_price = vix.iloc[-1]
+
+        # Safety check for NaN
+        if pd.isna(spy_sma200):
+             # Fallback: If 200 SMA missing, try 50 SMA or just use VIX
+             if not pd.isna(vix_price) and vix_price > 25:
+                 return "RED", f"High Volatility (VIX {vix_price:.1f})"
+             return "YELLOW", "SMA N/A (Using VIX)"
 
         if spy_price > spy_sma200 and vix_price < 20:
             return "GREEN", f"Bullish (VIX {vix_price:.1f})"
@@ -202,12 +215,16 @@ def analyze_ticker_hardened(ticker, df, regime, mode="ISA"):
     except Exception as e:
         return None
 
-def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> list:
+def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> dict:
     """
     The Single Entry Point.
     1. Checks Regime.
     2. Scans UK/US Universes.
-    3. Returns enriched list.
+    3. Returns enriched list in dictionary format:
+       {
+          "regime": "GREEN/YELLOW/RED ...",
+          "results": [...]
+       }
     """
     # 1. DETERMINE REGIME
     regime_status, regime_note = get_market_regime()
@@ -229,7 +246,9 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
     from option_auditor.common.data_utils import fetch_batch_data_safe
     data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
 
-    if data.empty: return []
+    # If NO DATA at all, return empty results but still return the regime
+    if data.empty:
+        return {"regime": regime_note, "results": []}
 
     results = []
 
@@ -278,11 +297,10 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
         for future in as_completed(futures):
             res = future.result()
             if res:
-                # Inject Regime Note
-                res['regime'] = regime_note
+                # We no longer inject regime here
                 results.append(res)
 
     # Sort by Quality Score (Smooth Momentum)
     results.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
 
-    return results
+    return {"regime": regime_note, "results": results}

@@ -2048,6 +2048,8 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
             # Calculate dominant period for context
             period, rel_pos = _calculate_dominant_cycle(closes) or (0, 0)
 
+            breakout_date = _calculate_trend_breakout_date(df)
+
             results.append({
                 "ticker": ticker,
                 "price": float(closes[-1]),
@@ -2057,7 +2059,8 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
                 "cycle_strength": f"{strength*100:.1f}%", # Volatility of the cycle
                 "verdict_color": verdict_color,
                 "method": "Hilbert (Non-Stationary)",
-                "cycle_period": f"{period} days" # Legacy compatibility for tests
+                "cycle_period": f"{period} days", # Legacy compatibility for tests
+                "breakout_date": breakout_date
             })
 
         except Exception:
@@ -2616,6 +2619,8 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
             score = atr_pct * 10
             if curr_close > sma_200: score += 15
 
+            breakout_date = _calculate_trend_breakout_date(df)
+
             results.append({
                 "ticker": ticker,
                 "price": round(curr_close, 2),
@@ -2626,7 +2631,8 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
                 "buy_strike": long_strike,
                 "dist_pct": f"{((curr_close - short_strike)/curr_close)*100:.1f}%",
                 "score": round(score, 1),
-                "trend": trend_status
+                "trend": trend_status,
+                "breakout_date": breakout_date
             })
 
         except Exception: continue
@@ -2807,6 +2813,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
+            breakout_date = _calculate_trend_breakout_date(df)
+
             return {
                 "ticker": ticker,
                 "company_name": company_name,
@@ -2821,7 +2829,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 "ATR": sanitize(round(current_atr, 2)),
                 "Stop Loss": sanitize(round(stop_loss, 2)),
                 "Target": sanitize(round(target_price, 2)),
-                "volatility_pct": sanitize(round((current_atr/curr_price)*100, 2))
+                "volatility_pct": sanitize(round((current_atr/curr_price)*100, 2)),
+                "breakout_date": breakout_date
             }
 
         except Exception as e:

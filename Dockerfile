@@ -8,13 +8,12 @@ RUN npm run build
 
 # [Stage 2: Backend - Robust Build]
 FROM python:3.12-slim
-
 # Set work directory
 WORKDIR /app
 
 # 1. Install System Dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
+    gcc git ca-certificates curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Upgrade PIP (Vital for better networking handling)
