@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 # Import Strategy Logic (Keep specific calc logic, but we govern execution here)
 from option_auditor.strategies.turtle import TurtleStrategy
 from option_auditor.common.constants import TICKER_NAMES, SECTOR_COMPONENTS
+from option_auditor.common.data_utils import _calculate_trend_breakout_date
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,9 @@ def analyze_ticker_hardened(ticker, df, regime, mode="ISA"):
         slope = (curr_price - close.iloc[-90]) / 90
         quality_score = (slope / atr) * 100
 
+        # Calculate Breakout Date
+        breakout_date = _calculate_trend_breakout_date(df)
+
         return {
             "ticker": ticker,
             "company_name": TICKER_NAMES.get(ticker, ticker),
@@ -209,7 +213,8 @@ def analyze_ticker_hardened(ticker, df, regime, mode="ISA"):
             "vol_scan": f"{rvol:.1f}x Vol",
             "rsi": round(rsi, 0),
             "quality_score": round(quality_score, 2),
-            "master_color": "green" if "ISA" in mode else "blue"
+            "master_color": "green" if "ISA" in mode else "blue",
+            "breakout_date": breakout_date
         }
 
     except Exception as e:

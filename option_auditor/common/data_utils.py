@@ -248,3 +248,54 @@ def prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval
             pass
 
     return df
+
+def _calculate_trend_breakout_date(df: pd.DataFrame) -> str:
+    """
+    Calculates the start date of the current trend (ISA Logic: Breakout > 50d High, Exit < 20d Low).
+    Returns "N/A" if not in a trend.
+    """
+    try:
+        # Ensure we have enough data
+        if df.empty or len(df) < 50: return "N/A"
+
+        # Calculate indicators if missing
+        # Work on a copy/slice to avoid modifying original if needed, but adding columns is fine
+        subset = df.copy()
+
+        if 'High_50' not in subset.columns:
+            subset['High_50'] = subset['High'].rolling(50).max().shift(1)
+        if 'Low_20' not in subset.columns:
+            subset['Low_20'] = subset['Low'].rolling(20).min().shift(1)
+
+        curr_close = subset['Close'].iloc[-1]
+        low_20 = subset['Low_20'].iloc[-1]
+
+        # Check if currently in a trend state
+        # The ISA logic defines a trend as "Safe" if Close > Low_20.
+        # If currently stopped out (Close <= Low_20), then no active trend.
+        if pd.isna(curr_close) or pd.isna(low_20) or curr_close <= low_20:
+            return "N/A"
+
+        # Search backwards
+        limit = min(len(subset), 400)
+        subset = subset.iloc[-limit:]
+
+        is_breakout = subset['Close'] >= subset['High_50']
+        is_broken = subset['Close'] <= subset['Low_20']
+
+        break_indices = subset.index[is_broken]
+        last_break_idx = break_indices[-1] if not break_indices.empty else None
+
+        breakout_indices = subset.index[is_breakout]
+
+        if last_break_idx is not None:
+             valid_breakouts = breakout_indices[breakout_indices > last_break_idx]
+        else:
+             valid_breakouts = breakout_indices
+
+        if not valid_breakouts.empty:
+             return valid_breakouts[0].strftime("%Y-%m-%d")
+
+        return "N/A"
+    except Exception:
+        return "N/A"
