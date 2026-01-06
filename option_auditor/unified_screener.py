@@ -66,7 +66,10 @@ def get_market_regime():
 
         # Safety check for NaN
         if pd.isna(spy_sma200):
-             return "YELLOW", "SMA Calculation Error"
+             # Fallback: If 200 SMA missing, try 50 SMA or just use VIX
+             if not pd.isna(vix_price) and vix_price > 25:
+                 return "RED", f"High Volatility (VIX {vix_price:.1f})"
+             return "YELLOW", "SMA N/A (Using VIX)"
 
         if spy_price > spy_sma200 and vix_price < 20:
             return "GREEN", f"Bullish (VIX {vix_price:.1f})"
