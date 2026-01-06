@@ -2361,11 +2361,22 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
              base_tickers = get_sp500_tickers()
              watch_list = SECTOR_COMPONENTS.get("WATCH", [])
              ticker_list = list(set(base_tickers + watch_list))
+        elif region in ["uk", "uk_euro", "india"]:
+             ticker_list = _resolve_region_tickers(region)
         else:
              ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
 
     is_large = len(ticker_list) > 100 or region == "sp500"
-    cache_name = "market_scan_v1" if is_large else "watchlist_scan"
+
+    cache_name = "watchlist_scan"
+    if region == "india":
+         cache_name = "market_scan_india"
+    elif region == "uk":
+         cache_name = "market_scan_uk"
+    elif region == "uk_euro":
+         cache_name = "market_scan_europe"
+    elif is_large:
+         cache_name = "market_scan_v1"
 
     try:
         if check_mode:
