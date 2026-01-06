@@ -649,6 +649,8 @@ def create_app(testing: bool = False) -> Flask:
         # If 'us_uk_mix' (default), we pass None to let unified_screener use its default curated list.
 
         try:
+            # Result is now a dict {regime: ..., results: ...}
+            # which we can directly jsonify for the frontend.
             results = screen_universal_dashboard(ticker_list=ticker_list)
             return jsonify(results)
         except Exception as e:
