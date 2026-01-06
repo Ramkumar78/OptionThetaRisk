@@ -120,6 +120,7 @@ const Screener: React.FC = () => {
                                 <th className="px-6 py-4">Verdict</th>
                                 <th className="px-6 py-4">Action</th>
                                 <th className="px-6 py-4">Stop Loss</th>
+                                <th className="px-6 py-4">Breakout Date</th>
                                 <th className="px-6 py-4 text-right">Quality</th>
                             </tr>
                         </thead>
@@ -132,6 +133,7 @@ const Screener: React.FC = () => {
                                 const action = r?.action || '-';
                                 const stop = r?.stop_loss || '-';
                                 const score = r?.quality_score || 0;
+                                const breakoutDate = r?.breakout_date || '-';
                                 const currency = ticker.includes && ticker.includes('.L') ? '£' : '$';
 
                                 return (
@@ -150,6 +152,7 @@ const Screener: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{action}</td>
                                         <td className="px-6 py-4 text-red-600 font-mono">{stop}</td>
+                                        <td className="px-6 py-4 text-gray-500 font-mono text-xs">{breakoutDate}</td>
                                         <td className="px-6 py-4 text-right font-mono">{score}</td>
                                     </tr>
                                 );
