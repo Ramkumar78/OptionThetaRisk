@@ -1,7 +1,7 @@
 # UK FTSE 350 Representative List (Yahoo Finance Tickers ending in .L)
 UK_TICKERS = [
     "RR.L", "BP.L", "SHEL.L", "HSBA.L", "LLOY.L", "BARC.L", "NWG.L", "VOD.L",
-    "BT-A.L", "GSK.L", "AZN.L", "ULVR.L", "DGE.L", "BATS.L", "IMB.L", "RIO.L",
+    "BT.A.L", "GSK.L", "AZN.L", "ULVR.L", "DGE.L", "BATS.L", "IMB.L", "RIO.L",
     "GLEN.L", "AAL.L", "ANTO.L", "NG.L", "SSE.L", "CNA.L", "UU.L", "SVT.L",
     "TSCO.L", "SBRY.L", "OCDO.L", "MKS.L", "NXT.L", "JD.L", "ABF.L", "WTB.L",
     "IAG.L", "EZJ.L", "RYA.L", "WIZZ.L", "TUI.L", "IHG.L", "CPG.L", "EXPN.L",
