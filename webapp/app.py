@@ -6,6 +6,8 @@ import uuid
 import threading
 import time
 import json
+import logging
+import sys
 from typing import Optional
 from collections import OrderedDict
 
@@ -41,7 +43,6 @@ from datetime import datetime, timedelta
 from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
 from dotenv import load_dotenv
-import sys
 from option_auditor.common.resilience import data_api_breaker
 
 # Load environment variables from .env file
@@ -190,7 +191,19 @@ def cleanup_job(app):
             time.sleep(CLEANUP_INTERVAL)
 
 def create_app(testing: bool = False) -> Flask:
+    # --- LOGGING CONFIGURATION ---
+    # Configure root logger to output to stdout with format
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+
     app = Flask(__name__, instance_relative_config=True, static_folder="static")
+
+    # Ensure app logger propagates to root logger
+    app.logger.setLevel(logging.INFO)
+
     # Ensure the instance folder exists
     try:
         os.makedirs(app.instance_path)
@@ -229,7 +242,13 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.errorhandler(413)
     def too_large(e):
+        app.logger.warning("Upload rejected: Too large.")
         return jsonify({"error": "Upload too large. Max size is limited."}), 413
+
+    @app.errorhandler(500)
+    def server_error(e):
+        app.logger.exception("Internal Server Error")
+        return jsonify({"error": "Internal Server Error"}), 500
 
     @app.before_request
     def ensure_guest_session():
@@ -237,6 +256,7 @@ def create_app(testing: bool = False) -> Flask:
         if 'username' not in session:
             session['username'] = f"guest_{uuid.uuid4().hex}"
             session.permanent = True
+            app.logger.info(f"New guest session created: {session['username']}")
 
     @app.route("/feedback", methods=["POST"])
     def feedback():
@@ -256,9 +276,10 @@ def create_app(testing: bool = False) -> Flask:
                 threading.Thread(target=send_email_notification, args=(f"New Feedback from {username}", email_body)).start()
                 # ---------------------------
 
+                app.logger.info(f"Feedback received from {username}")
                 return jsonify({"success": True, "message": "Feedback submitted"})
             except Exception as e:
-                print(f"Feedback error: {e}")
+                app.logger.error(f"Feedback error: {e}")
                 return jsonify({"error": "Failed to submit feedback"}), 500
         else:
             return jsonify({"error": "Message cannot be empty"}), 400
@@ -269,6 +290,7 @@ def create_app(testing: bool = False) -> Flask:
         if not username:
              return jsonify({"error": "No session"}), 401
 
+        app.logger.info(f"Dashboard access by {username}")
         storage = get_storage_provider(app)
         data_bytes = storage.get_portfolio(username)
 
@@ -278,8 +300,10 @@ def create_app(testing: bool = False) -> Flask:
         try:
             saved_data = json.loads(data_bytes)
             updated_data = refresh_dashboard_data(saved_data)
+            app.logger.info(f"Dashboard data refreshed for {username}")
             return jsonify(updated_data)
         except Exception as e:
+            app.logger.error(f"Dashboard refresh error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/health")
@@ -302,15 +326,18 @@ def create_app(testing: bool = False) -> Flask:
         ticker = request.args.get('ticker')
         strategy = request.args.get('strategy', 'master') # master, turtle, isa
 
+        app.logger.info(f"Starting backtest: {strategy} on {ticker}")
+
         if not ticker:
             return jsonify({"error": "Ticker required"}), 400
 
         try:
             backtester = UnifiedBacktester(ticker, strategy_type=strategy)
             result = backtester.run()
+            app.logger.info(f"Backtest completed for {ticker}")
             return jsonify(result)
         except Exception as e:
-            app.logger.error(f"Backtest Failed: {e}")
+            app.logger.exception(f"Backtest Failed: {e}")
             return jsonify({"error": str(e)}), 500
 
     # API Routes for Screener
@@ -330,16 +357,17 @@ def create_app(testing: bool = False) -> Flask:
 
         time_frame = request.form.get("time_frame", "1d")
         region = request.form.get("region", "us")
+
+        app.logger.info(f"Screen request: region={region}, time={time_frame}")
+
         cache_key = ("market", iv_rank, rsi_threshold, time_frame, region)
         cached = get_cached_screener_result(cache_key)
         if cached:
+            app.logger.info("Serving cached screen result")
             return jsonify(cached)
 
         try:
             results = screener.screen_market(iv_rank, rsi_threshold, time_frame, region=region)
-            # Only run sector screen if region is us or explicitly requested?
-            # screen_sectors scans Sector ETFs (XLC, XLY...) which are US specific.
-            # If region is India/UK, it might not make sense, but for now we leave it as sidebar info.
             sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
             data = {
                 "results": results,
@@ -347,17 +375,30 @@ def create_app(testing: bool = False) -> Flask:
                 "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame, "region": region}
             }
             cache_screener_result(cache_key, data)
+
+            # Count results
+            count = 0
+            if isinstance(results, dict):
+                 count = sum(len(v) for v in results.values())
+            else:
+                 count = len(results)
+
+            app.logger.info(f"Screen completed. Results: {count}")
+            if count == 0:
+                app.logger.warning("Screen returned 0 results.")
+
             return jsonify(data)
         except Exception as e:
+            app.logger.exception(f"Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route('/screen/turtle', methods=['GET'])
     def screen_turtle():
         region = request.args.get('region', 'us')
+        app.logger.info(f"Turtle Screen request: region={region}")
         tickers = get_tickers_for_region(region)
 
         results = []
-        # Reuse data fetching pattern...
         try:
             data = get_cached_market_data(tickers, period="1y")
             for ticker in tickers:
@@ -369,15 +410,17 @@ def create_app(testing: bool = False) -> Flask:
                          df = data
 
                     if df is not None:
-                        # Fix: TurtleStrategy does not take args in init, and analyze needs df
                         strat = TurtleStrategy()
                         res = strat.analyze(df)
                         if res and res.get('signal') != 'WAIT':
-                            res['Ticker'] = ticker # Attach ticker
+                            res['Ticker'] = ticker
                             results.append(res)
                 except: pass
+
+            app.logger.info(f"Turtle Screen completed. Results: {len(results)}")
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"Turtle Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/isa/check", methods=["GET"])
@@ -387,7 +430,8 @@ def create_app(testing: bool = False) -> Flask:
             if not query:
                 return jsonify({"error": "No ticker provided"}), 400
 
-            # Optional entry price for PnL
+            app.logger.info(f"ISA Check request for {query}")
+
             entry_price = None
             entry_str = request.args.get("entry_price", "").strip()
             if entry_str:
@@ -398,13 +442,12 @@ def create_app(testing: bool = False) -> Flask:
 
             ticker = screener.resolve_ticker(query)
             if not ticker:
-                # Should not happen given logic, but safe guard
                 ticker = query.upper()
 
-            # Run just for this ticker
             results = screener.screen_trend_followers_isa(ticker_list=[ticker])
 
             if not results:
+                app.logger.warning(f"ISA Check: No data found for {ticker}")
                 return jsonify({"error": f"No data found for {ticker} or insufficient history."}), 404
 
             result = results[0]
@@ -415,63 +458,63 @@ def create_app(testing: bool = False) -> Flask:
                 result['pnl_pct'] = ((curr - entry_price) / entry_price) * 100
                 result['user_entry_price'] = entry_price
 
-                # Override verdict if user is in position
                 signal = result.get('signal', 'WAIT')
                 stop_exit = result.get('trailing_exit_20d', 0)
 
-                # 1. If signal is positive (Enter/Watch) but we are already in -> HOLD
                 if "ENTER" in signal or "WATCH" in signal:
                      result['signal'] = "✅ HOLD (Trend Active)"
 
-                # 2. Strict Exit: Below Trailing Stop (20d Low)
                 if curr <= stop_exit:
                     result['signal'] = "🛑 EXIT (Stop Hit)"
 
-                # 3. Strict Exit: Downtrend (Below 200 SMA)
                 if "SELL" in signal or "AVOID" in signal:
                      result['signal'] = "🛑 EXIT (Downtrend)"
 
+            app.logger.info(f"ISA Check result for {ticker}: {result.get('signal')}")
             return jsonify(result)
         except Exception as e:
+            app.logger.exception(f"ISA Check Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fortress", methods=["GET"])
     def screen_fortress():
         try:
-            # Cache this specific result for 1 hour as VIX doesn't change setup logic instantly
+            app.logger.info("Fortress Screen request")
             cache_key = "api_screen_fortress_us"
             cached = get_cached_screener_result(cache_key)
             if cached: return jsonify(cached)
 
-            # Run the new math function
             results = screener.screen_dynamic_volatility_fortress()
 
+            app.logger.info(f"Fortress Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"Fortress Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route('/screen/isa', methods=['GET'])
     def screen_isa():
         region = request.args.get('region', 'us')
+        app.logger.info(f"ISA Screen request: region={region}")
         tickers = get_tickers_for_region(region)
 
         results = []
         try:
-            # Batch fetch data
             data = get_cached_market_data(tickers, period="2y")
 
-            if data.empty: return jsonify([])
+            if data.empty:
+                app.logger.warning("ISA Screen: Data empty")
+                return jsonify([])
 
             for ticker in tickers:
                 try:
-                    # Robust extraction
                     df = None
                     if isinstance(data.columns, pd.MultiIndex):
                         if ticker in data.columns.levels[0]:
                             df = data[ticker].dropna()
                     else:
-                        df = data # Single ticker case? Unlikely for list.
+                        df = data
 
                     if df is not None:
                         strategy = IsaStrategy(ticker, df)
@@ -481,15 +524,17 @@ def create_app(testing: bool = False) -> Flask:
                 except Exception as e:
                     continue
 
+            app.logger.info(f"ISA Screen completed. Results: {len(results)}")
             return jsonify({"results": results})
         except Exception as e:
-            app.logger.error(f"ISA Screen Error: {e}")
+            app.logger.exception(f"ISA Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/bull_put", methods=["GET"])
     def screen_bull_put():
         try:
             region = request.args.get("region", "us")
+            app.logger.info(f"Bull Put Screen request: region={region}")
 
             cache_key = ("bull_put", region)
             cached = get_cached_screener_result(cache_key)
@@ -502,17 +547,16 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "uk":
                  ticker_list = get_uk_tickers()
             elif region == "sp500":
-                 # Bull Puts benefit from high volume.
-                 # Trend filter? Bull Puts are bullish strategies, so >200SMA makes sense.
-                 # Let's apply trend filter.
                  filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                  watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                  ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_bull_put_spreads(ticker_list=ticker_list)
+            app.logger.info(f"Bull Put Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"Bull Put Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/darvas", methods=["GET"])
@@ -520,6 +564,7 @@ def create_app(testing: bool = False) -> Flask:
         try:
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
+            app.logger.info(f"Darvas Screen request: region={region}, tf={time_frame}")
 
             cache_key = ("darvas", region, time_frame)
             cached = get_cached_screener_result(cache_key)
@@ -534,15 +579,16 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
-                # For Darvas, YES S&P 500. Trend Following.
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                 ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_darvas_box(ticker_list=ticker_list, time_frame=time_frame)
+            app.logger.info(f"Darvas Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"Darvas Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/ema", methods=["GET"])
@@ -550,6 +596,7 @@ def create_app(testing: bool = False) -> Flask:
         try:
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
+            app.logger.info(f"EMA Screen request: region={region}, tf={time_frame}")
 
             cache_key = ("ema", region, time_frame)
             cached = get_cached_screener_result(cache_key)
@@ -564,15 +611,16 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
-                # For EMA, YES S&P 500. Trend/Momentum.
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                 ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
+            app.logger.info(f"EMA Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"EMA Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/mms", methods=["GET"])
@@ -580,6 +628,7 @@ def create_app(testing: bool = False) -> Flask:
         try:
             time_frame = request.args.get("time_frame", "1h")
             region = request.args.get("region", "us")
+            app.logger.info(f"MMS Screen request: region={region}, tf={time_frame}")
 
             cache_key = ("mms", region, time_frame)
             cached = get_cached_screener_result(cache_key)
@@ -594,22 +643,22 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
-                # For OTE: NO. Stick to liquid names (Top 50 / WATCH list).
-                # Explicitly override SP500 to WATCH list only.
                 ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
 
             results = screener.screen_mms_ote_setups(ticker_list=ticker_list, time_frame=time_frame)
+            app.logger.info(f"MMS Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"MMS Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/hybrid", methods=["GET"])
     def screen_hybrid():
         try:
-            print(f"DEBUG APP: url={request.url} args={request.args}", flush=True)
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
+            app.logger.info(f"Hybrid Screen request: region={region}, tf={time_frame}")
 
             cache_key = ("hybrid", region, time_frame)
             cached = get_cached_screener_result(cache_key)
@@ -624,21 +673,22 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
-                # For Hybrid, YES S&P 500. Trend + Cycle.
-                # Hybrid strategy handles data fetching internally to avoid double-tap rate limits.
                 raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                 ticker_list = list(set(raw_sp500 + watch_list))
 
             results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=time_frame, region=region)
+            app.logger.info(f"Hybrid Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"Hybrid Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route('/screen/master', methods=['GET'])
     def screen_master():
         region = request.args.get('region', 'us_uk_mix')
+        app.logger.info(f"Master Screen request: region={region}")
 
         ticker_list = None
         if region == 'us':
@@ -646,58 +696,60 @@ def create_app(testing: bool = False) -> Flask:
         elif region == 'uk':
             ticker_list = get_tickers_for_region('uk')
 
-        # If 'us_uk_mix' (default), we pass None to let unified_screener use its default curated list.
-
         try:
-            # Result is now a dict {regime: ..., results: ...}
-            # which we can directly jsonify for the frontend.
             results = screen_universal_dashboard(ticker_list=ticker_list)
+
+            # Count
+            count = 0
+            if isinstance(results, list): count = len(results)
+            elif isinstance(results, dict) and 'results' in results: count = len(results['results'])
+
+            app.logger.info(f"Master Screen completed. Results: {count}")
             return jsonify(results)
         except Exception as e:
-            app.logger.error(f"Master Screen Error: {e}")
+            app.logger.exception(f"Master Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route('/screen/quant', methods=['GET'])
     def screen_quant():
         try:
             region = request.args.get('region', 'us')
+            app.logger.info(f"Quant Screen request: region={region}")
             ticker_list = get_tickers_for_region(region)
 
-            # Use new Quant Engine
             screener = QuantMasterScreener(use_ibkr=False)
             df_results = screener.run_screen(ticker_list)
 
-            # Convert DF to list of dicts for JSON
             if df_results.empty:
+                app.logger.warning("Quant Screen: No results")
                 return jsonify([])
 
-            # Replace NaN with None for JSON compliance
             df_results = df_results.where(pd.notnull(df_results), None)
 
+            app.logger.info(f"Quant Screen completed. Results: {len(df_results)}")
             return jsonify(df_results.to_dict(orient='records'))
         except Exception as e:
-            app.logger.error(f"Quant Screen Error: {e}")
+            app.logger.exception(f"Quant Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/fourier", methods=["GET"])
     def screen_fourier():
         try:
-            # Check for Single Ticker mode
             query = request.args.get("ticker", "").strip()
             if query:
+                app.logger.info(f"Fourier Single request: {query}")
                 ticker = screener.resolve_ticker(query)
                 if not ticker:
                     ticker = query.upper()
 
-                # Run single analysis (bypass cache or use specific key if needed, usually live is better for single check)
-                # But Fourier is heavy calculation? No, it's fast enough for one.
-                results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame="1d") # Default to 1d for single check
+                results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame="1d")
                 if not results:
                      return jsonify({"error": f"No cycle data found for {ticker}"}), 404
                 return jsonify(results[0])
 
             time_frame = request.args.get("time_frame", "1d")
             region = request.args.get("region", "us")
+            app.logger.info(f"Fourier Screen request: region={region}, tf={time_frame}")
 
             cache_key = ("fourier", region, time_frame)
             cached = get_cached_screener_result(cache_key)
@@ -712,22 +764,23 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
-                # S&P 500
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                 ticker_list = list(set(filtered_sp500 + watch_list))
 
             results = screener.screen_fourier_cycles(ticker_list=ticker_list, time_frame=time_frame)
+            app.logger.info(f"Fourier Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"Fourier Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/universal", methods=["GET"])
     def screen_universal():
         try:
             region = request.args.get("region", "us")
-            # Unified Dashboard implies a broad look, but we can respect region.
+            app.logger.info(f"Universal Screen request: region={region}")
 
             cache_key = ("universal", region)
             cached = get_cached_screener_result(cache_key)
@@ -742,25 +795,23 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "sp500":
-                # Raw list is fine for universal as it does its own heavy filtering?
-                # Actually, 500 tickers * 3 strategies might be heavy.
-                # Let's use the trend-filtered list to be safe for now, or just raw if we trust the universal logic.
-                # Universal downloads 2y data. Doing that for 500 stocks is heavy but okay once.
-                # Let's use get_sp500_tickers() directly as per the Hybrid fix philosophy.
                 raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                 ticker_list = list(set(raw_sp500 + watch_list))
 
             results = screener.screen_universal_dashboard(ticker_list=ticker_list)
+            app.logger.info(f"Universal Screen completed.")
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
+            app.logger.exception(f"Universal Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/quantum", methods=["GET"])
     def screen_quantum():
         try:
             region = request.args.get("region", "us")
+            app.logger.info(f"Quantum Screen request: region={region}")
             cache_key = ("quantum", region)
             cached = get_cached_screener_result(cache_key)
             if cached:
@@ -768,19 +819,17 @@ def create_app(testing: bool = False) -> Flask:
 
             results = screener.screen_quantum_setups(region=region)
 
-            # Transform to the requested API contract
             api_results = [
                 {
                     "ticker": r["ticker"],
                     "price": r["price"],
-                    "hurst": round(r["hurst"], 2),
-                    "entropy": round(r["entropy"], 2),
-                    "verdict": r["signal"],  # Mapping signal to verdict as per instruction
+                    "hurst": round(r["hurst"], 2) if r["hurst"] else None,
+                    "entropy": round(r["entropy"], 2) if r["entropy"] else None,
+                    "verdict": r["signal"],
                     "score": r["score"],
-                    # Keeping other useful fields
                     "company_name": r.get("company_name"),
-                    "kalman_diff": round(r["kalman_diff"], 2),
-                    "phase": round(r["phase"], 2),
+                    "kalman_diff": round(r["kalman_diff"], 2) if r["kalman_diff"] else None,
+                    "phase": round(r["phase"], 2) if r.get("phase") else None,
                     "verdict_color": r.get("verdict_color"),
                     "atr_value": r.get("atr_value"),
                     "volatility_pct": r.get("volatility_pct"),
@@ -792,12 +841,11 @@ def create_app(testing: bool = False) -> Flask:
                 } for r in results
             ]
 
+            app.logger.info(f"Quantum Screen completed. Results: {len(api_results)}")
             cache_screener_result(cache_key, api_results)
             return jsonify(api_results)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"Error in /screen/quantum: {e}", flush=True)
+            app.logger.exception(f"Quantum Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/check", methods=["GET"])
@@ -809,15 +857,15 @@ def create_app(testing: bool = False) -> Flask:
             entry_price_str = request.args.get("entry_price", "").strip()
             entry_date_str = request.args.get("entry_date", "").strip()
             
+            app.logger.info(f"Check Stock: {ticker_query}, Strategy: {strategy}")
+
             if not ticker_query:
                 return jsonify({"error": "No ticker provided"}), 400
 
-            # Resolve ticker
             ticker = screener.resolve_ticker(ticker_query)
             if not ticker:
                 ticker = ticker_query.upper()
 
-            # Parse entry price
             entry_price = None
             if entry_price_str:
                 try:
@@ -825,26 +873,15 @@ def create_app(testing: bool = False) -> Flask:
                 except:
                     pass
             
-            # If no price but date provided, fetch close
             if entry_price is None and entry_date_str:
                  try:
                      dt = datetime.strptime(entry_date_str, "%Y-%m-%d")
-                     # Fetch history: Use yfinance directly or helper
-                     # Start date is inclusive, fetch a few days to ensure we hit a trading day
-                     # Use auto_adjust=True to match screener logic
                      hist = yf.download(ticker, start=dt, end=dt + timedelta(days=5), progress=False, auto_adjust=True)
                      if not hist.empty:
-                        # Use the first available Close (closest to subsequent days if holiday)
                         try:
-                            # Handling yfinance structure (MultiIndex or Flat)
-                            # If single ticker, it might be flat or have Ticker as column level
-                            # If Single Index (Date), selecting 'Close' returns a Series
-
                             close_series = hist['Close']
-
                             val = None
                             if isinstance(close_series, pd.DataFrame):
-                                # If columns are tickers, get the first one (should be our ticker)
                                 val = close_series.iloc[0, 0]
                             else:
                                 val = close_series.iloc[0]
@@ -852,13 +889,12 @@ def create_app(testing: bool = False) -> Flask:
                             if val is not None:
                                 entry_price = float(val)
                         except Exception as inner:
-                            print(f"Error accessing Close price: {inner}")
+                            app.logger.warning(f"Error accessing Close price: {inner}")
                             pass
                  except Exception as e:
-                     print(f"Error fetching historical price for {ticker} on {entry_date_str}: {e}")
+                     app.logger.warning(f"Error fetching historical price for {ticker}: {e}")
                      pass
 
-            # Dispatch Strategy
             results = []
             if strategy == "isa":
                 results = screener.screen_trend_followers_isa(ticker_list=[ticker], check_mode=True)
@@ -871,16 +907,8 @@ def create_app(testing: bool = False) -> Flask:
             elif strategy == "bull_put":
                 results = screener.screen_bull_put_spreads(ticker_list=[ticker], check_mode=True)
             elif strategy == "hybrid":
-                # Hybrid usually aggregates others, might not support check_mode yet or needs update
-                # But let's check its signature. screen_hybrid_strategy usually calls others.
-                # Use standard call, hybrid might not need check_mode if it just aggregates.
-                # But wait, if hybrid filters results...
-                # For now leave hybrid as is or update if signature allows. 
-                # I didn't verify hybrid signature. Let's assume it doesn't support it yet or works differently.
-                # Actually, the implementation plan didn't explicitly list hybrid for update, but listed "Update Backend Endpoint".
                 results = screener.screen_hybrid_strategy(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "mms":
-                # MMS/OTE
                 results = screener.screen_mms_ote_setups(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "fourier":
                  results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame=time_frame)
@@ -890,22 +918,20 @@ def create_app(testing: bool = False) -> Flask:
                 return jsonify({"error": f"Unknown strategy: {strategy}"}), 400
 
             if not results:
+                 app.logger.info(f"No results for {ticker} in strategy {strategy}")
                  return jsonify({"error": f"No data returned for {ticker} with strategy {strategy}."}), 404
 
             result = results[0]
 
-            # Enrich with PnL if Entry Price Provided
             if entry_price and result.get('price'):
                 curr = result['price']
                 result['pnl_value'] = curr - entry_price
                 result['pnl_pct'] = ((curr - entry_price) / entry_price) * 100
                 result['user_entry_price'] = entry_price
 
-                # Logic: If user is holding, provide context
                 signal = str(result.get('signal', 'WAIT')).upper()
                 verdict = str(result.get('verdict', '')).upper()
                 
-                # Check specifics
                 if strategy == "isa":
                     stop_exit = result.get('trailing_exit_20d', 0)
                     if curr <= stop_exit:
@@ -916,7 +942,6 @@ def create_app(testing: bool = False) -> Flask:
                          result['user_verdict'] = "✅ HOLD (Trend Valid)"
                 
                 elif strategy == "turtle":
-                    # Check 10-day trailing exit if available (for winning trades)
                     trailing_exit = result.get('trailing_exit_10d', 0)
                     sl = result.get('stop_loss', 0)
 
@@ -928,34 +953,24 @@ def create_app(testing: bool = False) -> Flask:
                          result['user_verdict'] = "✅ HOLD (Trend Valid)"
 
                 elif strategy == "ema":
-                    # 5/13 Cross? 
-                    # If signal is SELL, exit.
                     if "SELL" in signal or "DUMP" in signal:
                          result['user_verdict'] = "🛑 EXIT (Bearish Cross)"
                     else:
                          result['user_verdict'] = "✅ HOLD (Momentum)"
 
                 elif strategy == "fourier":
-                    # Check Cycle Position
-                    # If at Top (>0.8) -> SELL
                     if "HIGH" in signal or "SELL" in signal:
                         result['user_verdict'] = "🛑 EXIT (Cycle Peak)"
                     elif "LOW" in signal or "BUY" in signal:
-                         # If already holding, maybe accumulate
                          result['user_verdict'] = "✅ HOLD/ADD (Cycle Bottom)"
                     else:
                          result['user_verdict'] = "✅ HOLD (Mid-Cycle)"
 
                 elif strategy == "master":
-                    # Confluence Score Logic
                     score = result.get('confluence_score', 0)
-                    # "STAY LONG": If 2/3 or 3/3 strategies remain bullish.
-                    # "URGENT EXIT": If multiple strategies have flipped to SELL/EXIT since your purchase date.
-
                     if score >= 2:
                          result['user_verdict'] = f"✅ STAY LONG ({score}/3 Bullish)"
                     else:
-                         # Check specific negatives
                          isa = result.get('isa_trend', 'NEUTRAL')
                          fourier = result.get('fourier', '')
 
@@ -966,7 +981,6 @@ def create_app(testing: bool = False) -> Flask:
                          else:
                               result['user_verdict'] = "🛑 EXIT (No Confluence)"
 
-                # Fallback
                 if 'user_verdict' not in result:
                     if "BUY" in signal or "GREEN" in signal or "BREAKOUT" in signal or "LONG" in signal or "BUY" in verdict:
                          result['user_verdict'] = "✅ HOLD (Signal Active)"
@@ -978,6 +992,7 @@ def create_app(testing: bool = False) -> Flask:
             return jsonify(result)
 
         except Exception as e:
+            app.logger.exception(f"Check Stock Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     # API Routes for Journal
@@ -1001,8 +1016,10 @@ def create_app(testing: bool = False) -> Flask:
         storage = get_storage_provider(app)
         try:
             entry_id = storage.save_journal_entry(data)
+            app.logger.info(f"Journal entry added: {entry_id}")
             return jsonify({"success": True, "id": entry_id})
         except Exception as e:
+            app.logger.error(f"Journal add error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/journal/delete/<entry_id>", methods=["DELETE"])
@@ -1010,6 +1027,7 @@ def create_app(testing: bool = False) -> Flask:
         username = session.get('username')
         storage = get_storage_provider(app)
         storage.delete_journal_entry(username, entry_id)
+        app.logger.info(f"Journal entry deleted: {entry_id}")
         return jsonify({"success": True})
 
     @app.route("/journal/analyze", methods=["POST"])
@@ -1031,10 +1049,6 @@ def create_app(testing: bool = False) -> Flask:
         journal_entries = []
         try:
             for trade in data:
-                # Map analysis trade object to journal entry
-                # trade is likely a dict from strategy_rows in main_analyzer
-
-                # Extract entry date from segments if available
                 entry_date = ""
                 entry_time = ""
                 if trade.get("segments") and len(trade.get("segments")) > 0:
@@ -1048,7 +1062,6 @@ def create_app(testing: bool = False) -> Flask:
                          except:
                              pass
 
-                # Fallback to current date if missing (though analysis results usually have dates)
                 if not entry_date:
                     entry_date = datetime.now().date().isoformat()
 
@@ -1059,21 +1072,21 @@ def create_app(testing: bool = False) -> Flask:
                     "entry_time": entry_time,
                     "symbol": trade.get("symbol", ""),
                     "strategy": trade.get("strategy", ""),
-                    "direction": "", # Not explicit in strategy object, user can edit
-                    "entry_price": 0.0, # Not explicit aggregated
+                    "direction": "",
+                    "entry_price": 0.0,
                     "exit_price": 0.0,
-                    "qty": 1.0, # Strategy level aggregation
+                    "qty": 1.0,
                     "pnl": float(trade.get("pnl", 0.0)),
                     "notes": f"Imported Analysis. Legs: {trade.get('legs_desc', '')}. Description: {trade.get('description', '')}",
                     "created_at": time.time()
                 }
                 journal_entries.append(journal_entry)
 
-            # Batch Insert
             count = storage.save_journal_entries(journal_entries)
-
+            app.logger.info(f"Imported {count} trades for {username}")
             return jsonify({"success": True, "count": count})
         except Exception as e:
+            app.logger.error(f"Import error: {e}")
             return jsonify({"error": str(e)}), 500
 
     # API Route for Analysis (Audit)
@@ -1093,10 +1106,12 @@ def create_app(testing: bool = False) -> Flask:
             return jsonify(report)
 
         except Exception as e:
+            app.logger.exception(f"Portfolio Analysis Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/analyze", methods=["POST"])
     def analyze():
+        app.logger.info("Portfolio Audit Request received")
         file = request.files.get("csv")
         broker = request.form.get("broker", "auto")
         
@@ -1194,12 +1209,14 @@ def create_app(testing: bool = False) -> Flask:
                 storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
 
             if "excel_report" in res:
-                del res["excel_report"] # Can't JSON serialize bytes
+                del res["excel_report"]
 
             res["token"] = token
+            app.logger.info("Portfolio Audit completed successfully.")
             return jsonify(res)
 
         except Exception as exc:
+            app.logger.exception(f"Audit failed: {exc}")
             return jsonify({"error": str(exc)}), 500
 
     @app.route("/download/<token>/<filename>")

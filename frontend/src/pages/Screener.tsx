@@ -258,29 +258,60 @@ const Screener: React.FC = () => {
                 )}
             </div>
 
-            {/* LEGEND / DOCS AT BOTTOM */}
+            {/* LEGEND / DOCS AT BOTTOM - ENHANCED FOR LAYMEN */}
             <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 text-gray-500 text-sm">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-4">PROTOCOL LEGEND</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                        <h4 className="font-bold mb-2">ISA GROWTH Criteria (UK/US Stocks)</h4>
-                        <ul className="list-disc pl-5 space-y-1 text-xs">
-                            <li>Market Regime: SPY &gt; 200 SMA & VIX &lt; 25.</li>
-                            <li>Trend: Price &gt; 50 &gt; 200 SMA.</li>
-                            <li>Momentum: Within 25% of 52-week Highs.</li>
-                            <li>Trigger: Volume Breakout of 20-Day High.</li>
-                            <li>Risk: 1% of £100k Account.</li>
+                <h3 className="font-bold text-gray-900 dark:text-white mb-6 text-lg">PROTOCOL LEGEND & GLOSSARY</h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {/* Strategy 1: ISA Growth */}
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                        <h4 className="font-bold mb-3 text-indigo-600 dark:text-indigo-400">ISA GROWTH (Long-Term Trend)</h4>
+                        <p className="text-xs mb-3 text-gray-600 dark:text-gray-400">
+                            Designed for long-term compounding in tax-free accounts (ISA/Roth). We only buy when the overall market is safe and the stock is establishing a new uptrend.
+                        </p>
+                        <ul className="list-disc pl-5 space-y-2 text-xs">
+                            <li><strong>Market Regime:</strong> Is the S&P 500 rising? Are fears (VIX) low? If yes, we can buy.</li>
+                            <li><strong>Trend Alignment:</strong> Price must be above both the 50-day and 200-day average prices.</li>
+                            <li><strong>Trigger:</strong> We buy when price breaks above the highest point of the last 20 days (Breakout).</li>
+                            <li><strong>Exit:</strong> We sell if it drops below the lowest point of the last 20 days.</li>
                         </ul>
                     </div>
-                    <div>
-                        <h4 className="font-bold mb-2">US OPTIONS INCOME Criteria</h4>
-                        <ul className="list-disc pl-5 space-y-1 text-xs">
-                            <li>Strategy: Bull Put Verticals.</li>
-                            <li>Trend: Price &gt; 50 SMA (Bullish).</li>
-                            <li>Timing: RSI &lt; 55 (Pullback).</li>
-                            <li>Implied Vol: ATR &gt; 2% of Price.</li>
-                            <li>Risk: 2% of $9.5k Account.</li>
+
+                    {/* Strategy 2: Income */}
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                        <h4 className="font-bold mb-3 text-emerald-600 dark:text-emerald-400">US OPTIONS INCOME (Cash Flow)</h4>
+                        <p className="text-xs mb-3 text-gray-600 dark:text-gray-400">
+                            Designed to generate monthly income by selling "insurance" (Bull Put Spreads) on strong stocks that are temporarily pulling back.
+                        </p>
+                        <ul className="list-disc pl-5 space-y-2 text-xs">
+                            <li><strong>Setup:</strong> Stock is in an uptrend but has dipped slightly (RSI &lt; 55).</li>
+                            <li><strong>Implied Volatility (IV):</strong> Insurance premiums are expensive (good for sellers).</li>
+                            <li><strong>Safety:</strong> We bet the stock won't fall below a safety floor (Support) within 45 days.</li>
+                            <li><strong>Win Condition:</strong> Stock stays flat or goes up. We keep the premium.</li>
                         </ul>
+                    </div>
+
+                    {/* Glossary */}
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                        <h4 className="font-bold mb-3 text-gray-900 dark:text-white">Beginner's Glossary</h4>
+                        <dl className="space-y-3 text-xs">
+                            <div>
+                                <dt className="font-bold">SMA (Simple Moving Average):</dt>
+                                <dd>The average price over X days. "Price &gt; 200 SMA" means the long-term trend is UP.</dd>
+                            </div>
+                            <div>
+                                <dt className="font-bold">RSI (Relative Strength Index):</dt>
+                                <dd>Speedometer for price. Over 70 is "Speeding" (Overbought). Under 30 is "Stalled" (Oversold). We buy dips around 40-50.</dd>
+                            </div>
+                            <div>
+                                <dt className="font-bold">ATR (Average True Range):</dt>
+                                <dd>How much the stock moves on average per day. We use this to set safe Stop Losses so normal wiggles don't kick us out.</dd>
+                            </div>
+                            <div>
+                                <dt className="font-bold">VIX (Volatility Index):</dt>
+                                <dd>The "Fear Gauge". High VIX (&gt;25) means panic. We stay cash. Low VIX (&lt;20) means calm seas. We trade.</dd>
+                            </div>
+                        </dl>
                     </div>
                 </div>
             </div>
