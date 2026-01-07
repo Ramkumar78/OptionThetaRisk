@@ -370,6 +370,10 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             # Calculate Breakout Date (Trend Age)
             breakout_date = _calculate_trend_breakout_date(df)
 
+            # Standard Stop/Target for Market Screener (2x ATR Stop, 4x ATR Target)
+            stop_loss = current_price - (2 * current_atr) if trend == "BULLISH" else current_price + (2 * current_atr)
+            target_price = current_price + (4 * current_atr) if trend == "BULLISH" else current_price - (4 * current_atr)
+
             time.sleep(0.1)
 
             return {
@@ -384,6 +388,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "signal": signal,
                 "is_green": is_green,
                 "iv_rank": "N/A*",
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target_price, 2),
                 "atr": current_atr,
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
@@ -907,6 +913,22 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
             # current_atr is already calculated above
             # high_52wk and low_52wk are already calculated above
 
+            # Calculate Target based on 2R relative to EMA stop or 4 ATR
+            # If long, target = price + (price - stop) * 2
+            target_price = 0.0
+            if "DUMP" in signal:
+                risk = stop_loss - curr_close
+                if risk > 0:
+                     target_price = curr_close - (risk * 2)
+                else:
+                     target_price = curr_close - (4 * current_atr)
+            else:
+                risk = curr_close - stop_loss
+                if risk > 0:
+                     target_price = curr_close + (risk * 2)
+                else:
+                     target_price = curr_close + (4 * current_atr)
+
             if check_mode or signal != "WAIT":
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
@@ -923,6 +945,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
                     "ema_21": curr_21,
                     # Stop Loss usually strictly below the slow EMA line
                     "stop_loss": stop_loss,
+                    "target": round(target_price, 2),
                     "atr_value": round(current_atr, 2), # Key was different in 5/13, standardizing or adding both? Keeping original key 'atr_value' but adding 'atr' for unified UI
                     "atr": round(current_atr, 2),
                     "52_week_high": round(high_52wk, 2) if high_52wk else None,
@@ -1148,6 +1171,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                 "floor_level": floor,
                 "stop_loss": stop_loss,
                 "target_price": target,
+                "target": target, # Alias for unified UI
                 "high_52w": period_high,
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
@@ -1560,6 +1584,10 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
             low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
 
+            # Stock Level Stop/Target for Reference (2x ATR Stop, 4x ATR Target)
+            stock_stop_loss = curr_price - (2 * current_atr)
+            stock_target = curr_price + (4 * current_atr)
+
             return {
                 "ticker": ticker,
                 "price": curr_price,
@@ -1574,6 +1602,8 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
                 "max_risk": round(risk, 2),
                 "roi_pct": round(roi * 100, 1),
                 "trend": "Bullish (>SMA50)",
+                "stop_loss": round(stock_stop_loss, 2),
+                "target": round(stock_target, 2),
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
                 "breakout_date": breakout_date,
@@ -1819,6 +1849,8 @@ def _process_isa_ticker(ticker, df, check_mode):
             "trend_200sma": "Bullish",
             "breakout_level": round(high_50, 2),
             "stop_loss_3atr": round(stop_price, 2),
+            "stop_loss": round(stop_price, 2), # Alias for unified UI
+            "target": round(curr_close + (6 * atr_20), 2), # 6x ATR Target for Trend Following
             "trailing_exit_20d": round(low_20, 2),
             "volatility_pct": round(volatility_pct, 2),
             "atr_20": round(atr_20, 2),
@@ -1997,6 +2029,23 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
             # Calculate dominant period for context
             period, rel_pos = _calculate_dominant_cycle(closes) or (0, 0)
 
+            # ATR for Stop/Target
+            if 'ATR' not in df.columns:
+                 df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
+
+            # Mean Reversion Logic: Stop 2 ATR, Target 2 ATR
+            curr_price = float(closes[-1])
+            if "LOW" in signal:
+                stop_loss = curr_price - (2 * current_atr)
+                target = curr_price + (2 * current_atr)
+            elif "HIGH" in signal:
+                stop_loss = curr_price + (2 * current_atr)
+                target = curr_price - (2 * current_atr)
+            else:
+                stop_loss = curr_price - (2 * current_atr)
+                target = curr_price + (2 * current_atr)
+
             breakout_date = _calculate_trend_breakout_date(df)
 
             results.append({
@@ -2004,12 +2053,15 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
                 "price": float(closes[-1]),
                 "pct_change_1d": pct_change_1d,
                 "signal": signal,
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target, 2),
                 "cycle_phase": f"{phase:.2f} rad",
                 "cycle_strength": f"{strength*100:.1f}%", # Volatility of the cycle
                 "verdict_color": verdict_color,
                 "method": "Hilbert (Non-Stationary)",
                 "cycle_period": f"{period} days", # Legacy compatibility for tests
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "atr_value": round(current_atr, 2)
             })
 
         except Exception:
@@ -2409,6 +2461,10 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
 
             breakout_date = _calculate_trend_breakout_date(df)
 
+            # Standard Confluence Stop/Target (3 ATR Stop, 5 ATR Target)
+            stop_loss = curr_price - (3 * current_atr) if isa_trend == "BULLISH" else curr_price + (3 * current_atr)
+            target = curr_price + (5 * current_atr) if isa_trend == "BULLISH" else curr_price - (5 * current_atr)
+
             results.append({
                 "ticker": ticker,
                 "company_name": company_name,
@@ -2420,6 +2476,8 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
                 "confluence_score": score,
                 "verdict": final_verdict,
                 "signals": ", ".join(signals),
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target, 2),
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
                 "breakout_date": breakout_date
@@ -2581,6 +2639,10 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
 
             breakout_date = _calculate_trend_breakout_date(df)
 
+            # Fortress Stop/Target (Underlying)
+            stock_stop_loss = curr_close - (safety_k * atr)
+            stock_target = curr_close + (safety_k * atr * 2)
+
             results.append({
                 "ticker": ticker,
                 "price": round(curr_close, 2),
@@ -2589,6 +2651,8 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
                 "safety_mult": f"{safety_k:.1f}x",
                 "sell_strike": short_strike,
                 "buy_strike": long_strike,
+                "stop_loss": round(stock_stop_loss, 2),
+                "target": round(stock_target, 2),
                 "dist_pct": f"{((curr_close - short_strike)/curr_close)*100:.1f}%",
                 "score": round(score, 1),
                 "trend": trend_status,
@@ -2789,6 +2853,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 "ATR": sanitize(round(current_atr, 2)),
                 "Stop Loss": sanitize(round(stop_loss, 2)),
                 "Target": sanitize(round(target_price, 2)),
+                "stop_loss": sanitize(round(stop_loss, 2)), # Lowercase alias
+                "target": sanitize(round(target_price, 2)), # Lowercase alias
                 "volatility_pct": sanitize(round((current_atr/curr_price)*100, 2)),
                 "breakout_date": breakout_date
             }
