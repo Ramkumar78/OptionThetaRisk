@@ -32,7 +32,7 @@ from option_auditor.common.data_utils import get_cached_market_data
 
 # Import Data Lists
 from option_auditor.sp500_data import SP500_TICKERS
-from option_auditor.uk_stock_data import UK_TICKERS
+from option_auditor.uk_stock_data import get_uk_tickers
 from option_auditor.india_stock_data import INDIA_TICKERS
 
 # Import India Data (Compat)
@@ -99,12 +99,12 @@ def cache_screener_result(key, data):
 def get_tickers_for_region(region):
     region = region.lower()
     if region == 'uk':
-        return list(set(UK_TICKERS)) # Ensure unique
+        return list(set(get_uk_tickers())) # Ensure unique
     elif region == 'india':
         return list(set(INDIA_TICKERS))
     elif region == 'uk_euro':
         # Combine UK with some major Euro tickers if available, for now just UK + placeholders
-        return list(set(UK_TICKERS))
+        return list(set(get_uk_tickers()))
     elif region == 'united_states':
         return get_united_states_stocks()
     else: # Default 'us'
