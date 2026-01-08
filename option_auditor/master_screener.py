@@ -18,14 +18,19 @@ RISK_PER_TRADE_PCT = 0.0125  # 1.25% Risk
 # HARDENED GATES
 MIN_PRICE_USD = 10.0
 MIN_PRICE_GBP = 100.0 # Pence
+MIN_PRICE_INR = 100.0 # Rupees
+
 MIN_TURNOVER_USD = 20_000_000
 MIN_TURNOVER_GBP = 2_000_000
+MIN_TURNOVER_INR = 50_000_000 # 5 Crores INR
 
 class FortressScreener:
-    def __init__(self, tickers_us=None, tickers_uk=None):
+    def __init__(self, tickers_us=None, tickers_uk=None, tickers_india=None):
         self.tickers_us = list(set([t for t in (tickers_us or []) if t]))
         self.tickers_uk = list(set([t for t in (tickers_uk or []) if t]))
-        self.all_tickers = self.tickers_us + self.tickers_uk
+        self.tickers_india = list(set([t for t in (tickers_india or []) if t]))
+
+        self.all_tickers = self.tickers_us + self.tickers_uk + self.tickers_india
         self.regime = "NEUTRAL"
         self.spy_history = None
 
@@ -66,28 +71,16 @@ class FortressScreener:
             self.regime = "🟡 NEUTRAL (Data Error)"
 
     def _calculate_breakout_date(self, close_series, sma_50_series):
-        """
-        Identifies the last date price crossed ABOVE the SMA 50.
-        Returns: (date_string, days_since)
-        """
         try:
-            # Boolean series: True where Price > SMA50
             above_50 = close_series > sma_50_series
-
-            # Find crossover: Current is True, Previous was False
-            # shift(1) moves data down, so we compare Today vs Yesterday
             crossovers = above_50 & (~above_50.shift(1).fillna(False))
-
-            # Get the dates where this happened
             breakout_dates = crossovers[crossovers].index
 
             if not breakout_dates.empty:
                 last_date = breakout_dates[-1]
-                # Calculate days since
                 days_since = (close_series.index[-1] - last_date).days
                 return last_date.strftime("%Y-%m-%d"), days_since
             else:
-                # If it's been above for the whole loaded history (2y)
                 return "Long Term Leader", 999
         except:
             return "Unknown", 0
@@ -118,15 +111,27 @@ class FortressScreener:
             volume = df['Volume']
             curr_price = float(close.iloc[-1])
 
-            # Liquidity Check
             try: avg_vol = float(volume.rolling(20).mean().iloc[-1])
             except: avg_vol = 0
 
+            # --- REGION IDENTIFICATION ---
             is_uk = ticker.endswith(".L")
+            is_india = ticker.endswith(".NS")
+            is_us = not (is_uk or is_india)
+
+            # --- LIQUIDITY GATES ---
             if is_uk:
-                if (curr_price/100 * avg_vol) < MIN_TURNOVER_GBP: return None
-            else:
-                if (curr_price * avg_vol) < MIN_TURNOVER_USD: return None
+                price_gbp = curr_price / 100.0
+                turnover = price_gbp * avg_vol
+                if turnover < MIN_TURNOVER_GBP: return None
+            elif is_india:
+                turnover = curr_price * avg_vol
+                if turnover < MIN_TURNOVER_INR: return None # 5 Cr
+                if curr_price < MIN_PRICE_INR: return None
+            else: # US
+                turnover = curr_price * avg_vol
+                if turnover < MIN_TURNOVER_USD: return None
+                if curr_price < MIN_PRICE_USD: return None
 
             # Indicators
             sma_50_series = close.rolling(50).mean()
@@ -140,14 +145,12 @@ class FortressScreener:
             high_52 = float(close.rolling(252).max().iloc[-1])
             low_52 = float(close.rolling(252).min().iloc[-1])
 
-            # --- BREAKOUT DATE CALCULATION ---
+            # Breakout Date
             bk_date, days_since = self._calculate_breakout_date(close, sma_50_series)
 
-            # Setup Detection
             setup = "NONE"
             score = 0
             action = "WAIT"
-            stop_loss = 0.0
             rs_score = self._calculate_rs_score(df)
 
             # Trend Template (Minervini)
@@ -159,40 +162,53 @@ class FortressScreener:
                 curr_price > (high_52 * 0.75)
             )
 
-            # VCP (Volatility Contraction)
+            # VCP
             try:
                 vol_10 = float(close.rolling(10).std().iloc[-1])
                 vol_50 = float(close.rolling(50).std().iloc[-1])
                 is_vcp = (vol_10 / vol_50) < 0.60 if vol_50 > 0 else False
             except: is_vcp = False
 
-            # --- LOGIC ---
-            # 1. ISA GROWTH (Trend + VCP)
+            # --- STRATEGY LOGIC ---
+
+            # 1. GROWTH (ISA / General Trend) - Applies to ALL regions
             if "BULLISH" in self.regime and stage_2 and rs_score > 0:
                 if is_vcp:
-                    setup = "🚀 ISA: VCP LEADER"
+                    setup = "🚀 LEADER: VCP"
                     score = 90 + rs_score
                 elif days_since < 15:
-                    setup = "🚀 ISA: FRESH BREAKOUT"
+                    setup = "🚀 LEADER: FRESH"
                     score = 85 + rs_score
                 else:
-                    setup = "⚠️ ISA: EXTENDED" # Valid trend but maybe too late
+                    setup = "⚠️ LEADER: EXTENDED"
                     score = 60
 
                 stop_loss = float(low.rolling(20).min().iloc[-1])
 
-                # Sizing
-                risk_per_share = curr_price - stop_loss
-                if risk_per_share > 0:
-                    risk_amt = ISA_ACCOUNT_GBP * RISK_PER_TRADE_PCT
-                    fx_rate = 0.79 if not is_uk else 1.0
-                    shares = int((risk_amt / fx_rate) / risk_per_share)
-                    action = f"BUY ~{shares} (Stop: {stop_loss:.2f})"
+                # Sizing Logic based on Region
+                if is_uk:
+                    # ISA Account Logic (GBP)
+                    risk_per_share = (curr_price/100.0) - (stop_loss/100.0)
+                    if risk_per_share > 0:
+                        risk_amt = ISA_ACCOUNT_GBP * RISK_PER_TRADE_PCT
+                        shares = int(risk_amt / risk_per_share)
+                        action = f"BUY ~{shares} (ISA)"
+                elif is_india:
+                    # Generic Sizing for India (assuming 1L capital for example or just unit based)
+                    risk_per_share = curr_price - stop_loss
+                    if risk_per_share > 0:
+                        action = f"BUY (Stop: {stop_loss:.1f})"
                 else:
-                    action = "WAIT"
+                    # US Logic (ISA allowed)
+                    risk_per_share = curr_price - stop_loss
+                    if risk_per_share > 0:
+                        risk_amt = ISA_ACCOUNT_GBP * RISK_PER_TRADE_PCT
+                        fx_rate = 0.79 # USD/GBP
+                        shares = int((risk_amt / fx_rate) / risk_per_share)
+                        action = f"BUY ~{shares} (ISA)"
 
-            # 2. OPTIONS INCOME (Bull Put)
-            elif not is_uk and "BEARISH" not in self.regime:
+            # 2. OPTIONS INCOME (US Only)
+            elif is_us and "BEARISH" not in self.regime:
                 if curr_price > sma_200 and rsi < 45 and rsi > 30:
                     setup = "🛡️ OPT: BULL PUT"
                     score = 80 + (50 - rsi)
@@ -212,8 +228,8 @@ class FortressScreener:
                 "RSI": round(rsi, 0),
                 "Regime": self.regime,
                 "RS_Rating": round(rs_score, 1),
-                "breakout_date": bk_date, # <--- NEW FIELD
-                "days_since_breakout": days_since, # <--- NEW FIELD
+                "breakout_date": bk_date,
+                "days_since_breakout": days_since,
                 "VCP": "YES" if is_vcp else "NO"
             }
 
@@ -249,17 +265,39 @@ class FortressScreener:
 
 def screen_master_convergence(ticker_list=None, region="us", check_mode=False):
     from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
-    try: from option_auditor.uk_stock_data import get_uk_tickers
-    except: get_uk_tickers = lambda: []
 
+    # 1. Ticker Loading Logic
     us = []
     uk = []
+    india = []
+
     if ticker_list:
+        # Manual check mode
         for t in ticker_list:
             if ".L" in t: uk.append(t)
+            elif ".NS" in t: india.append(t)
             else: us.append(t)
     else:
-        if region in ["uk", "uk_euro"]: uk = get_uk_tickers()
-        else: us = LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])
+        # Automatic Region Selection
+        if region == "india":
+            # Attempt to load India tickers dynamically
+            try:
+                from option_auditor.india_stock_data import get_india_tickers
+                india = get_india_tickers()
+            except ImportError:
+                # Fallback Nifty List if file missing
+                india = [
+                    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
+                    "HINDUNILVR.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS",
+                    "LTIM.NS", "BAJFINANCE.NS", "TATAMOTORS.NS", "LT.NS", "AXISBANK.NS"
+                ]
+        elif region in ["uk", "uk_euro"]:
+            try:
+                from option_auditor.uk_stock_data import get_uk_tickers
+                uk = get_uk_tickers()
+            except: uk = []
+        else:
+            # Default to US
+            us = LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])
 
-    return FortressScreener(us, uk).run_screen()
+    return FortressScreener(tickers_us=us, tickers_uk=uk, tickers_india=india).run_screen()
