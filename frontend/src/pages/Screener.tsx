@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; // <--- ADDED THIS
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 // 1. STRATEGY DEFINITIONS
@@ -201,6 +202,7 @@ const STRATEGIES: Record<string, {
 };
 
 const Screener: React.FC = () => {
+    const navigate = useNavigate(); // <--- ADDED THIS
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<any[]>([]);
     const [regime, setRegime] = useState<string>('WAITING');
@@ -316,7 +318,7 @@ const Screener: React.FC = () => {
                     bVal = b.Setup || b.verdict || b.signal;
                 }
                 if (sortConfig.key === 'Action') {
-                    aVal = a.Action || a.action || a.Score || 0; // Sort actions primarily by Score if string fails
+                    aVal = a.Action || a.action || a.Score || 0;
                     bVal = b.Action || b.action || b.Score || 0;
                 }
 
@@ -344,7 +346,6 @@ const Screener: React.FC = () => {
     const getVerdict = (r: any) => r.Setup || r.verdict || r.signal || r.human_verdict || 'WAIT';
     const getAction = (r: any) => r.Action || r.action || (r.signal && r.signal.includes('BUY') ? 'BUY' : '-') || '-';
 
-    // Helper for Sort Arrows
     const SortIcon = ({ colKey }: { colKey: string }) => {
         if (sortConfig?.key !== colKey) return <i className="bi bi-arrow-down-up text-gray-300 ml-1 text-[10px]"></i>;
         return sortConfig.direction === 'asc' ?
@@ -433,25 +434,12 @@ const Screener: React.FC = () => {
                             disabled={loading}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                         >
-                            {loading ? (
-                                <>
-                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Running...
-                                </>
-                            ) : (
-                                <>
-                                    <i className="bi bi-search"></i>
-                                    RUN SCANNER
-                                </>
-                            )}
+                            {loading ? 'Running...' : 'RUN SCANNER'}
                         </button>
                     </div>
                 </div>
 
-                <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                 <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
                     <i className="bi bi-info-circle mr-2"></i>
                     {STRATEGIES[selectedStrategy].description}
                 </div>
@@ -478,76 +466,38 @@ const Screener: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                                    <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
-                                        Ticker <SortIcon colKey="Ticker" />
-                                    </th>
-                                    <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
-                                        Price <SortIcon colKey="Price" />
-                                    </th>
-                                    <th onClick={() => handleSort('Change')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
-                                        Change <SortIcon colKey="Change" />
-                                    </th>
-                                    <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
-                                        Verdict / Setup <SortIcon colKey="Setup" />
-                                    </th>
-                                    <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
-                                        Action / Details <SortIcon colKey="Action" />
-                                    </th>
+                                    <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker <SortIcon colKey="Ticker" /></th>
+                                    <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price <SortIcon colKey="Price" /></th>
+                                    <th onClick={() => handleSort('Change')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Change <SortIcon colKey="Change" /></th>
+                                    <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Verdict / Setup <SortIcon colKey="Setup" /></th>
+                                    <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action / Details <SortIcon colKey="Action" /></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {sortedResults.map((r, i) => {
                                     const verdict = getVerdict(r);
-
-                                    // Dynamic details based on strategy
                                     let details = '';
                                     if (selectedStrategy === 'quantum') details = `H: ${r.hurst?.toFixed(2)} | E: ${r.entropy?.toFixed(2)}`;
                                     else if (selectedStrategy === 'bull_put') details = `Credit: ${r.credit} | ROI: ${r.roi_pct}%`;
-
-                                    // --- GRANDMASTER LOGIC UPDATED ---
                                     else if (selectedStrategy === 'grandmaster') {
-                                        // Plain date display as requested
                                         details = `Breakout: ${r.breakout_date || 'N/A'}`;
                                         if (r.RS_Rating) details += ` | RS: ${r.RS_Rating}`;
                                     }
-
-                                    else if (selectedStrategy === 'hybrid') details = `Score: ${r.score} | Cycle: ${r.cycle}`;
-                                    else if (selectedStrategy === 'fourier') details = `Phase: ${r.cycle_phase} | Str: ${r.cycle_strength}`;
-                                    else if (selectedStrategy === 'fortress') details = `Strike: ${r.sell_strike} | Saf: ${r.safety_mult}`;
                                     else details = `Vol: ${r.volatility_pct}% | ATR: ${r.atr_value}`;
 
-                                    // Color coding verdict
-                                    let badgeColor = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                                    let badgeColor = 'bg-gray-100 text-gray-800';
                                     const vUpper = String(verdict).toUpperCase();
-
-                                    if (vUpper.includes('BUY') || vUpper.includes('LONG') || vUpper.includes('GREEN') || vUpper.includes('BREAKOUT') || vUpper.includes('LEADER'))
-                                        badgeColor = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-                                    if (vUpper.includes('SELL') || vUpper.includes('SHORT') || vUpper.includes('RED') || vUpper.includes('EXIT') || vUpper.includes('BEARISH'))
-                                        badgeColor = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-                                    if (vUpper.includes('WAIT') || vUpper.includes('WATCH') || vUpper.includes('NEUTRAL'))
-                                        badgeColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-                                    if (vUpper.includes('OPT'))
-                                        badgeColor = 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                                    if (vUpper.includes('BUY') || vUpper.includes('LONG') || vUpper.includes('GREEN')) badgeColor = 'bg-green-100 text-green-800';
+                                    if (vUpper.includes('SELL') || vUpper.includes('SHORT') || vUpper.includes('RED')) badgeColor = 'bg-red-100 text-red-800';
 
                                     return (
                                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                             <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100">{r.Ticker || r.ticker}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">
-                                                {formatCurrency(r.Price || r.price, getCurrencySymbol(r.Ticker || r.ticker))}
-                                            </td>
-                                            <td className={`px-6 py-4 text-right font-bold font-mono ${(r.Change || r.pct_change_1d) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {(r.Change || r.pct_change_1d || 0) > 0 ? '+' : ''}{Number(r.Change || r.pct_change_1d || 0).toFixed(2)}%
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wide ${badgeColor}`}>
-                                                    {verdict}
-                                                </span>
-                                            </td>
+                                            <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, '$')}</td>
+                                            <td className={`px-6 py-4 text-right font-bold font-mono ${(r.Change || r.pct_change_1d) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(r.Change || r.pct_change_1d || 0) > 0 ? '+' : ''}{Number(r.Change || r.pct_change_1d || 0).toFixed(2)}%</td>
+                                            <td className="px-6 py-4"><span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wide ${badgeColor}`}>{verdict}</span></td>
                                             <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-gray-900 dark:text-gray-200">{getAction(r)}</span>
-                                                    <span className="text-xs opacity-75">{details}</span>
-                                                </div>
+                                                <div className="flex flex-col"><span className="font-bold">{getAction(r)}</span><span className="text-xs opacity-75">{details}</span></div>
                                             </td>
                                         </tr>
                                     );
@@ -576,7 +526,7 @@ const Screener: React.FC = () => {
                 ))}
             </div>
 
-            {/* BACKTEST SECTION */}
+            {/* BACKTEST SECTION - FIXED KEYS FOR GRANDMASTER */}
             <div className="mt-12 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Strategy Backtest</h2>
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -609,21 +559,37 @@ const Screener: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 dark:bg-gray-700/30 p-6 rounded-lg border border-gray-100 dark:border-gray-700">
                         <div>
                             <p className="text-xs text-gray-500 uppercase">Total Return</p>
-                            <p className={`text-xl font-bold ${backtestResult.total_return_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {backtestResult.total_return_pct.toFixed(2)}%
+                            <p className={`text-xl font-bold ${(backtestResult.strategy_return || backtestResult.total_return_pct || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {(backtestResult.strategy_return ?? backtestResult.total_return_pct ?? 0).toFixed(2)}%
                             </p>
                         </div>
                         <div>
                             <p className="text-xs text-gray-500 uppercase">Win Rate</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{backtestResult.win_rate_pct.toFixed(1)}%</p>
+                            <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                {String(backtestResult.win_rate ?? backtestResult.win_rate_pct ?? '0').replace('%', '')}%
+                            </p>
                         </div>
                         <div>
                             <p className="text-xs text-gray-500 uppercase">Profit Factor</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{backtestResult.profit_factor.toFixed(2)}</p>
+                            <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                {backtestResult.profit_factor ? backtestResult.profit_factor.toFixed(2) : 'N/A'}
+                            </p>
                         </div>
                         <div>
                             <p className="text-xs text-gray-500 uppercase">Trades</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">{backtestResult.total_trades}</p>
+                            <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                {backtestResult.trades ?? backtestResult.total_trades ?? 0}
+                            </p>
+                        </div>
+
+                        <div className="col-span-2 md:col-span-4 mt-2 flex justify-end">
+                            <button
+                                onClick={() => navigate('/results', { state: { results: backtestResult } })}
+                                className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 font-bold bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg transition-colors"
+                            >
+                                <i className="bi bi-bar-chart-fill mr-2"></i>
+                                View Full Analysis & Equity Curve
+                            </button>
                         </div>
                     </div>
                 )}
