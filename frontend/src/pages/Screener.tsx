@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 // 1. STRATEGY DEFINITIONS
@@ -10,7 +10,6 @@ const STRATEGIES: Record<string, {
     params: string[];
     legend: { title: string; desc: string; items: { label: string; text: string }[] }[];
 }> = {
-    // RENAMED TO GRANDMASTER (Points to /screen/master backend)
     grandmaster: {
         id: 'grandmaster',
         name: 'Grandmaster Council',
@@ -208,8 +207,10 @@ const Screener: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [region, setRegion] = useState('us_uk_mix');
     const [timeFrame, setTimeFrame] = useState('1d');
-    // 2. SET DEFAULT TO GRANDMASTER
     const [selectedStrategy, setSelectedStrategy] = useState<string>('grandmaster');
+
+    // Sorting State
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'Score', direction: 'desc' });
 
     // Backtest State
     const [backtestTicker, setBacktestTicker] = useState('');
@@ -242,14 +243,12 @@ const Screener: React.FC = () => {
                 return;
             }
 
-            // Normalize results
             let finalResults = [];
             if (data.results && Array.isArray(data.results)) {
                 finalResults = data.results;
             } else if (Array.isArray(data)) {
                 finalResults = data;
             } else if (typeof data === 'object') {
-                 // Check for sector grouping or other structures
                  if (Object.values(data).every(v => Array.isArray(v))) {
                      Object.values(data).forEach((arr: any) => {
                          finalResults.push(...arr);
@@ -259,13 +258,9 @@ const Screener: React.FC = () => {
                  }
             }
 
-            // 3. FIX REGIME CASE SENSITIVITY (Handle 'Regime' and 'regime')
-            if (data.regime) {
-                setRegime(data.regime);
-            } else if (data.Regime) {
-                setRegime(data.Regime);
-            } else if (finalResults.length > 0) {
-                // Check first item for regime
+            if (data.regime) setRegime(data.regime);
+            else if (data.Regime) setRegime(data.Regime);
+            else if (finalResults.length > 0) {
                 if (finalResults[0].regime) setRegime(finalResults[0].regime);
                 if (finalResults[0].Regime) setRegime(finalResults[0].Regime);
             }
@@ -299,11 +294,63 @@ const Screener: React.FC = () => {
         }
     };
 
-    const currentStrategy = STRATEGIES[selectedStrategy];
+    // --- SORTING LOGIC ---
+    const handleSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
 
-    // 4. FIX DISPLAY HELPERS (Handle capitalized keys from Backend)
+    const sortedResults = useMemo(() => {
+        let sortable = [...results];
+        if (sortConfig !== null) {
+            sortable.sort((a, b) => {
+                let aVal = a[sortConfig.key] || a[sortConfig.key.toLowerCase()];
+                let bVal = b[sortConfig.key] || b[sortConfig.key.toLowerCase()];
+
+                // Handle nested access or differing casing
+                if (sortConfig.key === 'Setup') {
+                    aVal = a.Setup || a.verdict || a.signal;
+                    bVal = b.Setup || b.verdict || b.signal;
+                }
+                if (sortConfig.key === 'Action') {
+                    aVal = a.Action || a.action || a.Score || 0; // Sort actions primarily by Score if string fails
+                    bVal = b.Action || b.action || b.Score || 0;
+                }
+
+                // Numeric conversion
+                const aNum = parseFloat(aVal);
+                const bNum = parseFloat(bVal);
+
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    aVal = aNum;
+                    bVal = bNum;
+                } else {
+                    // String fallback
+                    aVal = String(aVal || '').toLowerCase();
+                    bVal = String(bVal || '').toLowerCase();
+                }
+
+                if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortable;
+    }, [results, sortConfig]);
+
     const getVerdict = (r: any) => r.Setup || r.verdict || r.signal || r.human_verdict || 'WAIT';
     const getAction = (r: any) => r.Action || r.action || (r.signal && r.signal.includes('BUY') ? 'BUY' : '-') || '-';
+
+    // Helper for Sort Arrows
+    const SortIcon = ({ colKey }: { colKey: string }) => {
+        if (sortConfig?.key !== colKey) return <i className="bi bi-arrow-down-up text-gray-300 ml-1 text-[10px]"></i>;
+        return sortConfig.direction === 'asc' ?
+            <i className="bi bi-arrow-up-short text-blue-500 ml-1"></i> :
+            <i className="bi bi-arrow-down-short text-blue-500 ml-1"></i>;
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
@@ -315,7 +362,6 @@ const Screener: React.FC = () => {
                     Institutional grade scanning for high-probability setups.
                 </p>
 
-                {/* REGIME BADGE */}
                 <div className="mt-4 flex items-center gap-3">
                     <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Market Regime:
@@ -347,7 +393,7 @@ const Screener: React.FC = () => {
                         </select>
                     </div>
 
-                    {currentStrategy.params.includes('region') && (
+                    {STRATEGIES[selectedStrategy].params.includes('region') && (
                         <div>
                             <label htmlFor="region-select" className="block text-xs font-semibold text-gray-500 uppercase mb-2">Region</label>
                             <select
@@ -364,7 +410,7 @@ const Screener: React.FC = () => {
                         </div>
                     )}
 
-                    {currentStrategy.params.includes('time_frame') && (
+                    {STRATEGIES[selectedStrategy].params.includes('time_frame') && (
                         <div>
                             <label htmlFor="timeframe-select" className="block text-xs font-semibold text-gray-500 uppercase mb-2">Time Frame</label>
                             <select
@@ -407,7 +453,7 @@ const Screener: React.FC = () => {
 
                 <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
                     <i className="bi bi-info-circle mr-2"></i>
-                    {currentStrategy.description}
+                    {STRATEGIES[selectedStrategy].description}
                 </div>
             </div>
 
@@ -432,40 +478,39 @@ const Screener: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Change</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Verdict / Setup</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action / Details</th>
+                                    <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
+                                        Ticker <SortIcon colKey="Ticker" />
+                                    </th>
+                                    <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
+                                        Price <SortIcon colKey="Price" />
+                                    </th>
+                                    <th onClick={() => handleSort('Change')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
+                                        Change <SortIcon colKey="Change" />
+                                    </th>
+                                    <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
+                                        Verdict / Setup <SortIcon colKey="Setup" />
+                                    </th>
+                                    <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
+                                        Action / Details <SortIcon colKey="Action" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                {results.map((r, i) => {
+                                {sortedResults.map((r, i) => {
                                     const verdict = getVerdict(r);
 
                                     // Dynamic details based on strategy
                                     let details = '';
                                     if (selectedStrategy === 'quantum') details = `H: ${r.hurst?.toFixed(2)} | E: ${r.entropy?.toFixed(2)}`;
                                     else if (selectedStrategy === 'bull_put') details = `Credit: ${r.credit} | ROI: ${r.roi_pct}%`;
-                                    // 5. FIX DETAIL MAPPING FOR GRANDMASTER
-                                    // --- GRANDMASTER LOGIC START ---
+
+                                    // --- GRANDMASTER LOGIC UPDATED ---
                                     else if (selectedStrategy === 'grandmaster') {
-                                        const days = r.days_since_breakout || 0;
-                                        const date = r.breakout_date || 'N/A';
-
-                                        // Stale Trade Warning (Breakout > 20 days ago)
-                                        if (days > 20 && days < 900) {
-                                            details = `⚠️ STALE: Broke out ${days} days ago (${date})`;
-                                        } else if (days < 5) {
-                                            details = `🔥 FRESH: Breakout on ${date}`;
-                                        } else {
-                                            details = `Breakout: ${date} (${days}d ago)`;
-                                        }
-
-                                        // Append RS Rating
-                                        details += ` | RS: ${r.RS_Rating}`;
+                                        // Plain date display as requested
+                                        details = `Breakout: ${r.breakout_date || 'N/A'}`;
+                                        if (r.RS_Rating) details += ` | RS: ${r.RS_Rating}`;
                                     }
-                                    // --- GRANDMASTER LOGIC END ---
+
                                     else if (selectedStrategy === 'hybrid') details = `Score: ${r.score} | Cycle: ${r.cycle}`;
                                     else if (selectedStrategy === 'fourier') details = `Phase: ${r.cycle_phase} | Str: ${r.cycle_strength}`;
                                     else if (selectedStrategy === 'fortress') details = `Strike: ${r.sell_strike} | Saf: ${r.safety_mult}`;
@@ -487,7 +532,9 @@ const Screener: React.FC = () => {
                                     return (
                                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                             <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100">{r.Ticker || r.ticker}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, getCurrencySymbol(r.Ticker || r.ticker))}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">
+                                                {formatCurrency(r.Price || r.price, getCurrencySymbol(r.Ticker || r.ticker))}
+                                            </td>
                                             <td className={`px-6 py-4 text-right font-bold font-mono ${(r.Change || r.pct_change_1d) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                                 {(r.Change || r.pct_change_1d || 0) > 0 ? '+' : ''}{Number(r.Change || r.pct_change_1d || 0).toFixed(2)}%
                                             </td>
@@ -513,7 +560,7 @@ const Screener: React.FC = () => {
 
             {/* LEGEND */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {currentStrategy.legend.map((l, i) => (
+                {STRATEGIES[selectedStrategy].legend.map((l, i) => (
                     <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-2">{l.title}</h3>
                         <p className="text-sm text-gray-500 mb-4">{l.desc}</p>
