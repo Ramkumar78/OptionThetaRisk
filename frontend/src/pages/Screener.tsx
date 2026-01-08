@@ -448,7 +448,24 @@ const Screener: React.FC = () => {
                                     if (selectedStrategy === 'quantum') details = `H: ${r.hurst?.toFixed(2)} | E: ${r.entropy?.toFixed(2)}`;
                                     else if (selectedStrategy === 'bull_put') details = `Credit: ${r.credit} | ROI: ${r.roi_pct}%`;
                                     // 5. FIX DETAIL MAPPING FOR GRANDMASTER
-                                    else if (selectedStrategy === 'grandmaster') details = `Score: ${r.Score} | RS: ${r.RS_Rating}`;
+                                    // --- GRANDMASTER LOGIC START ---
+                                    else if (selectedStrategy === 'grandmaster') {
+                                        const days = r.days_since_breakout || 0;
+                                        const date = r.breakout_date || 'N/A';
+
+                                        // Stale Trade Warning (Breakout > 20 days ago)
+                                        if (days > 20 && days < 900) {
+                                            details = `⚠️ STALE: Broke out ${days} days ago (${date})`;
+                                        } else if (days < 5) {
+                                            details = `🔥 FRESH: Breakout on ${date}`;
+                                        } else {
+                                            details = `Breakout: ${date} (${days}d ago)`;
+                                        }
+
+                                        // Append RS Rating
+                                        details += ` | RS: ${r.RS_Rating}`;
+                                    }
+                                    // --- GRANDMASTER LOGIC END ---
                                     else if (selectedStrategy === 'hybrid') details = `Score: ${r.score} | Cycle: ${r.cycle}`;
                                     else if (selectedStrategy === 'fourier') details = `Phase: ${r.cycle_phase} | Str: ${r.cycle_strength}`;
                                     else if (selectedStrategy === 'fortress') details = `Strike: ${r.sell_strike} | Saf: ${r.safety_mult}`;
