@@ -1,7 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { adaptBacktestToResults } from '../utils/adapters';
-import { importTradesToJournal } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,9 +15,9 @@ import {
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
-import clsx from 'clsx';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
+// REGISTER CHARTS (Critical to prevent blank screen)
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -34,339 +32,237 @@ ChartJS.register(
 );
 
 interface ResultsProps {
-    directData?: any;
+  directData?: any;
 }
 
 const Results: React.FC<ResultsProps> = ({ directData }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  let rawResults = directData || location.state?.results;
+  const [data, setData] = useState<any>(null);
 
-  // FIX: Check if we have 'log' (Simple Format) but missing 'strategy_metrics' (Complex Format)
-  // If so, adapt it on the fly.
-  if (rawResults && rawResults.log && !rawResults.strategy_metrics) {
-      rawResults = adaptBacktestToResults(rawResults);
-  }
+  useEffect(() => {
+    let rawData = directData || location.state?.results;
 
-  const results = rawResults;
-  const isDark = document.documentElement.classList.contains('dark'); // Initial check, might need context for reactivity
-  const [importing, setImporting] = React.useState(false);
+    if (!rawData) {
+      return; // Data not ready yet
+    }
 
-  const handleImportToJournal = async () => {
-      if (!results || !results.strategy_groups) return;
-      if (!confirm("Import all analyzed closed trades into your Journal? This will create new entries.")) return;
+    // --- AUTO-ADAPTER: Fix Simple JSON to Complex Format ---
+    // If we have 'log' but NO 'strategy_metrics', it's the Simple Backtest format.
+    if (rawData.log && !rawData.strategy_metrics) {
+      console.log("Adapting Simple Backtest Data...");
 
-      setImporting(true);
-      try {
-          const res = await importTradesToJournal(results.strategy_groups);
-          if (res.success) {
-              alert(`Successfully imported ${res.count} trades into Journal!`);
-              navigate('/journal');
-          } else {
-              alert(`Error importing trades: ${res.error}`);
-          }
-      } catch (e) {
-          alert("Failed to import trades.");
-      } finally {
-          setImporting(false);
-      }
-  };
+      // 1. Calculate Equity Curve
+      const curve = [];
+      // Add start point
+      curve.push({ x: rawData.start_date, y: 10000 }); // Assume 10k start
 
-  if (!results) {
+      rawData.log.forEach((trade: any) => {
+        if (trade.type === 'SELL' && trade.equity) {
+          curve.push({ x: trade.date, y: trade.equity });
+        }
+      });
+
+      // 2. Calculate Monthly Income (Simple approximation)
+      const incomeMap: Record<string, number> = {};
+      let prevEquity = 10000;
+      rawData.log.forEach((trade: any) => {
+        if (trade.type === 'SELL' && trade.equity) {
+           const dateObj = new Date(trade.date);
+           const monthKey = dateObj.toLocaleString('default', { month: 'short', year: 'numeric' });
+           const pnl = trade.equity - prevEquity;
+           incomeMap[monthKey] = (incomeMap[monthKey] || 0) + pnl;
+           prevEquity = trade.equity;
+        }
+      });
+      const monthlyIncome = Object.keys(incomeMap).map(m => ({ month: m, income: incomeMap[m] }));
+
+      // 3. Construct Metrics
+      const winRateStr = String(rawData.win_rate || "0").replace('%', '');
+
+      rawData = {
+        ...rawData,
+        verdict: rawData.strategy_return > 0 ? "PROFITABLE" : "NEEDS WORK",
+        verdict_color: rawData.strategy_return > 0 ? "green" : "red",
+        verdict_details: `Return: ${rawData.strategy_return}% | Trades: ${rawData.trades}`,
+        date_window: { start: rawData.start_date, end: rawData.end_date },
+        style: rawData.strategy,
+
+        strategy_metrics: {
+          total_pnl: rawData.final_equity - 10000,
+          win_rate: parseFloat(winRateStr) / 100,
+          profit_factor: rawData.profit_factor || 0,
+          drawdown: 0, // Not calculated in simple mode
+          sharpe: 0    // Not calculated in simple mode
+        },
+        portfolio_curve: curve,
+        monthly_income: monthlyIncome,
+        strategy_groups: [{
+          strategy: rawData.strategy,
+          legs_desc: rawData.ticker,
+          symbol: rawData.ticker,
+          pnl: rawData.final_equity - 10000
+        }]
+      };
+    }
+    // -------------------------------------------------------
+
+    setData(rawData);
+  }, [directData, location.state]);
+
+  if (!data) {
     return (
-      <div className="text-center py-20">
-        <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-300">No results to display.</h2>
-        <p className="text-gray-500">Please run an audit first.</p>
+      <div className="p-8 text-center text-gray-500">
+        <p>No results found. Run a backtest first.</p>
+        <button onClick={() => navigate('/screener')} className="mt-4 text-blue-600 font-bold hover:underline">
+          Go to Screener
+        </button>
       </div>
     );
   }
 
-  const {
-    verdict,
-    verdict_color,
-    verdict_details,
-    date_window,
-    style,
-    strategy_metrics,
-    buying_power_utilized_percent,
-    portfolio_curve,
-    monthly_income,
-    open_positions,
-    strategy_groups,
-    token
-  } = results;
+  // --- HELPER ---
+  const currencySymbol = getCurrencySymbol(data.ticker || (data.strategy_groups && data.strategy_groups[0]?.symbol) || '');
 
-  // Chart Config
-  const textColor = isDark ? '#94a3b8' : '#64748b';
-  const gridColor = isDark ? '#334155' : '#e2e8f0';
-
-  const portfolioChartData = {
+  // --- CHART CONFIGURATION ---
+  const curveChartData = {
     datasets: [{
-      label: 'Cumulative Net PnL',
-      data: portfolio_curve, // Assuming [{x: date, y: value}] format from backend
-      borderColor: '#4f46e5',
-      backgroundColor: 'rgba(79, 70, 229, 0.05)',
-      borderWidth: 3,
+      label: 'Portfolio Equity',
+      data: data.portfolio_curve || [],
+      borderColor: '#2563eb',
+      backgroundColor: 'rgba(37, 99, 235, 0.1)',
       fill: true,
       tension: 0.2,
-      pointRadius: 0,
-      pointHoverRadius: 6,
-      pointBackgroundColor: '#4f46e5'
+      pointRadius: 2,
     }]
   };
 
   const incomeChartData = {
-    labels: monthly_income.map((d: any) => d.month),
+    labels: data.monthly_income?.map((m: any) => m.month) || [],
     datasets: [{
-      label: 'Net Income',
-      data: monthly_income.map((d: any) => d.income),
-      backgroundColor: monthly_income.map((d: any) => d.income >= 0 ? '#10b981' : '#f43f5e'),
+      label: 'Monthly PnL',
+      data: data.monthly_income?.map((m: any) => m.income) || [],
+      backgroundColor: (context: any) => {
+        const val = context.raw;
+        return val >= 0 ? '#16a34a' : '#dc2626';
+      },
       borderRadius: 4,
     }]
   };
 
-  const chartOptions: any = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: 'nearest', axis: 'x', intersect: false },
-    scales: {
-      x: {
-        grid: { color: gridColor, drawBorder: false },
-        ticks: { color: textColor }
-      },
-      y: {
-        grid: { color: gridColor, drawBorder: false },
-        ticks: { color: textColor, callback: (val: number) => formatCurrency(val, '$') } // Default to $ for charts for now as mixed currency charts are complex
-      }
-    },
-    plugins: {
-      legend: { display: false }
-    }
-  };
-
-  const portfolioOptions = {
-      ...chartOptions,
-      scales: {
-          ...chartOptions.scales,
-          x: {
-              ...chartOptions.scales.x,
-              type: 'time',
-              time: { unit: 'day', displayFormats: { day: 'MMM d' } }
-          }
-      },
-      plugins: {
-          ...chartOptions.plugins,
-          tooltip: {
-              callbacks: {
-                  afterBody: (context: any) => {
-                      const dataPoint = context[0]?.raw;
-                      if (dataPoint && dataPoint.trades && dataPoint.trades.length > 0) {
-                          return ['', ...dataPoint.trades];
-                      }
-                      return [];
-                  }
-              }
-          }
-      }
-  };
-
   return (
-    <div className="space-y-8 animate-fade-in">
-       {/* Verdict Card */}
-       <div className="relative overflow-hidden rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 md:p-8">
-           <div className={clsx(
-             "absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 rounded-full blur-3xl opacity-20",
-             verdict_color === 'red' ? "bg-red-500" : verdict_color === 'yellow' ? "bg-yellow-500" : "bg-emerald-500"
-           )}></div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div>
+          <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700 mb-2 flex items-center gap-2">
+            <i className="bi bi-arrow-left"></i> Back
+          </button>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white">
+            AUDIT <span className="text-blue-600">RESULTS</span>
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            {data.date_window?.start} to {data.date_window?.end} • {data.style}
+          </p>
+        </div>
 
-           <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div>
-                 <p className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Strategy Audit Verdict</p>
-                 <h2 id="verdict-text" className={clsx(
-                   "text-4xl md:text-5xl font-extrabold tracking-tight",
-                   verdict_color === 'red' ? "text-red-600 dark:text-red-500" : verdict_color === 'yellow' ? "text-yellow-600 dark:text-yellow-500" : "text-emerald-600 dark:text-emerald-500"
-                 )}>{verdict}</h2>
-                 {verdict_details && (
-                   <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
-                      ℹ️ {verdict_details}
-                   </div>
-                 )}
-              </div>
+        <div className={`px-6 py-3 rounded-xl shadow-sm border-l-4 ${data.verdict_color === 'green' ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`}>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Verdict</p>
+          <p className={`text-2xl font-black ${data.verdict_color === 'green' ? 'text-green-700' : 'text-red-700'}`}>
+            {data.verdict}
+          </p>
+          <p className="text-sm text-gray-600 mt-1">{data.verdict_details}</p>
+        </div>
+      </div>
 
-              <div className="flex flex-col items-end">
-                 {date_window && (
-                    <div className="text-right">
-                        <span className="block text-xs text-gray-400 uppercase">Analysis Period</span>
-                        <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{date_window.start} — {date_window.end}</span>
-                    </div>
-                 )}
-                 <div className="mt-4">
-                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-300 capitalize">
-                        {style || 'Standard'} Profile
-                     </span>
-                 </div>
-              </div>
-           </div>
-       </div>
+      {/* METRICS GRID */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <p className="text-xs font-bold text-gray-500 uppercase">Total PnL</p>
+          <p className={`text-2xl font-mono font-bold ${data.strategy_metrics?.total_pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCurrency(data.strategy_metrics?.total_pnl || 0, currencySymbol)}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <p className="text-xs font-bold text-gray-500 uppercase">Win Rate</p>
+          <p className="text-2xl font-mono font-bold text-gray-900 dark:text-white">
+            {((data.strategy_metrics?.win_rate || 0) * 100).toFixed(1)}%
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <p className="text-xs font-bold text-gray-500 uppercase">Trades</p>
+          <p className="text-2xl font-mono font-bold text-gray-900 dark:text-white">
+            {data.trades || data.total_trades || 0}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <p className="text-xs font-bold text-gray-500 uppercase">Profit Factor</p>
+          <p className="text-2xl font-mono font-bold text-gray-900 dark:text-white">
+            {data.strategy_metrics?.profit_factor?.toFixed(2) || 'N/A'}
+          </p>
+        </div>
+      </div>
 
-       {/* Bento Grid Metrics */}
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-           <MetricCard title="Net PnL" value={strategy_metrics.total_pnl} isCurrency subValue={`Fees: $${Math.round(strategy_metrics.total_fees)}`} color={strategy_metrics.total_pnl < 0 ? 'red' : 'emerald'} icon="💰" />
-           <MetricCard title="Win Rate" value={strategy_metrics.win_rate * 100} suffix="%" subValue={<ProgressBar value={strategy_metrics.win_rate * 100} />} color="blue" icon="🎯" />
-           <MetricCard title="Expectancy / Trade" value={strategy_metrics.expectancy} isCurrency color={strategy_metrics.expectancy < 0 ? 'red' : 'emerald'} icon="📈" />
-           <MetricCard title="BP Usage" value={buying_power_utilized_percent || 0} suffix="%" subValue="Target: < 50%" color={buying_power_utilized_percent > 75 ? 'red' : 'gray'} icon="🔋" />
-       </div>
-
-       {/* Charts */}
-       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
-               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Equity Curve</h3>
-               <div className="h-64 w-full">
-                  <Line data={portfolioChartData} options={portfolioOptions} />
-               </div>
+      {/* CHARTS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 h-[400px]">
+          <h3 className="font-bold text-gray-800 dark:text-white mb-4">Equity Curve</h3>
+          <div className="h-[320px] w-full">
+             <Line data={curveChartData} options={{ maintainAspectRatio: false, responsive: true, scales: { x: { type: 'time', time: { unit: 'month' } } } }} />
           </div>
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800">
-               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Monthly Income</h3>
-               <div className="h-64 w-full">
-                  <Bar data={incomeChartData} options={chartOptions} />
-               </div>
-          </div>
-       </div>
+        </div>
 
-       {/* Open Positions */}
-       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-              <h3 className="font-bold text-gray-900 dark:text-white">Active Positions</h3>
-              <span className="bg-primary-100 text-primary-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-primary-900 dark:text-primary-300">{open_positions.length} Open</span>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 h-[400px]">
+          <h3 className="font-bold text-gray-800 dark:text-white mb-4">Monthly Income</h3>
+          <div className="h-[320px] w-full">
+            <Bar data={incomeChartData} options={{ maintainAspectRatio: false, responsive: true }} />
           </div>
-          <div className="overflow-x-auto">
-             <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                 <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                     <tr>
-                         <th className="px-6 py-3">Symbol</th>
-                         <th className="px-6 py-3 text-right">Price</th>
-                         <th className="px-6 py-3 text-center">Expiry</th>
-                         <th className="px-6 py-3 text-right">Qty</th>
-                         <th className="px-6 py-3 text-right">DTE</th>
-                         <th className="px-6 py-3 text-center">Status</th>
-                     </tr>
-                 </thead>
-                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                     {open_positions.length === 0 ? (
-                         <tr><td colSpan={6} className="px-6 py-8 text-center italic">No active positions.</td></tr>
-                     ) : (
-                         open_positions.map((p: any, idx: number) => {
-                             const currency = getCurrencySymbol(p.symbol);
-                             return (
-                                 <tr key={idx} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                     <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{p.symbol}</td>
-                                     <td className="px-6 py-4 text-right">{formatCurrency(p.current_price, currency)}</td>
-                                     <td className="px-6 py-4 text-center">{p.expiry}</td>
-                                     <td className={clsx("px-6 py-4 text-right font-mono", p.qty_open < 0 ? "text-red-500" : "text-emerald-500")}>{Math.round(p.qty_open)}</td>
-                                     <td className="px-6 py-4 text-right">
-                                        <span className={clsx(p.dte < 5 && "text-red-500 font-bold")}>{p.dte !== null ? `${p.dte}d` : '-'}</span>
-                                     </td>
-                                     <td className="px-6 py-4 text-center">
-                                        {p.risk_alert ? (
-                                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">{p.risk_alert}</span>
-                                        ) : (
-                                            <span className="text-emerald-600 dark:text-emerald-400 text-xs">OK</span>
-                                        )}
-                                     </td>
-                                 </tr>
-                             );
-                         })
-                     )}
-                 </tbody>
-             </table>
-          </div>
-       </div>
+        </div>
+      </div>
 
-       {/* Strategy Performance */}
-       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-               <h3 className="font-bold text-gray-900 dark:text-white">Strategy Performance</h3>
+      {/* TRADE LOG */}
+      {data.log && data.log.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-bold text-gray-800 dark:text-white">Trade Log</h3>
           </div>
           <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                  <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                      <tr>
-                          <th className="px-6 py-3">Strategy</th>
-                          <th className="px-6 py-3">Symbol</th>
-                          <th className="px-6 py-3 text-right">Net PnL</th>
-                          <th className="px-6 py-3 text-right">Daily PnL</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      {strategy_groups.map((s: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b dark:border-gray-700">
-                              <td className="px-6 py-4">
-                                  <div className="font-bold text-gray-900 dark:text-white">{s.strategy}</div>
-                                  <div className="text-xs text-gray-400 mt-1">{s.legs_desc}</div>
-                              </td>
-                              <td className="px-6 py-4">
-                                  <span className="bg-gray-100 text-gray-800 text-xs font-semibold px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">{s.symbol}</span>
-                              </td>
-                              <td className={clsx("px-6 py-4 text-right font-bold", s.pnl < 0 ? "text-red-500" : "text-emerald-500")}>
-                                  {formatCurrency(s.pnl, '$')}
-                              </td>
-                              <td className="px-6 py-4 text-right font-mono">
-                                  {formatCurrency(s.average_daily_pnl, '$')}
-                              </td>
-                          </tr>
-                      ))}
-                  </tbody>
-              </table>
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 uppercase text-xs">
+                <tr>
+                  <th className="px-6 py-3">Date</th>
+                  <th className="px-6 py-3">Type</th>
+                  <th className="px-6 py-3 text-right">Price</th>
+                  <th className="px-6 py-3">Reason / Details</th>
+                  <th className="px-6 py-3 text-right">Equity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {data.log.map((trade: any, i: number) => (
+                  <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <td className="px-6 py-3 font-mono">{trade.date}</td>
+                    <td className="px-6 py-3">
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${
+                        trade.type === 'BUY' ? 'bg-blue-100 text-blue-800' :
+                        trade.type === 'SELL' ? 'bg-gray-100 text-gray-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {trade.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3 text-right font-mono">{formatCurrency(trade.price, currencySymbol)}</td>
+                    <td className="px-6 py-3 text-gray-600">{trade.reason || trade.stop ? `Stop: ${trade.stop}` : '-'}</td>
+                    <td className="px-6 py-3 text-right font-mono font-bold">
+                      {trade.equity ? formatCurrency(trade.equity, currencySymbol) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-       </div>
-
-       <div className="flex flex-col md:flex-row justify-center items-center gap-4 mt-8 pb-8">
-           {token && (
-                <a href={`/download/${token}/report.xlsx`} className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all hover:-translate-y-0.5 shadow-lg shadow-primary-500/30">
-                    <i className="bi bi-download mr-2"></i> Download Excel Report
-                </a>
-           )}
-
-           {strategy_groups && strategy_groups.length > 0 && (
-                <button
-                    onClick={handleImportToJournal}
-                    disabled={importing}
-                    className="inline-flex items-center px-6 py-3 border border-gray-300 dark:border-gray-600 text-base font-medium rounded-xl shadow-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all hover:-translate-y-0.5"
-                >
-                    {importing ? "Importing..." : (
-                        <>
-                            <span className="mr-2">📓</span> Add Closed Trades to Journal
-                        </>
-                    )}
-                </button>
-           )}
-       </div>
-
+        </div>
+      )}
     </div>
   );
 };
-
-const MetricCard = ({ title, value, isCurrency, suffix, subValue, color, icon }: any) => (
-    <div className="relative group bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-lg transition-all">
-          <div className="flex justify-between items-start">
-              <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-                  <h3 className={clsx("text-3xl font-bold mt-2 tracking-tight", color === 'red' ? "text-red-500" : color === 'emerald' ? "text-emerald-500" : "text-gray-900 dark:text-white")}>
-                    {isCurrency ? '$' : ''}{typeof value === 'number' ? value.toFixed(isCurrency ? 2 : 1) : value}{suffix}
-                  </h3>
-              </div>
-              <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:text-primary-500 transition-colors text-xl">
-                  {icon}
-              </div>
-          </div>
-          <div className="mt-4 text-xs text-gray-400">{subValue}</div>
-    </div>
-);
-
-const ProgressBar = ({ value }: { value: number }) => (
-    <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mt-1">
-        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(value, 100)}%` }}></div>
-    </div>
-);
 
 export default Results;
