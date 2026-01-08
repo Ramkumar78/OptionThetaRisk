@@ -25,6 +25,10 @@ from option_auditor.common.constants import SECTOR_NAMES, SECTOR_COMPONENTS, TIC
 from option_auditor.common.data_utils import prepare_data_for_ticker as _prepare_data_for_ticker
 from option_auditor.common.data_utils import fetch_data_with_retry, fetch_batch_data_safe, get_cached_market_data, _calculate_trend_breakout_date
 
+# Import ticker lists from dedicated files
+from option_auditor.uk_stock_data import get_uk_tickers, get_uk_euro_tickers
+from option_auditor.india_stock_data import get_indian_tickers
+
 try:
     from option_auditor.sp500_data import get_sp500_tickers
 except ImportError:
@@ -56,7 +60,6 @@ def _resolve_region_tickers(region: str) -> list:
         return get_uk_euro_tickers()
     elif region == "uk":
         try:
-            from option_auditor.uk_stock_data import get_uk_tickers
             return get_uk_tickers()
         except ImportError:
             # Fallback to UK/Euro or empty
@@ -512,31 +515,6 @@ def screen_sectors(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0,
 
     return results
 
-UK_EURO_TICKERS = [
-    # Top 50 FTSE (UK)
-    "AZN.L", "SHEL.L", "HSBA.L", "ULVR.L", "BP.L", "RIO.L", "REL.L", "GSK.L", "DGE.L", "LSEG.L", "BATS.L", "GLEN.L", "BA.L", "CNA.L", "NG.L", "LLOY.L", "RR.L", "BARC.L", "CPG.L", "NWG.L", "RKT.L", "VOD.L", "AAL.L", "SGE.L", "HLN.L", "EXR.L", "TSCO.L", "SSE.L", "MNG.L", "ADM.L", "III.L", "ANTO.L", "SPX.L", "STAN.L", "IMB.L", "WTB.L", "SVT.L", "AUTO.L", "SN.L", "CRDA.L", "WPP.L", "SMIN.L", "DCC.L", "AV.L", "LGEN.L", "KGF.L", "SBRY.L", "MKS.L", "LAND.L", "PSON.L",
-    # Liquid UK Mid-Caps
-    "JD.L", "IAG.L", "EZJ.L", "AML.L", "IDS.L", "DLG.L", "ITM.L", "QQ.L", "GRG.L", "VTY.L", "BTRW.L", "BOO.L", "ASOS.L", "HBR.L", "ENOG.L", "TLW.L", "CWR.L", "GNC.L", "THG.L", "CURY.L", "DOM.L", "SFOR.L", "PETS.L", "MRO.L", "INVP.L", "OCDO.L", "IGG.L", "CMC.L", "PLUS.L", "EMG.L", "HWDN.L", "COST.L", "BEZ.L", "SGRO.L", "PSN.L", "TW.L", "BYG.L", "SAFE.L", "UTG.L", "BBOX.L", "MANG.L", "TPK.L", "HIK.L", "SRO.L", "FRES.L", "KAP.L", "WKP.L", "JMAT.L", "RS1.L", "PNN.L",
-    # Top 50 Euro
-    "ASML.AS", "MC.PA", "SAP.DE", "RMS.PA", "TTE.PA", "SIE.DE", "CDI.PA", "AIR.PA", "SAN.MC", "IBE.MC", "OR.PA", "ALV.DE", "SU.PA", "EL.PA", "AI.PA", "BNP.PA", "DTE.DE", "ENEL.MI", "DG.PA", "BBVA.MC", "CS.PA", "BAS.DE", "ADS.DE", "MUV2.DE", "IFX.DE", "SAF.PA", "ENI.MI", "INGA.AS", "ISP.MI", "KER.PA", "STLAP.PA", "AD.AS", "VOW3.DE", "BMW.DE", "MBG.DE", "BAYN.DE", "DB1.DE", "BN.PA", "RI.PA", "CRH.L", "G.MI", "PHIA.AS", "HEIA.AS", "NOKIA.HE", "VIV.PA", "ORA.PA", "KNEBV.HE", "UMG.AS", "HO.PA", "ABI.BR"
-]
-
-def get_uk_euro_tickers():
-    """Returns normalized UK/Euro tickers list."""
-    return list(set(UK_EURO_TICKERS))
-
-INDIAN_TICKERS = [
-    # Nifty 50
-    "RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK", "INFY", "HINDUNILVR", "SBIN", "ITC", "LTIM", "LT", "HCLTECH", "BAJFINANCE", "AXISBANK", "MARUTI", "ULTRACEMCO", "SUNPHARMA", "M&M", "TITAN", "KOTAKBANK", "ADANIENT", "TATAMOTORS", "NTPC", "TATASTEEL", "POWERGRID", "ASIANPAINT", "JSWSTEEL", "BAJAJFINSV", "NESTLEIND", "GRASIM", "ONGC", "TECHM", "HINDALCO", "ADANIPORTS", "CIPLA", "WIPRO", "SBILIFE", "DRREDDY", "BRITANNIA", "TATACONSUM", "COALINDIA", "APOLLOHOSP", "EICHERMOT", "INDUSINDBK", "DIVISLAB", "BAJAJ-AUTO", "HDFCLIFE", "HEROMOTOCO", "BEL", "SHRIRAMFIN",
-    # Nifty Next 50
-    "LICI", "HAL", "ADANIPOWER", "DMART", "VBL", "JIOFIN", "SIEMENS", "TRENT", "ZOMATO", "ADANIGREEN", "IOC", "DLF", "VEDL", "BANKBARODA", "GAIL", "AMBUJACEM", "CHOLAFIN", "HAVELLS", "ABB", "PIDILITIND", "GODREJCP", "DABUR", "SHREECEM", "PNB", "BPCL", "SBICARD", "SRF", "MOTHERSON", "ICICIPRULI", "MARICO", "BERGEPAINT", "ICICIGI", "TVSMOTOR", "NAUKRI", "LODHA", "BOSCHLTD", "INDIGO", "CANBK", "UNITDSPR", "TORNTPHARM", "PIIND", "UPL", "JINDALSTEL", "ALKEM", "ZYDUSLIFE", "COLPAL", "BAJAJHLDNG", "TATAPOWER", "IRCTC", "MUTHOOTFIN"
-]
-
-def get_indian_tickers():
-    """Returns normalized Indian tickers list."""
-    # Append .NS for NSE
-    return [t + ".NS" for t in INDIAN_TICKERS]
-
 def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for Turtle Trading Setups (20-Day Breakouts).
@@ -718,7 +696,9 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
                     "52_week_high": round(high_52wk, 2) if high_52wk else None,
                     "52_week_low": round(low_52wk, 2) if low_52wk else None,
                     "sector_change": pct_change_1d, # Returning stocks own change as placeholder for now as sector mapping requires fetching sector ticker
-                    "trailing_exit_10d": round(prev_low_10, 2)
+                    "trailing_exit_10d": round(prev_low_10, 2),
+                    "breakout_date": breakout_date,
+                    "atr_value": round(current_atr, 2)
                 })
 
         except Exception as e:
@@ -1669,8 +1649,10 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         if region == "uk_euro":
             ticker_list = get_uk_euro_tickers()
         elif region == "uk":
-            from option_auditor.uk_stock_data import get_uk_tickers
-            ticker_list = get_uk_tickers()
+            try:
+                ticker_list = get_uk_tickers()
+            except ImportError:
+                 ticker_list = get_uk_euro_tickers()
         elif region == "india":
             ticker_list = get_indian_tickers()
         elif region == "sp500":
@@ -2061,7 +2043,8 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
                 "method": "Hilbert (Non-Stationary)",
                 "cycle_period": f"{period} days", # Legacy compatibility for tests
                 "breakout_date": breakout_date,
-                "atr_value": round(current_atr, 2)
+                "atr_value": round(current_atr, 2),
+                "atr": round(current_atr, 2)
             })
 
         except Exception:
@@ -2480,7 +2463,8 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
                 "target": round(target, 2),
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "atr": round(current_atr, 2)
             })
 
         except Exception: continue
@@ -2656,7 +2640,8 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
                 "dist_pct": f"{((curr_close - short_strike)/curr_close)*100:.1f}%",
                 "score": round(score, 1),
                 "trend": trend_status,
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "atr": round(atr, 2)
             })
 
         except Exception: continue
@@ -2856,7 +2841,8 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
                 "stop_loss": sanitize(round(stop_loss, 2)), # Lowercase alias
                 "target": sanitize(round(target_price, 2)), # Lowercase alias
                 "volatility_pct": sanitize(round((current_atr/curr_price)*100, 2)),
-                "breakout_date": breakout_date
+                "breakout_date": breakout_date,
+                "atr": sanitize(round(current_atr, 2))
             }
 
         except Exception as e:
