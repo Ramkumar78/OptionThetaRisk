@@ -28,6 +28,7 @@ from option_auditor.common.data_utils import fetch_data_with_retry, fetch_batch_
 # Import ticker lists from dedicated files
 from option_auditor.uk_stock_data import get_uk_tickers, get_uk_euro_tickers
 from option_auditor.india_stock_data import get_indian_tickers
+from option_auditor.us_stock_data import get_united_states_stocks
 
 try:
     from option_auditor.sp500_data import get_sp500_tickers
@@ -64,6 +65,8 @@ def _resolve_region_tickers(region: str) -> list:
         except ImportError:
             # Fallback to UK/Euro or empty
             return get_uk_euro_tickers()
+    elif region == "united_states":
+        return get_united_states_stocks()
     elif region == "india":
         return get_indian_tickers()
     elif region == "sp500":
@@ -1655,6 +1658,8 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                  ticker_list = get_uk_euro_tickers()
         elif region == "india":
             ticker_list = get_indian_tickers()
+        elif region == "united_states":
+            ticker_list = get_united_states_stocks()
         elif region == "sp500":
              sp500 = _get_filtered_sp500(check_trend=True)
              watch_list = SECTOR_COMPONENTS.get("WATCH", [])

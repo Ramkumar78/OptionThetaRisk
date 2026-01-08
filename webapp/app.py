@@ -18,6 +18,7 @@ from flask import Flask, request, redirect, url_for, flash, send_file, session, 
 from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
+from option_auditor.us_stock_data import get_united_states_stocks
 from option_auditor.master_screener import screen_master_convergence
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
@@ -104,6 +105,8 @@ def get_tickers_for_region(region):
     elif region == 'uk_euro':
         # Combine UK with some major Euro tickers if available, for now just UK + placeholders
         return list(set(UK_TICKERS))
+    elif region == 'united_states':
+        return get_united_states_stocks()
     else: # Default 'us'
         return list(set(SP500_TICKERS))
 
@@ -546,6 +549,8 @@ def create_app(testing: bool = False) -> Flask:
                  ticker_list = screener.get_uk_euro_tickers()
             elif region == "uk":
                  ticker_list = get_uk_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
             elif region == "sp500":
                  filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                  watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -578,6 +583,8 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -610,6 +617,8 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -642,6 +651,8 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
 
@@ -672,6 +683,8 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -742,6 +755,8 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -773,6 +788,8 @@ def create_app(testing: bool = False) -> Flask:
                 ticker_list = get_uk_tickers()
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
