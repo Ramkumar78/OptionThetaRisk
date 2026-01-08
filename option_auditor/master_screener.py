@@ -1,281 +1,284 @@
-import sys
-import datetime
-import logging
-import warnings
-from typing import List, Dict, Optional
-
-# --- 1. Numerical & Data Computing ---
-import numpy as np
 import pandas as pd
-import scipy.stats as stats
-import statsmodels.api as sm
+import pandas_ta as ta
+import numpy as np
+import yfinance as yf
+import logging
+import traceback
+from datetime import datetime, timedelta
 
-# --- 2. Visualization ---
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# --- 3. Machine Learning ---
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-# try:
-#     from pycaret.classification import load_model, predict_model
-# except ImportError:
-#     pass  # Handle if PyCaret is too heavy to load initially
-
-# --- 4. Finance & Risk Ecosystem ---
-try:
-    from openbb import obb  # OpenBB SDK for data
-except ImportError:
-    print("OpenBB SDK not found. Using mock data.")
-    obb = None
-
-try:
-    import riskfolio as rp  # For portfolio optimization/risk
-except ImportError:
-    pass
-
-# try:
-#     import alphalens
-#     import pyfolio
-#     import zipline
-# except ImportError:
-#     pass
-
-# --- 5. Execution/Live Data ---
-try:
-    from ib_insync import IB, Stock, util
-except ImportError:
-    pass
-
-# Setup Logging
+# Setup Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("FortressScreener")
 
-class QuantMasterScreener:
-    """
-    Advanced Screener integrating OpenBB, ML, and Risk Engines.
-    """
+# --- USER CONFIGURATION ---
+ISA_ACCOUNT_GBP = 100000.0
+OPTIONS_ACCOUNT_USD = 9500.0
+RISK_PER_TRADE_PCT = 0.0125  # 1.25% Risk (Institutional Standard)
 
-    def __init__(self, use_ibkr=False):
-        self.results = pd.DataFrame()
-        self.use_ibkr = use_ibkr
+# HARDENED GATES
+MIN_PRICE_USD = 10.0
+MIN_PRICE_GBP = 100.0 # Pence
+MIN_TURNOVER_USD = 20_000_000 # $20M Daily Dollar Volume
+MIN_TURNOVER_GBP = 2_000_000  # £2M Daily Sterling Volume
 
-        # Initialize IBKR if required
-        if self.use_ibkr:
+class FortressScreener:
+    def __init__(self, tickers_us=None, tickers_uk=None):
+        self.tickers_us = list(set([t for t in (tickers_us or []) if t]))
+        self.tickers_uk = list(set([t for t in (tickers_uk or []) if t]))
+        self.all_tickers = self.tickers_us + self.tickers_uk
+
+        # Market State
+        self.regime = "NEUTRAL"
+        self.spy_history = None
+
+    def _fetch_market_regime(self):
+        """
+        Determines if we are in a 'Green Light' or 'Red Light' market.
+        """
+        logger.info("🚦 Checking Market Regime...")
+        try:
+            # Download SPY and VIX
+            data = yf.download(["SPY", "^VIX"], period="1y", progress=False, auto_adjust=True)
+
+            if data.empty:
+                self.regime = "NEUTRAL"
+                return
+
+            # Handle yfinance multi-index columns safely
             try:
-                self.ib = IB()
-                self.ib.connect('127.0.0.1', 7497, clientId=1)
-                logger.info("Connected to IBKR.")
-            except Exception as e:
-                logger.error(f"Could not connect to IBKR: {e}")
-                self.use_ibkr = False
+                spy = data['Close']['SPY'].dropna()
+                vix = data['Close']['^VIX'].dropna()
+            except KeyError:
+                # Fallback if structure is flat (rare but possible)
+                if 'SPY' in data.columns: spy = data['SPY']['Close']
+                else: spy = pd.Series()
+                if '^VIX' in data.columns: vix = data['^VIX']['Close']
+                else: vix = pd.Series()
 
-    def fetch_data_openbb(self, symbol: str, lookback_days: int = 365) -> pd.DataFrame:
-        """
-        Uses OpenBB to fetch robust historical data.
-        """
-        if obb is None:
-            logger.warning("OpenBB SDK not available. Skipping data fetch.")
-            return pd.DataFrame()
+            if spy.empty:
+                self.regime = "NEUTRAL"
+                return
 
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=lookback_days)).strftime('%Y-%m-%d')
-        try:
-            # Using OpenBB v4+ syntax (check documentation for specific version changes)
-            # obb.equity.price.historical returns an OBBject, we need to convert to df
-            # The user code had .to_df(), which works on OBBject
-            df = obb.equity.price.historical(symbol=symbol, start_date=start_date, provider="yfinance").to_df()
-            # Ensure columns are lower case for consistency with analysis logic
-            df.columns = [c.lower() for c in df.columns]
-            return df
-        except Exception as e:
-            logger.error(f"Error fetching data for {symbol}: {e}")
-            return pd.DataFrame()
+            self.spy_history = spy
 
-    def analyze_statistical_features(self, df: pd.DataFrame) -> Dict:
-        """
-        Uses SciPy and Statsmodels for advanced statistical metrics.
-        """
-        if df.empty:
-            return {}
+            curr_spy = float(spy.iloc[-1])
+            sma_200 = float(spy.rolling(200).mean().iloc[-1])
+            curr_vix = float(vix.iloc[-1]) if not vix.empty else 20.0
 
-        # Ensure 'close' exists
-        if 'close' not in df.columns:
-            return {}
-
-        closes = df['close'].values
-        returns = df['close'].pct_change().dropna()
-
-        if len(returns) < 2:
-            return {}
-
-        # 1. Normality Test (SciPy)
-        # null hypothesis: x comes from a normal distribution
-        k2, p_value = stats.normaltest(returns)
-        is_normal = p_value > 0.05
-
-        # 2. Augmented Dickey-Fuller Test for Stationarity (Statsmodels)
-        try:
-            adf_result = sm.tsa.stattools.adfuller(returns)
-            is_stationary = adf_result[1] < 0.05
-        except Exception:
-            is_stationary = False
-
-        # 3. Volatility (Numpy/Pandas)
-        hist_vol = returns.std() * np.sqrt(252)
-
-        return {
-            "is_return_normal": is_normal,
-            "is_stationary": is_stationary,
-            "annualized_volatility": hist_vol,
-            "skewness": stats.skew(returns),
-            "kurtosis": stats.kurtosis(returns)
-        }
-
-    def generate_ml_signal(self, df: pd.DataFrame) -> float:
-        """
-        Uses Scikit-Learn to generate a simple predictive signal (prob of up move).
-        Can be replaced with PyCaret model inference.
-        """
-        if len(df) < 50:
-            return 0.5
-
-        data = df.copy()
-        data['Returns'] = data['close'].pct_change()
-        data['SMA_50'] = data['close'].rolling(50).mean()
-        data['Dist_SMA'] = data['close'] / data['SMA_50'] - 1
-        data['Target'] = (data['Returns'].shift(-1) > 0).astype(int)
-
-        # Features needed for prediction
-        features = ['Dist_SMA', 'volume']
-
-        # Capture the latest available data point (which has no target yet) for prediction
-        # We need to handle potential NaNs in features if window is large, but Dist_SMA uses 50
-        # If last row has NaN features, we can't predict well.
-        if data.iloc[-1][features].isna().any():
-             return 0.5
-
-        last_row_features = data.iloc[[-1]][features]
-
-        # Prepare Training Data: Drop rows with NaN targets (the last row and maybe others)
-        # We also need to drop rows with NaN features from the start
-        train_data = data.dropna(subset=['Target'] + features)
-
-        if train_data.empty or len(train_data) < 10:
-            return 0.5
-
-        X_train = train_data[features]
-        y_train = train_data['Target']
-
-        # Simple random forest train/predict
-        model = RandomForestClassifier(n_estimators=10, max_depth=3, random_state=42)
-        model.fit(X_train, y_train)
-
-        # Predict probability for the LATEST available data (forecasting tomorrow)
-        try:
-            prob_up = model.predict_proba(last_row_features)[0][1]
-        except:
-            prob_up = 0.5
-
-        return prob_up
-
-    def assess_portfolio_risk(self, symbol: str, current_portfolio: List[str]):
-        """
-        Uses Riskfolio-Lib to check if adding this asset reduces or increases portfolio risk.
-        """
-        # Placeholder: In a real scenario, you fetch returns for all tickers in current_portfolio + symbol
-        # data = fetch_combined_data(current_portfolio + [symbol])
-
-        # Example Riskfolio usage (HRP - Hierarchical Risk Parity)
-        # port = rp.Portfolio(returns=data)
-        # w = port.optimization(model='HRP', rm='MV', rf=0.05, linkage='single', leaf_order=True)
-        # return w
-        pass
-
-    def run_screen(self, ticker_list: List[str]):
-        """
-        Master execution loop.
-        """
-        # Note: IBKR execution logic would go here if enabled (self.use_ibkr)
-        # Currently defaults to data analysis via OpenBB only.
-
-        screen_results = []
-
-        for ticker in ticker_list:
-            logger.info(f"Processing {ticker}...")
-
-            # 1. Fetch Data (OpenBB)
-            df = self.fetch_data_openbb(ticker)
-            if df.empty:
-                continue
-
-            # 2. Statistical Analysis (SciPy/Statsmodels)
-            stats_metrics = self.analyze_statistical_features(df)
-
-            # 3. ML Prediction (Sklearn)
-            ml_score = self.generate_ml_signal(df)
-
-            # 4. Filter Logic
-            # Example: We only want stationary returns with > 60% ML probability
-            # Relaxed filter for demo purposes if nothing passes
-            if ml_score > 0.60:
-                result_row = {
-                    "Ticker": ticker,
-                    "Price": df['close'].iloc[-1],
-                    "ML_Prob_Up": ml_score,
-                    **stats_metrics
-                }
-                screen_results.append(result_row)
+            # REGIME LOGIC
+            if curr_spy > sma_200 and curr_vix < 20:
+                self.regime = "🟢 BULLISH (Aggressive)"
+            elif curr_spy > sma_200 and curr_vix >= 20:
+                self.regime = "🟡 VOLATILE UPTREND (Caution)"
             else:
-                 # Optional: log rejected candidates
-                 pass
+                self.regime = "🔴 BEARISH (Cash/Puts Only)"
 
-        self.results = pd.DataFrame(screen_results)
-        return self.results
+            logger.info(f"MARKET REGIME: {self.regime} | SPY: ${curr_spy:.2f} | VIX: {curr_vix:.2f}")
 
-    def visualize_results(self):
-        """
-        Uses Seaborn/Matplotlib to visualize the screened candidates.
-        """
-        if self.results.empty:
-            print("No results to visualize.")
-            return
+        except Exception as e:
+            logger.error(f"Regime fetch failed: {e}")
+            self.regime = "🟡 NEUTRAL (Data Error)"
 
-        plt.figure(figsize=(10, 6))
-        # Ensure columns exist before plotting
-        if "annualized_volatility" in self.results.columns and "ML_Prob_Up" in self.results.columns:
-            sns.scatterplot(
-                data=self.results,
-                x="annualized_volatility",
-                y="ML_Prob_Up",
-                hue="Ticker",
-                s=100
+    def _calculate_rs_score(self, df):
+        """Relative Strength vs SPY (Mansfield)."""
+        try:
+            if self.spy_history is None or self.spy_history.empty: return 0
+
+            stock_cls = df['Close']
+            # Intersect dates
+            common_idx = stock_cls.index.intersection(self.spy_history.index)
+            if len(common_idx) < 63: return 0
+
+            stock_aligned = stock_cls.loc[common_idx]
+            spy_aligned = self.spy_history.loc[common_idx]
+
+            rs_ratio = stock_aligned / spy_aligned
+            if len(rs_ratio) > 63:
+                # 3-Month Slope
+                rs_score = ((rs_ratio.iloc[-1] - rs_ratio.iloc[-63]) / rs_ratio.iloc[-63]) * 100
+                return rs_score
+            return 0
+        except:
+            return 0
+
+    def _analyze_ticker(self, ticker, df):
+        try:
+            # 1. CLEANING & PRE-CHECKS
+            df = df.dropna(subset=['Close'])
+            if len(df) < 200: return None
+
+            # Extract Series
+            close = df['Close']
+            high = df['High']
+            low = df['Low']
+            volume = df['Volume']
+
+            curr_price = float(close.iloc[-1])
+
+            # Safe Volume Check
+            try:
+                avg_vol = float(volume.rolling(20).mean().iloc[-1])
+            except:
+                avg_vol = 0
+
+            is_uk = ticker.endswith(".L")
+
+            # 2. LIQUIDITY GATES
+            if is_uk:
+                price_gbp = curr_price / 100.0 # Pence to Pounds
+                turnover = price_gbp * avg_vol
+                if turnover < MIN_TURNOVER_GBP: return None
+            else:
+                turnover = curr_price * avg_vol
+                if turnover < MIN_TURNOVER_USD: return None
+
+            # 3. INDICATORS
+            sma_50 = float(close.rolling(50).mean().iloc[-1])
+            sma_150 = float(close.rolling(150).mean().iloc[-1])
+            sma_200 = float(close.rolling(200).mean().iloc[-1])
+
+            try:
+                atr = float(ta.atr(high, low, close, length=14).iloc[-1])
+                rsi = float(ta.rsi(close, length=14).iloc[-1])
+            except:
+                atr, rsi = 0.0, 50.0
+
+            high_52 = float(close.rolling(252).max().iloc[-1])
+            low_52 = float(close.rolling(252).min().iloc[-1])
+
+            # 4. STRATEGY GATES
+            setup = "NONE"
+            score = 0
+            action = "WAIT"
+            stop_loss = 0.0
+
+            rs_score = self._calculate_rs_score(df)
+
+            # --- STRATEGY A: ISA GROWTH (Minervini) ---
+            stage_2 = (
+                curr_price > sma_150 and curr_price > sma_200 and
+                sma_150 > sma_200 and sma_50 > sma_150 and
+                curr_price > sma_50 and
+                curr_price > (low_52 * 1.3) and
+                curr_price > (high_52 * 0.75)
             )
-            plt.title("Screener Candidates: Volatility vs ML Confidence")
-            plt.axhline(0.5, color='red', linestyle='--')
 
-            # Save plot to file instead of showing (headless env)
-            plt.savefig("screener_results.png")
-            print("Visualization saved to screener_results.png")
-            plt.close() # Close to free memory
+            # VCP Calculation
+            try:
+                vol_10 = float(close.rolling(10).std().iloc[-1])
+                vol_50 = float(close.rolling(50).std().iloc[-1])
+                is_vcp = (vol_10 / vol_50) < 0.60 if vol_50 > 0 else False
+            except: is_vcp = False
 
-# --- Backtesting & Research Environment Hooks ---
-def run_research_pipeline():
-    """
-    Hook to run Zipline/Alphalens analysis.
-    This is usually run offline in a Jupyter environment.
-    """
-    # import alphalens
-    # alphalens.tears.create_full_tear_sheet(factor_data)
-    print("Research pipeline triggers (Alphalens/Pyfolio) would execute here.")
+            if "BULLISH" in self.regime and stage_2 and is_vcp and rs_score > 0:
+                setup = "🚀 ISA: VCP LEADER"
+                score = 90 + rs_score
+                stop_loss = float(low.rolling(20).min().iloc[-1])
 
-if __name__ == "__main__":
-    # Example usage
-    tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMD"]
+                # Sizing Logic
+                risk_per_share = curr_price - stop_loss
+                if risk_per_share > 0:
+                    risk_amt = ISA_ACCOUNT_GBP * RISK_PER_TRADE_PCT
+                    fx_rate = 0.79 if not is_uk else 1.0 # USD/GBP approx
+                    shares = int((risk_amt / fx_rate) / risk_per_share)
+                    action = f"BUY ~{shares} qty (Stop: {stop_loss:.2f})"
+                else:
+                    action = "WAIT (Stop undefined)"
 
-    screener = QuantMasterScreener(use_ibkr=False)
-    results = screener.run_screen(tickers)
+            # --- STRATEGY B: OPTIONS INCOME (Bull Put) ---
+            # For $9.5k account: Blue chips, trend up, short term oversold
+            elif not is_uk and "BEARISH" not in self.regime:
+                if curr_price > sma_200 and rsi < 45 and rsi > 30:
+                    setup = "🛡️ OPT: BULL PUT"
+                    score = 80 + (50 - rsi)
 
-    print("\n--- Screening Results ---")
-    print(results)
+                    short_strike = sma_50 if curr_price > sma_50 else sma_200
+                    if short_strike >= curr_price: short_strike = curr_price * 0.95
 
-    screener.visualize_results()
+                    short_strike = round(short_strike, 1)
+                    long_strike = round(short_strike - 5, 1)
+
+                    # Risk 5% of $9500 = $475. Max Loss per spread approx $500.
+                    # So 1 contract.
+                    action = f"SELL 1x {short_strike}/{long_strike} PUT VERTICAL"
+
+            if setup == "NONE": return None
+
+            # STRICT RETURN STRUCTURE (Prevent Frontend Crash)
+            return {
+                "Ticker": str(ticker),
+                "Price": round(curr_price, 2),
+                "Change": round(((curr_price - float(df['Close'].iloc[-2]))/float(df['Close'].iloc[-2]))*100, 2),
+                "Volume": int(avg_vol),
+                "Setup": setup,
+                "Score": round(score, 1),
+                "Action": action,
+                "RSI": round(rsi, 0),
+                "ATR": round(atr, 2),
+                "Regime": self.regime,
+                "RS_Rating": round(rs_score, 1),
+                "VCP": "YES" if is_vcp else "NO",
+                # Dummy fields to satisfy any other potential frontend checks
+                "Sector": "N/A", "Industry": "N/A", "MarketCap": "N/A"
+            }
+
+        except Exception as e:
+            # logger.error(f"Err {ticker}: {e}")
+            return None
+
+    def run_screen(self):
+        self._fetch_market_regime()
+        results = []
+        chunk_size = 50
+
+        logger.info(f"Scanning {len(self.all_tickers)} tickers...")
+
+        for i in range(0, len(self.all_tickers), chunk_size):
+            chunk = self.all_tickers[i:i+chunk_size]
+            try:
+                # Fast batch download
+                data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True, auto_adjust=True)
+
+                for ticker in chunk:
+                    try:
+                        df = None
+                        if len(chunk) == 1: df = data
+                        elif isinstance(data.columns, pd.MultiIndex):
+                            if ticker in data.columns.levels[0]: df = data[ticker]
+
+                        if df is not None and not df.empty:
+                            res = self._analyze_ticker(ticker, df)
+                            if res: results.append(res)
+                    except: continue
+            except: continue
+
+        results.sort(key=lambda x: x['Score'], reverse=True)
+        return results
+
+# Compatibility Adapter for CLI/Webapp
+def screen_master_convergence(ticker_list=None, region="us", check_mode=False):
+    # Dynamic imports to avoid circular deps
+    from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
+    try:
+        from option_auditor.uk_stock_data import get_uk_tickers
+    except:
+        def get_uk_tickers(): return []
+
+    us_tickers = []
+    uk_tickers = []
+
+    # If list provided (e.g. from Check Stock box)
+    if ticker_list:
+        for t in ticker_list:
+            if ".L" in t: uk_tickers.append(t)
+            else: us_tickers.append(t)
+    else:
+        # Default Lists
+        if region in ["uk", "uk_euro"]:
+            uk_tickers = get_uk_tickers()
+        else:
+            us_tickers = LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])
+
+    screener = FortressScreener(us_tickers, uk_tickers)
+    results = screener.run_screen()
+    return results # Returns list of dicts directly
