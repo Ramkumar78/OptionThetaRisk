@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom'; // <--- ADDED THIS
-import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
+import { useNavigate } from 'react-router-dom';
+import { formatCurrency } from '../utils/formatting';
 
 // 1. STRATEGY DEFINITIONS
 const STRATEGIES: Record<string, {
@@ -202,7 +202,7 @@ const STRATEGIES: Record<string, {
 };
 
 const Screener: React.FC = () => {
-    const navigate = useNavigate(); // <--- ADDED THIS
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<any[]>([]);
     const [regime, setRegime] = useState<string>('WAITING');
@@ -314,8 +314,8 @@ const Screener: React.FC = () => {
 
                 // Handle nested access or differing casing
                 if (sortConfig.key === 'Setup') {
-                    aVal = a.Setup || a.verdict || a.signal;
-                    bVal = b.Setup || b.verdict || b.signal;
+                    aVal = a.Setup || a.verdict || a.signal || a.Strategy || 'WAIT';
+                    bVal = b.Setup || b.verdict || b.signal || b.Strategy || 'WAIT';
                 }
                 if (sortConfig.key === 'Action') {
                     aVal = a.Action || a.action || a.Score || 0;
@@ -342,9 +342,6 @@ const Screener: React.FC = () => {
         }
         return sortable;
     }, [results, sortConfig]);
-
-    const getVerdict = (r: any) => r.Setup || r.verdict || r.signal || r.human_verdict || 'WAIT';
-    const getAction = (r: any) => r.Action || r.action || (r.signal && r.signal.includes('BUY') ? 'BUY' : '-') || '-';
 
     const SortIcon = ({ colKey }: { colKey: string }) => {
         if (sortConfig?.key !== colKey) return <i className="bi bi-arrow-down-up text-gray-300 ml-1 text-[10px]"></i>;
@@ -468,36 +465,68 @@ const Screener: React.FC = () => {
                                 <tr className="bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                                     <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker <SortIcon colKey="Ticker" /></th>
                                     <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price <SortIcon colKey="Price" /></th>
-                                    <th onClick={() => handleSort('Change')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Change <SortIcon colKey="Change" /></th>
-                                    <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Verdict / Setup <SortIcon colKey="Setup" /></th>
-                                    <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action / Details <SortIcon colKey="Action" /></th>
+
+                                    {/* NEW COLUMN: ATR */}
+                                    <th onClick={() => handleSort('ATR')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">ATR <SortIcon colKey="ATR" /></th>
+
+                                    {/* NEW COLUMN: BREAKOUT */}
+                                    <th onClick={() => handleSort('Breakout')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout <SortIcon colKey="Breakout" /></th>
+
+                                    <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strategy / Verdict <SortIcon colKey="Setup" /></th>
+
+                                    {/* NEW COLUMN: RISK PLAN (Stop/Target) */}
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan</th>
+
+                                    <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action <SortIcon colKey="Action" /></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {sortedResults.map((r, i) => {
-                                    const verdict = getVerdict(r);
-                                    let details = '';
-                                    if (selectedStrategy === 'quantum') details = `H: ${r.hurst?.toFixed(2)} | E: ${r.entropy?.toFixed(2)}`;
-                                    else if (selectedStrategy === 'bull_put') details = `Credit: ${r.credit} | ROI: ${r.roi_pct}%`;
-                                    else if (selectedStrategy === 'grandmaster') {
-                                        details = `Breakout: ${r.breakout_date || 'N/A'}`;
-                                        if (r.RS_Rating) details += ` | RS: ${r.RS_Rating}`;
-                                    }
-                                    else details = `Vol: ${r.volatility_pct}% | ATR: ${r.atr_value}`;
+                                    const verdict = r.Setup || r.verdict || r.signal || r.Strategy || 'WAIT';
 
-                                    let badgeColor = 'bg-gray-100 text-gray-800';
-                                    const vUpper = String(verdict).toUpperCase();
-                                    if (vUpper.includes('BUY') || vUpper.includes('LONG') || vUpper.includes('GREEN')) badgeColor = 'bg-green-100 text-green-800';
-                                    if (vUpper.includes('SELL') || vUpper.includes('SHORT') || vUpper.includes('RED')) badgeColor = 'bg-red-100 text-red-800';
+                                    // Helper for Stop/Target styling
+                                    const stopVal = r.Stop || r.stop || 0;
+                                    const targetVal = r.Target || r.target || 0;
+                                    const atrVal = r.ATR || r.atr || 0;
+                                    const breakoutDate = r.Breakout || r.breakout_date || '-';
 
                                     return (
                                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                             <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100">{r.Ticker || r.ticker}</td>
                                             <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, '$')}</td>
-                                            <td className={`px-6 py-4 text-right font-bold font-mono ${(r.Change || r.pct_change_1d) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(r.Change || r.pct_change_1d || 0) > 0 ? '+' : ''}{Number(r.Change || r.pct_change_1d || 0).toFixed(2)}%</td>
-                                            <td className="px-6 py-4"><span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wide ${badgeColor}`}>{verdict}</span></td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                                                <div className="flex flex-col"><span className="font-bold">{getAction(r)}</span><span className="text-xs opacity-75">{details}</span></div>
+
+                                            {/* ATR DATA */}
+                                            <td className="px-6 py-4 text-right font-mono text-xs text-gray-500">
+                                                {atrVal ? atrVal.toFixed(2) : '-'}
+                                            </td>
+
+                                            {/* BREAKOUT DATE */}
+                                            <td className="px-6 py-4 text-xs text-gray-600 dark:text-gray-400">
+                                                <span className={`px-2 py-1 rounded border ${breakoutDate === 'Consolidating' ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
+                                                    {breakoutDate}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-6 py-4">
+                                                <span className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wide bg-gray-100 text-gray-800">
+                                                    {verdict}
+                                                </span>
+                                            </td>
+
+                                            {/* RISK PLAN DATA */}
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono">
+                                                        T: {targetVal ? formatCurrency(targetVal, '$') : '-'}
+                                                    </span>
+                                                    <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-mono">
+                                                        S: {stopVal ? formatCurrency(stopVal, '$') : '-'}
+                                                    </span>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white">
+                                                {r.Action || 'VIEW'}
                                             </td>
                                         </tr>
                                     );

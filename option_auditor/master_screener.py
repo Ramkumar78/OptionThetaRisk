@@ -70,6 +70,73 @@ class FortressScreener:
             logger.error(f"Regime fetch failed: {e}")
             self.regime = "🟡 NEUTRAL (Data Error)"
 
+    def calculate_atr(self, df, period=14):
+        """Calculates the Average True Range (ATR)"""
+        try:
+            high_low = df['High'] - df['Low']
+            high_close = (df['High'] - df['Close'].shift()).abs()
+            low_close = (df['Low'] - df['Close'].shift()).abs()
+            ranges = pd.concat([high_low, high_close, low_close], axis=1)
+            true_range = ranges.max(axis=1)
+            return float(true_range.rolling(window=period).mean().iloc[-1])
+        except:
+            return 0.0
+
+    def get_breakout_date(self, df, window=20):
+        """Finds the most recent date where price broke a N-day high"""
+        try:
+            recent = df.iloc[-30:].copy() # Look back 30 days
+            roll_max = df['High'].rolling(window=window).max().shift(1)
+
+            # Check where Close > Previous N-Day High
+            # Align indices
+            roll_max_aligned = roll_max.reindex(recent.index)
+            breakouts = recent[recent['Close'] > roll_max_aligned]
+
+            if not breakouts.empty:
+                return breakouts.index[-1].strftime('%Y-%m-%d')
+            return "Consolidating"
+        except:
+            return "Unknown"
+
+    def get_council_parameters(self, member_name, price, atr):
+        """
+        Returns Stop Loss and Target based on the famous trader's style.
+        """
+        stop = 0.0
+        target = 0.0
+
+        # GROUP 1: TREND FOLLOWERS (Turtles, Seykota, Dennis)
+        # Style: Wide stops (ATR based), huge targets.
+        if any(x in member_name for x in ['Turtle', 'Seykota', 'Dennis', 'Parker', 'Hite', 'Dunn']):
+            stop = price - (2.0 * atr)
+            target = price + (10.0 * atr) # Let winners run
+
+        # GROUP 2: MOMENTUM / SWING (Minervini, Zanger, O'Neil, Kulmagi)
+        # Style: Tight stops (Volatility contraction), quick targets.
+        elif any(x in member_name for x in ['Minervini', 'Zanger', 'Kulmagi', 'CanSlim', 'Morales']):
+            stop = price * 0.93 # 7-8% Stop strictly
+            target = price * 1.25 # 20-25% Target
+
+        # GROUP 3: QUANTS / STAT ARB (Simons, Thorp, Shaw, Griffin)
+        # Style: Statistical deviation.
+        elif any(x in member_name for x in ['Simons', 'Thorp', 'Shaw', 'Griffin', 'Muller', 'Put']):
+            stop = price - (1.5 * atr)
+            target = price + (1.5 * atr) # High frequency/mean reversion often tighter
+
+        # GROUP 4: MACRO / VALUE (Soros, Druckenmiller, Buffett)
+        # Style: Structural stops.
+        elif any(x in member_name for x in ['Soros', 'Druckenmiller', 'Buffett', 'Dalio']):
+            stop = price * 0.90 # 10% Structural stop
+            target = price * 1.50 # 50% Macro move
+
+        # DEFAULT (The Council Consensus)
+        else:
+            stop = price - (2 * atr)
+            target = price + (4 * atr)
+
+        return round(stop, 2), round(target, 2)
+
     def _calculate_breakout_date(self, close_series, sma_50_series):
         try:
             above_50 = close_series > sma_50_series
@@ -146,7 +213,11 @@ class FortressScreener:
             low_52 = float(close.rolling(252).min().iloc[-1])
 
             # Breakout Date
-            bk_date, days_since = self._calculate_breakout_date(close, sma_50_series)
+            bk_date_str = self.get_breakout_date(df)
+            atr_value = self.calculate_atr(df)
+
+            # Legacy calc for scoring
+            legacy_bk_date, days_since = self._calculate_breakout_date(close, sma_50_series)
 
             setup = "NONE"
             score = 0
@@ -174,16 +245,17 @@ class FortressScreener:
             # 1. GROWTH (ISA / General Trend) - Applies to ALL regions
             if "BULLISH" in self.regime and stage_2 and rs_score > 0:
                 if is_vcp:
-                    setup = "🚀 LEADER: VCP"
+                    setup = "🚀 Minervini VCP"
                     score = 90 + rs_score
                 elif days_since < 15:
-                    setup = "🚀 LEADER: FRESH"
+                    setup = "🚀 Turtle Breakout"
                     score = 85 + rs_score
                 else:
-                    setup = "⚠️ LEADER: EXTENDED"
+                    setup = "⚠️ Trend Follower"
                     score = 60
 
-                stop_loss = float(low.rolling(20).min().iloc[-1])
+                # Existing sizing logic preserved but ACTION string updated
+                stop_loss, target_price = self.get_council_parameters(setup, curr_price, atr_value)
 
                 # Sizing Logic based on Region
                 if is_uk:
@@ -212,23 +284,36 @@ class FortressScreener:
                 if curr_price > sma_200 and rsi < 45 and rsi > 30:
                     setup = "🛡️ OPT: BULL PUT"
                     score = 80 + (50 - rsi)
+                    stop_loss, target_price = self.get_council_parameters("Put", curr_price, atr_value)
+
                     short_strike = round(sma_50 if curr_price > sma_50 else sma_200, 1)
                     if short_strike >= curr_price: short_strike = round(curr_price * 0.95, 1)
                     action = f"SELL 1x {short_strike} PUT"
+                else:
+                    stop_loss = 0.0
+                    target_price = 0.0
 
             if setup == "NONE" or score < 60: return None
+
+            # Recalculate Stop/Target if not set (for safety)
+            if 'stop_loss' not in locals():
+                stop_loss, target_price = self.get_council_parameters(setup, curr_price, atr_value)
 
             return {
                 "Ticker": str(ticker),
                 "Price": round(curr_price, 2),
                 "Change": round(((curr_price - float(df['Close'].iloc[-2]))/float(df['Close'].iloc[-2]))*100, 2),
                 "Setup": setup,
+                "Strategy": setup, # Alias for Frontend
                 "Score": round(score, 1),
                 "Action": action,
                 "RSI": round(rsi, 0),
                 "Regime": self.regime,
                 "RS_Rating": round(rs_score, 1),
-                "breakout_date": bk_date,
+                "Breakout": bk_date_str, # New Field
+                "ATR": round(atr_value, 2), # New Field
+                "Stop": stop_loss, # New Field
+                "Target": target_price, # New Field
                 "days_since_breakout": days_since,
                 "VCP": "YES" if is_vcp else "NO"
             }

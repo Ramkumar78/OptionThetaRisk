@@ -135,7 +135,8 @@ class TestFortressScreener(unittest.TestCase):
              print(f"DEBUG: Price={curr}, SMA50={sma_50}")
 
         self.assertIsNotNone(result)
-        self.assertIn("ISA: VCP LEADER", result['Setup'])
+        # Updated Setup string expectation to match new logic
+        self.assertIn("Minervini VCP", result['Setup'])
         self.assertEqual(result['VCP'], "YES")
         self.assertIn("BUY", result['Action'])
 
