@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { adaptBacktestToResults } from '../utils/adapters';
 import { importTradesToJournal } from '../api';
 import {
   Chart as ChartJS,
@@ -39,7 +40,15 @@ interface ResultsProps {
 const Results: React.FC<ResultsProps> = ({ directData }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const results = directData || location.state?.results;
+  let rawResults = directData || location.state?.results;
+
+  // FIX: Check if we have 'log' (Simple Format) but missing 'strategy_metrics' (Complex Format)
+  // If so, adapt it on the fly.
+  if (rawResults && rawResults.log && !rawResults.strategy_metrics) {
+      rawResults = adaptBacktestToResults(rawResults);
+  }
+
+  const results = rawResults;
   const isDark = document.documentElement.classList.contains('dark'); // Initial check, might need context for reactivity
   const [importing, setImporting] = React.useState(false);
 
