@@ -18,7 +18,7 @@ from flask import Flask, request, redirect, url_for, flash, send_file, session, 
 from option_auditor import analyze_csv, screener, journal_analyzer, portfolio_risk
 from option_auditor.main_analyzer import refresh_dashboard_data
 from option_auditor.uk_stock_data import get_uk_tickers
-from option_auditor.master_screener import QuantMasterScreener
+from option_auditor.master_screener import screen_master_convergence
 from option_auditor.sp500_data import get_sp500_tickers
 from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
 from option_auditor.unified_backtester import UnifiedBacktester
@@ -27,7 +27,7 @@ from option_auditor.unified_backtester import UnifiedBacktester
 from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.strategies.turtle import TurtleStrategy
 from option_auditor.common.data_utils import get_cached_market_data
-from option_auditor.unified_screener import screen_universal_dashboard
+# from option_auditor.unified_screener import screen_universal_dashboard
 
 # Import Data Lists
 from option_auditor.sp500_data import SP500_TICKERS
@@ -687,24 +687,20 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route('/screen/master', methods=['GET'])
     def screen_master():
-        region = request.args.get('region', 'us_uk_mix')
-        app.logger.info(f"Master Screen request: region={region}")
+        region = request.args.get('region', 'us')
+        app.logger.info(f"Master Fortress Screen request: region={region}")
 
-        ticker_list = None
-        if region == 'us':
-            ticker_list = get_tickers_for_region('us')
-        elif region == 'uk':
-            ticker_list = get_tickers_for_region('uk')
-
+        # The adapter handles the list logic internally based on region
         try:
-            results = screen_universal_dashboard(ticker_list=ticker_list)
+            results = screen_master_convergence(region=region)
 
-            # Count
-            count = 0
-            if isinstance(results, list): count = len(results)
-            elif isinstance(results, dict) and 'results' in results: count = len(results['results'])
+            # Ensure it returns a list directly, or wrap in dict if frontend expects {results: [...]}
+            # Based on your previous code, it seems to handle both, but let's be safe:
+            count = len(results)
+            app.logger.info(f"Fortress Screen completed. Results: {count}")
 
-            app.logger.info(f"Master Screen completed. Results: {count}")
+            # Frontend often expects { "results": [...] } or just [...]
+            # Let's standardise on the list for this specific route if the frontend grid handles it
             return jsonify(results)
         except Exception as e:
             app.logger.exception(f"Master Screen Error: {e}")
@@ -712,25 +708,8 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route('/screen/quant', methods=['GET'])
     def screen_quant():
-        try:
-            region = request.args.get('region', 'us')
-            app.logger.info(f"Quant Screen request: region={region}")
-            ticker_list = get_tickers_for_region(region)
-
-            screener = QuantMasterScreener(use_ibkr=False)
-            df_results = screener.run_screen(ticker_list)
-
-            if df_results.empty:
-                app.logger.warning("Quant Screen: No results")
-                return jsonify([])
-
-            df_results = df_results.where(pd.notnull(df_results), None)
-
-            app.logger.info(f"Quant Screen completed. Results: {len(df_results)}")
-            return jsonify(df_results.to_dict(orient='records'))
-        except Exception as e:
-            app.logger.exception(f"Quant Screen Error: {e}")
-            return jsonify({"error": str(e)}), 500
+        # Redirect Quant requests to the Fortress as well, since QuantMasterScreener (OpenBB) is broken
+        return screen_master()
 
     @app.route("/screen/fourier", methods=["GET"])
     def screen_fourier():
