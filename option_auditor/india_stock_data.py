@@ -1,16 +1,53 @@
+import os
+import csv
+import logging
+
+logger = logging.getLogger("India_Stock_Data")
+
 # Nifty 50 & Major NSE Stocks (Yahoo Finance Tickers ending in .NS)
-INDIA_TICKERS = [
-    # Nifty 50
-    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "BHARTIARTL.NS", "ICICIBANK.NS", "INFY.NS", "HINDUNILVR.NS", "SBIN.NS", "ITC.NS", "LTIM.NS", "LT.NS", "HCLTECH.NS", "BAJFINANCE.NS", "AXISBANK.NS", "MARUTI.NS", "ULTRACEMCO.NS", "SUNPHARMA.NS", "M&M.NS", "TITAN.NS", "KOTAKBANK.NS", "ADANIENT.NS", "TATAMOTORS.NS", "NTPC.NS", "TATASTEEL.NS", "POWERGRID.NS", "ASIANPAINT.NS", "JSWSTEEL.NS", "BAJAJFINSV.NS", "NESTLEIND.NS", "GRASIM.NS", "ONGC.NS", "TECHM.NS", "HINDALCO.NS", "ADANIPORTS.NS", "CIPLA.NS", "WIPRO.NS", "SBILIFE.NS", "DRREDDY.NS", "BRITANNIA.NS", "TATACONSUM.NS", "COALINDIA.NS", "APOLLOHOSP.NS", "EICHERMOT.NS", "INDUSINDBK.NS", "DIVISLAB.NS", "BAJAJ-AUTO.NS", "HDFCLIFE.NS", "HEROMOTOCO.NS", "BEL.NS", "SHRIRAMFIN.NS",
-    # Nifty Next 50
-    "LICI.NS", "HAL.NS", "ADANIPOWER.NS", "DMART.NS", "VBL.NS", "JIOFIN.NS", "SIEMENS.NS", "TRENT.NS", "ZOMATO.NS", "ADANIGREEN.NS", "IOC.NS", "DLF.NS", "VEDL.NS", "BANKBARODA.NS", "GAIL.NS", "AMBUJACEM.NS", "CHOLAFIN.NS", "HAVELLS.NS", "ABB.NS", "PIDILITIND.NS", "GODREJCP.NS", "DABUR.NS", "SHREECEM.NS", "PNB.NS", "BPCL.NS", "SBICARD.NS", "SRF.NS", "MOTHERSON.NS", "ICICIPRULI.NS", "MARICO.NS", "BERGEPAINT.NS", "ICICIGI.NS", "TVSMOTOR.NS", "NAUKRI.NS", "LODHA.NS", "BOSCHLTD.NS", "INDIGO.NS", "CANBK.NS", "UNITDSPR.NS", "TORNTPHARM.NS", "PIIND.NS", "UPL.NS", "JINDALSTEL.NS", "ALKEM.NS", "ZYDUSLIFE.NS", "COLPAL.NS", "BAJAJHLDNG.NS", "TATAPOWER.NS", "IRCTC.NS", "MUTHOOTFIN.NS"
-]
-
-# Compatibility aliases
-INDIAN_TICKERS_RAW = INDIA_TICKERS
-
-def get_indian_tickers_list():
-    return INDIA_TICKERS
+# Now loaded from CSV
 
 def get_indian_tickers():
-    return INDIA_TICKERS
+    """
+    Returns the Nifty/NSE Tickers list from a CSV file.
+    """
+    tickers = []
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(current_dir, 'data', 'nifty_nse_stocks.csv')
+
+    if os.path.exists(csv_path):
+        try:
+            with open(csv_path, 'r') as f:
+                reader = csv.reader(f)
+                # Skip header if present, or just assume first col is ticker
+
+                header_skipped = False
+                for row in reader:
+                    if not row: continue
+                    val = row[0].strip()
+
+                    if not header_skipped and val.lower() == "ticker":
+                        header_skipped = True
+                        continue
+
+                    if val:
+                        tickers.append(val.upper())
+
+            # Use dict.fromkeys to remove duplicates while preserving order
+            unique_tickers = list(dict.fromkeys(tickers))
+            # logger.info(f"Loaded {len(unique_tickers)} tickers from CSV: {csv_path}")
+            return unique_tickers
+        except Exception as e:
+            logger.error(f"Error loading Nifty Stocks from CSV: {e}")
+            return []
+    else:
+        logger.warning(f"Nifty Stocks CSV not found at {csv_path}. Returning empty list.")
+        return []
+
+# Compatibility alias
+def get_indian_tickers_list():
+    return get_indian_tickers()
+
+# For legacy/compatibility if variables were accessed directly
+INDIA_TICKERS = get_indian_tickers()
+INDIAN_TICKERS_RAW = INDIA_TICKERS

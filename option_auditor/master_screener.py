@@ -367,15 +367,11 @@ def screen_master_convergence(ticker_list=None, region="us", check_mode=False):
         if region == "india":
             # Attempt to load India tickers dynamically
             try:
-                from option_auditor.india_stock_data import get_india_tickers
-                india = get_india_tickers()
+                from option_auditor.india_stock_data import get_indian_tickers
+                india = get_indian_tickers()
             except ImportError:
                 # Fallback Nifty List if file missing
-                india = [
-                    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
-                    "HINDUNILVR.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS",
-                    "LTIM.NS", "BAJFINANCE.NS", "TATAMOTORS.NS", "LT.NS", "AXISBANK.NS"
-                ]
+                india = []
         elif region in ["uk", "uk_euro"]:
             try:
                 from option_auditor.uk_stock_data import get_uk_tickers
