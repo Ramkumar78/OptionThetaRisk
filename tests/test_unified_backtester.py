@@ -72,10 +72,10 @@ def test_fetch_data_success(mock_yf_download):
 
     assert df is not None
     assert not df.empty
-    assert "close" in df.columns
-    assert "spy" in df.columns
-    assert "vix" in df.columns
-    assert "open" in df.columns
+    assert "Close" in df.columns
+    assert "Spy" in df.columns
+    assert "Vix" in df.columns
+    assert "Open" in df.columns
 
 def test_fetch_data_failure(mock_yf_download):
     mock_yf_download.side_effect = Exception("API Error")
@@ -89,13 +89,13 @@ def test_calculate_indicators():
     # We can use fetch_data output simulation
     dates = pd.date_range(end=pd.Timestamp.now(), periods=250, freq='B') # 1 year
     df = pd.DataFrame({
-        'close': np.linspace(100, 150, 250),
-        'high': np.linspace(102, 152, 250),
-        'low': np.linspace(98, 148, 250),
-        'open': np.linspace(99, 149, 250),
-        'volume': [1000] * 250,
-        'spy': np.linspace(300, 400, 250),
-        'vix': [15] * 250
+        'Close': np.linspace(100, 150, 250),
+        'High': np.linspace(102, 152, 250),
+        'Low': np.linspace(98, 148, 250),
+        'Open': np.linspace(99, 149, 250),
+        'Volume': [1000] * 250,
+        'Spy': np.linspace(300, 400, 250),
+        'Vix': [15] * 250
     }, index=dates)
 
     bt = UnifiedBacktester("TEST")
