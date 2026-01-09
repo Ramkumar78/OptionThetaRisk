@@ -28,6 +28,8 @@ def test_full_fills_csv_auto_mode_parses():
     assert os.path.exists(full_path), "Fixture file missing: tests/data/tasty_fills_full.csv"
     with open(full_path, "r") as f:
         res = analyze_csv(io.StringIO(f.read()), broker="auto")
+    if "error" in res:
+        pytest.fail(f"Analysis failed with error: {res['error']}")
     assert res["broker"] == "tasty"
     assert isinstance(res["metrics"], dict)
 
@@ -36,6 +38,8 @@ def test_full_fills_csv_forced_tasty_parses():
     full_path = os.path.join(here, "data", "tasty_fills_full.csv")
     with open(full_path, "r") as f:
         res = analyze_csv(io.StringIO(f.read()), broker="tasty")
+    if "error" in res:
+        pytest.fail(f"Analysis failed with error: {res['error']}")
     assert res["broker"] == "tasty"
     assert isinstance(res["metrics"], dict)
 

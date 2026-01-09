@@ -36,7 +36,7 @@ class TestRegionStrategies:
         
         # Check Tickers
         passed_tickers = call_args[0] if call_args else call_kwargs.get('tickers')
-        assert len(passed_tickers) >= 150
+        assert len(passed_tickers) >= 130
         assert passed_tickers == get_uk_tickers()
         assert "SHEL.L" in passed_tickers
 

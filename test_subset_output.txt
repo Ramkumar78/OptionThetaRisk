@@ -1,0 +1,44 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /app
+configfile: pytest.ini
+plugins: cov-7.0.0, anyio-4.12.1
+collected 49 items
+
+test_screener_execution.py .                                             [  2%]
+test_screener_execution_debug.py .                                       [  4%]
+tests/test_api_master.py ..                                              [  8%]
+tests/test_api_quant.py .                                                [ 10%]
+tests/test_region_strategies.py ....                                     [ 18%]
+tests/test_uk_350.py ..                                                  [ 22%]
+tests/test_tasty_fills_csv.py .........                                  [ 40%]
+tests/test_backtester_new.py ..                                          [ 44%]
+tests/test_webapp_gap_fill.py ...........................                [100%]
+
+=============================== warnings summary ===============================
+tests/test_tasty_fills_csv.py::test_tasty_fills_auto_detection_parses_successfully
+tests/test_tasty_fills_csv.py::test_tasty_fills_forced_tasty_parses_successfully
+tests/test_tasty_fills_csv.py::test_full_fills_csv_auto_mode_parses
+tests/test_tasty_fills_csv.py::test_full_fills_csv_forced_tasty_parses
+tests/test_tasty_fills_csv.py::test_edgecase_iron_condor_parsing
+tests/test_tasty_fills_csv.py::test_edgecase_decimal_strike_and_exp_token
+tests/test_tasty_fills_csv.py::test_edgecase_stock_legs_ignored
+tests/test_tasty_fills_csv.py::test_strategy_name_put_vertical_credit
+tests/test_tasty_fills_csv.py::test_strategy_name_present_in_groups
+  /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/openpyxl/packaging/core.py:99: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.datetime.utcnow()
+
+tests/test_tasty_fills_csv.py::test_tasty_fills_auto_detection_parses_successfully
+tests/test_tasty_fills_csv.py::test_tasty_fills_forced_tasty_parses_successfully
+tests/test_tasty_fills_csv.py::test_full_fills_csv_auto_mode_parses
+tests/test_tasty_fills_csv.py::test_full_fills_csv_forced_tasty_parses
+tests/test_tasty_fills_csv.py::test_edgecase_iron_condor_parsing
+tests/test_tasty_fills_csv.py::test_edgecase_decimal_strike_and_exp_token
+tests/test_tasty_fills_csv.py::test_edgecase_stock_legs_ignored
+tests/test_tasty_fills_csv.py::test_strategy_name_put_vertical_credit
+tests/test_tasty_fills_csv.py::test_strategy_name_present_in_groups
+  /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/openpyxl/writer/excel.py:292: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    workbook.properties.modified = datetime.datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================= 49 passed, 18 warnings in 190.42s (0:03:10) ==================
