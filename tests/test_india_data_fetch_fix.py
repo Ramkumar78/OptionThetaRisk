@@ -34,14 +34,15 @@ class TestIndiaTickerList:
         assert not invalid, f"Found non-NSE tickers: {invalid}"
 
     def test_list_limit_and_length(self):
-        """Verify the list returns exactly 250 tickers."""
+        """Verify the list returns exactly 100 tickers."""
         tickers = get_indian_tickers_list()
-        assert len(tickers) == 250, f"Expected 250 tickers, got {len(tickers)}"
+        assert len(tickers) == 100, f"Expected 100 tickers, got {len(tickers)}"
 
     def test_list_preserves_order(self):
         """Verify the list preserves market cap order (Reliance, TCS, HDFC first)."""
         tickers = get_indian_tickers_list()
         # Top 3 based on static list we provided
+        # Order is preserved from CSV which matches original list
         assert tickers[0] == "RELIANCE.NS"
         assert tickers[1] == "TCS.NS"
         assert tickers[2] == "HDFCBANK.NS"
