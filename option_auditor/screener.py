@@ -8,6 +8,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
 import traceback
+try:
+    import pandas_ta as ta # Moved to top level for global availability
+except ImportError as e:
+    raise ImportError("The 'pandas_ta' library is required. Please install it with 'pip install pandas_ta'.") from e
+
 from option_auditor.quant_engine import QuantPhysicsEngine
 
 # Configure logger
@@ -145,7 +150,7 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
         return []
 
     # Batch download 1y data for volume and sma using safe utility
-    import pandas_ta as ta
+    # import pandas_ta as ta # Now global
 
     filtered_list = []
 
@@ -201,11 +206,6 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
     """
     Internal helper to screen a list of tickers.
     """
-    try:
-        import pandas_ta as ta
-    except ImportError as e:
-        raise ImportError("The 'pandas_ta' library is required for the screener. Please install it with 'pip install pandas_ta'.") from e
-
     # Map time_frame to yfinance interval and resample rule
     yf_interval = "1d"
     resample_rule = None
