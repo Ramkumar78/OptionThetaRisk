@@ -21,9 +21,9 @@ class UnifiedBacktester:
 
     def fetch_data(self):
         try:
-            # Fetch 3 years to ensure 200 SMA is ready before the 2-year backtest starts
+            # Fetch 5 years to ensure 200 SMA is ready before the 3-year backtest starts
             symbols = [self.ticker, "SPY", "^VIX"]
-            data = yf.download(symbols, period="3y", auto_adjust=True, progress=False)
+            data = yf.download(symbols, period="5y", auto_adjust=True, progress=False)
 
             if isinstance(data.columns, pd.MultiIndex):
                 try:
@@ -93,11 +93,19 @@ class UnifiedBacktester:
         df = self.calculate_indicators(df)
 
         # --- EXACT SIMULATION WINDOW ---
-        start_date = pd.Timestamp.now() - pd.Timedelta(days=730)
-        # If simulation data is older (e.g. testing with fixed dates), this might result in empty.
-        # Fallback for testing: if df ends before start_date, use entire df
-        if df.index[-1] < start_date:
-             sim_data = df.copy()
+        # 3 Years (approx 1095 days)
+        target_days = 1095
+        start_date = pd.Timestamp.now() - pd.Timedelta(days=target_days)
+
+        # Check if we have enough data, fallback to 2 years if not
+        if df.index[0] > start_date:
+            # Not enough history for 3 years
+            start_date_2y = pd.Timestamp.now() - pd.Timedelta(days=730)
+            if df.index[0] > start_date_2y:
+                 # Even 2y is tight, just use what we have
+                 sim_data = df.copy()
+            else:
+                 sim_data = df[df.index >= start_date_2y].copy()
         else:
              sim_data = df[df.index >= start_date].copy()
 
@@ -110,9 +118,20 @@ class UnifiedBacktester:
         # --- FAIR COMPARISON: BUY & HOLD ---
         initial_price = sim_data['Close'].iloc[0]
         final_price = sim_data['Close'].iloc[-1]
+
+        # Simple Buy and Hold Return %
+        simple_bnh_return = ((final_price - initial_price) / initial_price) * 100
+
+        # Portfolio Buy and Hold (Investing initial capital)
         bnh_shares = int(self.initial_capital / initial_price)
         bnh_final_value = self.initial_capital - (bnh_shares * initial_price) + (bnh_shares * final_price)
-        bnh_return = ((bnh_final_value - self.initial_capital) / self.initial_capital) * 100
+        # bnh_return = ((bnh_final_value - self.initial_capital) / self.initial_capital) * 100
+        # Let's use simple return for clarity as requested "return for buy and hold" usually implies asset return
+        # But for comparison with strategy equity, portfolio return is fairer.
+        # Given we show 'strategy_return' based on equity, we should show bnh based on equity or raw stock
+        # I will return both or the one that matches strategy_return type.
+
+        bnh_return_equity = ((bnh_final_value - self.initial_capital) / self.initial_capital) * 100
 
         # --- STRATEGY LOOP ---
         stop_loss = 0.0
@@ -256,11 +275,16 @@ class UnifiedBacktester:
                         "days": days_held
                     })
 
-        final_eq = self.equity + (self.shares * final_price)
-        strat_return = ((final_eq - self.initial_capital) / self.initial_capital) * 100
+        # Calculate final equity if still holding
+        current_equity_val = self.equity
+        if self.state == "IN":
+             current_equity_val += (self.shares * final_price)
+
+        strat_return = ((current_equity_val - self.initial_capital) / self.initial_capital) * 100
 
         sell_trades = [t['days'] for t in self.trade_log if t['type'] == 'SELL' and isinstance(t['days'], int)]
         avg_days_held = round(sum(sell_trades) / len(sell_trades)) if sell_trades else 0
+        total_days_held = sum(sell_trades)
 
         return {
             "ticker": self.ticker,
@@ -268,12 +292,14 @@ class UnifiedBacktester:
             "start_date": actual_start_str,
             "end_date": actual_end_str,
             "strategy_return": round(strat_return, 2),
-            "buy_hold_return": round(bnh_return, 2),
+            "buy_hold_return": round(bnh_return_equity, 2), # Portfolio based comparison
+            "buy_hold_return_pct": round(simple_bnh_return, 2), # Raw stock return
             "buy_hold_days": buy_hold_days,
             "avg_days_held": avg_days_held,
+            "total_days_held": total_days_held,
             "trades": len(self.trade_log) // 2,
             "win_rate": self._calculate_win_rate(),
-            "final_equity": round(final_eq, 2),
+            "final_equity": round(current_equity_val, 2),
             "log": self.trade_log
         }
 
