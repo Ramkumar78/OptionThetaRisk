@@ -39,7 +39,10 @@ class TestTurtleStrategyClass:
 
     def test_turtle_wait(self, mock_market_data):
         df = mock_market_data(days=30, price=100.0, trend="flat")
-        # Price within range
+        # Price within range but not near high (avoid WATCH)
+        high_20 = df['High'].rolling(20).max().shift(1).iloc[-1]
+        df.iloc[-1, df.columns.get_loc('Close')] = high_20 * 0.95
+
         strategy = TurtleStrategy()
         result = strategy.analyze(df)
 
