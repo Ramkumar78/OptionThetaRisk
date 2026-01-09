@@ -11,8 +11,9 @@ class TestBullPutScreener(unittest.TestCase):
         Tests that the Bull Put Spread screener correctly:
         1. Uses Ticker.history (not yf.download)
         2. Filters by SMA trend
-        3. Selects correct strikes based on delta
-        4. Calculates ROI and Price correctly
+        3. Filters by Volume (>1M)
+        4. Selects correct strikes based on delta
+        5. Calculates ROI and Price correctly
         """
         # Patch yfinance globally since it is imported inside the function
         with patch('yfinance.Ticker') as mock_Ticker, \
@@ -24,28 +25,27 @@ class TestBullPutScreener(unittest.TestCase):
 
                 # 1. Setup History Data
                 # Create data such that:
-                # NVDA: Price 180 > SMA 50 (Say SMA is 170) -> BULLISH
-                # AMD: Price 120 > SMA 50 (Say SMA is 110) -> BULLISH
-                # BAD: Price 50 < SMA 50 (Say SMA is 60) -> BEARISH (Should be filtered)
+                # NVDA: Price 180 > SMA 50 (Say SMA is 170) -> BULLISH. High Vol.
+                # AMD: Price 120 > SMA 50 (Say SMA is 110) -> BULLISH. High Vol.
+                # BAD: Price 50 < SMA 50 (Say SMA is 60) -> BEARISH (Should be filtered).
+                # ILLIQUID: Price 100 > SMA 50, but Low Volume (<1M).
 
                 price = 100.0
+                volume = 2000000 # Default Liquid
+
                 if ticker == "NVDA": price = 180.0
                 elif ticker == "AMD": price = 120.0
                 elif ticker == "BAD": price = 50.0
+                elif ticker == "ILLIQUID":
+                    price = 100.0
+                    volume = 50000
 
-                dates = pd.date_range(end=pd.Timestamp.now(), periods=60)
-                # Create a trend.
-                # For BULLISH, Price > Rolling Mean.
-                # Flat price works if we cheat the SMA calc or provide long history where past was lower.
-                # Let's just provide constant price and ensure SMA calculation works.
-                # If constant, Price == SMA. Code checks: if curr_price < sma_50: return None.
-                # 180 < 180 is False. It passes.
-                # For BAD, we make price drop at the end.
+                dates = pd.date_range(end=pd.Timestamp.now(), periods=250) # Need > 200 for safe length checks
 
-                prices = [price] * 60
+                prices = [price] * 250
                 if ticker == "BAD":
                     # SMA will be higher if past prices were higher
-                    prices = [60.0] * 50 + [50.0] * 10
+                    prices = [60.0] * 200 + [50.0] * 50
                     # SMA approx 58. Current 50. 50 < 58. Filtered.
 
                 df = pd.DataFrame({
@@ -53,7 +53,7 @@ class TestBullPutScreener(unittest.TestCase):
                     "High": prices,
                     "Low": prices,
                     "Close": prices,
-                    "Volume": [1000000] * 60
+                    "Volume": [volume] * 250
                 }, index=dates)
 
                 instance.history.return_value = df
@@ -106,10 +106,14 @@ class TestBullPutScreener(unittest.TestCase):
             mock_delta.side_effect = side_effect_delta
 
             # Execute
-            results = screen_bull_put_spreads(["NVDA", "AMD", "BAD"], min_roi=0.01)
+            results = screen_bull_put_spreads(["NVDA", "AMD", "BAD", "ILLIQUID"], min_roi=0.01)
 
             # Assertions
-            self.assertEqual(len(results), 2, "Should return 2 results (NVDA, AMD), BAD should be filtered")
+            # Should return 2 results (NVDA, AMD).
+            # BAD filtered by Trend.
+            # ILLIQUID filtered by Volume.
+
+            self.assertEqual(len(results), 2, f"Should return 2 results, got {len(results)}. Results: {[r['ticker'] for r in results]}")
 
             nvda = next((r for r in results if r['ticker'] == "NVDA"), None)
             amd = next((r for r in results if r['ticker'] == "AMD"), None)
@@ -131,7 +135,18 @@ class TestBullPutScreener(unittest.TestCase):
             # Short Bid (170): 17.0 - 0.05 = 16.95
             # Long Ask (165): 16.5 + 0.05 = 16.55
             # Credit = 16.95 - 16.55 = 0.40
-            self.assertAlmostEqual(nvda['credit'], 0.40)
+            # Note: The new code returns credit in DOLLARS ($40.0), not per share ($0.40)
+            # The mocked calc: round(credit * 100, 2)
+            self.assertAlmostEqual(nvda['credit'], 40.0)
+
+            # Check ROI
+            # Width = 5.0 -> $500 Risk - $40 Credit = $460 Max Risk
+            # ROI = 40 / 460 = 0.0869 -> 8.7%
+            self.assertAlmostEqual(nvda['roi_pct'], 8.7, places=1)
+
+            # Check IV Status field exists
+            self.assertIn('iv_status', nvda)
+            self.assertIn('pop', nvda)
 
 if __name__ == '__main__':
     unittest.main()
