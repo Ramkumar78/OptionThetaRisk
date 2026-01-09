@@ -398,28 +398,11 @@ def create_app(testing: bool = False) -> Flask:
     @app.route('/screen/turtle', methods=['GET'])
     def screen_turtle():
         region = request.args.get('region', 'us')
+        time_frame = request.args.get('time_frame', '1d')
         app.logger.info(f"Turtle Screen request: region={region}")
-        tickers = get_tickers_for_region(region)
 
-        results = []
         try:
-            data = get_cached_market_data(tickers, period="1y")
-            for ticker in tickers:
-                try:
-                    df = None
-                    if isinstance(data.columns, pd.MultiIndex) and ticker in data.columns.levels[0]:
-                        df = data[ticker].dropna()
-                    elif not isinstance(data.columns, pd.MultiIndex):
-                         df = data
-
-                    if df is not None:
-                        strat = TurtleStrategy()
-                        res = strat.analyze(df)
-                        if res and res.get('signal') != 'WAIT':
-                            res['Ticker'] = ticker
-                            results.append(res)
-                except: pass
-
+            results = screener.screen_turtle_setups(region=region, time_frame=time_frame)
             app.logger.info(f"Turtle Screen completed. Results: {len(results)}")
             return jsonify(results)
         except Exception as e:
