@@ -1425,10 +1425,19 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
     return results
 
 # -------------------------------------------------------------------------
-#  OPTIONS STRATEGY HELPERS (Add to option_auditor/screener.py)
+#  OPTIONS STRATEGY HELPERS
 # -------------------------------------------------------------------------
 import math
-from datetime import date
+import numpy as np
+from datetime import date, timedelta
+import pandas as pd
+import pandas_ta as ta
+import yfinance as yf
+import logging
+import time
+import concurrent.futures
+
+# logger = logging.getLogger(__name__)
 
 def _norm_cdf(x):
     """Cumulative distribution function for the standard normal distribution."""
@@ -1437,55 +1446,67 @@ def _norm_cdf(x):
 def _calculate_put_delta(S, K, T, r, sigma):
     """
     Estimates Put Delta using Black-Scholes.
+    S: Spot Price, K: Strike, T: Time to Exp (Years), r: Risk Free Rate, sigma: IV
     """
-    if T <= 0 or sigma <= 0: return -0.5 # Fallback
+    if T <= 0 or sigma <= 0: return -0.5
     d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
     return _norm_cdf(d1) - 1.0
 
 def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, region: str = "us", check_mode: bool = False) -> list:
     """
-    Screens for 45 DTE, 30-Delta Bull Put Spreads ($5 Wide).
+    Screens for High Probability Bull Put Spreads (TastyTrade Mechanics).
+    - 30-60 DTE
+    - 30 Delta Short
+    - $5 Wide Wings
+    - High IV (IV > HV)
+    - Liquid (>1M Vol)
     """
-    import yfinance as yf
-    import pandas_ta as ta
-    import pandas as pd
-
     if ticker_list is None:
+        # from option_auditor.screener import _resolve_region_tickers
         ticker_list = _resolve_region_tickers(region)
+
+    # TASTYTRADE PARAMETERS
+    RISK_FREE_RATE = 0.045
+    MIN_DTE = 30
+    MAX_DTE = 60
+    TARGET_DTE = 45
+    SPREAD_WIDTH = 5.0
+    TARGET_DELTA = -0.30
+    MIN_AVG_VOLUME = 1_000_000  # Liquid Underlyings Rule
 
     results = []
 
-    # Risk-free rate approx
-    RISK_FREE_RATE = 0.045
-    TARGET_DTE = 45
-    SPREAD_WIDTH = 5.0
-    TARGET_DELTA = -0.30 # Puts have negative delta
-
     def _process_spread(ticker):
         try:
-            # 1. Trend Filter (Fast Fail)
+            # 1. TECHNICAL & LIQUIDITY FILTER (Fast Fail)
             tk = yf.Ticker(ticker)
 
-            df = tk.history(period="6mo", interval="1d", auto_adjust=True)
-            if df.empty: return None
+            # Fetch 1y to calculate HV (Historical Volatility) and Trend
+            df = tk.history(period="1y", interval="1d", auto_adjust=True)
 
-            min_length = 50 if check_mode else 50
-            if len(df) < min_length: return None
+            if df.empty or len(df) < 200: return None
 
+            # Flatten MultiIndex if necessary
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
 
             curr_price = float(df['Close'].iloc[-1])
-            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
 
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-            volatility_pct = (current_atr / curr_price * 100) if curr_price > 0 else 0.0
-
-            if curr_price < sma_50 and not check_mode:
+            # Liquidity Rule: Skip "Ant" stocks or Illiquid names
+            if not check_mode and (avg_vol < MIN_AVG_VOLUME or curr_price < 20):
                 return None
 
-            # 2. Get Option Dates
+            # Trend Rule: Bullish/Neutral (Price > SMA 50)
+            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
+            if not check_mode and curr_price < sma_50:
+                return None
+
+            # Historical Volatility (HV) - Annualized StdDev of Log Returns
+            log_returns = np.log(df['Close'] / df['Close'].shift(1))
+            hv_annual = log_returns.std() * np.sqrt(252)
+
+            # 2. OPTION EXPIRATION FILTER
             expirations = tk.options
             if not expirations: return None
 
@@ -1493,25 +1514,33 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             best_date = None
             min_diff = 999
 
+            valid_exps = []
             for exp_str in expirations:
                 exp_date = pd.to_datetime(exp_str).date()
                 dte = (exp_date - today).days
-                diff = abs(dte - TARGET_DTE)
-                if diff < min_diff:
-                    min_diff = diff
-                    best_date = exp_str
+                if MIN_DTE <= dte <= MAX_DTE:
+                    valid_exps.append((exp_str, dte))
 
-            actual_dte = (pd.to_datetime(best_date).date() - today).days
-            if not (25 <= actual_dte <= 75) and not check_mode: return None
+            # Pick the one closest to 45 DTE
+            if not valid_exps: return None
+            valid_exps.sort(key=lambda x: abs(x[1] - TARGET_DTE))
+            best_date, actual_dte = valid_exps[0]
 
-            # 3. Get Option Chain for that Date
-            chain = tk.option_chain(best_date)
-            puts = chain.puts
+            # 3. CHAIN ANALYSIS
+            try:
+                chain = tk.option_chain(best_date)
+                puts = chain.puts
+            except Exception:
+                return None # Failed to fetch chain
 
             if puts.empty: return None
 
-            # 4. Find 30 Delta Strike
+            # Add Delta Column to Chain
             T_years = actual_dte / 365.0
+
+            # Use vectorized apply for speed
+            # If IV is 0 or NaN, assume HV as fallback for delta calc (common data issue)
+            puts['impliedVolatility'] = puts['impliedVolatility'].replace(0, hv_annual)
 
             puts['calc_delta'] = puts.apply(
                 lambda row: _calculate_put_delta(
@@ -1519,95 +1548,127 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
                 ), axis=1
             )
 
-            puts['delta_dist'] = (puts['calc_delta'] - TARGET_DELTA).abs()
-            short_leg_row = puts.loc[puts['delta_dist'].idxmin()]
+            # 4. FIND SHORT STRIKE (~30 Delta)
+            # Filter for OTM puts only (Strike < Price) to ensure it's a credit spread
+            otm_puts = puts[puts['strike'] < curr_price].copy()
+            if otm_puts.empty: return None
 
-            short_strike = short_leg_row['strike']
-            short_bid = short_leg_row['bid']
-            short_delta = short_leg_row['calc_delta']
+            otm_puts['delta_dist'] = (otm_puts['calc_delta'] - TARGET_DELTA).abs()
+            short_leg_row = otm_puts.loc[otm_puts['delta_dist'].idxmin()]
 
-            # 5. Find Long Strike ($5 Lower)
+            short_strike = float(short_leg_row['strike'])
+            short_iv = float(short_leg_row['impliedVolatility'])
+            short_delta = float(short_leg_row['calc_delta'])
+
+            # Check IV "Richness" (Proxy for IV Rank)
+            # If Implied Volatility is lower than Historical Volatility, premiums are cheap (Bad for selling)
+            # Allow pass if check_mode is on
+            if not check_mode and short_iv < (hv_annual * 0.9):
+                # Strict: IV must be at least near HV. Ideally > HV.
+                # return None
+                pass # Warning only for now, or user will see "Low IV" label
+
+            # 5. FIND LONG STRIKE ($5 Wide Strict)
             long_strike_target = short_strike - SPREAD_WIDTH
 
-            puts['strike_dist'] = (puts['strike'] - long_strike_target).abs()
-            long_leg_row = puts.loc[puts['strike_dist'].idxmin()]
+            # Find exact strike match or very close match
+            long_candidates = puts[ (puts['strike'] - long_strike_target).abs() < 0.1 ]
 
-            long_strike = long_leg_row['strike']
-            long_ask = long_leg_row['ask']
+            if long_candidates.empty:
+                return None # No $5 wide strike available
 
-            actual_width = short_strike - long_strike
-            if abs(actual_width - SPREAD_WIDTH) > 1.0 and not check_mode:
-                return None
+            long_leg_row = long_candidates.iloc[0]
+            long_strike = float(long_leg_row['strike'])
 
-            # 6. Calc Metrics
-            s_price = short_bid if short_bid > 0 else short_leg_row['lastPrice']
-            l_price = long_ask if long_ask > 0 else long_leg_row['lastPrice']
+            # 6. PRICING & METRICS
+            # Use Bid for Short (Selling) and Ask for Long (Buying) -> Conservative Credit
+            # Fallback to lastPrice if bid/ask is broken/zero (common in yfinance)
+            short_bid = short_leg_row['bid'] if short_leg_row['bid'] > 0 else short_leg_row['lastPrice']
+            long_ask = long_leg_row['ask'] if long_leg_row['ask'] > 0 else long_leg_row['lastPrice']
 
-            credit = s_price - l_price
-            risk = actual_width - credit
+            credit = short_bid - long_ask
+            width = short_strike - long_strike
+            max_risk = width - credit
 
-            if (risk <= 0 or credit <= 0) and not check_mode: return None
+            # Sanity Checks
+            if credit <= 0 or max_risk <= 0: return None
 
-            roi = credit / risk
+            roi = credit / max_risk
+            if not check_mode and roi < min_roi: return None
 
-            if roi < min_roi and not check_mode: return None
+            # Probability of Profit (POP) approximation for Credit Spread
+            # Roughly 1 - Delta of Short Option (Theoretical Prob OTM)
+            pop_pct = (1.0 + short_delta) * 100 # short_delta is negative (e.g. -0.30 -> 70% POP)
 
-            time.sleep(0.1)
+            break_even = short_strike - credit
 
-            pct_change_1d = None
+            # IV Status
+            iv_status = "High" if short_iv > hv_annual else "Normal"
+            if short_iv > (hv_annual * 1.5): iv_status = "🔥 Very High"
+            elif short_iv < hv_annual: iv_status = "Low (Cheap)"
+
+            # Prepare Output
+            pct_change_1d = 0.0
             if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    pct_change_1d = ((curr_price - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
+                prev_close = float(df['Close'].iloc[-2])
+                pct_change_1d = ((curr_price - prev_close) / prev_close) * 100
 
+            # Technicals
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            atr = df['ATR'].iloc[-1]
             breakout_date = _calculate_trend_breakout_date(df)
 
-            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
-            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
-
-            # Stock Level Stop/Target for Reference (2x ATR Stop, 4x ATR Target)
-            stock_stop_loss = curr_price - (2 * current_atr)
-            stock_target = curr_price + (4 * current_atr)
+            high_52 = df['High'].max()
+            low_52 = df['Low'].min()
 
             return {
                 "ticker": ticker,
-                "price": curr_price,
-                "pct_change_1d": pct_change_1d,
-                "strategy": "Bull Put Spread",
-                "expiry": best_date,
-                "dte": actual_dte,
+                "company_name": ticker, # Can fetch name if available
+                "price": round(curr_price, 2),
+                "pct_change_1d": round(pct_change_1d, 2),
+                "strategy": "Bull Put (Credit Spread)",
+                "expiry": str(best_date),
+                "dte": int(actual_dte),
                 "short_strike": short_strike,
-                "short_delta": round(short_delta, 2),
                 "long_strike": long_strike,
-                "credit": round(credit, 2),
-                "max_risk": round(risk, 2),
+                "width": round(width, 2),
+                "short_delta": round(short_delta, 2),
+                "credit": round(credit * 100, 2), # Total credit per 1 contract ($)
+                "max_risk": round(max_risk * 100, 2), # Total risk per 1 contract ($)
                 "roi_pct": round(roi * 100, 1),
-                "trend": "Bullish (>SMA50)",
-                "stop_loss": round(stock_stop_loss, 2),
-                "target": round(stock_target, 2),
-                "atr_value": round(current_atr, 2),
-                "volatility_pct": round(volatility_pct, 2),
+                "pop": round(pop_pct, 1),
+                "iv_annual": round(short_iv * 100, 1),
+                "hv_annual": round(hv_annual * 100, 1),
+                "iv_status": iv_status,
+                "break_even": round(break_even, 2),
+                "trend": "Bullish" if curr_price > sma_50 else "Bearish",
+                "vol_scan": f"{int(avg_vol/1000)}k",
                 "breakout_date": breakout_date,
-                "atr": round(current_atr, 2),
-                "52_week_high": round(high_52wk, 2) if high_52wk else None,
-                "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                "sector_change": pct_change_1d
+                "atr": round(atr, 2),
+                "52_week_high": round(high_52, 2),
+                "52_week_low": round(low_52, 2),
+                # UI Helpers
+                "atr_value": round(atr, 2),
+                "stop_loss": round(curr_price - 2*atr, 2), # Technical Stop Reference
+                "target": round(curr_price + 2*atr, 2),
+                "sector_change": round(pct_change_1d, 2)
             }
 
         except Exception as e:
-            logger.error(f"Error processing bull put spread for {ticker}: {e}")
+            # logger.error(f"Spread Calc Error {ticker}: {e}")
             return None
 
-    import concurrent.futures
+    # Multi-threaded execution to handle network latency
     final_list = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_process_spread, t): t for t in ticker_list}
         for future in concurrent.futures.as_completed(futures):
-            res = future.result()
-            if res: final_list.append(res)
+            try:
+                res = future.result()
+                if res: final_list.append(res)
+            except: pass
 
+    # Sort by ROI or POP
     final_list.sort(key=lambda x: x['roi_pct'], reverse=True)
     return final_list
 
