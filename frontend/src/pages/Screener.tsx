@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatCurrency } from '../utils/formatting';
+import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
 // 1. STRATEGY DEFINITIONS
 const STRATEGIES: Record<string, {
@@ -484,6 +484,7 @@ const Screener: React.FC = () => {
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {sortedResults.map((r, i) => {
                                     const verdict = r.Setup || r.verdict || r.signal || r.Strategy || 'WAIT';
+                                    const currencySymbol = getCurrencySymbol(r.Ticker || r.ticker);
 
                                     // Helper for Stop/Target styling
                                     const stopVal = r.Stop || r.stop || 0;
@@ -494,7 +495,7 @@ const Screener: React.FC = () => {
                                     return (
                                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                             <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100">{r.Ticker || r.ticker}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, '$')}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, currencySymbol)}</td>
 
                                             {/* ATR DATA */}
                                             <td className="px-6 py-4 text-right font-mono text-xs text-gray-500">
@@ -518,10 +519,10 @@ const Screener: React.FC = () => {
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end gap-1">
                                                     <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono">
-                                                        T: {targetVal ? formatCurrency(targetVal, '$') : '-'}
+                                                        T: {targetVal ? formatCurrency(targetVal, currencySymbol) : '-'}
                                                     </span>
                                                     <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-mono">
-                                                        S: {stopVal ? formatCurrency(stopVal, '$') : '-'}
+                                                        S: {stopVal ? formatCurrency(stopVal, currencySymbol) : '-'}
                                                     </span>
                                                 </div>
                                             </td>
