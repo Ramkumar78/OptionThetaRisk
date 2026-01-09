@@ -101,7 +101,7 @@ def test_screen_bull_put_spreads_logic(mock_ticker_cls):
     mock_ticker_cls.return_value = mock_ticker
 
     # 1. Mock History (Uptrend)
-    mock_ticker.history.return_value = create_mock_df(periods=100, trend='up')
+    mock_ticker.history.return_value = create_mock_df(periods=250, trend='up')
 
     # 2. Mock Options dates
     today = datetime.today()

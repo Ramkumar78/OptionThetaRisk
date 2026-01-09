@@ -13,7 +13,7 @@ def test_screen_bull_put_valid(mock_ticker, mock_market_data):
     # 4. ROI > Threshold
 
     # Mock History
-    df = mock_market_data(days=100, price=100.0)
+    df = mock_market_data(days=250, price=100.0)
     # Ensure Price > SMA 50
     # SMA 50 approx 100. Price 105.
     df.iloc[-1, df.columns.get_loc('Close')] = 105.0
@@ -66,7 +66,7 @@ def test_screen_bull_put_valid(mock_ticker, mock_market_data):
 
 @patch('option_auditor.screener.yf.Ticker')
 def test_screen_bull_put_bearish_trend(mock_ticker, mock_market_data):
-    df = mock_market_data(days=100, price=100.0)
+    df = mock_market_data(days=250, price=100.0)
     # Price < SMA 50
     df.iloc[-1, df.columns.get_loc('Close')] = 80.0
     # SMA approx 100
@@ -80,7 +80,7 @@ def test_screen_bull_put_bearish_trend(mock_ticker, mock_market_data):
 
 @patch('option_auditor.screener.yf.Ticker')
 def test_screen_bull_put_no_options(mock_ticker, mock_market_data):
-    df = mock_market_data(days=100, price=100.0)
+    df = mock_market_data(days=250, price=100.0)
     mock_instance = MagicMock()
     mock_instance.history.return_value = df
     mock_instance.options = [] # No options
