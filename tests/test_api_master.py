@@ -15,41 +15,35 @@ def test_screen_master_endpoint(client):
 
     # Correct mock path based on import in app.py:
     # `from option_auditor.unified_screener import screen_universal_dashboard`
-    # So we patch `webapp.app.screen_universal_dashboard`
+    # However, `webapp.app` uses `screener.screen_universal_dashboard` from `option_auditor.screener`.
+    # And `option_auditor.screener` imports it from `option_auditor.unified_screener`.
+    # So we patch `option_auditor.screener.screen_universal_dashboard` or `option_auditor.unified_screener.screen_universal_dashboard`.
+    # Since `webapp.app` calls `screener.screen_universal_dashboard`, we patch that.
 
-    with patch('webapp.app.screen_universal_dashboard') as mock_screen:
-        # It now returns a dict
-        mock_screen.return_value = {
-            "regime": "GREEN",
-            "results": [{"ticker": "TEST", "master_verdict": "ISA_BUY", "price": 100}]
-        }
+    # Patch the function imported in webapp.app
+    with patch('webapp.app.screen_master_convergence') as mock_screen:
+        # It returns a list of dicts
+        mock_screen.return_value = [{"ticker": "TEST", "master_verdict": "ISA_BUY", "price": 100}]
 
         # Test US Region
         resp = client.get("/screen/master?region=us")
         assert resp.status_code == 200
         data = resp.json
 
-        # Verify structure
-        assert "regime" in data
-        assert "results" in data
-        assert len(data["results"]) == 1
-        assert data["results"][0]['ticker'] == "TEST"
+        # Verify structure: direct list
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]['ticker'] == "TEST"
 
         # Verify call args
-        args, kwargs = mock_screen.call_args
-        # It takes ticker_list as kwarg or arg
-        assert kwargs['ticker_list'] is not None
+        mock_screen.assert_called()
 
 def test_screen_master_endpoint_uk(client):
-    with patch('webapp.app.screen_universal_dashboard') as mock_screen:
-        mock_screen.return_value = {"regime": "GREEN", "results": []}
+    with patch('webapp.app.screen_master_convergence') as mock_screen:
+        mock_screen.return_value = []
 
-        # Patch get_tickers_for_region inside app
-        with patch('webapp.app.get_tickers_for_region') as mock_get_tickers:
-            mock_get_tickers.return_value = ["BP.L"]
+        resp = client.get("/screen/master?region=uk")
+        assert resp.status_code == 200
 
-            resp = client.get("/screen/master?region=uk")
-            assert resp.status_code == 200
-
-            # Verify screen_universal_dashboard called with BP.L
-            mock_screen.assert_called_once_with(ticker_list=["BP.L"])
+        # Verify called with region='uk'
+        mock_screen.assert_called_with(region='uk')

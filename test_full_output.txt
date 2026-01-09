@@ -1,0 +1,154 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /app
+configfile: pytest.ini
+plugins: cov-7.0.0, anyio-4.12.1
+collected 546 items
+
+test_breakout_execution.py .                                             [  0%]
+test_screener_execution.py .                                             [  0%]
+test_screener_execution_debug.py .                                       [  0%]
+tests/strategies/test_strategy_bull_put.py ...                           [  1%]
+tests/strategies/test_strategy_darvas.py ...                             [  1%]
+tests/strategies/test_strategy_ema.py ..                                 [  2%]
+tests/strategies/test_strategy_fortress.py ...                           [  2%]
+tests/strategies/test_strategy_fourier.py .....                          [  3%]
+tests/strategies/test_strategy_hybrid.py ...                             [  4%]
+tests/strategies/test_strategy_isa.py .......                            [  5%]
+tests/strategies/test_strategy_master.py ....                            [  6%]
+tests/strategies/test_strategy_mms.py ...                                [  6%]
+tests/strategies/test_strategy_quantum.py ...                            [  7%]
+tests/strategies/test_strategy_turtle.py .........                       [  8%]
+tests/test_analyzer_extended_more.py ................                    [ 11%]
+tests/test_api_integration.py ....                                       [ 12%]
+tests/test_api_master.py ..                                              [ 12%]
+tests/test_api_quant.py .                                                [ 13%]
+tests/test_backtest_extended.py .........                                [ 14%]
+tests/test_backtester_new.py ..                                          [ 15%]
+tests/test_breakeven_metrics.py ..                                       [ 15%]
+tests/test_cache_logic.py ..                                             [ 15%]
+tests/test_calendar.py .                                                 [ 15%]
+tests/test_circuit_breaker.py ....                                       [ 16%]
+tests/test_coverage_improvements.py ......                               [ 17%]
+tests/test_data_robustness.py ...                                        [ 18%]
+tests/test_endpoint_check_stock.py ........                              [ 19%]
+tests/test_global_fees.py ..                                             [ 20%]
+tests/test_grandmaster_strategy.py ...                                   [ 20%]
+tests/test_grouping.py ..                                                [ 21%]
+tests/test_hedge_risk_logic.py ....                                      [ 21%]
+tests/test_hybrid_fix.py .                                               [ 21%]
+tests/test_ibkr_parser.py ....                                           [ 22%]
+tests/test_india_data_fetch_fix.py ...........                           [ 24%]
+tests/test_isa_api_verdict.py ....                                       [ 25%]
+tests/test_itm_risk.py ..                                                [ 25%]
+tests/test_journal.py .                                                  [ 26%]
+tests/test_journal_analyzer.py .....                                     [ 26%]
+tests/test_journal_coverage.py ....                                      [ 27%]
+tests/test_leakage.py ..                                                 [ 28%]
+tests/test_legs_desc.py .....                                            [ 28%]
+tests/test_main_analyzer.py ...............                              [ 31%]
+tests/test_main_analyzer_coverage.py ......                              [ 32%]
+tests/test_manual_entry.py ...                                           [ 33%]
+tests/test_manual_parser_case.py .                                       [ 33%]
+tests/test_master_screener_india.py ..                                   [ 33%]
+tests/test_master_screener_new.py ......                                 [ 34%]
+tests/test_missing_keys.py ...                                           [ 35%]
+tests/test_optimization.py ..                                            [ 35%]
+tests/test_parser_stock.py ...                                           [ 36%]
+tests/test_parsers_extended.py .........                                 [ 38%]
+tests/test_parsers_extra.py ...                                          [ 38%]
+tests/test_parsers_warning_fixes.py ...                                  [ 39%]
+tests/test_performance.py .                                              [ 39%]
+tests/test_portfolio_risk.py .......                                     [ 40%]
+tests/test_quantum_api.py ..                                             [ 41%]
+tests/test_quantum_reproduce.py .                                        [ 41%]
+tests/test_quantum_screener_calculations.py .                            [ 41%]
+tests/test_region_strategies.py ....                                     [ 42%]
+tests/test_regression_groupby.py .                                       [ 42%]
+tests/test_rolling.py .                                                  [ 42%]
+tests/test_screener_bull_put.py .                                        [ 42%]
+tests/test_screener_coverage.py ........                                 [ 44%]
+tests/test_screener_coverage_extended.py ..........                      [ 45%]
+tests/test_screener_coverage_improvements.py .......                     [ 47%]
+tests/test_screener_coverage_new.py ........                             [ 48%]
+tests/test_screener_extended_more.py ............                        [ 50%]
+tests/test_screener_extra.py ........                                    [ 52%]
+tests/test_screener_features.py ...                                      [ 52%]
+tests/test_screener_fields.py .............                              [ 55%]
+tests/test_screener_fortress.py ..                                       [ 55%]
+tests/test_screener_fortress_repro.py .                                  [ 55%]
+tests/test_screener_gap_fill.py ...........                              [ 57%]
+tests/test_screener_hybrid.py ...                                        [ 58%]
+tests/test_screener_intervals.py ..                                      [ 58%]
+tests/test_screener_isa.py ....                                          [ 59%]
+tests/test_screener_isa_regions.py .                                     [ 59%]
+tests/test_screener_mms.py .....                                         [ 60%]
+tests/test_screener_regions_all.py ...                                   [ 61%]
+tests/test_screener_robustness.py ..                                     [ 61%]
+tests/test_sp500_loading.py ..                                           [ 61%]
+tests/test_storage.py ...........                                        [ 63%]
+tests/test_storage_extended.py ............                              [ 66%]
+tests/test_storage_gap_fill.py ..............                            [ 68%]
+tests/test_storage_url_fix.py ..                                         [ 69%]
+tests/test_strategy_classification.py .........................          [ 73%]
+tests/test_strategy_extended_more.py ..............                      [ 76%]
+tests/test_strategy_performance.py ...                                   [ 76%]
+tests/test_tasty_fills_csv.py .........                                  [ 78%]
+tests/test_ticker_normalization.py ...                                   [ 78%]
+tests/test_uk_350.py ..                                                  [ 79%]
+tests/test_uk_euro_strategy.py .                                         [ 79%]
+tests/test_unified_backtester.py .......                                 [ 80%]
+tests/test_unified_backtester_new.py ..                                  [ 81%]
+tests/test_unified_backtester_v2.py ....                                 [ 81%]
+tests/test_unified_screener.py .                                         [ 82%]
+tests/test_verdict_sample_size.py ..                                     [ 82%]
+tests/test_webapp_app_coverage.py ...................                    [ 85%]
+tests/test_webapp_coverage_new.py ...........                            [ 87%]
+tests/test_webapp_extended.py ..............                             [ 90%]
+tests/test_webapp_extra.py .....                                         [ 91%]
+tests/test_webapp_gap_fill.py ...........................                [ 96%]
+tests/test_webapp_routes.py ..                                           [ 96%]
+tests/test_webapp_storage_coverage.py ..................                 [100%]
+
+=============================== warnings summary ===============================
+tests/test_analyzer_extended_more.py: 2 warnings
+tests/test_breakeven_metrics.py: 2 warnings
+tests/test_calendar.py: 1 warning
+tests/test_coverage_improvements.py: 1 warning
+tests/test_global_fees.py: 3 warnings
+tests/test_ibkr_parser.py: 2 warnings
+tests/test_itm_risk.py: 2 warnings
+tests/test_leakage.py: 1 warning
+tests/test_main_analyzer.py: 10 warnings
+tests/test_main_analyzer_coverage.py: 1 warning
+tests/test_manual_entry.py: 1 warning
+tests/test_tasty_fills_csv.py: 9 warnings
+tests/test_ticker_normalization.py: 2 warnings
+tests/test_verdict_sample_size.py: 4 warnings
+  /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/openpyxl/packaging/core.py:99: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.datetime.utcnow()
+
+tests/test_analyzer_extended_more.py: 2 warnings
+tests/test_breakeven_metrics.py: 2 warnings
+tests/test_calendar.py: 1 warning
+tests/test_coverage_improvements.py: 1 warning
+tests/test_global_fees.py: 3 warnings
+tests/test_ibkr_parser.py: 2 warnings
+tests/test_itm_risk.py: 2 warnings
+tests/test_leakage.py: 1 warning
+tests/test_main_analyzer.py: 10 warnings
+tests/test_main_analyzer_coverage.py: 1 warning
+tests/test_manual_entry.py: 1 warning
+tests/test_tasty_fills_csv.py: 9 warnings
+tests/test_ticker_normalization.py: 2 warnings
+tests/test_verdict_sample_size.py: 4 warnings
+  /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/openpyxl/writer/excel.py:292: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    workbook.properties.modified = datetime.datetime.utcnow()
+
+tests/test_master_screener_india.py: 100 warnings
+tests/test_master_screener_new.py: 1 warning
+  /app/option_auditor/master_screener.py:143: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+    crossovers = above_50 & (~above_50.shift(1).fillna(False))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================ 546 passed, 183 warnings in 249.20s (0:04:09) =================

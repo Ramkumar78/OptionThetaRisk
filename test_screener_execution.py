@@ -6,7 +6,7 @@ from option_auditor.screener import screen_fourier_cycles, screen_dynamic_volati
 
 class TestScreenerExecution(unittest.TestCase):
     @patch('option_auditor.screener.fetch_batch_data_safe')
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.data_utils.get_cached_market_data')
     def test_screeners_run(self, mock_cached, mock_batch):
         # Mock DataFrame
         dates = pd.date_range('2023-01-01', periods=200)
