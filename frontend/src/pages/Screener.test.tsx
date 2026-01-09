@@ -125,4 +125,50 @@ describe('Screener Component', () => {
     await user.selectOptions(strategySelect, 'grandmaster');
     expect(screen.getByText(/The Fortress Protocol/i)).toBeInTheDocument();
   });
+
+  // NEW TEST CASE: Verify UK Currency Formatting
+  it('correctly formats UK prices as £ and divides by 100', async () => {
+      const ukMockData = {
+          results: [
+              {
+                  Ticker: 'AZN.L',
+                  Price: 10500.0, // 10,500 pence
+                  Setup: 'BUY',
+                  Target: 12000.0,
+                  Stop: 9500.0
+              }
+          ],
+          regime: 'NEUTRAL'
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+          json: () => Promise.resolve(ukMockData)
+      });
+
+      const user = userEvent.setup();
+
+      render(
+          <BrowserRouter>
+              <Screener />
+          </BrowserRouter>
+      );
+
+      const runBtn = screen.getByRole('button', { name: /RUN SCANNER/i });
+      await user.click(runBtn);
+
+      await waitFor(() => {
+          // Should display AZN.L
+          expect(screen.getByText('AZN.L')).toBeInTheDocument();
+
+          // 10500p should become £105.00
+          // The formatCurrency function divides by 100 for '£'
+          expect(screen.getByText('£105.00')).toBeInTheDocument();
+
+          // Target: 12000p -> £120.00
+          expect(screen.getByText(/T: £120.00/)).toBeInTheDocument();
+
+          // Stop: 9500p -> £95.00
+          expect(screen.getByText(/S: £95.00/)).toBeInTheDocument();
+      });
+  });
 });
