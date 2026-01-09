@@ -572,9 +572,9 @@ const Screener: React.FC = () => {
                         onChange={(e) => setBacktestStrategy(e.target.value)}
                         className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
                     >
-                        <option value="grandmaster">Grandmaster</option>
-                        <option value="turtle">Turtle</option>
-                        <option value="isa">ISA Trend</option>
+                        {Object.entries(STRATEGIES).map(([key, s]) => (
+                            <option key={key} value={key}>{s.name}</option>
+                        ))}
                     </select>
                     <button
                         onClick={handleBacktest}

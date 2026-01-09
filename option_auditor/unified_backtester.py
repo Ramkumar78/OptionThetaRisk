@@ -226,7 +226,7 @@ class UnifiedBacktester:
                      sell_signal = True
                      current_stop_reason = "TREND CHANGE (<SMA50)"
 
-            elif self.strategy_type == 'ema_5_13':
+            elif self.strategy_type == 'ema_5_13' or self.strategy_type == 'ema':
                 ema5 = row['ema5']
                 ema13 = row['ema13']
                 prev_ema5 = prev_row['ema5']
@@ -252,7 +252,7 @@ class UnifiedBacktester:
                     sell_signal = True
                     current_stop_reason = "BOX LOW BREAK"
 
-            elif self.strategy_type == 'mms_ote':
+            elif self.strategy_type == 'mms_ote' or self.strategy_type == 'mms':
                 # RSI < 40 (Oversold/Retracement)
                 if price > row['sma50'] and row['rsi'] < 40:
                     buy_signal = True

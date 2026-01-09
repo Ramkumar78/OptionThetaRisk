@@ -131,5 +131,5 @@ def test_fetch_data_multiindex_handling(mock_yf_download):
     df = bt.fetch_data()
 
     assert isinstance(df, pd.DataFrame)
-    assert 'close' in df.columns
-    assert 'spy' in df.columns
+    assert 'Close' in df.columns
+    assert 'Spy' in df.columns
