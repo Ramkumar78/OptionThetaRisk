@@ -483,35 +483,77 @@ def create_app(testing: bool = False) -> Flask:
     def screen_isa():
         region = request.args.get('region', 'us')
         app.logger.info(f"ISA Screen request: region={region}")
+
+        # Check result cache first
+        cache_key = ("isa", region)
+        cached = get_cached_screener_result(cache_key)
+        if cached:
+            app.logger.info("Serving cached ISA screen result")
+            return jsonify({"results": cached})
+
         tickers = get_tickers_for_region(region)
+
+        # Correct Cache Name logic to use Shared Cache for US/SP500
+        cache_name = f"market_scan_{region}"
+        if region in ['us', 'united_states', 'sp500']:
+            cache_name = "market_scan_v1"
+        elif region == 'uk':
+            cache_name = "market_scan_uk"
+        elif region == 'india':
+            cache_name = "market_scan_india"
+        elif region == 'uk_euro':
+             cache_name = "market_scan_europe"
 
         results = []
         try:
-            data = get_cached_market_data(tickers, period="2y")
+            data = get_cached_market_data(tickers, period="2y", cache_name=cache_name)
 
             if data.empty:
                 app.logger.warning("ISA Screen: Data empty")
                 return jsonify([])
 
-            for ticker in tickers:
-                try:
-                    df = None
-                    if isinstance(data.columns, pd.MultiIndex):
-                        if ticker in data.columns.levels[0]:
-                            df = data[ticker].dropna()
-                    else:
-                        df = data
+            # Robust Iteration Logic (Handles both MultiIndex and Flat DataFrames)
+            iterator = []
+            if isinstance(data.columns, pd.MultiIndex):
+                # Standard Batch Result: Iterate over Level 0 (Tickers)
+                iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
+            else:
+                # Flat Result (Single Ticker or Flattened)
+                # If we asked for 1 ticker, this is expected.
+                # If we asked for 500, this is bad unless only 1 returned.
+                if len(tickers) == 1:
+                     iterator = [(tickers[0], data)]
+                elif not data.empty:
+                     # Attempt to use as is if ambiguous, or skip
+                     # Usually shouldn't happen with fetch_batch_data_safe unless strict single mode
+                     pass
 
-                    if df is not None:
+            for ticker, df_raw in iterator:
+                try:
+                    if ticker not in tickers: continue
+
+                    # Ensure df is clean
+                    df = df_raw.dropna(how='all')
+
+                    if df is not None and not df.empty:
+                        # Handle potential MultiIndex columns remaining (rare)
+                        if isinstance(df.columns, pd.MultiIndex):
+                            df = df.droplevel(0, axis=1)
+
                         strategy = IsaStrategy(ticker, df)
                         res = strategy.analyze()
                         if res and res['Signal'] != 'WAIT':
                             results.append(res)
                 except Exception as e:
-                    app.logger.warning(f"ISA Screen failed for {ticker}: {e}")
+                    # Log but continue - prevent one bad ticker from killing the loop
+                    # app.logger.warning(f"ISA Screen failed for {ticker}: {e}")
                     continue
 
             app.logger.info(f"ISA Screen completed. Results: {len(results)}")
+
+            # Cache the successful result
+            cache_screener_result(cache_key, results)
+
             return jsonify({"results": results})
         except Exception as e:
             app.logger.exception(f"ISA Screen Error: {e}")
