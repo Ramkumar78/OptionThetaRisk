@@ -643,33 +643,41 @@ const Screener: React.FC = () => {
                 </div>
 
                 {backtestResult && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 dark:bg-gray-700/30 p-6 rounded-lg border border-gray-100 dark:border-gray-700">
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase">Total Return</p>
-                            <p className={`text-xl font-bold ${(backtestResult.strategy_return || backtestResult.total_return_pct || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {(backtestResult.strategy_return ?? backtestResult.total_return_pct ?? 0).toFixed(2)}%
-                            </p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase">Win Rate</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">
-                                {String(backtestResult.win_rate ?? backtestResult.win_rate_pct ?? '0').replace('%', '')}%
-                            </p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase">Profit Factor</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">
-                                {backtestResult.profit_factor ? backtestResult.profit_factor.toFixed(2) : 'N/A'}
-                            </p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase">Trades</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white">
-                                {backtestResult.trades ?? backtestResult.total_trades ?? 0}
-                            </p>
+                    <div className="bg-gray-50 dark:bg-gray-700/30 p-6 rounded-lg border border-gray-100 dark:border-gray-700">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase">Strategy Return</p>
+                                <p className={`text-xl font-bold ${(backtestResult.strategy_return || backtestResult.total_return_pct || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {(backtestResult.strategy_return ?? backtestResult.total_return_pct ?? 0).toFixed(2)}%
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    {(backtestResult.total_days_held ?? 0)} days in market
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase">Buy & Hold Return</p>
+                                <p className={`text-xl font-bold ${(backtestResult.buy_hold_return_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {(backtestResult.buy_hold_return_pct ?? 0).toFixed(2)}%
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    {(backtestResult.buy_hold_days ?? 0)} days held
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase">Win Rate</p>
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                    {String(backtestResult.win_rate ?? backtestResult.win_rate_pct ?? '0').replace('%', '')}%
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase">Trades</p>
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                    {backtestResult.trades ?? backtestResult.total_trades ?? 0}
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="col-span-2 md:col-span-4 mt-2 flex justify-end">
+                        <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
                             <button
                                 onClick={() => navigate('/results', { state: { results: backtestResult } })}
                                 className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 font-bold bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg transition-colors"
