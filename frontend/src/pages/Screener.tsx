@@ -334,6 +334,12 @@ const Screener: React.FC = () => {
                      bVal = b.Target || b.target || 0;
                 }
 
+                // Special handling for Breakout (breakout_date)
+                if (sortConfig.key === 'Breakout') {
+                    aVal = a.Breakout || a.breakout_date || '';
+                    bVal = b.Breakout || b.breakout_date || '';
+                }
+
                 // Handle nested access or differing casing
                 if (sortConfig.key === 'Setup') {
                     aVal = a.Setup || a.verdict || a.signal || a.Strategy || 'WAIT';
@@ -345,10 +351,11 @@ const Screener: React.FC = () => {
                 }
 
                 // Numeric conversion
-                const aNum = parseFloat(aVal);
-                const bNum = parseFloat(bVal);
+                // Use Number() to avoid partial parsing (e.g. "2023-10-25" -> 2023)
+                const aNum = Number(aVal);
+                const bNum = Number(bVal);
 
-                if (!isNaN(aNum) && !isNaN(bNum)) {
+                if (!isNaN(aNum) && !isNaN(bNum) && aVal !== '' && bVal !== '') {
                     aVal = aNum;
                     bVal = bNum;
                 } else {
