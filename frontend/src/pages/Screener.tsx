@@ -214,6 +214,9 @@ const Screener: React.FC = () => {
     // Sorting State
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'Score', direction: 'desc' });
 
+    // Filter State
+    const [filterText, setFilterText] = useState('');
+
     // Backtest State
     const [backtestTicker, setBacktestTicker] = useState('');
     const [backtestStrategy, setBacktestStrategy] = useState('grandmaster');
@@ -305,12 +308,31 @@ const Screener: React.FC = () => {
         setSortConfig({ key, direction });
     };
 
+    // --- MEMOIZED RESULTS (SORTING + FILTERING) ---
     const sortedResults = useMemo(() => {
-        let sortable = [...results];
+        let processed = [...results];
+
+        // 1. Filter
+        if (filterText) {
+            const lowerFilter = filterText.toLowerCase();
+            processed = processed.filter(row => {
+                return Object.values(row).some(val =>
+                    String(val).toLowerCase().includes(lowerFilter)
+                );
+            });
+        }
+
+        // 2. Sort
         if (sortConfig !== null) {
-            sortable.sort((a, b) => {
+            processed.sort((a, b) => {
                 let aVal = a[sortConfig.key] || a[sortConfig.key.toLowerCase()];
                 let bVal = b[sortConfig.key] || b[sortConfig.key.toLowerCase()];
+
+                // Special handling for Risk Plan (Target as proxy)
+                if (sortConfig.key === 'RiskPlan') {
+                     aVal = a.Target || a.target || 0;
+                     bVal = b.Target || b.target || 0;
+                }
 
                 // Handle nested access or differing casing
                 if (sortConfig.key === 'Setup') {
@@ -340,8 +362,8 @@ const Screener: React.FC = () => {
                 return 0;
             });
         }
-        return sortable;
-    }, [results, sortConfig]);
+        return processed;
+    }, [results, sortConfig, filterText]);
 
     const SortIcon = ({ colKey }: { colKey: string }) => {
         if (sortConfig?.key !== colKey) return <i className="bi bi-arrow-down-up text-gray-300 ml-1 text-[10px]"></i>;
@@ -457,6 +479,27 @@ const Screener: React.FC = () => {
                 </div>
             )}
 
+            {/* SEARCH / FILTER INPUT */}
+            {results.length > 0 && (
+                <div className="mb-4">
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i className="bi bi-search text-gray-400"></i>
+                        </div>
+                        <input
+                            type="text"
+                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            placeholder="Filter results (e.g. 'BUY', 'AAPL', 'Technology')..."
+                            value={filterText}
+                            onChange={(e) => setFilterText(e.target.value)}
+                        />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 ml-1">
+                        Showing {sortedResults.length} of {results.length} results
+                    </p>
+                </div>
+            )}
+
             {/* RESULTS TABLE */}
             {results.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -476,7 +519,7 @@ const Screener: React.FC = () => {
                                     <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strategy / Verdict <SortIcon colKey="Setup" /></th>
 
                                     {/* NEW COLUMN: RISK PLAN (Stop/Target) */}
-                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan</th>
+                                    <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
 
                                     <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action <SortIcon colKey="Action" /></th>
                                 </tr>
@@ -491,10 +534,16 @@ const Screener: React.FC = () => {
                                     const targetVal = r.Target || r.target || 0;
                                     const atrVal = r.ATR || r.atr || 0;
                                     const breakoutDate = r.Breakout || r.breakout_date || '-';
+                                    const companyName = r.company_name || r.name || r.Ticker || r.ticker;
 
                                     return (
                                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                                            <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100">{r.Ticker || r.ticker}</td>
+                                            <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100" title={companyName}>
+                                                <div className="flex flex-col">
+                                                    <span>{r.Ticker || r.ticker}</span>
+                                                    {/* Optional: Show company name in small text below ticker if desired, but request asked for hover */}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, currencySymbol)}</td>
 
                                             {/* ATR DATA */}

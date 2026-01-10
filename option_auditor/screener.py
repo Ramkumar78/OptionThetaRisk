@@ -1389,8 +1389,12 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                     except Exception:
                         pass
 
+                base_ticker = ticker.split('.')[0]
+                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
                 return {
                     "ticker": ticker,
+                    "company_name": company_name,
                     "price": curr_close,
                     "pct_change_1d": pct_change_1d,
                     "signal": signal,
@@ -1623,9 +1627,12 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             high_52 = df['High'].max()
             low_52 = df['Low'].min()
 
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
             return {
                 "ticker": ticker,
-                "company_name": ticker, # Can fetch name if available
+                "company_name": company_name,
                 "price": round(curr_price, 2),
                 "pct_change_1d": round(pct_change_1d, 2),
                 "strategy": "Bull Put (Credit Spread)",
@@ -2098,8 +2105,12 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
 
             breakout_date = _calculate_trend_breakout_date(df)
 
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
             results.append({
                 "ticker": ticker,
+                "company_name": company_name,
                 "price": float(closes[-1]),
                 "pct_change_1d": pct_change_1d,
                 "signal": signal,
@@ -2695,8 +2706,12 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
             stock_stop_loss = curr_close - (safety_k * atr)
             stock_target = curr_close + (safety_k * atr * 2)
 
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
             results.append({
                 "ticker": ticker,
+                "company_name": company_name,
                 "price": round(curr_close, 2),
                 "vix_ref": round(current_vix, 2),
                 "volatility_pct": f"{atr_pct:.1f}%",
