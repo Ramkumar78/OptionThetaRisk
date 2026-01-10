@@ -318,6 +318,7 @@ class UnifiedBacktester:
                 self.trade_log.append({
                     "date": date.strftime('%Y-%m-%d'), "type": "BUY",
                     "price": round(price, 2), "stop": round(stop_loss, 2),
+                    "target": round(target_price, 2) if target_price > 0 else "Trailing",
                     "days": "-"
                 })
 
@@ -362,6 +363,33 @@ class UnifiedBacktester:
         avg_days_held = round(sum(sell_trades) / len(sell_trades)) if sell_trades else 0
         total_days_held = sum(sell_trades)
 
+        # Construct Structured Trade List (Buy/Sell Pairs)
+        structured_trades = []
+        current_trade = {}
+
+        for event in self.trade_log:
+            if event['type'] == 'BUY':
+                current_trade = {
+                    "buy_date": event['date'],
+                    "buy_price": event['price'],
+                    "stop_loss": event.get('stop'),
+                    "target": event.get('target', 'Trailing')
+                }
+            elif event['type'] == 'SELL':
+                if current_trade:
+                    current_trade["sell_date"] = event['date']
+                    current_trade["sell_price"] = event['price']
+                    current_trade["reason"] = event['reason']
+                    current_trade["days_held"] = event['days']
+
+                    # Calculate PnL % for this trade
+                    if current_trade['buy_price'] and current_trade['buy_price'] > 0:
+                        pnl = ((current_trade['sell_price'] - current_trade['buy_price']) / current_trade['buy_price']) * 100
+                        current_trade["return_pct"] = round(pnl, 2)
+
+                    structured_trades.append(current_trade)
+                    current_trade = {}
+
         return {
             "ticker": self.ticker,
             "strategy": self.strategy_type.upper(),
@@ -376,7 +404,8 @@ class UnifiedBacktester:
             "trades": len(self.trade_log) // 2,
             "win_rate": self._calculate_win_rate(),
             "final_equity": round(current_equity_val, 2),
-            "log": self.trade_log
+            "log": self.trade_log,
+            "trade_list": structured_trades
         }
 
     def _calculate_win_rate(self):
