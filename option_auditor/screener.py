@@ -1174,9 +1174,10 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
         future_to_symbol = {executor.submit(_process_darvas, sym): sym for sym in ticker_list}
         for future in as_completed(future_to_symbol):
             try:
-                data = future.result()
-                if data:
-                    results.append(data)
+                # FIX: Do not shadow 'data' variable
+                res_data = future.result()
+                if res_data:
+                    results.append(res_data)
             except Exception as e:
                 logger.error(f"Darvas thread error for {future_to_symbol[future]}: {e}")
                 pass
@@ -1415,9 +1416,10 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
         future_to_symbol = {executor.submit(_process_ote, sym): sym for sym in ticker_list}
         for future in as_completed(future_to_symbol):
             try:
-                data = future.result()
-                if data:
-                    results.append(data)
+                # FIX: Do not shadow 'data' variable
+                res_data = future.result()
+                if res_data:
+                    results.append(res_data)
             except Exception as e:
                 logger.error(f"OTE thread error for {future_to_symbol[future]}: {e}")
                 pass
