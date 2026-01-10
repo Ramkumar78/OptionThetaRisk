@@ -3,11 +3,11 @@ from .base import BaseStrategy
 from .isa import IsaStrategy
 from .fourier import FourierStrategy
 from .turtle import TurtleStrategy
-from .grandmaster import GrandmasterStrategy  # <--- 1. Import the class
+from .grandmaster_screener import GrandmasterScreener
 
 STRATEGIES = {
     "isa": IsaStrategy,
     "fourier": FourierStrategy,
     "turtle": TurtleStrategy,
-    "grandmaster": GrandmasterStrategy,       # <--- 2. Register the key
+    "grandmaster": GrandmasterScreener,
 }
