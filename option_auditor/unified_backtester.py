@@ -21,9 +21,9 @@ class UnifiedBacktester:
 
     def fetch_data(self):
         try:
-            # Fetch 5 years to ensure 200 SMA is ready before the 3-year backtest starts
+            # Fetch 10 years to ensure 200 SMA is ready before the 5-year backtest starts
             symbols = [self.ticker, "SPY", "^VIX"]
-            data = yf.download(symbols, period="5y", auto_adjust=True, progress=False)
+            data = yf.download(symbols, period="10y", auto_adjust=True, progress=False)
 
             if isinstance(data.columns, pd.MultiIndex):
                 try:
@@ -72,7 +72,12 @@ class UnifiedBacktester:
         df['sma20'] = df['Close'].rolling(20).mean()
 
         # --- Volatility & ATR ---
-        df['atr'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+        # Note: pandas_ta usually returns a Series with name depending on params, we force assign it.
+        # Ensure we have enough data for ATR
+        if len(df) > 14:
+            df['atr'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+        else:
+            df['atr'] = 0.0
 
         # --- Donchian Channels (Legacy) ---
         df['high_20'] = df['High'].rolling(20).max().shift(1)
@@ -94,6 +99,16 @@ class UnifiedBacktester:
         # RSI
         df['rsi'] = ta.rsi(df['Close'], length=14)
 
+        # Handle NaNs created by rolling windows
+        # SMA 200 requires 200 data points.
+        # If we dropna here, we lose the first 200 points.
+        # This is expected behavior for indicators.
+        # However, we must ensure we don't drop everything if data is sparse but valid for some indicators.
+        # Ensure 'sma200' is not NaN before dropping?
+        # Standard dropna() on the whole DF drops any row with any NaN.
+        # Since indicators like SMA200 create NaNs at start, this is correct for backtesting warm-up.
+        # But if 'Spy' rolling average also creates NaNs, they might align or not.
+
         return df.dropna()
 
     def run(self):
@@ -105,20 +120,27 @@ class UnifiedBacktester:
         if df.empty: return {"error": "Not enough history"}
 
         # --- EXACT SIMULATION WINDOW ---
-        # 3 Years (approx 1095 days)
-        target_days = 1095
+        # 5 Years (approx 1825 days)
+        target_days = 1825
         start_date = pd.Timestamp.now() - pd.Timedelta(days=target_days)
 
-        # Check if we have enough data, fallback to 2 years if not
+        # Check if we have enough data, fallback to 3 years or 2 years if not
+        # Ensure we don't start before the first available data point
         if df.index[0] > start_date:
-            # Not enough history for 3 years
-            start_date_2y = pd.Timestamp.now() - pd.Timedelta(days=730)
-            if df.index[0] > start_date_2y:
-                 # Even 2y is tight, just use what we have
-                 sim_data = df.copy()
+            # Not enough history for 5 years, try 3 years
+            start_date_3y = pd.Timestamp.now() - pd.Timedelta(days=1095)
+            if df.index[0] > start_date_3y:
+                 # Not enough for 3y, try 2y
+                 start_date_2y = pd.Timestamp.now() - pd.Timedelta(days=730)
+                 if df.index[0] > start_date_2y:
+                     sim_data = df.copy()
+                 else:
+                     sim_data = df[df.index >= start_date_2y].copy()
             else:
-                 sim_data = df[df.index >= start_date_2y].copy()
+                 sim_data = df[df.index >= start_date_3y].copy()
         else:
+             # We have enough data for the full 5 year window.
+             # Slice the dataframe to start exactly at start_date.
              sim_data = df[df.index >= start_date].copy()
 
         if sim_data.empty: return {"error": "Not enough history"}
