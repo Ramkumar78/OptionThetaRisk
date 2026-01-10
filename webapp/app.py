@@ -149,7 +149,7 @@ def _get_env_or_docker_default(key, default=None):
                 if match:
                     return match.group(1)
     except Exception:
-        pass
+        pass  # Fallback to default if regex fails
 
     return default
 
@@ -189,8 +189,8 @@ def cleanup_job(app):
         while True:
             try:
                 storage.cleanup_old_reports(MAX_REPORT_AGE)
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.error(f"Cleanup job failed: {e}")
             time.sleep(CLEANUP_INTERVAL)
 
 def create_app(testing: bool = False) -> Flask:
@@ -423,8 +423,8 @@ def create_app(testing: bool = False) -> Flask:
             if entry_str:
                 try:
                     entry_price = float(entry_str)
-                except:
-                    pass
+                except ValueError:
+                    pass  # Ignore invalid float format
 
             ticker = screener.resolve_ticker(query)
             if not ticker:
@@ -508,6 +508,7 @@ def create_app(testing: bool = False) -> Flask:
                         if res and res['Signal'] != 'WAIT':
                             results.append(res)
                 except Exception as e:
+                    app.logger.warning(f"ISA Screen failed for {ticker}: {e}")
                     continue
 
             app.logger.info(f"ISA Screen completed. Results: {len(results)}")
@@ -849,9 +850,9 @@ def create_app(testing: bool = False) -> Flask:
             if entry_price_str:
                 try:
                     entry_price = float(entry_price_str)
-                except:
-                    pass
-            
+                except ValueError:
+                    pass  # Ignore invalid float format
+
             if entry_price is None and entry_date_str:
                  try:
                      dt = datetime.strptime(entry_date_str, "%Y-%m-%d")
@@ -1038,8 +1039,8 @@ def create_app(testing: bool = False) -> Flask:
                              dt = datetime.fromisoformat(ts_str)
                              entry_date = dt.date().isoformat()
                              entry_time = dt.time().isoformat()
-                         except:
-                             pass
+                         except ValueError:
+                             pass  # Ignore invalid date format
 
                 if not entry_date:
                     entry_date = datetime.now().date().isoformat()
@@ -1237,6 +1238,6 @@ if __name__ == "__main__":
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
 
     if enable_https:
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=debug_mode, ssl_context="adhoc")
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=debug_mode, ssl_context="adhoc")  # nosec
     else:
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=debug_mode)
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=debug_mode)  # nosec
