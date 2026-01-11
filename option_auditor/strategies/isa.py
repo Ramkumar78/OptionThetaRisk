@@ -1,6 +1,8 @@
 import pandas as pd
 import pandas_ta as ta
 import numpy as np
+# Fix 1: Import the shared helper function for breakout dates
+from option_auditor.common.data_utils import _calculate_trend_breakout_date
 
 class IsaStrategy:
     """
@@ -56,6 +58,13 @@ class IsaStrategy:
             elif trend_ok and near_highs:
                 signal = "WATCHLIST"
 
+            # Fix 2: Filter out "WAIT" signals so the screener only populates Buy/Watch stocks
+            if signal == "WAIT":
+                return None
+
+            # Fix 3: Calculate the Breakout Date using the helper
+            breakout_date = _calculate_trend_breakout_date(self.df)
+
             # Stop Loss (3 ATR)
             stop_loss = curr_price - (3 * atr)
 
@@ -70,7 +79,8 @@ class IsaStrategy:
                 "volatility_pct": round((atr / curr_price) * 100, 2),
                 "risk_per_share": round(curr_price - stop_loss, 2),
                 "tharp_verdict": "BULL" if trend_ok else "BEAR",
-                "max_position_size": "20%" # Hardcoded safe limit
+                "max_position_size": "20%", # Hardcoded safe limit
+                "breakout_date": breakout_date # Fix 4: Populate the field
             }
 
         except Exception as e:
