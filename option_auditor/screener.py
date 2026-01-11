@@ -1840,24 +1840,36 @@ def _process_isa_ticker(ticker, df, check_mode):
 
         df['High_50'] = df['High'].rolling(50).max().shift(1)
         df['Low_20'] = df['Low'].rolling(20).min().shift(1)
+        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
+
+        # Fix for Data Gaps (e.g. Missing High/Low): Forward Fill indicators
+        df['High_50'] = df['High_50'].ffill()
+        df['Low_20'] = df['Low_20'].ffill()
+        df['ATR'] = df['ATR'].ffill()
 
         high_50 = df['High_50'].iloc[-1]
         low_20 = df['Low_20'].iloc[-1]
-
-        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
         atr_20 = float(df['ATR'].iloc[-1])
+
+        # Fallback for ATR if completely missing
+        if pd.isna(atr_20):
+             atr_20 = curr_close * 0.02
 
         signal = "WAIT"
 
         if curr_close > sma_200:
-            if curr_close >= high_50:
+            # Handle NaNs in High_50/Low_20 (if insufficient history)
+            if pd.notna(high_50) and curr_close >= high_50:
                 signal = "🚀 ENTER LONG (50d Breakout)"
-            elif curr_close >= high_50 * 0.98:
+            elif pd.notna(high_50) and curr_close >= high_50 * 0.98:
                 signal = "👀 WATCH (Near Breakout)"
-            elif curr_close > low_20:
+            elif pd.notna(low_20) and curr_close > low_20:
                 signal = "✅ HOLD (Trend Active)"
-            elif curr_close <= low_20:
+            elif pd.notna(low_20) and curr_close <= low_20:
                 signal = "🛑 EXIT (Stop Hit)"
+            # Fallback if indicators are missing but Trend is up
+            elif signal == "WAIT":
+                 signal = "✅ HOLD (Trend Active*)"
         else:
             signal = "❌ SELL/AVOID (Downtrend)"
 
