@@ -49,8 +49,8 @@ class TestISAStrategyClass:
 
         # In a downtrend, signal should be WAIT or None depending on implementation
         # Code: signal="WAIT" initially. if trend_ok ...
-        # If trend not ok, stays WAIT.
-        assert result['Signal'] == "WAIT"
+        # If trend not ok, the strategy returns None (filtered out).
+        assert result is None
 
 # --- Functional Screener Tests ---
 

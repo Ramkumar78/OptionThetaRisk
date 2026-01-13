@@ -1,6 +1,7 @@
 -r requirements.txt
 pytest
 pytest-cov
+pytest-rerunfailures
 flake8
 bandit
 pip-audit
