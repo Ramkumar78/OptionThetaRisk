@@ -16,7 +16,7 @@ const STRATEGIES: Record<string, {
         name: 'Grandmaster Council',
         endpoint: '/screen/master',
         description: 'The Fortress Protocol. Hardened logic for £100k ISA (VCP Trend) and $9.5k Options (Bull Puts).',
-        params: ['region'],
+        params: ['region', 'time_frame'],
         legend: [
             {
                 title: 'Fortress Keys',
@@ -85,7 +85,7 @@ const STRATEGIES: Record<string, {
         name: 'ISA Trend Follower',
         endpoint: '/screen/isa',
         description: 'Long-term trend following for tax-free growth accounts. Buys 50-day highs in 200-day uptrends.',
-        params: ['region'],
+        params: ['region', 'time_frame'],
         legend: [
             {
                 title: 'ISA Growth',
@@ -102,7 +102,7 @@ const STRATEGIES: Record<string, {
         name: 'Bull Put Spreads',
         endpoint: '/screen/bull_put',
         description: 'Income generation strategy selling credit spreads on bullish stocks.',
-        params: ['region'],
+        params: ['region', 'time_frame'],
         legend: [
             {
                 title: 'Options Income',
@@ -187,7 +187,7 @@ const STRATEGIES: Record<string, {
         name: 'Quantum',
         endpoint: '/screen/quantum',
         description: 'Advanced physics-based analysis using Hurst Exponent, Entropy, and Kalman Filters.',
-        params: ['region'],
+        params: ['region', 'time_frame'],
         legend: [
             {
                 title: 'Quantum Physics',
@@ -204,7 +204,7 @@ const STRATEGIES: Record<string, {
         name: 'Fortress (Vol)',
         endpoint: '/screen/fortress',
         description: 'Dynamic Volatility strategy optimizing yield based on VIX regime. (US Only)',
-        params: ['time_frame'],
+        params: ['region', 'time_frame'],
         legend: [
             {
                 title: 'Volatility Fortress',

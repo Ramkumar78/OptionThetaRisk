@@ -487,12 +487,13 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/screen/fortress", methods=["GET"])
     def screen_fortress():
         try:
-            app.logger.info("Fortress Screen request")
-            cache_key = "api_screen_fortress_us"
+            time_frame = request.args.get("time_frame", "1d")
+            app.logger.info(f"Fortress Screen request: time_frame={time_frame}")
+            cache_key = ("api_screen_fortress_us", time_frame)
             cached = get_cached_screener_result(cache_key)
             if cached: return jsonify(cached)
 
-            results = screener.screen_dynamic_volatility_fortress()
+            results = screener.screen_dynamic_volatility_fortress(time_frame=time_frame)
 
             app.logger.info(f"Fortress Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
@@ -504,10 +505,11 @@ def create_app(testing: bool = False) -> Flask:
     @app.route('/screen/isa', methods=['GET'])
     def screen_isa():
         region = request.args.get('region', 'us')
-        app.logger.info(f"ISA Screen request: region={region}")
+        time_frame = request.args.get('time_frame', '1d')
+        app.logger.info(f"ISA Screen request: region={region}, time_frame={time_frame}")
 
         # Check result cache first
-        cache_key = ("isa", region)
+        cache_key = ("isa", region, time_frame)
         cached = get_cached_screener_result(cache_key)
         if cached:
             app.logger.info("Serving cached ISA screen result")
@@ -585,9 +587,10 @@ def create_app(testing: bool = False) -> Flask:
     def screen_bull_put():
         try:
             region = request.args.get("region", "us")
-            app.logger.info(f"Bull Put Screen request: region={region}")
+            time_frame = request.args.get("time_frame", "1d")
+            app.logger.info(f"Bull Put Screen request: region={region}, time_frame={time_frame}")
 
-            cache_key = ("bull_put", region)
+            cache_key = ("bull_put", region, time_frame)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
@@ -604,7 +607,7 @@ def create_app(testing: bool = False) -> Flask:
                  watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
                  ticker_list = list(set(filtered_sp500 + watch_list))
 
-            results = screener.screen_bull_put_spreads(ticker_list=ticker_list)
+            results = screener.screen_bull_put_spreads(ticker_list=ticker_list, time_frame=time_frame)
             app.logger.info(f"Bull Put Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)
             return jsonify(results)
@@ -749,11 +752,12 @@ def create_app(testing: bool = False) -> Flask:
     @app.route('/screen/master', methods=['GET'])
     def screen_master():
         region = request.args.get('region', 'us')
-        app.logger.info(f"Master Fortress Screen request: region={region}")
+        time_frame = request.args.get('time_frame', '1d')
+        app.logger.info(f"Master Fortress Screen request: region={region}, time_frame={time_frame}")
 
         # The adapter handles the list logic internally based on region
         try:
-            results = screen_master_convergence(region=region)
+            results = screen_master_convergence(region=region, time_frame=time_frame)
 
             # Ensure it returns a list directly, or wrap in dict if frontend expects {results: [...]}
             # Based on your previous code, it seems to handle both, but let's be safe:
@@ -855,13 +859,14 @@ def create_app(testing: bool = False) -> Flask:
     def screen_quantum():
         try:
             region = request.args.get("region", "us")
-            app.logger.info(f"Quantum Screen request: region={region}")
-            cache_key = ("quantum", region)
+            time_frame = request.args.get("time_frame", "1d")
+            app.logger.info(f"Quantum Screen request: region={region}, time_frame={time_frame}")
+            cache_key = ("quantum", region, time_frame)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
-            results = screener.screen_quantum_setups(region=region)
+            results = screener.screen_quantum_setups(region=region, time_frame=time_frame)
 
             api_results = [
                 {
