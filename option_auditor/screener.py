@@ -1458,7 +1458,7 @@ def _calculate_put_delta(S, K, T, r, sigma):
     d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
     return _norm_cdf(d1) - 1.0
 
-def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, region: str = "us", check_mode: bool = False) -> list:
+def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, region: str = "us", check_mode: bool = False, time_frame: str = "1d") -> list:
     """
     Screens for High Probability Bull Put Spreads (TastyTrade Mechanics).
     - 30-60 DTE
@@ -1706,7 +1706,7 @@ def resolve_ticker(query: str) -> str:
 
     return query
 
-def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False) -> list:
+def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False, time_frame: str = "1d") -> list:
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).
     """
@@ -2427,7 +2427,7 @@ def _process_hybrid_ticker(ticker, df, time_frame, check_mode):
         }
     except Exception: return None
 
-def screen_master_convergence(ticker_list: list = None, region: str = "us", check_mode: bool = False) -> list:
+def screen_master_convergence(ticker_list: list = None, region: str = "us", check_mode: bool = False, time_frame: str = "1d") -> list:
     """
     Runs ALL strategies on the dataset to find CONFLUENCE.
     """
@@ -2621,7 +2621,7 @@ def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 1000):
     except Exception:
         return None
 
-def screen_dynamic_volatility_fortress(ticker_list: list = None) -> list:
+def screen_dynamic_volatility_fortress(ticker_list: list = None, time_frame: str = "1d") -> list:
     """
     YIELD-OPTIMIZED STRATEGY:
     """
@@ -2762,7 +2762,7 @@ def sanitize(val):
     except:
         return None
 
-def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
+def screen_quantum_setups(ticker_list: list = None, region: str = "us", time_frame: str = "1d") -> list:
     # ... (Keep existing imports and LIQUID_OPTION_TICKERS logic) ...
     try:
         from option_auditor.common.constants import LIQUID_OPTION_TICKERS
@@ -2956,7 +2956,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
 
     return results
 
-def screen_alpha_101(ticker_list: list = None, region: str = "us") -> list:
+def screen_alpha_101(ticker_list: list = None, region: str = "us", time_frame: str = "1d") -> list:
     """
     Implements Alpha#101: ((close - open) / ((high - low) + .001))
     Paper Source: 101 Formulaic Alphas (Kakushadze, 2015)

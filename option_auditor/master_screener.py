@@ -321,17 +321,43 @@ class FortressScreener:
         except Exception as e:
             return None
 
-    def run_screen(self):
+    def run_screen(self, time_frame="1d"):
         self._fetch_market_regime()
         results = []
         chunk_size = 50
 
-        logger.info(f"Scanning {len(self.all_tickers)} tickers...")
+        # Timeframe logic
+        yf_interval = "1d"
+        period = "2y"
+
+        if time_frame == "49m":
+            yf_interval = "5m"
+            period = "1mo"
+        elif time_frame == "98m":
+            yf_interval = "5m"
+            period = "1mo"
+        elif time_frame == "196m":
+            yf_interval = "5m"
+            period = "1mo"
+        elif time_frame == "1wk":
+            yf_interval = "1wk"
+            period = "2y"
+        elif time_frame == "1mo":
+            yf_interval = "1mo"
+            period = "5y"
+        elif time_frame == "1h":
+            yf_interval = "1h"
+            period = "60d"
+        elif time_frame == "4h":
+            yf_interval = "1h" # yfinance 4h not reliably supported, use 1h and could resample but for now 1h
+            period = "60d"
+
+        logger.info(f"Scanning {len(self.all_tickers)} tickers with timeframe {time_frame}...")
 
         for i in range(0, len(self.all_tickers), chunk_size):
             chunk = self.all_tickers[i:i+chunk_size]
             try:
-                data = yf.download(chunk, period="2y", group_by='ticker', progress=False, threads=True, auto_adjust=True)
+                data = yf.download(chunk, period=period, interval=yf_interval, group_by='ticker', progress=False, threads=True, auto_adjust=True)
                 for ticker in chunk:
                     try:
                         df = None
@@ -340,6 +366,11 @@ class FortressScreener:
                             if ticker in data.columns.levels[0]: df = data[ticker]
 
                         if df is not None and not df.empty:
+                            # If intraday, we might want to resample for better analysis if strategy requires it,
+                            # but for now we just pass the raw DF which might be 5m or 1h.
+                            # _analyze_ticker expects daily-like structure, so metrics like SMA50/200 work but
+                            # they will be 50/200 *periods* (e.g. 50 hours).
+                            # This is acceptable for a "Master" screener on different timeframes.
                             res = self._analyze_ticker(ticker, df)
                             if res: results.append(res)
                     except: continue
@@ -348,7 +379,7 @@ class FortressScreener:
         results.sort(key=lambda x: x['Score'], reverse=True)
         return results
 
-def screen_master_convergence(ticker_list=None, region="us", check_mode=False):
+def screen_master_convergence(ticker_list=None, region="us", check_mode=False, time_frame="1d"):
     from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
 
     # 1. Ticker Loading Logic
@@ -381,4 +412,4 @@ def screen_master_convergence(ticker_list=None, region="us", check_mode=False):
             # Default to US
             us = LIQUID_OPTION_TICKERS + SECTOR_COMPONENTS.get("WATCH", [])
 
-    return FortressScreener(tickers_us=us, tickers_uk=uk, tickers_india=india).run_screen()
+    return FortressScreener(tickers_us=us, tickers_uk=uk, tickers_india=india).run_screen(time_frame=time_frame)

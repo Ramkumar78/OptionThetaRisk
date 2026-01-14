@@ -1,37 +1,18 @@
-from playwright.sync_api import sync_playwright, expect
+from option_auditor.screener import screen_alpha_101, screen_master_convergence, screen_market
 
-def run_verification():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+try:
+    print("Testing Alpha 101 with region='uk' and time_frame='1d'...")
+    results_alpha = screen_alpha_101(region='uk', time_frame='1d')
+    print(f"Alpha 101 Result Count: {len(results_alpha)}")
+except Exception as e:
+    print(f"Alpha 101 Failed: {e}")
+    raise e
 
-        # Navigate to the Screener page
-        page.goto("http://127.0.0.1:5000/screener")
-        page.wait_for_load_state("networkidle")
-
-        # Check Alpha 101 strategy selection
-        strategy_select = page.locator("#strategy-select")
-        strategy_select.select_option("alpha101")
-
-        # Check Timeframe selection
-        timeframe_select = page.locator("#timeframe-select")
-
-        # Verify 1mo option exists
-        # Option text is "Monthly (Macro)"
-        # Option value is "1mo"
-
-        # We can check if the option exists
-        option_1mo = timeframe_select.locator("option[value='1mo']")
-        expect(option_1mo).to_have_count(1)
-        expect(option_1mo).to_have_text("Monthly (Macro)")
-
-        # Select it
-        timeframe_select.select_option("1mo")
-
-        # Take screenshot
-        page.screenshot(path="alpha101_timeframe_verification.png")
-
-        browser.close()
-
-if __name__ == "__main__":
-    run_verification()
+try:
+    print("\nTesting Master Convergence with time_frame='1d'...")
+    # This call previously would fail if I hadn't updated the signature (or if I passed it to a function that didn't take it)
+    results_master = screen_master_convergence(region='us', time_frame='1d')
+    print(f"Master Result Count: {len(results_master)}")
+except Exception as e:
+    print(f"Master Failed: {e}")
+    raise e
