@@ -320,6 +320,12 @@ class UnifiedBacktester:
                 # Screener uses strict Stop/Target.
                 pass
 
+            elif self.strategy_type == 'mystrategy':
+                # My Strategy: ISA Trend + Alpha 101
+                is_trend_up = (price > row['sma200']) and (price > row['sma50'])
+                if is_trend_up and row['alpha101'] > 0.5:
+                    buy_signal = True
+
             # ==============================
             # EXECUTION
             # ==============================
@@ -351,6 +357,15 @@ class UnifiedBacktester:
                     # Logic from screener: Stop = Low - 0.5*ATR (tight), Target = Close + 2*ATR
                     stop_loss = row['Low'] - (0.5 * atr)
                     target_price = price + (2 * atr)
+                elif self.strategy_type == 'mystrategy':
+                    # Logic from screener
+                    if row['alpha101'] > 0.5:
+                        stop_loss = row['Low'] - (0.5 * atr)
+                    else:
+                        stop_loss = price - (3 * atr)
+
+                    risk = price - stop_loss
+                    target_price = price + (risk * 2) if risk > 0 else price + (5 * atr)
                 else:
                     stop_loss = price - (2 * atr)
                     target_price = price + (4 * atr)
@@ -372,7 +387,7 @@ class UnifiedBacktester:
                      current_stop_reason = "INITIAL STOP HIT"
                 elif hit_target and self.strategy_type not in ['grandmaster', 'isa', 'turtle']:
                      # Trend followers (ISA/Turtle/Grandmaster) don't use fixed targets usually, they trail.
-                     if self.strategy_type in ['market', 'fourier', 'alpha101']:
+                     if self.strategy_type in ['market', 'fourier', 'alpha101', 'mystrategy']:
                         sell_signal = True
                         current_stop_reason = "TARGET HIT"
 

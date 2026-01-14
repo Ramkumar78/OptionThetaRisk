@@ -484,6 +484,25 @@ def create_app(testing: bool = False) -> Flask:
             app.logger.exception(f"Alpha 101 Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/mystrategy", methods=["GET"])
+    def screen_my_strategy_route():
+        try:
+            region = request.args.get("region", "us")
+            app.logger.info(f"MyStrategy Screen request: region={region}")
+
+            cache_key = ("mystrategy", region)
+            # Optional: Use caching if you implement it broadly
+            cached = get_cached_screener_result(cache_key)
+            if cached: return jsonify(cached)
+
+            results = screener.screen_my_strategy(region=region)
+
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            app.logger.exception(f"MyStrategy Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/fortress", methods=["GET"])
     def screen_fortress():
         try:
