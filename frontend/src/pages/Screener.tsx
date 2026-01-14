@@ -29,6 +29,23 @@ const STRATEGIES: Record<string, {
             }
         ]
     },
+    alpha101: {
+        id: 'alpha101',
+        name: 'Alpha 101 (Momentum)',
+        endpoint: '/screen/alpha101',
+        description: 'Kakushadze Alpha #101: ((Close - Open) / (High - Low)). Captures pure intraday buying/selling pressure.',
+        params: ['region'],
+        legend: [
+            {
+                title: 'Alpha Value',
+                desc: 'Range from -1.0 to 1.0',
+                items: [
+                    { label: '> 0.5', text: 'Strong Bullish (Close near High).' },
+                    { label: '< -0.5', text: 'Strong Bearish (Close near Low).' }
+                ]
+            }
+        ]
+    },
     hybrid: {
         id: 'hybrid',
         name: 'Hybrid (Trend + Cycle)',

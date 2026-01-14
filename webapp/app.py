@@ -462,6 +462,27 @@ def create_app(testing: bool = False) -> Flask:
             app.logger.exception(f"ISA Check Error: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/alpha101", methods=["GET"])
+    def screen_alpha101():
+        try:
+            region = request.args.get("region", "us")
+            app.logger.info(f"Alpha 101 Screen request: region={region}")
+
+            cache_key = ("alpha101", region)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            # Use the new function
+            results = screener.screen_alpha_101(region=region)
+
+            app.logger.info(f"Alpha 101 Screen completed. Results: {len(results)}")
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            app.logger.exception(f"Alpha 101 Screen Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/fortress", methods=["GET"])
     def screen_fortress():
         try:
