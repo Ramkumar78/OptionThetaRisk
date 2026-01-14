@@ -2956,7 +2956,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
 
     return results
 
-def screen_alpha_101(ticker_list: list = None, region: str = "us", time_frame: str = "1d") -> list:
+def screen_alpha_101(ticker_list: list = None, region: str = "us") -> list:
     """
     Implements Alpha#101: ((close - open) / ((high - low) + .001))
     Paper Source: 101 Formulaic Alphas (Kakushadze, 2015)
