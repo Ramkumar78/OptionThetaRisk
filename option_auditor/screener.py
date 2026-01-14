@@ -3114,3 +3114,147 @@ def screen_alpha_101(ticker_list: list = None, region: str = "us", time_frame: s
     # Sort by Alpha Value (Positive/Strongest first)
     active_results.sort(key=lambda x: x['alpha_101'], reverse=True)
     return active_results
+
+def screen_my_strategy(ticker_list: list = None, region: str = "us") -> list:
+    """
+    My Strategy: Combines ISA Trend (Macro) + Alpha #101 (Micro).
+    1. Filter: Price > 200 SMA & Price > 50 SMA (Trend).
+    2. Trigger: Alpha #101 > 0.5 (Momentum).
+    """
+    import pandas as pd
+    import pandas_ta as ta
+    import numpy as np
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if ticker_list is None:
+        ticker_list = _resolve_region_tickers(region)
+
+    results = []
+
+    # 1. Fetch Data (1 Year required for Alpha 101 & 200 SMA)
+    try:
+        data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
+    except Exception as e:
+        logger.error(f"MyStrategy Data Fetch Error: {e}")
+        return []
+
+    # Iterator setup (Handling MultiIndex vs Flat)
+    if isinstance(data.columns, pd.MultiIndex):
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
+    else:
+        iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
+
+    def process_ticker(ticker, df):
+        try:
+            df = df.dropna(how='all')
+            if len(df) < 200: return None # Need 200 SMA
+
+            # --- 1. MACRO DATA (ISA TREND) ---
+            curr_close = float(df['Close'].iloc[-1])
+            curr_open = float(df['Open'].iloc[-1])
+            curr_high = float(df['High'].iloc[-1])
+            curr_low = float(df['Low'].iloc[-1])
+
+            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
+            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+
+            # 50-Day High (Breakout Level)
+            high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
+
+            # ATR (Volatility)
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_close * 0.01)
+
+            # Trend Check
+            is_trend_up = (curr_close > sma_200) and (curr_close > sma_50)
+
+            if not is_trend_up:
+                return None # Strict Filter: Only Bullish Trends
+
+            # --- 2. MICRO DATA (ALPHA #101) ---
+            # Formula: (Close - Open) / ((High - Low) + 0.001)
+            denom = (curr_high - curr_low) + 0.001
+            alpha_val = (curr_close - curr_open) / denom
+
+            # --- 3. COMBINED VERDICT ---
+            signal = "WAIT"
+            color = "gray"
+            score = 50
+
+            # Breakout Check
+            dist_to_breakout = (curr_close - high_50) / high_50
+
+            if alpha_val > 0.5:
+                # Strong Intraday buying in a Bull Trend
+                signal = "🚀 SNIPER ENTRY (Alpha > 0.5)"
+                color = "green"
+                score = 95
+            elif alpha_val < -0.5:
+                # Strong Selling in a Bull Trend (Pullback or Exit?)
+                signal = "⚠️ SELLING PRESSURE"
+                color = "orange"
+                score = 40
+            elif curr_close > high_50:
+                 signal = "✅ BREAKOUT (Trend)"
+                 color = "blue"
+                 score = 80
+            elif dist_to_breakout > -0.05:
+                 signal = "👀 WATCH (Near Breakout)"
+                 color = "yellow"
+                 score = 60
+
+            # --- 4. RISK MANAGEMENT (Populate Fields) ---
+            # Stop Loss:
+            # If Snipering (Alpha > 0.5), use Today's Low (Tight).
+            # Otherwise, use 3x ATR (Wide/Trend).
+            if alpha_val > 0.5:
+                stop_loss = curr_low - (atr * 0.5)
+            else:
+                stop_loss = curr_close - (3 * atr)
+
+            # Target:
+            # 2x Risk (Reward to Risk 2:1)
+            risk = curr_close - stop_loss
+            target = curr_close + (risk * 2) if risk > 0 else curr_close + (5 * atr)
+
+            # Breakout Date
+            breakout_date = _calculate_trend_breakout_date(df)
+
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            # Filter out pure "WAIT" unless you want to see everything
+            if signal == "WAIT": return None
+
+            return {
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": round(curr_close, 2),
+                "verdict": signal, # UI uses this for main badge
+                "signal": signal,
+                "alpha_101": round(alpha_val, 2),
+                "breakout_level": round(high_50, 2), # 50-Day High
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target, 2),
+                "atr_value": round(atr, 2),
+                "breakout_date": breakout_date,
+                "score": score,
+                "color": color, # For UI Badge
+                # Extra stats
+                "pct_change_1d": round(((curr_close - df['Close'].iloc[-2])/df['Close'].iloc[-2])*100, 2)
+            }
+
+        except Exception as e:
+            return None
+
+    # Threaded Execution
+    results = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process_ticker, t, d): t for t, d in iterator}
+        for future in as_completed(futures):
+            res = future.result()
+            if res: results.append(res)
+
+    # Sort by Score (Best Setups first)
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return results
