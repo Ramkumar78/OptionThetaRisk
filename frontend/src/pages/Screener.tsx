@@ -29,6 +29,24 @@ const STRATEGIES: Record<string, {
             }
         ]
     },
+    myStrategy: {
+        id: 'myStrategy',
+        name: 'My Strategy (ISA + Alpha)',
+        endpoint: '/screen/mystrategy',
+        description: 'Combines Long-Term Trend (ISA) with Alpha #101 Sniping. Shows ATR, Targets, and Breakout Dates.',
+        params: ['region'],
+        legend: [
+            {
+                title: 'Verdict',
+                desc: 'Combined Signal',
+                items: [
+                    { label: '🚀 SNIPER', text: 'Bull Trend + Alpha 101 (> 0.5) Trigger.' },
+                    { label: '✅ BREAKOUT', text: 'Price crossing 50-Day High.' },
+                    { label: '👀 WATCH', text: 'Bull Trend active, waiting for trigger.' }
+                ]
+            }
+        ]
+    },
     alpha101: {
         id: 'alpha101',
         name: 'Alpha 101 (Momentum)',
@@ -535,18 +553,30 @@ const Screener: React.FC = () => {
                                     <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker <SortIcon colKey="Ticker" /></th>
                                     <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price <SortIcon colKey="Price" /></th>
 
-                                    {/* NEW COLUMN: ATR */}
-                                    <th onClick={() => handleSort('ATR')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">ATR <SortIcon colKey="ATR" /></th>
+                                    {selectedStrategy === 'myStrategy' ? (
+                                        <>
+                                            <th onClick={() => handleSort('breakout_level')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout Lvl <SortIcon colKey="breakout_level" /></th>
+                                            <th onClick={() => handleSort('atr_value')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">ATR <SortIcon colKey="atr_value" /></th>
+                                            <th onClick={() => handleSort('stop_loss')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stop <SortIcon colKey="stop_loss" /></th>
+                                            <th onClick={() => handleSort('target')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Target <SortIcon colKey="target" /></th>
+                                            <th onClick={() => handleSort('breakout_date')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trend Age <SortIcon colKey="breakout_date" /></th>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {/* NEW COLUMN: ATR */}
+                                            <th onClick={() => handleSort('ATR')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">ATR <SortIcon colKey="ATR" /></th>
 
-                                    {/* NEW COLUMN: BREAKOUT */}
-                                    <th onClick={() => handleSort('Breakout')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout <SortIcon colKey="Breakout" /></th>
+                                            {/* NEW COLUMN: BREAKOUT */}
+                                            <th onClick={() => handleSort('Breakout')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout <SortIcon colKey="Breakout" /></th>
 
-                                    <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strategy / Verdict <SortIcon colKey="Setup" /></th>
+                                            <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strategy / Verdict <SortIcon colKey="Setup" /></th>
 
-                                    {/* NEW COLUMN: RISK PLAN (Stop/Target) */}
-                                    <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
+                                            {/* NEW COLUMN: RISK PLAN (Stop/Target) */}
+                                            <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
 
-                                    <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action <SortIcon colKey="Action" /></th>
+                                            <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action <SortIcon colKey="Action" /></th>
+                                        </>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -561,6 +591,8 @@ const Screener: React.FC = () => {
                                     const breakoutDate = r.Breakout || r.breakout_date || '-';
                                     const companyName = r.company_name || r.name || r.Ticker || r.ticker;
 
+                                    const item = r;
+
                                     return (
                                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                             <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100" title={companyName}>
@@ -571,39 +603,61 @@ const Screener: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, currencySymbol)}</td>
 
-                                            {/* ATR DATA */}
-                                            <td className="px-6 py-4 text-right font-mono text-xs text-gray-500">
-                                                {atrVal ? atrVal.toFixed(2) : '-'}
-                                            </td>
+                                            {selectedStrategy === 'myStrategy' ? (
+                                                <>
+                                                    <td className="px-4 py-3">
+                                                         <span className="font-mono text-blue-600">{item.breakout_level}</span>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                         {item.atr_value}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-red-600 font-semibold">
+                                                         {item.stop_loss}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-green-600 font-semibold">
+                                                         {item.target}
+                                                    </td>
+                                                     <td className="px-4 py-3 text-gray-500 text-sm">
+                                                         {item.breakout_date || "-"}
+                                                    </td>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {/* ATR DATA */}
+                                                    <td className="px-6 py-4 text-right font-mono text-xs text-gray-500">
+                                                        {atrVal ? atrVal.toFixed(2) : '-'}
+                                                    </td>
 
-                                            {/* BREAKOUT DATE */}
-                                            <td className="px-6 py-4 text-xs text-gray-600 dark:text-gray-400">
-                                                <span className={`px-2 py-1 rounded border ${breakoutDate === 'Consolidating' ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
-                                                    {breakoutDate}
-                                                </span>
-                                            </td>
+                                                    {/* BREAKOUT DATE */}
+                                                    <td className="px-6 py-4 text-xs text-gray-600 dark:text-gray-400">
+                                                        <span className={`px-2 py-1 rounded border ${breakoutDate === 'Consolidating' ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
+                                                            {breakoutDate}
+                                                        </span>
+                                                    </td>
 
-                                            <td className="px-6 py-4">
-                                                <span className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wide bg-gray-100 text-gray-800">
-                                                    {verdict}
-                                                </span>
-                                            </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wide bg-gray-100 text-gray-800">
+                                                            {verdict}
+                                                        </span>
+                                                    </td>
 
-                                            {/* RISK PLAN DATA */}
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono">
-                                                        T: {targetVal ? formatCurrency(targetVal, currencySymbol) : '-'}
-                                                    </span>
-                                                    <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-mono">
-                                                        S: {stopVal ? formatCurrency(stopVal, currencySymbol) : '-'}
-                                                    </span>
-                                                </div>
-                                            </td>
+                                                    {/* RISK PLAN DATA */}
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono">
+                                                                T: {targetVal ? formatCurrency(targetVal, currencySymbol) : '-'}
+                                                            </span>
+                                                            <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-mono">
+                                                                S: {stopVal ? formatCurrency(stopVal, currencySymbol) : '-'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
 
-                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white">
-                                                {r.Action || 'VIEW'}
-                                            </td>
+                                                    <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white">
+                                                        {r.Action || 'VIEW'}
+                                                    </td>
+                                                </>
+                                            )}
                                         </tr>
                                     );
                                 })}
