@@ -387,7 +387,7 @@ class UnifiedBacktester:
                      current_stop_reason = "INITIAL STOP HIT"
                 elif hit_target and self.strategy_type not in ['grandmaster', 'isa', 'turtle']:
                      # Trend followers (ISA/Turtle/Grandmaster) don't use fixed targets usually, they trail.
-                     if self.strategy_type in ['market', 'fourier', 'alpha101']:
+                     if self.strategy_type in ['market', 'fourier', 'alpha101', 'mystrategy']:
                         sell_signal = True
                         current_stop_reason = "TARGET HIT"
 
