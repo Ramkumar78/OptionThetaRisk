@@ -2955,3 +2955,162 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us") -> list:
     results.sort(key=lambda x: (x.get('score', 0)), reverse=True)
 
     return results
+
+def screen_alpha_101(ticker_list: list = None, region: str = "us", time_frame: str = "1d") -> list:
+    """
+    Implements Alpha#101: ((close - open) / ((high - low) + .001))
+    Paper Source: 101 Formulaic Alphas (Kakushadze, 2015)
+    Logic: Delay-1 Momentum. If stock runs up intraday (Close >> Open), go Long.
+    """
+    import pandas as pd
+    import numpy as np
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if ticker_list is None:
+        ticker_list = _resolve_region_tickers(region)
+
+    results = []
+
+    # Timeframe logic
+    yf_interval = "1d"
+    resample_rule = None
+    is_intraday = False
+    period = "1y"
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "196m":
+        yf_interval = "5m"
+        resample_rule = "196min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y"
+    elif time_frame == "1h":
+        yf_interval = "1h"
+        period = "60d" # Max for 1h
+        is_intraday = True
+    elif time_frame == "4h":
+        yf_interval = "1h"
+        resample_rule = "4h"
+        is_intraday = True
+        period = "60d"
+
+    # 1. Batch Fetch Data
+    try:
+        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
+    except Exception as e:
+        logger.error(f"Alpha 101 Data Fetch Error: {e}")
+        return []
+
+    # Handle Flat vs MultiIndex Data
+    if isinstance(data.columns, pd.MultiIndex):
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
+    else:
+        iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
+
+    def process_ticker(ticker, raw_df):
+        try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+            if df is None: return None
+
+            df = df.dropna(how='all')
+            if len(df) < 5: return None
+
+            # --- ALPHA #101 CALCULATION ---
+            # Formula: ((close - open) / ((high - low) + 0.001))
+            # We use the most recent completed day
+            curr_row = df.iloc[-1]
+
+            c = float(curr_row['Close'])
+            o = float(curr_row['Open'])
+            h = float(curr_row['High'])
+            l = float(curr_row['Low'])
+
+            denom = (h - l) + 0.001
+            alpha_val = (c - o) / denom
+
+            # --- SIGNAL LOGIC ---
+            # Thresholds: > 0.5 implies strong closing strength (Marubozu-like)
+            signal = "WAIT"
+            color = "gray"
+
+            if alpha_val > 0.5:
+                signal = "🚀 STRONG BUY (Alpha > 0.5)"
+                color = "green"
+            elif alpha_val > 0.25:
+                signal = "📈 BULLISH MOMENTUM"
+                color = "blue"
+            elif alpha_val < -0.5:
+                signal = "📉 STRONG SELL (Alpha < -0.5)"
+                color = "red"
+            elif alpha_val < -0.25:
+                signal = "⚠️ BEARISH PRESSURE"
+                color = "orange"
+
+            # Filter: Only show active signals to reduce noise?
+            # Or show all for ranking. Let's return all non-neutral for the screener.
+            if abs(alpha_val) < 0.25:
+                return None
+
+            # --- METRICS ---
+            import pandas_ta as ta
+            if 'ATR' not in df.columns:
+                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+
+            atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (c * 0.01)
+
+            # Risk Management (Paper suggests holding 1-6 days)
+            # We use a tight stop below the low of the signal day
+            stop_loss = l - (atr * 0.5) if alpha_val > 0 else h + (atr * 0.5)
+            target = c + (atr * 2) if alpha_val > 0 else c - (atr * 2)
+
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            pct_change_1d = 0.0
+            if len(df) >= 2:
+                prev_c = float(df['Close'].iloc[-2])
+                pct_change_1d = ((c - prev_c) / prev_c) * 100
+
+            return {
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": round(c, 2),
+                "alpha_101": round(alpha_val, 4),
+                "signal": signal,
+                "verdict": signal, # Alias for UI
+                "pct_change_1d": pct_change_1d,
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target, 2),
+                "atr": round(atr, 2),
+                "score": round(abs(alpha_val) * 100, 1), # Sort by intensity
+                "breakout_date": _calculate_trend_breakout_date(df)
+            }
+
+        except Exception as e:
+            return None
+
+    # Threaded Execution
+    active_results = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process_ticker, t, d): t for t, d in iterator}
+        for future in as_completed(futures):
+            res = future.result()
+            if res: active_results.append(res)
+
+    # Sort by Alpha Value (Positive/Strongest first)
+    active_results.sort(key=lambda x: x['alpha_101'], reverse=True)
+    return active_results

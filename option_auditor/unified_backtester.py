@@ -99,6 +99,11 @@ class UnifiedBacktester:
         # RSI
         df['rsi'] = ta.rsi(df['Close'], length=14)
 
+        # Alpha 101 (Momentum)
+        # ((Close - Open) / ((High - Low) + 0.001))
+        denom = (df['High'] - df['Low']) + 0.001
+        df['alpha101'] = (df['Close'] - df['Open']) / denom
+
         # Handle NaNs created by rolling windows
         # SMA 200 requires 200 data points.
         # If we dropna here, we lose the first 200 points.
@@ -305,6 +310,15 @@ class UnifiedBacktester:
             elif self.strategy_type == 'quantum':
                 if price > row['sma50'] and row['rsi'] > 50: buy_signal = True
 
+            elif self.strategy_type == 'alpha101':
+                # Long Signal: Alpha > 0.5 (Strong Buy)
+                if row['alpha101'] > 0.5:
+                    buy_signal = True
+
+                # Exit: Standard Risk Management handles it (Stop/Target)
+                # But we can also exit if momentum reverses?
+                # Screener uses strict Stop/Target.
+                pass
 
             # ==============================
             # EXECUTION
@@ -333,6 +347,10 @@ class UnifiedBacktester:
                 elif self.strategy_type == 'fourier':
                     stop_loss = price - (2 * atr)
                     target_price = price + (2 * atr)
+                elif self.strategy_type == 'alpha101':
+                    # Logic from screener: Stop = Low - 0.5*ATR (tight), Target = Close + 2*ATR
+                    stop_loss = row['Low'] - (0.5 * atr)
+                    target_price = price + (2 * atr)
                 else:
                     stop_loss = price - (2 * atr)
                     target_price = price + (4 * atr)
@@ -354,7 +372,7 @@ class UnifiedBacktester:
                      current_stop_reason = "INITIAL STOP HIT"
                 elif hit_target and self.strategy_type not in ['grandmaster', 'isa', 'turtle']:
                      # Trend followers (ISA/Turtle/Grandmaster) don't use fixed targets usually, they trail.
-                     if self.strategy_type in ['market', 'fourier']:
+                     if self.strategy_type in ['market', 'fourier', 'alpha101']:
                         sell_signal = True
                         current_stop_reason = "TARGET HIT"
 

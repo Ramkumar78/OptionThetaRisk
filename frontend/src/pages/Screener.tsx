@@ -29,6 +29,23 @@ const STRATEGIES: Record<string, {
             }
         ]
     },
+    alpha101: {
+        id: 'alpha101',
+        name: 'Alpha 101 (Momentum)',
+        endpoint: '/screen/alpha101',
+        description: 'Kakushadze Alpha #101: ((Close - Open) / (High - Low)). Captures pure intraday buying/selling pressure.',
+        params: ['region', 'time_frame'],
+        legend: [
+            {
+                title: 'Alpha Value',
+                desc: 'Range from -1.0 to 1.0',
+                items: [
+                    { label: '> 0.5', text: 'Strong Bullish (Close near High).' },
+                    { label: '< -0.5', text: 'Strong Bearish (Close near Low).' }
+                ]
+            }
+        ]
+    },
     hybrid: {
         id: 'hybrid',
         name: 'Hybrid (Trend + Cycle)',
@@ -187,7 +204,7 @@ const STRATEGIES: Record<string, {
         name: 'Fortress (Vol)',
         endpoint: '/screen/fortress',
         description: 'Dynamic Volatility strategy optimizing yield based on VIX regime. (US Only)',
-        params: [],
+        params: ['time_frame'],
         legend: [
             {
                 title: 'Volatility Fortress',
@@ -451,6 +468,7 @@ const Screener: React.FC = () => {
                                 <option value="1h">1 Hour (Intraday)</option>
                                 <option value="4h">4 Hour (Swing)</option>
                                 <option value="1wk">Weekly (Position)</option>
+                                <option value="1mo">Monthly (Macro)</option>
                             </select>
                         </div>
                     )}
