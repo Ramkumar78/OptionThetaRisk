@@ -466,15 +466,16 @@ def create_app(testing: bool = False) -> Flask:
     def screen_alpha101():
         try:
             region = request.args.get("region", "us")
-            app.logger.info(f"Alpha 101 Screen request: region={region}")
+            time_frame = request.args.get("time_frame", "1d")
+            app.logger.info(f"Alpha 101 Screen request: region={region}, time_frame={time_frame}")
 
-            cache_key = ("alpha101", region)
+            cache_key = ("alpha101", region, time_frame)
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
             # Use the new function
-            results = screener.screen_alpha_101(region=region)
+            results = screener.screen_alpha_101(region=region, time_frame=time_frame)
 
             app.logger.info(f"Alpha 101 Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)

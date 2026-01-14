@@ -2971,9 +2971,46 @@ def screen_alpha_101(ticker_list: list = None, region: str = "us") -> list:
 
     results = []
 
-    # 1. Batch Fetch Data (Daily)
+    # Timeframe logic
+    yf_interval = "1d"
+    resample_rule = None
+    is_intraday = False
+    period = "1y"
+
+    if time_frame == "49m":
+        yf_interval = "5m"
+        resample_rule = "49min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "98m":
+        yf_interval = "5m"
+        resample_rule = "98min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "196m":
+        yf_interval = "5m"
+        resample_rule = "196min"
+        is_intraday = True
+        period = "1mo"
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+    elif time_frame == "1mo":
+        yf_interval = "1mo"
+        period = "5y"
+    elif time_frame == "1h":
+        yf_interval = "1h"
+        period = "60d" # Max for 1h
+        is_intraday = True
+    elif time_frame == "4h":
+        yf_interval = "1h"
+        resample_rule = "4h"
+        is_intraday = True
+        period = "60d"
+
+    # 1. Batch Fetch Data
     try:
-        data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d")
+        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
     except Exception as e:
         logger.error(f"Alpha 101 Data Fetch Error: {e}")
         return []
@@ -2984,8 +3021,11 @@ def screen_alpha_101(ticker_list: list = None, region: str = "us") -> list:
     else:
         iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
 
-    def process_ticker(ticker, df):
+    def process_ticker(ticker, raw_df):
         try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+            if df is None: return None
+
             df = df.dropna(how='all')
             if len(df) < 5: return None
 
