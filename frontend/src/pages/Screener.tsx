@@ -233,6 +233,23 @@ const STRATEGIES: Record<string, {
                 ]
             }
         ]
+    },
+    optionsOnly: {
+        id: 'optionsOnly',
+        name: 'Options Only Scanner',
+        endpoint: '/screen/options_only',
+        description: 'Thalaiva Protocol: Bull Put Spreads, 45 DTE, 30 Delta, $5 Width. Filters for Liquidity & Earnings.',
+        params: [],
+        legend: [
+            {
+                title: 'Thalaiva Verdict',
+                desc: 'Mentor Instructions',
+                items: [
+                    { label: '🟢 GREEN LIGHT', text: 'Mechanics valid. >20% ROC. Safe from Earnings.' },
+                    { label: '🛑 EARNINGS', text: 'DANGER. Earnings event before expiration.' }
+                ]
+            }
+        ]
     }
 };
 
@@ -561,6 +578,14 @@ const Screener: React.FC = () => {
                                             <th onClick={() => handleSort('target')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Target <SortIcon colKey="target" /></th>
                                             <th onClick={() => handleSort('breakout_date')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trend Age <SortIcon colKey="breakout_date" /></th>
                                         </>
+                                    ) : selectedStrategy === 'optionsOnly' ? (
+                                        <>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">The Trade (Put Spread)</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiration</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit / Risk</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ROC</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Earnings In</th>
+                                        </>
                                     ) : (
                                         <>
                                             {/* NEW COLUMN: ATR */}
@@ -619,6 +644,43 @@ const Screener: React.FC = () => {
                                                     </td>
                                                      <td className="px-4 py-3 text-gray-500 text-sm">
                                                          {item.breakout_date || "-"}
+                                                    </td>
+                                                </>
+                                            ) : selectedStrategy === 'optionsOnly' ? (
+                                                <>
+                                                    <td className="px-4 py-3">
+                                                         {/* The Specific Trade Instruction */}
+                                                         <div className="flex flex-col">
+                                                             <span className="font-bold text-gray-900 dark:text-gray-100">
+                                                                 Short: {item.short_put} P <span className="text-gray-400 text-xs">(~30Δ)</span>
+                                                             </span>
+                                                             <span className="text-gray-600 dark:text-gray-400 text-sm">
+                                                                 Long: {item.long_put} P
+                                                             </span>
+                                                         </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                         <div className="text-sm font-semibold text-blue-700 dark:text-blue-400">{item.expiry_date}</div>
+                                                         <div className="text-xs text-gray-500 font-mono">{item.dte} DTE</div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                         <div className="flex items-center space-x-1">
+                                                             <span className="text-green-600 font-bold">${item.credit}</span>
+                                                             <span className="text-gray-300">|</span>
+                                                             <span className="text-red-600 font-medium">${item.risk}</span>
+                                                         </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono text-lg font-bold text-gray-800 dark:text-gray-200">
+                                                         {item.roc}%
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                         {item.verdict && item.verdict.includes("EARNINGS") ? (
+                                                             <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-800 animate-pulse">
+                                                                 ⚠️ {item.earnings_gap} Days
+                                                             </span>
+                                                         ) : (
+                                                             <span className="text-gray-400 text-sm">Safe ({item.earnings_gap}d)</span>
+                                                         )}
                                                     </td>
                                                 </>
                                             ) : (

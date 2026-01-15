@@ -521,6 +521,26 @@ def create_app(testing: bool = False) -> Flask:
             app.logger.exception(f"Fortress Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/options_only", methods=["GET"])
+    def screen_options_only():
+        try:
+            app.logger.info("Thalaiva Options Only Screen Initiated")
+
+            # Cache Key
+            cache_key = ("options_only_scanner", "us")
+            cached = get_cached_screener_result(cache_key)
+            if cached: return jsonify(cached)
+
+            # Run Logic
+            results = screener.screen_options_only_strategy()
+
+            # Cache results
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            app.logger.exception(f"Options Only Screen Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
     @app.route('/screen/isa', methods=['GET'])
     def screen_isa():
         region = request.args.get('region', 'us')
