@@ -529,17 +529,19 @@ def create_app(testing: bool = False) -> Flask:
             # Cache Key
             cache_key = ("options_only_scanner", "us")
             cached = get_cached_screener_result(cache_key)
-            if cached: return jsonify(cached)
+            if cached:
+                app.logger.info("Serving cached Options Only results")
+                return jsonify(cached)
 
-            # Run Logic
-            results = screener.screen_options_only_strategy()
+            # Run with limit=75 to be safe
+            results = screener.screen_options_only_strategy(limit=75)
 
             # Cache results
             cache_screener_result(cache_key, results)
             return jsonify(results)
         except Exception as e:
-            app.logger.exception(f"Options Only Screen Error: {e}")
-            return jsonify({"error": str(e)}), 500
+            app.logger.error(f"Critical Screener Error: {e}")
+            return jsonify({"error": "Scanner Timeout or Error"}), 500
 
     @app.route('/screen/isa', methods=['GET'])
     def screen_isa():
