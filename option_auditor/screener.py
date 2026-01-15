@@ -3258,3 +3258,248 @@ def screen_my_strategy(ticker_list: list = None, region: str = "us") -> list:
     # Sort by Score (Best Setups first)
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
+
+def screen_options_only_strategy(region: str = "us") -> list:
+    """
+    THALAIVA'S OPTIONS ONLY SCANNER (The $10k -> $25k Protocol)
+    -----------------------------------------------------------
+    Strict Mechanical Rules:
+    1.  **Source:** Tickers from 'option_auditor/data/us_sectors.csv'.
+    2.  **Liquidity:** Daily Turnover > $20M (No wide spreads).
+    3.  **Setup:** Bull Put Spread (Vertical).
+    4.  **Expiry:** 35-60 DTE (Target 45).
+    5.  **Strikes:** Short Delta ~0.30 | Width $5.
+    6.  **Earnings:** RED LIGHT if earnings occur before expiration.
+    7.  **ROC:** Must be > 20% (No Ant Trades).
+    """
+    import pandas as pd
+    import numpy as np
+    import yfinance as yf
+    import os
+    from datetime import date, timedelta
+    from scipy.stats import norm
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # --- 1. LOAD TICKERS FROM CSV ---
+    csv_path = os.path.join(os.path.dirname(__file__), 'data', 'us_sectors.csv')
+    try:
+        # Reading the specific format provided (Symbol column)
+        df_tickers = pd.read_csv(csv_path)
+        # Filter out headers/categories if they exist in the single column format
+        # (The provided file seems to have a mix, we extract valid tickers)
+        raw_list = df_tickers.iloc[:, 0].dropna().tolist()
+
+        # Clean list: Remove sector headers like "TECH", "BULL", etc. if they aren't valid tickers
+        # Simple heuristic: Tickers are usually length 1-5.
+        ticker_list = [t for t in raw_list if isinstance(t, str) and len(t) <= 5 and t.isupper()]
+
+        # Deduplicate
+        ticker_list = list(set(ticker_list))
+    except Exception as e:
+        logger.error(f"Thalaiva Scanner: Could not load CSV. Defaulting to major liquid list. Error: {e}")
+        ticker_list = ["SPY", "QQQ", "IWM", "NVDA", "AMD", "TSLA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "NFLX"]
+
+    # Constants
+    RISK_FREE_RATE = 0.045
+    MIN_ROC = 0.20
+    TARGET_DTE = 45
+    MIN_DTE = 35
+    MAX_DTE = 60
+    TARGET_DELTA = -0.30
+    SPREAD_WIDTH = 5.0
+    MIN_TURNOVER = 20_000_000 # $20M daily liquidity
+
+    def calculate_delta(S, K, T, r, sigma):
+        """Black-Scholes Delta for Put"""
+        if T <= 0 or sigma <= 0: return -0.5
+        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+        return norm.cdf(d1) - 1.0
+
+    def process_ticker(ticker):
+        try:
+            tk = yf.Ticker(ticker)
+
+            # --- PHASE 1: LIQUIDITY FILTER ---
+            hist = tk.history(period="3mo")
+            if hist.empty: return None
+
+            curr_price = hist['Close'].iloc[-1]
+            avg_vol = hist['Volume'].iloc[-20:].mean()
+            turnover = curr_price * avg_vol
+
+            if turnover < MIN_TURNOVER: return None # Filter out illiquid junk immediately
+
+            # --- PHASE 2: EARNINGS CHECK ---
+            # Get next earnings date
+            earnings_date = None
+            try:
+                cal = tk.calendar
+                if cal is not None and not cal.empty:
+                    # Handle different yfinance versions
+                    if isinstance(cal, pd.DataFrame):
+                        if 'Earnings Date' in cal.columns:
+                            earnings_date = cal['Earnings Date'].iloc[0]
+                        elif 0 in cal.columns: # Sometimes it's transposed
+                             earnings_date = cal.iloc[0, 0]
+                    elif isinstance(cal, dict) and 'Earnings Date' in cal:
+                        earnings_date = cal['Earnings Date'][0]
+
+                if earnings_date:
+                    earnings_date = pd.to_datetime(earnings_date).date()
+            except:
+                pass # Proceed with caution if earnings unknown
+
+            # --- PHASE 3: FIND EXPIRATION (45 DTE) ---
+            expirations = tk.options
+            if not expirations: return None
+
+            target_exp = None
+            best_dte_diff = 999
+            actual_dte = 0
+            today = date.today()
+
+            for exp in expirations:
+                exp_d = pd.to_datetime(exp).date()
+                dte = (exp_d - today).days
+
+                if MIN_DTE <= dte <= MAX_DTE:
+                    diff = abs(dte - TARGET_DTE)
+                    if diff < best_dte_diff:
+                        best_dte_diff = diff
+                        target_exp = exp
+                        actual_dte = dte
+
+            if not target_exp: return None
+
+            # Check Earnings Collision
+            earnings_warning = False
+            days_to_earnings = "N/A"
+            if earnings_date:
+                days_to_earnings = (earnings_date - today).days
+                # If earnings happen BEFORE expiration, it's a risk for Short Puts
+                if days_to_earnings <= actual_dte:
+                    earnings_warning = True
+
+            # --- PHASE 4: CHAIN ANALYSIS ---
+            chain = tk.option_chain(target_exp)
+            puts = chain.puts
+
+            # Estimate IV (Use ATM IV as baseline or individual)
+            # Simple approach: use the row's IV provided by yfinance
+
+            # Calculate Delta for all Puts
+            T_years = actual_dte / 365.0
+
+            # Find SHORT strike (closest to 30 Delta)
+            # Filter for OTM puts first (Strike < Price)
+            otm_puts = puts[puts['strike'] < curr_price].copy()
+
+            # Recalculate Delta accurately if 'delta' col missing (yfinance often lacks Greeks)
+            otm_puts['calc_delta'] = otm_puts.apply(
+                lambda x: calculate_delta(curr_price, x['strike'], T_years, RISK_FREE_RATE, x['impliedVolatility'] if x['impliedVolatility'] > 0 else 0.4),
+                axis=1
+            )
+
+            # Find row closest to -0.30
+            short_leg = otm_puts.iloc[(otm_puts['calc_delta'] - TARGET_DELTA).abs().argsort()[:1]]
+            if short_leg.empty: return None
+            short_leg = short_leg.iloc[0]
+
+            short_strike = short_leg['strike']
+            short_bid = short_leg['bid']
+            short_delta = short_leg['calc_delta']
+
+            # Find LONG strike ($5 below)
+            long_strike_target = short_strike - SPREAD_WIDTH
+            long_leg = puts[puts['strike'] == long_strike_target]
+
+            # If exact $5 width not found, try closest within small tolerance
+            if long_leg.empty:
+                long_leg = puts[(puts['strike'] - long_strike_target).abs() < 1.0]
+                if long_leg.empty: return None # Can't build spread
+
+            long_leg = long_leg.iloc[0]
+            long_strike = long_leg['strike']
+            long_ask = long_leg['ask']
+
+            # --- PHASE 5: TRADE MATH ---
+            # Conservative Entry: Sell Short at BID, Buy Long at ASK
+            credit = short_bid - long_ask
+
+            # Fallback if market closed/wide spread (use Last)
+            if credit <= 0:
+                credit = short_leg['lastPrice'] - long_leg['lastPrice']
+
+            width = short_strike - long_strike
+            max_risk = width - credit
+
+            if credit <= 0 or max_risk <= 0: return None
+
+            roc = (credit / max_risk) * 100
+
+            # --- PHASE 6: THALAIVA VERDICT ---
+            verdict = "WAIT"
+            color = "gray"
+            reasons = []
+
+            # 1. Check ROC
+            if roc < 20:
+                reasons.append("Ant Trade (<20% ROC)")
+
+            # 2. Check Earnings
+            if earnings_warning:
+                reasons.append(f"EARNINGS RISK (In {days_to_earnings}d)")
+                verdict = "🛑 EARNINGS"
+                color = "red"
+            # 3. Check Delta Accuracy
+            elif abs(short_delta) < 0.20:
+                reasons.append("Delta too low (Far OTM)")
+
+            # 4. Green Light
+            elif roc >= 20:
+                verdict = "🟢 GREEN LIGHT"
+                color = "green"
+                reasons.append("Perfect Mechanics")
+
+            # Filter: Only return Green Lights or High ROC earnings warnings
+            if verdict == "WAIT" and roc < 20: return None
+
+            return {
+                "ticker": ticker,
+                "price": round(curr_price, 2),
+                "verdict": verdict,
+                "color": color,
+                "setup_name": f"Bull Put {int(short_strike)}/{int(long_strike)}",
+                "short_put": int(short_strike),
+                "long_put": int(long_strike),
+                "expiry_date": target_exp, # String YYYY-MM-DD
+                "dte": actual_dte,
+                "credit": round(credit * 100, 0), # Total $ per 1 contract
+                "risk": round(max_risk * 100, 0), # Total $ per 1 contract
+                "roc": round(roc, 1),
+                "earnings_gap": days_to_earnings,
+                "delta": round(short_delta, 2),
+                "desc": f"Sell {target_exp} {int(short_strike)}P / Buy {int(long_strike)}P",
+                "score": roc if verdict == "🟢 GREEN LIGHT" else 0 # Sort key
+            }
+
+        except Exception as e:
+            return None
+
+    # --- EXECUTION ---
+    # Limit to first 100 or specific high-interest sectors to ensure speed if needed
+    # For now, we process as many as possible with threading
+    results = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all tickers
+        future_to_ticker = {executor.submit(process_ticker, t): t for t in ticker_list}
+
+        for future in as_completed(future_to_ticker):
+            data = future.result()
+            if data:
+                results.append(data)
+
+    # Sort: Green Lights first, then by highest ROC
+    results.sort(key=lambda x: (1 if "GREEN" in x['verdict'] else 0, x['score']), reverse=True)
+
+    return results
