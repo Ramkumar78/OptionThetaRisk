@@ -3353,7 +3353,12 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
                         earnings_date = cal.iloc[0, 0]
 
                 if earnings_date:
-                    earnings_date = pd.to_datetime(earnings_date).date()
+                    # Fix: Robust parsing
+                    dt_val = pd.to_datetime(earnings_date, errors='coerce')
+                    if not pd.isna(dt_val):
+                        earnings_date = dt_val.date()
+                    else:
+                        earnings_date = None
             except Exception:
                 # If we can't find earnings, assume safe but flag in UI if needed?
                 # For now, just proceed.
@@ -3375,7 +3380,9 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
             for exp in expirations:
                 # Basic string format check
                 try:
-                    exp_date = pd.to_datetime(exp).date()
+                    dt_exp = pd.to_datetime(exp, errors='coerce')
+                    if pd.isna(dt_exp): continue
+                    exp_date = dt_exp.date()
                 except:
                     continue
 
@@ -3607,15 +3614,18 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
                 elif isinstance(cal, pd.DataFrame) and not cal.empty:
                     # Often row 0 is next earnings
                     val = cal.iloc[0, 0]
-                    # Check if it's a date object
-                    if isinstance(val, (date, datetime, pd.Timestamp)):
+                    # Check if it's a date object or string
+                    if isinstance(val, (date, datetime, pd.Timestamp, str)):
                         earnings_date = val
 
                 if earnings_date:
-                    earnings_date = pd.to_datetime(earnings_date).date()
-                    days_to_earnings = (earnings_date - date.today()).days
-                    if 0 <= days_to_earnings <= 21:
-                        return None # Skip (Earnings Risk)
+                    # Fix: Use errors='coerce' to prevent "The string did not match expected pattern" error
+                    dt_val = pd.to_datetime(earnings_date, errors='coerce')
+                    if not pd.isna(dt_val):
+                        earnings_date = dt_val.date()
+                        days_to_earnings = (earnings_date - date.today()).days
+                        if 0 <= days_to_earnings <= 21:
+                            return None # Skip (Earnings Risk)
             except Exception:
                 pass # Proceed if data missing, assume safe but careful
 
@@ -3632,8 +3642,12 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
 
             for exp in expirations:
                 try:
-                    d = pd.to_datetime(exp).date()
-                    dte = (d - today).days
+                    # Fix: Use errors='coerce' to handle malformed expiration strings safely
+                    d = pd.to_datetime(exp, errors='coerce')
+                    if pd.isna(d): continue
+
+                    d_date = d.date()
+                    dte = (d_date - today).days
                     if MIN_DTE <= dte <= MAX_DTE:
                         valid_exps.append((exp, dte))
                 except: continue
