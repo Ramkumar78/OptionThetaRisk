@@ -148,7 +148,7 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
 
     return pd.DataFrame()
 
-def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=30, threads=True) -> pd.DataFrame:
+def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=30, threads=True, raise_on_error=False) -> pd.DataFrame:
     """
     Downloads data for a list of tickers in chunks to avoid Rate Limiting.
     Returns a combined DataFrame or Empty DataFrame on total failure.
@@ -183,6 +183,10 @@ def fetch_batch_data_safe(tickers: list, period="1y", interval="1d", chunk_size=
                 data_frames.append(batch)
 
         except Exception as e:
+            if raise_on_error:
+                # If specifically requested, bubble up the error (e.g. for Auth/Rate Limit detection)
+                raise e
+
             logger.error(f"Batch {i} download failed or Circuit Open: {e}")
             if data_api_breaker.current_state == 'open':
                 logger.warning("Circuit breaker open during batch fetch. Aborting remaining batches.")

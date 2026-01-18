@@ -3530,8 +3530,11 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
     # 1. BATCH FETCH DATA (Trend & Stock Liquidity)
     # We fetch 1 year to ensure 200 SMA is valid
     try:
-        data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d")
+        data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d", raise_on_error=True)
     except Exception as e:
+        # If it's a critical yfinance error (401, 429), re-raise to UI
+        if "401" in str(e) or "429" in str(e) or "Unauthorized" in str(e):
+            raise e
         logger.error(f"Vertical Put Data Fetch Error: {e}")
         return []
 
