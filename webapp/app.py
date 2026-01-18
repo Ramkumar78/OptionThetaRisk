@@ -656,6 +656,28 @@ def create_app(testing: bool = False) -> Flask:
             app.logger.exception(f"Bull Put Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/vertical_put", methods=["GET"])
+    def screen_vertical_put():
+        try:
+            region = request.args.get("region", "us")
+            app.logger.info(f"Vertical Put Screen request: region={region}")
+
+            # Cache key
+            cache_key = ("vertical_put_v2", region)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            # Call the new logic
+            results = screener.screen_vertical_put_spreads(region=region)
+
+            app.logger.info(f"Vertical Put Screen completed. Results: {len(results)}")
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            app.logger.exception(f"Vertical Put Screen Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/darvas", methods=["GET"])
     def screen_darvas():
         try:
