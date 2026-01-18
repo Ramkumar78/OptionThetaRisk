@@ -2,9 +2,10 @@
 pytest
 pytest-cov
 pytest-rerunfailures
+pytest-bdd
 flake8
 bandit
 pip-audit
 pyinstaller
-pytest-rerunfailures
+pyarrow
 -e .
