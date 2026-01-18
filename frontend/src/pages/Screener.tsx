@@ -132,6 +132,25 @@ const STRATEGIES: Record<string, {
             }
         ]
     },
+    verticalPut: {
+        id: 'verticalPut',
+        name: 'Vertical Put (High Prob)',
+        endpoint: '/screen/vertical_put',
+        description: 'High Probability Bull Put Spreads. Filters for Trend (>200 SMA), High IV (>HV), and Option Liquidity. Avoids Earnings.',
+        params: ['region'],
+        legend: [
+            {
+                title: 'Vertical Spread Criteria',
+                desc: 'Strict Mechanical Rules',
+                items: [
+                    { label: 'Trend', text: 'Price > 200 SMA & 50 SMA.' },
+                    { label: 'Volatility', text: 'Implied Volatility > Historical Volatility (Edge).' },
+                    { label: 'Liquidity', text: 'Option Vol > 1000 contracts.' },
+                    { label: 'Setup', text: '30 Delta Short, 21-45 DTE.' }
+                ]
+            }
+        ]
+    },
     darvas: {
         id: 'darvas',
         name: 'Darvas Box',
@@ -578,13 +597,13 @@ const Screener: React.FC = () => {
                                             <th onClick={() => handleSort('target')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Target <SortIcon colKey="target" /></th>
                                             <th onClick={() => handleSort('breakout_date')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trend Age <SortIcon colKey="breakout_date" /></th>
                                         </>
-                                    ) : selectedStrategy === 'optionsOnly' ? (
+                                    ) : (selectedStrategy === 'optionsOnly' || selectedStrategy === 'verticalPut') ? (
                                         <>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">The Trade (Put Spread)</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiration</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit / Risk</th>
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ROC</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Earnings In</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Earnings / IV</th>
                                         </>
                                     ) : (
                                         <>
@@ -646,13 +665,13 @@ const Screener: React.FC = () => {
                                                          {item.breakout_date || "-"}
                                                     </td>
                                                 </>
-                                            ) : selectedStrategy === 'optionsOnly' ? (
+                                            ) : (selectedStrategy === 'optionsOnly' || selectedStrategy === 'verticalPut') ? (
                                                 <>
                                                     <td className="px-4 py-3">
                                                          {/* The Specific Trade Instruction */}
                                                          <div className="flex flex-col">
                                                              <span className="font-bold text-gray-900 dark:text-gray-100">
-                                                                 Short: {item.short_put} P <span className="text-gray-400 text-xs">(~30Δ)</span>
+                                                                 Short: {item.short_put} P <span className="text-gray-400 text-xs">(~{Math.abs(item.delta || 0.30).toFixed(2)}Δ)</span>
                                                              </span>
                                                              <span className="text-gray-600 dark:text-gray-400 text-sm">
                                                                  Long: {item.long_put} P
@@ -674,12 +693,20 @@ const Screener: React.FC = () => {
                                                          {item.roc}%
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                         {item.verdict && item.verdict.includes("EARNINGS") ? (
-                                                             <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-800 animate-pulse">
-                                                                 ⚠️ {item.earnings_gap} Days
-                                                             </span>
+                                                         {selectedStrategy === 'verticalPut' ? (
+                                                             <div className="flex flex-col text-xs">
+                                                                <span className="text-green-600 font-bold">IV: {item.iv_atm}%</span>
+                                                                <span className="text-gray-500">HV: {item.hv_20}%</span>
+                                                             </div>
                                                          ) : (
-                                                             <span className="text-gray-400 text-sm">Safe ({item.earnings_gap}d)</span>
+                                                             // Existing optionsOnly earnings logic
+                                                             item.verdict && item.verdict.includes("EARNINGS") ? (
+                                                                 <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-800 animate-pulse">
+                                                                     ⚠️ {item.earnings_gap} Days
+                                                                 </span>
+                                                             ) : (
+                                                                 <span className="text-gray-400 text-sm">Safe ({item.earnings_gap}d)</span>
+                                                             )
                                                          )}
                                                     </td>
                                                 </>
