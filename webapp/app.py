@@ -51,6 +51,8 @@ try:
 except ImportError:
     Session = None
     Account = None
+    # Log this for debugging
+    logging.warning("Tastytrade SDK could not be imported. Integration disabled.")
 
 # Load environment variables from .env file
 load_dotenv()
