@@ -55,6 +55,12 @@ except ImportError as e:
     TASTY_IMPORT_ERROR = str(e)
     # Log this for debugging
     logging.exception("Tastytrade SDK could not be imported. Integration disabled.")
+    try:
+        import httpx
+        logging.error(f"DEBUG: httpx version installed: {httpx.__version__}")
+        logging.error(f"DEBUG: httpx location: {httpx.__file__}")
+    except ImportError:
+        logging.error("DEBUG: httpx could not be imported at all.")
 
 # Load environment variables from .env file
 load_dotenv()
