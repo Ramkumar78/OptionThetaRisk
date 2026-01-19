@@ -45,7 +45,12 @@ from webapp.storage import get_storage_provider as _get_storage_provider
 import resend
 from dotenv import load_dotenv
 from option_auditor.common.resilience import data_api_breaker
-from tastytrade import Session, Account
+
+try:
+    from tastytrade import Session, Account
+except ImportError:
+    Session = None
+    Account = None
 
 # Load environment variables from .env file
 load_dotenv()
@@ -316,6 +321,9 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route("/api/tastytrade/connect", methods=["POST"])
     def connect_tt():
+        if Session is None:
+            return jsonify({"error": "Tastytrade SDK not installed."}), 503
+
         try:
             # Use credentials from .env
             client_id = os.getenv("TT_CLIENT_ID")
@@ -335,6 +343,9 @@ def create_app(testing: bool = False) -> Flask:
 
     @app.route("/api/tastytrade/account", methods=["GET"])
     def get_tt_account():
+        if Session is None or Account is None:
+            return jsonify({"error": "Tastytrade SDK not installed."}), 503
+
         # Defensive check: Must be connected
         if not session.get('tt_active'):
             return jsonify({"error": "Not Connected"}), 401
@@ -722,7 +733,7 @@ def create_app(testing: bool = False) -> Flask:
 
             # Check if TT Session is active
             tt_session = None
-            if session.get('tt_active'):
+            if session.get('tt_active') and Session:
                 try:
                     tt_session = Session(provider_secret=os.getenv("TT_SECRET"), refresh_token=os.getenv("TT_CLIENT_ID"))
                 except Exception as e:

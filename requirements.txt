@@ -35,3 +35,4 @@ openbb
 ib_insync
 zipline-reloaded
 scikit-learn>=1.0.0
+tastytrade>=11.1.0
