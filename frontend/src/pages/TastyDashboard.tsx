@@ -37,6 +37,9 @@ const TastyDashboard = () => {
         <div className="bg-red-900 border border-red-500 text-red-200 px-4 py-3 rounded relative mb-4" role="alert">
             <strong className="font-bold">Error: </strong>
             <span className="block sm:inline">{error}</span>
+            <div className="mt-2 text-xs opacity-75">
+                Check server logs for more details. If SDK is missing, ensure 'tastytrade' is installed.
+            </div>
         </div>
       )}
 

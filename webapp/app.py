@@ -48,11 +48,13 @@ from option_auditor.common.resilience import data_api_breaker
 
 try:
     from tastytrade import Session, Account
-except ImportError:
+    TASTY_IMPORT_ERROR = None
+except ImportError as e:
     Session = None
     Account = None
+    TASTY_IMPORT_ERROR = str(e)
     # Log this for debugging
-    logging.warning("Tastytrade SDK could not be imported. Integration disabled.")
+    logging.exception("Tastytrade SDK could not be imported. Integration disabled.")
 
 # Load environment variables from .env file
 load_dotenv()
@@ -324,7 +326,9 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/api/tastytrade/connect", methods=["POST"])
     def connect_tt():
         if Session is None:
-            return jsonify({"error": "Tastytrade SDK not installed."}), 503
+            msg = f"Tastytrade SDK not installed. Error: {TASTY_IMPORT_ERROR}"
+            app.logger.error(msg)
+            return jsonify({"error": msg}), 503
 
         try:
             # Use credentials from .env
@@ -346,7 +350,7 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/api/tastytrade/account", methods=["GET"])
     def get_tt_account():
         if Session is None or Account is None:
-            return jsonify({"error": "Tastytrade SDK not installed."}), 503
+            return jsonify({"error": f"Tastytrade SDK not installed. Error: {TASTY_IMPORT_ERROR}"}), 503
 
         # Defensive check: Must be connected
         if not session.get('tt_active'):
