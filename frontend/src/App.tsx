@@ -8,6 +8,7 @@ import Audit from './pages/Audit';
 import Results from './pages/Results';
 import Dashboard from './pages/Dashboard';
 import PortfolioRisk from './pages/PortfolioRisk';
+import TastyDashboard from './pages/TastyDashboard';
 
 const App: React.FC = () => {
   return (
@@ -21,6 +22,7 @@ const App: React.FC = () => {
           <Route path="results" element={<Results />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="portfolio-risk" element={<PortfolioRisk />} />
+          <Route path="tactical" element={<TastyDashboard />} />
           <Route path="*" element={<div className="text-center p-10">404 Not Found</div>} />
         </Route>
       </Routes>

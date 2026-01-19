@@ -46,6 +46,30 @@ import resend
 from dotenv import load_dotenv
 from option_auditor.common.resilience import data_api_breaker
 
+# Extensive Debugging for Dependency Hell
+try:
+    import httpcore
+    logging.info(f"DIAGNOSTIC: httpcore version: {httpcore.__version__} at {httpcore.__file__}")
+    import httpx
+    # Try importing AsyncClient directly to verify integrity
+    from httpx import AsyncClient
+    # Check version
+    logging.info(f"DIAGNOSTIC: httpx version: {httpx.__version__} at {httpx.__file__}")
+except ImportError as e:
+    logging.error(f"DIAGNOSTIC: Networking stack broken: {e}")
+except Exception as e:
+    logging.error(f"DIAGNOSTIC: Unexpected error during dependency check: {e}")
+
+try:
+    from tastytrade import Session, Account
+    TASTY_IMPORT_ERROR = None
+    logging.info("DIAGNOSTIC: Tastytrade imported successfully.")
+except ImportError as e:
+    Session = None
+    Account = None
+    TASTY_IMPORT_ERROR = str(e)
+    logging.exception("Tastytrade SDK could not be imported. Integration disabled.")
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -312,6 +336,71 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/health")
     def health():
         return "OK", 200
+
+    @app.route("/api/tastytrade/connect", methods=["POST"])
+    def connect_tt():
+        if Session is None:
+            msg = f"Tastytrade SDK not installed. Error: {TASTY_IMPORT_ERROR}"
+            app.logger.error(msg)
+            return jsonify({"error": msg}), 503
+
+        try:
+            # Use credentials from .env
+            client_id = os.getenv("TT_CLIENT_ID")
+            secret = os.getenv("TT_SECRET")
+
+            # Initialize Tastytrade Session
+            # Note: In this SDK version, we initialize with your API credentials
+            tt_session = Session(provider_secret=secret, refresh_token=client_id)
+
+            if tt_session.validate():
+                session['tt_active'] = True
+                return jsonify({"success": True, "message": "🟢 CONNECTION ESTABLISHED. CASINO IS OPEN."})
+            return jsonify({"success": False, "message": "🛑 VALIDATION FAILED."}), 401
+        except Exception as e:
+            app.logger.error(f"TT Connect Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/tastytrade/account", methods=["GET"])
+    def get_tt_account():
+        if Session is None or Account is None:
+            return jsonify({"error": f"Tastytrade SDK not installed. Error: {TASTY_IMPORT_ERROR}"}), 503
+
+        # Defensive check: Must be connected
+        if not session.get('tt_active'):
+            return jsonify({"error": "Not Connected"}), 401
+
+        try:
+            tt_session = Session(provider_secret=os.getenv("TT_SECRET"), refresh_token=os.getenv("TT_CLIENT_ID"))
+            accounts = Account.get_accounts(tt_session)
+            if not accounts:
+                return jsonify({"error": "No accounts found"}), 404
+
+            acc = accounts[0] # Focus on your primary margin account
+
+            balances = acc.get_balances(tt_session)
+            positions = acc.get_positions(tt_session)
+
+            # THALAIVA METRIC: BP USAGE CALCULATION
+            # We use used_derivative_buying_power / net_liquidating_value
+            net_liq = float(balances.net_liquidating_value)
+            used_bp = float(balances.used_derivative_buying_power)
+            bp_usage = (used_bp / net_liq) * 100 if net_liq > 0 else 0
+
+            return jsonify({
+                "net_liq": round(net_liq, 2),
+                "buying_power": round(float(balances.derivative_buying_power), 2),
+                "bp_usage": round(bp_usage, 2),
+                "positions": [{
+                    "symbol": p.symbol,
+                    "qty": float(p.quantity),
+                    "mark": float(p.mark) if p.mark else 0,
+                    "exp": p.expires_at.strftime('%Y-%m-%d') if p.expires_at else "N/A"
+                } for p in positions]
+            })
+        except Exception as e:
+            app.logger.error(f"TT Account Error: {e}")
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/screener/status")
     def get_breaker_status():
@@ -662,14 +751,27 @@ def create_app(testing: bool = False) -> Flask:
             region = request.args.get("region", "us")
             app.logger.info(f"Vertical Put Screen request: region={region}")
 
-            # Cache key
-            cache_key = ("vertical_put_v2", region)
+            # Check if TT Session is active
+            tt_session = None
+            if session.get('tt_active') and Session:
+                try:
+                    tt_session = Session(provider_secret=os.getenv("TT_SECRET"), refresh_token=os.getenv("TT_CLIENT_ID"))
+                except Exception as e:
+                    app.logger.warning(f"Failed to create TT session for screener: {e}")
+
+            # Cache key (differentiate if using TT)
+            use_tt = 1 if tt_session else 0
+            cache_key = ("vertical_put_v2", region, use_tt)
+
+            # Skip cache if using live TT data to ensure freshness?
+            # Or assume 10 min cache is fine even for live data.
+            # Let's cache it, but use different key.
             cached = get_cached_screener_result(cache_key)
             if cached:
                 return jsonify(cached)
 
             # Call the new logic
-            results = screener.screen_vertical_put_spreads(region=region)
+            results = screener.screen_vertical_put_spreads(region=region, tt_session=tt_session)
 
             app.logger.info(f"Vertical Put Screen completed. Results: {len(results)}")
             cache_screener_result(cache_key, results)

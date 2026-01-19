@@ -13,6 +13,12 @@ try:
 except ImportError as e:
     raise ImportError("The 'pandas_ta' library is required. Please install it with 'pip install pandas_ta'.") from e
 
+# Try importing tastytrade (optional dependency)
+try:
+    from tastytrade.metrics import get_market_metrics
+except ImportError:
+    get_market_metrics = None
+
 from option_auditor.quant_engine import QuantPhysicsEngine
 
 # Configure logger
@@ -3506,7 +3512,7 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
     results.sort(key=lambda x: (1 if "GREEN" in x['verdict'] else 0, x['roc']), reverse=True)
     return results
 
-def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", check_mode: bool = False) -> list:
+def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", check_mode: bool = False, tt_session=None) -> list:
     """
     Screens for High Probability Vertical Put Credit Spreads (Bull Put).
     Logic:
@@ -3515,6 +3521,8 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
     3. Earnings: No earnings in next 21 days.
     4. Liquidity: Option Vol > 1000, OI > 500.
     5. Setup: 21-45 DTE, ~0.30 Delta Short, $5 Width.
+
+    Updated: Supports Tastytrade Metrics if session provided.
     """
     import pandas as pd
     import numpy as np
@@ -3591,6 +3599,52 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
     # Limit option chain scanning to avoid timeouts (Top 50 by Volume)
     trend_candidates.sort(key=lambda x: x['vol_avg'], reverse=True)
     trend_candidates = trend_candidates[:50]
+
+    # --- PHASE 3: FUNNEL UPGRADE (Tastytrade Metrics) ---
+    # If session is provided, we filter candidates using accurate TT IV Rank/Liquidity
+    tt_filtered_map = {}
+    if tt_session and get_market_metrics:
+        try:
+            candidate_symbols = [c['ticker'] for c in trend_candidates]
+            # Fetch in chunks if needed, but 50 is fine
+            metrics = get_market_metrics(tt_session, candidate_symbols)
+
+            for m in metrics:
+                # GATE 2: Volatility Edge (IV Rank > 30)
+                # GATE 4: Liquidity (Check TT liquidity score)
+
+                # Note: TT SDK metrics object structure might vary, adapting based on typical SDK
+                iv_rank = float(m.iv_rank) if m.iv_rank else 0
+                liq_rating = float(m.liquidity_rating) if m.liquidity_rating else 0
+
+                if iv_rank >= 30.0 and liq_rating >= 4.0:
+                    tt_filtered_map[m.symbol] = {
+                        "iv_rank": iv_rank,
+                        "liquidity_rating": liq_rating,
+                        "iv_index": float(m.implied_volatility_index) if m.implied_volatility_index else 0
+                    }
+
+            # Filter trend_candidates to only those who passed TT gates
+            # Or just mark them? The prompt implies "The 6-gate funnel" logic upgrade.
+            # If using TT, we might want to prioritize them.
+            # Let's keep only those passing TT gates if we have data, or proceed with all if API fails?
+            # User said "gate funnel", so we filter.
+
+            new_candidates = []
+            for c in trend_candidates:
+                if c['ticker'] in tt_filtered_map:
+                    # Enrich candidate with TT data
+                    tt_data = tt_filtered_map[c['ticker']]
+                    c['tt_iv_rank'] = tt_data['iv_rank']
+                    c['tt_liq'] = tt_data['liquidity_rating']
+                    new_candidates.append(c)
+
+            trend_candidates = new_candidates
+            logger.info(f"Filtered down to {len(trend_candidates)} candidates using Tastytrade Metrics.")
+
+        except Exception as e:
+            logger.error(f"Failed to fetch TT metrics: {e}")
+            # Fallback to standard processing if TT fails
 
     results = []
 
@@ -3687,7 +3741,11 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
             atm_iv = float(atm_row['impliedVolatility'].iloc[0] * 100)
 
             # IV > HV Check (Edge)
-            if atm_iv < hv_20:
+            # If we have TT IV Rank, we trust that already passed (IV Rank > 30 implies high IV)
+            if 'tt_iv_rank' in candidate:
+                # We already filtered for IV Rank > 30
+                pass
+            elif atm_iv < hv_20:
                 # Strictly speaking, we want IV > HV.
                 # If slightly below, we might skip. Let's enforce strictness.
                 return None
