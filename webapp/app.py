@@ -46,21 +46,27 @@ import resend
 from dotenv import load_dotenv
 from option_auditor.common.resilience import data_api_breaker
 
+# Extensive Debugging for Dependency Hell
+try:
+    import httpx
+    # Try importing AsyncClient directly to verify integrity
+    from httpx import AsyncClient
+    # Check version
+    logging.info(f"DIAGNOSTIC: httpx version: {httpx.__version__} at {httpx.__file__}")
+except ImportError as e:
+    logging.error(f"DIAGNOSTIC: httpx is broken or missing: {e}")
+except Exception as e:
+    logging.error(f"DIAGNOSTIC: httpx import caused unexpected error: {e}")
+
 try:
     from tastytrade import Session, Account
     TASTY_IMPORT_ERROR = None
+    logging.info("DIAGNOSTIC: Tastytrade imported successfully.")
 except ImportError as e:
     Session = None
     Account = None
     TASTY_IMPORT_ERROR = str(e)
-    # Log this for debugging
     logging.exception("Tastytrade SDK could not be imported. Integration disabled.")
-    try:
-        import httpx
-        logging.error(f"DEBUG: httpx version installed: {httpx.__version__}")
-        logging.error(f"DEBUG: httpx location: {httpx.__file__}")
-    except ImportError:
-        logging.error("DEBUG: httpx could not be imported at all.")
 
 # Load environment variables from .env file
 load_dotenv()
