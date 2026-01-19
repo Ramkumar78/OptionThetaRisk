@@ -55,6 +55,7 @@ const Layout: React.FC<LayoutProps> = () => {
     { name: 'Journal', path: '/journal' },
     { name: 'Audit', path: '/audit' },
     { name: 'Risk Map', path: '/portfolio-risk' },
+    { name: 'Tactical', path: '/tactical' },
   ];
 
   return (
