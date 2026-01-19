@@ -21,6 +21,9 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const connectTastytrade = () => api.post('/api/tastytrade/connect');
+export const fetchAccountMetrics = () => api.get('/api/tastytrade/account');
+
 export const runHybridScreener = async (region: string, timeFrame: string) => {
   const response = await api.get('/screen/hybrid', {
     params: { region, time_frame: timeFrame }
