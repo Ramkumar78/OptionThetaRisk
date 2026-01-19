@@ -48,15 +48,17 @@ from option_auditor.common.resilience import data_api_breaker
 
 # Extensive Debugging for Dependency Hell
 try:
+    import httpcore
+    logging.info(f"DIAGNOSTIC: httpcore version: {httpcore.__version__} at {httpcore.__file__}")
     import httpx
     # Try importing AsyncClient directly to verify integrity
     from httpx import AsyncClient
     # Check version
     logging.info(f"DIAGNOSTIC: httpx version: {httpx.__version__} at {httpx.__file__}")
 except ImportError as e:
-    logging.error(f"DIAGNOSTIC: httpx is broken or missing: {e}")
+    logging.error(f"DIAGNOSTIC: Networking stack broken: {e}")
 except Exception as e:
-    logging.error(f"DIAGNOSTIC: httpx import caused unexpected error: {e}")
+    logging.error(f"DIAGNOSTIC: Unexpected error during dependency check: {e}")
 
 try:
     from tastytrade import Session, Account
