@@ -46,4 +46,4 @@ def test_screen_master_endpoint_uk(client):
         assert resp.status_code == 200
 
         # Verify called with region='uk'
-        mock_screen.assert_called_with(region='uk')
+        mock_screen.assert_called_with(region='uk', time_frame='1d')
