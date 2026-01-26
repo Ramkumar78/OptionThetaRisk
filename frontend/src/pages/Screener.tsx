@@ -29,6 +29,23 @@ const STRATEGIES: Record<string, {
             }
         ]
     },
+    rsiDivergence: {
+        id: 'rsiDivergence',
+        name: 'RSI Divergence',
+        endpoint: '/screen/rsi_divergence',
+        description: 'Detects Regular Divergence (Trend Reversal). Bullish: Price Lower Low, RSI Higher Low. Bearish: Price Higher High, RSI Lower High.',
+        params: ['region', 'time_frame'],
+        legend: [
+            {
+                title: 'Divergence Types',
+                desc: 'Reversal Signals',
+                items: [
+                    { label: '🐂 Bullish', text: 'Price LL + RSI HL (Buy Dip)' },
+                    { label: '🐻 Bearish', text: 'Price HH + RSI LH (Sell Top)' }
+                ]
+            }
+        ]
+    },
     myStrategy: {
         id: 'myStrategy',
         name: 'My Strategy (ISA + Alpha)',
