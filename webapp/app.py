@@ -642,7 +642,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "uk":
                  ticker_list = get_uk_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                  filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                  watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -698,7 +698,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -883,6 +883,40 @@ def create_app(testing: bool = False) -> Flask:
             return jsonify(results)
         except Exception as e:
             app.logger.exception(f"Fourier Screen Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/screen/rsi_divergence", methods=["GET"])
+    def screen_rsi_divergence():
+        try:
+            region = request.args.get("region", "us")
+            time_frame = request.args.get("time_frame", "1d")
+            app.logger.info(f"RSI Divergence Screen request: region={region}, tf={time_frame}")
+
+            cache_key = ("rsi_divergence", region, time_frame)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
+            elif region == "sp500":
+                filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(filtered_sp500 + watch_list))
+
+            results = screener.screen_rsi_divergence(ticker_list=ticker_list, time_frame=time_frame, region=region)
+            app.logger.info(f"RSI Divergence Screen completed. Results: {len(results)}")
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            app.logger.exception(f"RSI Divergence Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/universal", methods=["GET"])
