@@ -1,58 +1,50 @@
-# Trade Auditor (The Option Auditor)
+# 📈 Trade Auditor: The Quest for Alpha
 
-**The Automated Risk Manager & Strategy Screener for UK & Global Traders**
+**Automated Risk Auditing, ISA Screening, and Strategy Backtesting.**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://trade-auditor.onrender.com/)
 
-Trade Auditor is a unified platform for tracking, analyzing, and auditing your trading performance. It combines a powerful **Automated Trade Journal** with **Advanced Risk Analysis** and specialized screeners for **UK ISA** and **Global Options** markets.
+Trade Auditor is built for traders and investors who aren't satisfied with market-average returns. It provides the technical "edge" required to audit performance, identify high-probability setups, and manage catastrophic risk.
 
-![Trade Auditor Banner](webapp/static/img/logo.png)
+## 🚀 "Beat The inflation" Toolkit
 
-## 🚀 Key Features
+### 🇬🇧 UK ISA Trend Screener (`isa.py`)
+Specifically tuned for the UK market, this screener identifies stocks transitioning from "Value" to "High-Growth" phases.
+* **VCP Detection**: Uses Volatility Contraction Pattern logic to find institutional accumulation.
+* **Relative Strength (RS)**: Automatically ranks stocks against the S&P 500 to ensure you are holding leaders, not laggards.
+* **Institutional Verdicts**: Provides clear 'Buy', 'Watch', or 'Avoid' signals based on 50/150/200 EMA alignment.
 
-### 🇬🇧 UK ISA Leader Screener
-Find high-growth, ISA-eligible stocks using the **ISA Trend Follower** logic.
-* **VCP Detection**: Identifies Volatility Contraction Patterns (Minervini style) where sellers are exhausted.
-* **Relative Strength**: Filters for stocks outperforming the S&P 500 (RS > 0).
-* **Dynamic Position Sizing**: Automatically calculates share counts based on a £1,250 risk limit per trade.
+### 🧪 Integrated Strategy Backtester (`unified_backtester.py`)
+Verify your edge before risking capital. Most traders fail because they don't know their historical expectancy.
+* **Multi-Strategy Support**: Run backtests on **ISA Trend Following**, **Turtle Trading**, and **Master Convergence**.
+* **PnL Simulation**: View drawdowns, recovery times, and win rates over years of historical data.
 
-### 📊 Automated Journal & Behavioral Audit
-Stop manual logging. Sync your closed trades directly to a high-performance journal.
-* **Metric Automation**: Instantly view Win Rate, Profit Factor, and "Tharp" Expectancy.
-* **Revenge Trade Detection**: Automatically flags "Revenge Trades" opened within 30 minutes of a losing exit on the same symbol.
-* **Leakage Reporting**: Identifies "Fee Drag" and stale capital that is hurting your efficiency.
+### 🛡️ The Behavioral Auditor (`journal_analyzer.py`)
+The difference between a 5% return and a 15% return is often "Leakage."
+* **Revenge Trade Detection**: Automatically flags trades opened within 30 minutes of a losing exit—the #1 killer of retail accounts.
+* **Monte Carlo Projections**: Simulates 1,000+ versions of your future equity curve to calculate your **Probability of Ruin**.
+* **Fee Audit**: Highlighting how much your broker is eating into your Alpha.
 
-### 📉 Integrated Strategy Backtester
-Verify your edge before risking capital. The built-in **Unified Backtester** allows you to run historical simulations of the core strategies.
-* **Strategy Support**: Backtest ISA, Turtle, and Master Convergence strategies.
-* **Ticker Analysis**: Run deep historical checks on specific tickers to see how they performed under different regimes.
+## 🛠️ Quick Start (Professional Setup)
 
-### 🛡️ Option Risk Manager
-* **ITM Risk Alerts**: Real-time monitoring of unhedged In-The-Money (ITM) exposure.
-* **Monte Carlo Projections**: Projects future equity curves and "Risk of Ruin" based on your actual PnL distribution.
-* **Broker Sync**: Seamlessly analyze CSV exports from **Tastytrade** and **IBKR**.
+The system is fully containerized. To run your own private instance:
 
-## 🎛️ Quick Start (Docker)
+```bash
+git clone https://github.com/Ramkumar78/OptionThetaRisk.git
+cd OptionThetaRisk
+docker-compose up --build
+```
+Access the dashboard at http://localhost:5000.
 
-The easiest way to run Trade Auditor is with Docker Compose:
+## 📈 Roadmap & Contributions
+We are currently working on integrating real-time LSE data for deeper UK market penetration.
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Ramkumar78/OptionThetaRisk.git
-   cd OptionThetaRisk
-   ```
+Found a bug? Open an issue.
 
-2. **Run with Docker**:
-   ```bash
-   docker-compose up --build
-   ```
+Have a strategy? See CONTRIBUTING.md to add your logic to the strategies/ directory.
 
-3. **Access the App**:
-   * Web Interface: http://localhost:5000
+If this tool helps you manage risk or find better setups, please ⭐ Star the repo to support development!
 
-## ⚖️ License
-Distributed under the Apache License 2.0. See LICENSE for more information.
-
-Disclaimer: Educational use only. Trading stocks and options involves significant risk of loss. The "Win Rates" and "Probabilities" displayed are historical heuristics, not guarantees of future performance. Use at your own risk.
+Disclaimer: For educational purposes only. Trading involves significant risk. Performance auditing is a tool for better decision-making, not a guarantee of future returns.
