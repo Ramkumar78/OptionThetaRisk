@@ -286,6 +286,23 @@ const STRATEGIES: Record<string, {
                 ]
             }
         ]
+    },
+    liquidityGrab: {
+        id: 'liquidityGrab',
+        name: 'Liquidity Grab (SMC)',
+        endpoint: '/screen/liquidity_grabs',
+        description: 'Detects Liquidity Sweeps where price breaches a Swing High/Low but closes back inside (Rejection). High probability reversal setup.',
+        params: ['region', 'time_frame'],
+        legend: [
+            {
+                title: 'Sweep Types',
+                desc: 'Reversal Patterns',
+                items: [
+                    { label: 'Bullish Sweep', text: 'Price sweeps Swing Low & closes above.' },
+                    { label: 'Bearish Sweep', text: 'Price sweeps Swing High & closes below.' }
+                ]
+            }
+        ]
     }
 };
 
@@ -606,7 +623,14 @@ const Screener: React.FC = () => {
                                     <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker <SortIcon colKey="Ticker" /></th>
                                     <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price <SortIcon colKey="Price" /></th>
 
-                                    {selectedStrategy === 'myStrategy' ? (
+                                    {selectedStrategy === 'liquidityGrab' ? (
+                                        <>
+                                            <th onClick={() => handleSort('breakout_level')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Swing Level <SortIcon colKey="breakout_level" /></th>
+                                            <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type <SortIcon colKey="Setup" /></th>
+                                            <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
+                                            <th onClick={() => handleSort('score')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strength <SortIcon colKey="score" /></th>
+                                        </>
+                                    ) : selectedStrategy === 'myStrategy' ? (
                                         <>
                                             <th onClick={() => handleSort('breakout_level')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout Lvl <SortIcon colKey="breakout_level" /></th>
                                             <th onClick={() => handleSort('atr_value')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">ATR <SortIcon colKey="atr_value" /></th>
@@ -664,7 +688,31 @@ const Screener: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, currencySymbol)}</td>
 
-                                            {selectedStrategy === 'myStrategy' ? (
+                                            {selectedStrategy === 'liquidityGrab' ? (
+                                                <>
+                                                    <td className="px-4 py-3">
+                                                         <span className="font-mono text-purple-600 font-bold">{item.breakout_level}</span>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                         <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${item.verdict && item.verdict.includes('BULL') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                             {item.verdict}
+                                                         </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono">
+                                                                T: {targetVal ? formatCurrency(targetVal, currencySymbol) : '-'}
+                                                            </span>
+                                                            <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-mono">
+                                                                S: {stopVal ? formatCurrency(stopVal, currencySymbol) : '-'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono text-sm">
+                                                         {item.score ? item.score.toFixed(1) : '0.0'}%
+                                                    </td>
+                                                </>
+                                            ) : selectedStrategy === 'myStrategy' ? (
                                                 <>
                                                     <td className="px-4 py-3">
                                                          <span className="font-mono text-blue-600">{item.breakout_level}</span>
