@@ -6,6 +6,4 @@ pytest-bdd
 flake8
 bandit
 pip-audit
-pyinstaller
 pyarrow
--e .
