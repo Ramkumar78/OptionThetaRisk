@@ -26,7 +26,7 @@ generate_human_verdict = QuantPhysicsEngine.generate_human_verdict
 from option_auditor.unified_screener import screen_universal_dashboard
 
 # Imports from common constants to avoid circular dependencies
-from option_auditor.common.constants import SECTOR_NAMES, SECTOR_COMPONENTS, TICKER_NAMES
+from option_auditor.common.constants import SECTOR_NAMES, SECTOR_COMPONENTS, TICKER_NAMES, DEFAULT_ACCOUNT_SIZE
 from option_auditor.common.data_utils import prepare_data_for_ticker as _prepare_data_for_ticker
 from option_auditor.common.data_utils import fetch_data_with_retry, fetch_batch_data_safe, get_cached_market_data, _calculate_trend_breakout_date
 
@@ -267,17 +267,7 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
     Returns:
         Dict[str, List[dict]]: Keys are 'Sector Name (Ticker)', Values are lists of ticker results.
     """
-    all_tickers = []
-
-    all_tickers = []
-
-    if region != "us" and region is not None:
-        # Use common helper for non-default regions
-        all_tickers = _resolve_region_tickers(region)
-    else:
-        # Default US Sector Components
-        for t_list in SECTOR_COMPONENTS.values():
-            all_tickers.extend(t_list)
+    all_tickers = _resolve_region_tickers(region)
 
     flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame)
 
@@ -1054,7 +1044,6 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
     - Liquid (>1M Vol)
     """
     if ticker_list is None:
-        # from option_auditor.screener import _resolve_region_tickers
         ticker_list = _resolve_region_tickers(region)
 
     # TASTYTRADE PARAMETERS
@@ -1292,7 +1281,7 @@ def resolve_ticker(query: str) -> str:
 
     return query
 
-def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False, time_frame: str = "1d", account_size: float = None) -> list:
+def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False, time_frame: str = "1d", account_size: float = DEFAULT_ACCOUNT_SIZE) -> list:
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).
     Supports Dynamic Position Sizing if account_size is provided.
@@ -1306,26 +1295,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         risk_per_trade_pct = 0.01
 
     if ticker_list is None:
-        if region == "uk_euro":
-            ticker_list = get_uk_euro_tickers()
-        elif region == "uk":
-            try:
-                ticker_list = get_uk_tickers()
-            except ImportError:
-                 ticker_list = get_uk_euro_tickers()
-        elif region == "india":
-            ticker_list = get_indian_tickers()
-        elif region == "united_states":
-            ticker_list = get_united_states_stocks()
-        elif region == "sp500":
-             sp500 = _get_filtered_sp500(check_trend=True)
-             watch_list = SECTOR_COMPONENTS.get("WATCH", [])
-             ticker_list = list(set(sp500 + watch_list))
-        else: # us / combined default
-            all_tickers = []
-            for t_list in SECTOR_COMPONENTS.values():
-                all_tickers.extend(t_list)
-            ticker_list = list(set(all_tickers))
+        ticker_list = _resolve_region_tickers(region)
 
     results = []
 
@@ -2062,14 +2032,12 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
     Runs ALL strategies on the dataset to find CONFLUENCE.
     """
     if ticker_list is None:
-        if region == "sp500":
-             base_tickers = get_sp500_tickers()
-             watch_list = SECTOR_COMPONENTS.get("WATCH", [])
-             ticker_list = list(set(base_tickers + watch_list))
-        elif region in ["uk", "uk_euro", "india"]:
-             ticker_list = _resolve_region_tickers(region)
-        else:
+        if region == "us" or region is None:
+             # Default Master Screener only checks WATCH list to save resources (high compute)
              ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
+        else:
+             # For other regions (or explicit sp500 request), use standard resolution
+             ticker_list = _resolve_region_tickers(region)
 
     is_large = len(ticker_list) > 100 or region == "sp500"
 

@@ -21,7 +21,7 @@ from option_auditor.uk_stock_data import get_uk_tickers
 from option_auditor.us_stock_data import get_united_states_stocks
 from option_auditor.master_screener import screen_master_convergence
 from option_auditor.sp500_data import get_sp500_tickers
-from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS
+from option_auditor.common.constants import LIQUID_OPTION_TICKERS, SECTOR_COMPONENTS, DEFAULT_ACCOUNT_SIZE
 from option_auditor.unified_backtester import UnifiedBacktester
 
 # Import Strategies
@@ -419,7 +419,7 @@ def create_app(testing: bool = False) -> Flask:
             app.logger.info(f"ISA Check request for {query}")
 
             # Position Sizing Param (Default £76k)
-            account_size = 76000.0
+            account_size = DEFAULT_ACCOUNT_SIZE
             acc_size_str = request.args.get("account_size", "").strip()
             if acc_size_str:
                 try:
@@ -559,7 +559,7 @@ def create_app(testing: bool = False) -> Flask:
         app.logger.info(f"ISA Screen request: region={region}, time_frame={time_frame}")
 
         # Position Sizing Param (Default £76k)
-        account_size = 76000.0
+        account_size = DEFAULT_ACCOUNT_SIZE
         acc_size_str = request.args.get("account_size", "").strip()
         if acc_size_str:
             try:
@@ -1095,7 +1095,7 @@ def create_app(testing: bool = False) -> Flask:
             entry_date_str = request.args.get("entry_date", "").strip()
             
             # Position Sizing Param (Default £76k)
-            account_size = 76000.0
+            account_size = DEFAULT_ACCOUNT_SIZE
             acc_size_str = request.args.get("account_size", "").strip()
             if acc_size_str:
                 try:
