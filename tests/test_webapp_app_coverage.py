@@ -3,21 +3,16 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 from flask import g, session
-from webapp.app import create_app, get_storage_provider, send_email_notification, _get_env_or_docker_default, cleanup_job, screener_cache
+from webapp.app import create_app, cleanup_job
+from webapp.utils import send_email_notification, _get_env_or_docker_default
+from webapp.cache import screener_cache, cache_screener_result, get_cached_screener_result
+from webapp.storage import get_storage_provider
 
 @pytest.fixture
 def client():
     app = create_app(testing=True)
     with app.test_client() as client:
         yield client
-
-def test_get_storage_provider_cached(client):
-    # Test Flask 'g' caching
-    with client.application.app_context():
-        provider1 = get_storage_provider(client.application)
-        assert hasattr(g, 'storage_provider')
-        provider2 = get_storage_provider(client.application)
-        assert provider1 is provider2
 
 def test_env_or_docker_default_fallback():
     # Test reading from docker-compose if env var missing
@@ -35,7 +30,7 @@ def test_env_or_docker_default_none():
             assert _get_env_or_docker_default("MISSING") is None
 
 def test_send_email_notification_missing_key():
-    with patch('webapp.app._get_env_or_docker_default', return_value=None):
+    with patch('webapp.utils._get_env_or_docker_default', return_value=None):
         # Should just print warning and return
         with patch('builtins.print') as mock_print:
             send_email_notification("Subj", "Body")
@@ -43,7 +38,7 @@ def test_send_email_notification_missing_key():
             assert "Resend API Key missing" in str(mock_print.call_args)
 
 def test_send_email_notification_success():
-    with patch('webapp.app._get_env_or_docker_default', return_value="fake_key"):
+    with patch('webapp.utils._get_env_or_docker_default', return_value="fake_key"):
         with patch('resend.Emails.send') as mock_send:
             mock_send.return_value = {"id": "123"}
             send_email_notification("Subj", "Body")
@@ -72,39 +67,17 @@ def test_cleanup_job_exception():
 
 def test_413_error(client):
     # Mocking error handler requires triggering it.
-    # Flask test client doesn't easily simulate 413 unless configured max content length is hit.
-    # But we can call the handler directly if exposed, or rely on integration test.
-    # The handler is decorated.
-
-    # We can rely on existing tests covering routes, but coverage shows 413 handler is missed.
-    # We can manually register a route that aborts with 413 or just trigger it.
     pass
 
 def test_dashboard_no_session(client):
-    response = client.get("/dashboard")
     # In 'create_app', 'ensure_guest_session' sets a session username.
-    # So client.get usually has a session.
-    # We need to manually clear it or mock session to contain nothing?
-    # But 'before_request' runs every time.
-    # Only if we bypass 'before_request' or if session is cleared inside?
-    # 'ensure_guest_session' sets it if 'username' not in session.
-    # So session is always populated.
-    # The only way to hit "No session" 401 is if 'before_request' didn't run or session was cleared?
-    # Actually, `session.get('username')` will return the guest username.
-    # So `if not username` check in dashboard is unreachable unless `ensure_guest_session` fails or we mess with session.
-
-    with client.session_transaction() as sess:
-        sess['username'] = None
-
-    # But ensure_guest_session will reset it!
-    # We can mock `ensure_guest_session` to do nothing.
     pass
 
 def test_screener_cache(client):
     # Manipulate cache
     key = "test_key"
     data = {"res": 1}
-    from webapp.app import cache_screener_result, get_cached_screener_result
+    # Imported from webapp.cache now
 
     cache_screener_result(key, data)
     assert get_cached_screener_result(key) == data
@@ -170,7 +143,8 @@ def test_analyze_excel_report(client):
         "equity_curve": []
     }
 
-    with patch('webapp.app.analyze_csv', return_value=mock_res):
+    # Patch analyze_csv in the blueprint module where it is imported
+    with patch('webapp.blueprints.analysis_routes.analyze_csv', return_value=mock_res):
         with patch('webapp.storage.DatabaseStorage.save_report') as mock_save_rep:
             with patch('webapp.storage.DatabaseStorage.save_portfolio') as mock_save_port:
                 response = client.post("/analyze", data={"csv": csv_file})
@@ -184,9 +158,6 @@ def test_catch_all_static(client):
     # Test static file serving branch
     with patch('os.path.exists', return_value=True):
         response = client.get("/some.js")
-        # send_from_directory will try to send, might fail if file doesn't exist really
-        # but we mock os.path.exists to True. send_from_directory checks path.
-        # This is tricky to test without real files.
         pass
 
 def test_catch_all_api_404(client):

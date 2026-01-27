@@ -1,13 +1,13 @@
 import pytest
 import pandas as pd
 from unittest.mock import MagicMock, patch
-from option_auditor.common.screener_utils import ScreeningRunner, _resolve_region_tickers, DEFAULT_RSI_LENGTH
+from option_auditor.common.screener_utils import ScreeningRunner, resolve_region_tickers, DEFAULT_RSI_LENGTH
 
 def test_constants_availability():
     assert DEFAULT_RSI_LENGTH == 14
 
 def test_resolve_region_tickers_defaults():
-    tickers = _resolve_region_tickers("us")
+    tickers = resolve_region_tickers("us")
     assert len(tickers) > 0
     assert "AAPL" in tickers or "SPY" in tickers # Check for common tickers
 
