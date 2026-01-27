@@ -57,7 +57,7 @@ def test_screen_5_13_pct_change(mock_yf_download):
     mock_yf_download.return_value = mock_df
 
     # We mock _prepare_data_for_ticker to just return our mock_df
-    with patch('option_auditor.screener._prepare_data_for_ticker', return_value=mock_df):
+    with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=mock_df):
         results = screen_5_13_setups(ticker_list=["AAPL"], time_frame="1d")
 
     assert len(results) == 1
@@ -73,7 +73,7 @@ def test_screen_5_13_priority_21(mock_yf_download):
 
     mock_df = create_mock_df(periods=30)
 
-    with patch('option_auditor.screener._prepare_data_for_ticker', return_value=mock_df), \
+    with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=mock_df), \
          patch('pandas_ta.ema') as mock_ema:
 
         # Setup EMA side effects
@@ -125,7 +125,7 @@ def test_screen_turtle_no_darvas_leakage(mock_yf_download):
     df = pd.DataFrame({"High": highs, "Low": lows, "Close": close, "Volume": 1000}, index=dates)
 
     # ATR mock
-    with patch('option_auditor.screener._prepare_data_for_ticker', return_value=df), \
+    with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=df), \
          patch('pandas_ta.atr', return_value=pd.Series([1.0]*30, index=dates)):
 
          results = screen_turtle_setups(ticker_list=["AAPL"], time_frame="1d")

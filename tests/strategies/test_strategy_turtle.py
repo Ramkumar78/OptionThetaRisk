@@ -19,11 +19,10 @@ class TestTurtleStrategyClass:
         df.iloc[-1, df.columns.get_loc('Close')] = high_20 + 5.0 # Breakout
         df.iloc[-1, df.columns.get_loc('High')] = high_20 + 6.0
 
-        strategy = TurtleStrategy()
-        result = strategy.analyze(df)
+        strategy = TurtleStrategy("TEST", df)
+        result = strategy.analyze()
 
-        assert result['signal'] == "BUY"
-        # assert result['signal_name'] == "Turtle Breakout" # Removed as key does not exist
+        assert "BREAKOUT (BUY)" in result['signal']
 
     def test_turtle_breakdown_sell(self, mock_market_data):
         df = mock_market_data(days=30, price=100.0, trend="flat")
@@ -32,33 +31,35 @@ class TestTurtleStrategyClass:
         df.iloc[-1, df.columns.get_loc('Close')] = low_20 - 5.0 # Breakdown
         df.iloc[-1, df.columns.get_loc('Low')] = low_20 - 6.0
 
-        strategy = TurtleStrategy()
-        result = strategy.analyze(df)
+        strategy = TurtleStrategy("TEST", df)
+        result = strategy.analyze()
 
-        assert result['signal'] == "SELL"
+        assert "BREAKDOWN (SELL)" in result['signal']
 
     def test_turtle_wait(self, mock_market_data):
         df = mock_market_data(days=30, price=100.0, trend="flat")
         # Price within range but not near high (avoid WATCH)
+        # Assuming previous high is ~100
         high_20 = df['High'].rolling(20).max().shift(1).iloc[-1]
         df.iloc[-1, df.columns.get_loc('Close')] = high_20 * 0.95
 
-        strategy = TurtleStrategy()
-        result = strategy.analyze(df)
+        strategy = TurtleStrategy("TEST", df)
+        result = strategy.analyze()
 
-        assert result['signal'] == "WAIT"
+        # The new strategy returns None if signal is WAIT and check_mode is False
+        assert result is None
 
     def test_turtle_insufficient_data(self, mock_market_data):
         df = mock_market_data(days=10)
-        strategy = TurtleStrategy()
-        result = strategy.analyze(df)
-        assert result == {'signal': 'WAIT'}
+        strategy = TurtleStrategy("TEST", df)
+        result = strategy.analyze()
+        assert result is None
 
 # --- Functional Screener Tests (option_auditor/screener.py - screen_turtle_setups) ---
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener.TICKER_NAMES', {"AAPL": "Apple Inc."})
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.get_cached_market_data')
+@patch('option_auditor.common.constants.TICKER_NAMES', {"AAPL": "Apple Inc."})
 def test_screen_turtle_setups_breakout(mock_get_cache, mock_fetch, mock_market_data):
     # Setup mock data with breakout
     df = mock_market_data(days=50, price=100.0, trend="flat")
@@ -71,8 +72,9 @@ def test_screen_turtle_setups_breakout(mock_get_cache, mock_fetch, mock_market_d
     # 20 day high was 100. Last close is 105.
     df.iloc[-1, df.columns.get_loc('Close')] = 105.0
 
-    # Mock data return
-    with patch('option_auditor.screener._prepare_data_for_ticker', return_value=df):
+    # Mock data return. Important: patch where ScreeningRunner imports it from.
+    # ScreeningRunner is in option_auditor.common.screener_utils
+    with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=df):
         results = screen_turtle_setups(ticker_list=["AAPL"], region="us")
 
         assert len(results) == 1
@@ -81,7 +83,7 @@ def test_screen_turtle_setups_breakout(mock_get_cache, mock_fetch, mock_market_d
         assert res['ticker'] == "AAPL"
         assert res['price'] == 105.0
 
-@patch('option_auditor.screener._prepare_data_for_ticker')
+@patch('option_auditor.common.screener_utils.prepare_data_for_ticker')
 def test_screen_turtle_setups_breakdown(mock_prepare):
     # Setup data
     dates = pd.date_range(end=datetime.now(), periods=50)
@@ -100,7 +102,7 @@ def test_screen_turtle_setups_breakdown(mock_prepare):
     assert "BREAKDOWN (SELL)" in results[0]['signal']
     assert results[0]['target'] < 85.0 # Target lower for short
 
-@patch('option_auditor.screener._prepare_data_for_ticker')
+@patch('option_auditor.common.screener_utils.prepare_data_for_ticker')
 def test_screen_turtle_near_high(mock_prepare):
     dates = pd.date_range(end=datetime.now(), periods=50)
     df = pd.DataFrame({
@@ -117,21 +119,21 @@ def test_screen_turtle_near_high(mock_prepare):
     assert len(results) == 1
     assert "WATCH" in results[0]['signal']
 
-@patch('option_auditor.screener._prepare_data_for_ticker')
+@patch('option_auditor.common.screener_utils.prepare_data_for_ticker')
 def test_screen_turtle_empty_data(mock_prepare):
     mock_prepare.return_value = None
     results = screen_turtle_setups(ticker_list=["BAD"])
     assert len(results) == 0
 
-@patch('option_auditor.screener._resolve_region_tickers')
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.resolve_region_tickers')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
 def test_screen_turtle_region_default(mock_fetch, mock_resolve):
     mock_resolve.return_value = ["AAPL"]
     # We mock fetch to return empty to avoid errors, relying on loop logic
     mock_fetch.return_value = pd.DataFrame()
 
     # We need to mock _prepare_data_for_ticker inside the loop or ensure data allows it
-    with patch('option_auditor.screener._prepare_data_for_ticker', return_value=None):
+    with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=None):
         results = screen_turtle_setups(ticker_list=None, region="us")
         assert len(results) == 0
         mock_resolve.assert_called_with("us")

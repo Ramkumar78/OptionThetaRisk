@@ -42,6 +42,8 @@ except ImportError:
 
 # Import Refactored Utilities and Constants
 from option_auditor.strategies.vertical_spreads import screen_vertical_put_spreads
+from option_auditor.strategies.turtle import TurtleStrategy
+from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.common.screener_utils import (
     ScreeningRunner,
     resolve_region_tickers,
@@ -353,130 +355,12 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
     """
     Screens for Turtle Trading Setups (20-Day Breakouts).
     Supports multiple timeframes.
+    DELEGATES TO: option_auditor/strategies/turtle.py
     """
-    import pandas_ta as ta
-
     runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
 
-    # Additional names for ETFs not in TICKER_NAMES
-    ETF_NAMES = {
-        "SPY": "SPDR S&P 500 ETF Trust",
-        "QQQ": "Invesco QQQ Trust",
-        "IWM": "iShares Russell 2000 ETF",
-        "GLD": "SPDR Gold Shares",
-        "SLV": "iShares Silver Trust",
-        "USO": "United States Oil Fund, LP",
-        "TLT": "iShares 20+ Year Treasury Bond ETF",
-    }
-
     def strategy(ticker, df):
-        try:
-            min_length = 21 if check_mode else 21 # Turtle needs 20 bars for Donchian
-            if len(df) < min_length: return None
-
-            # --- TURTLE & DARVAS CALCULATIONS ---
-            # 1. Donchian Channels (20-day High/Low)
-            df['20_High'] = df['High'].rolling(window=DEFAULT_DONCHIAN_WINDOW).max().shift(1)
-            df['20_Low'] = df['Low'].rolling(window=DEFAULT_DONCHIAN_WINDOW).min().shift(1)
-
-            # Darvas / 10-day Box for faster breakouts
-            df['10_High'] = df['High'].rolling(window=10).max().shift(1)
-            df['10_Low'] = df['Low'].rolling(window=10).min().shift(1)
-
-            # 2. ATR (Volatility 'N') - Using Donchian Window for N as per Turtle
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_DONCHIAN_WINDOW)
-
-            curr_close = float(df['Close'].iloc[-1])
-
-            # Calculate % Change
-            pct_change_1d = None
-            if len(df) >= 2:
-                try:
-                    prev_close_px = float(df['Close'].iloc[-2])
-                    pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
-
-            if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
-                return None
-
-            prev_high = float(df['20_High'].iloc[-1])
-            prev_low = float(df['20_Low'].iloc[-1])
-            atr = float(df['ATR'].iloc[-1])
-
-            # 10-day values
-            prev_high_10 = float(df['10_High'].iloc[-1]) if not pd.isna(df['10_High'].iloc[-1]) else prev_high
-            prev_low_10 = float(df['10_Low'].iloc[-1]) if not pd.isna(df['10_Low'].iloc[-1]) else prev_low
-
-            signal = "WAIT"
-            buy_price = 0.0
-            stop_loss = 0.0
-            target = 0.0
-
-            dist_to_breakout_high = (curr_close - prev_high) / prev_high
-
-            # Buy Breakout (Turtle 20-Day)
-            if curr_close > prev_high:
-                signal = "🚀 BREAKOUT (BUY)"
-                buy_price = curr_close
-                stop_loss = buy_price - (2 * atr)
-                target = buy_price + (4 * atr)
-
-            # Sell Breakout (Short)
-            elif curr_close < prev_low:
-                signal = "📉 BREAKDOWN (SELL)"
-                buy_price = curr_close
-                stop_loss = buy_price + (2 * atr) # Stop above entry for short
-                target = buy_price - (4 * atr)    # Target below entry
-
-            # Near High (Turtle 20-Day only for now)
-            elif -0.02 <= dist_to_breakout_high <= 0:
-                signal = "👀 WATCH (Near High)"
-                buy_price = prev_high
-                stop_loss = prev_high - (2 * atr)
-                target = prev_high + (4 * atr)
-
-            # Calculate Trend Breakout Date
-            breakout_date = _calculate_trend_breakout_date(df)
-
-            # Additional Calcs for Consistency
-            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH).iloc[-1] if len(df) >= DEFAULT_ATR_LENGTH else 0.0
-            high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
-            low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
-
-            # Risk/Reward calculation
-            invalidation_level = stop_loss
-            target_level = target
-            potential_risk = curr_close - invalidation_level
-            potential_reward = target_level - curr_close
-            rr_ratio = potential_reward / potential_risk if potential_risk > 0 else 0.0
-
-            if check_mode or signal != "WAIT":
-                # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
-                base_ticker = ticker.split('.')[0]
-                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
-                return {
-                    "ticker": ticker,
-                    "company_name": company_name,
-                    "price": curr_close,
-                    "pct_change_1d": pct_change_1d,
-                    "signal": signal,
-                    "breakout_level": prev_high,
-                    "stop_loss": invalidation_level,
-                    "target": target_level,
-                    "risk_reward": f"1:{rr_ratio:.2f}",
-                    "atr": round(current_atr, 2),
-                    "52_week_high": round(high_52wk, 2) if high_52wk else None,
-                    "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                    "sector_change": pct_change_1d,
-                    "trailing_exit_10d": round(prev_low_10, 2),
-                    "breakout_date": breakout_date,
-                    "atr_value": round(current_atr, 2)
-                }
-        except Exception as e:
-            logger.error(f"Error processing turtle setup for {ticker}: {e}")
-            return None
-        return None
+        return TurtleStrategy(ticker, df, check_mode=check_mode).analyze()
 
     return runner.run(strategy)
 
@@ -1275,259 +1159,28 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).
     Supports Dynamic Position Sizing if account_size is provided.
+    DELEGATES TO: option_auditor/strategies/isa.py
     """
-    import yfinance as yf
-    import pandas_ta as ta
-    import pandas as pd
-
     if not (0.001 <= risk_per_trade_pct <= 0.10):
         logger.warning(f"risk_per_trade_pct {risk_per_trade_pct} out of bounds (0.001-0.1). Resetting to 0.01.")
         risk_per_trade_pct = 0.01
 
-    if ticker_list is None:
-        ticker_list = resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
 
-    results = []
+    def strategy(ticker, df):
+        return IsaStrategy(ticker, df, check_mode=check_mode, account_size=account_size, risk_per_trade_pct=risk_per_trade_pct).analyze()
 
-    # 1. Fetch Data
-    cache_key = f"market_scan_{region}"
-    data = pd.DataFrame()
-
-    try:
-        if len(ticker_list) > 50:
-            data = get_cached_market_data(ticker_list, period="2y", cache_name=cache_key)
-        else:
-            data = yf.download(ticker_list, period="2y", progress=False, threads=True, auto_adjust=True, group_by='ticker')
-
-    except Exception as e:
-        logger.error(f"Failed to load data for {region}: {e}")
-        return []
-    
-    if data.empty:
-        if ticker_list:
-            logger.error("❌ Yahoo returned NO DATA. You might be rate limited.")
-        return []
-
-    # OPTIMIZED ITERATION
-    if isinstance(data.columns, pd.MultiIndex):
-        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
-    else:
-        # If single ticker requested and returned, make it behave like an iterator
-        if len(ticker_list) == 1 and not data.empty:
-             iterator = [(ticker_list[0], data)]
-        else:
-             iterator = [] # Can't iterate flat easily without knowing columns, usually safe to skip or assume
-
-    # If simple df and multiple tickers requested but flat returned, yfinance failed to group or only 1 valid.
-    # We fallback to standard iteration if needed, but groupby is cleaner for mass scans.
-
-    # Wait, if we requested 1 ticker, data is flat (Open, High, Low...)
-    # If we requested >1, data is MultiIndex (Ticker -> (Open...))
-
-    # Logic to handle both:
-    if not isinstance(data.columns, pd.MultiIndex) and len(ticker_list) > 1:
-         # Something weird, maybe only 1 valid ticker returned?
-         # Check intersection
-         pass
-
-    # Use a loop over ticker_list and slice? No, groupby is faster for iteration if it IS MultiIndex.
-    # If it is NOT MultiIndex, it is a single ticker frame.
-
-    if isinstance(data.columns, pd.MultiIndex):
-        for ticker, df in [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]:
-            try:
-                # Droplevel is implicit when accessing by top level key in MultiIndex columns
-                # df = df.droplevel(0, axis=1) # No longer needed with direct access
-
-                # Check if ticker matches what we wanted (groupby yields all in dataframe)
-                # If data contains more than we asked (e.g. cache has full market), we filter?
-                # Yes, but usually we pass the list to get_cached_market_data.
-                # But get_cached_market_data returns the whole cache if it hits.
-                if ticker not in ticker_list: continue
-
-                # Process
-                res = _process_isa_ticker(ticker, df, check_mode, account_size, risk_per_trade_pct)
-                if res: results.append(res)
-            except: continue
-    else:
-        # Single Ticker Case
-        if len(ticker_list) == 1:
-             res = _process_isa_ticker(ticker_list[0], data, check_mode, account_size, risk_per_trade_pct)
-             if res: results.append(res)
+    results = runner.run(strategy)
 
     # Sort by signal priority
     def sort_key(x):
-        s = x['signal']
+        s = x.get('signal', '')
         if "ENTER" in s: return 0
         if "WATCH" in s: return 1
         return 2
 
     results.sort(key=sort_key)
     return results
-
-def _process_isa_ticker(ticker, df, check_mode, account_size=None, risk_per_trade_pct=0.01):
-    try:
-        import pandas_ta as ta
-        df = df.dropna(how='all')
-        min_length = 50 if check_mode else 200
-        if len(df) < min_length: return None
-
-        curr_close = float(df['Close'].iloc[-1])
-
-        current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
-        high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
-        low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
-        pct_change_1d = ((curr_close - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
-
-        avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-        if not check_mode and (avg_vol * curr_close) < 5_000_000:
-            return None
-
-        sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-
-        df['High_50'] = df['High'].rolling(50).max().shift(1)
-        df['Low_20'] = df['Low'].rolling(20).min().shift(1)
-        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
-
-        # Fix for Data Gaps (e.g. Missing High/Low): Forward Fill indicators
-        df['High_50'] = df['High_50'].ffill()
-        df['Low_20'] = df['Low_20'].ffill()
-        df['ATR'] = df['ATR'].ffill()
-
-        high_50 = df['High_50'].iloc[-1]
-        low_20 = df['Low_20'].iloc[-1]
-        atr_20 = float(df['ATR'].iloc[-1])
-
-        # Fallback for ATR if completely missing
-        if pd.isna(atr_20):
-             atr_20 = curr_close * 0.02
-
-        signal = "WAIT"
-
-        if curr_close > sma_200:
-            # Handle NaNs in High_50/Low_20 (if insufficient history)
-            if pd.notna(high_50) and curr_close >= high_50:
-                signal = "🚀 ENTER LONG (50d Breakout)"
-            elif pd.notna(high_50) and curr_close >= high_50 * 0.98:
-                signal = "👀 WATCH (Near Breakout)"
-            elif pd.notna(low_20) and curr_close > low_20:
-                signal = "✅ HOLD (Trend Active)"
-            elif pd.notna(low_20) and curr_close <= low_20:
-                signal = "🛑 EXIT (Stop Hit)"
-            # Fallback if indicators are missing but Trend is up
-            elif signal == "WAIT":
-                 signal = "✅ HOLD (Trend Active*)"
-        else:
-            signal = "❌ SELL/AVOID (Downtrend)"
-
-        stop_price = curr_close - (3 * atr_20)
-
-        risk_per_share = curr_close - stop_price
-
-        effective_stop = stop_price
-        if "HOLD" in signal or "EXIT" in signal:
-            effective_stop = low_20
-
-        dist_to_stop_pct = 0.0
-        if curr_close > 0:
-            dist_to_stop_pct = ((curr_close - effective_stop) / curr_close) * 100
-
-        # --- POSITION SIZING LOGIC ---
-        position_size_shares = 0
-        position_value = 0.0
-        risk_amount = 0.0
-        account_used_pct = 0.0
-        max_position_size_str = ""
-        tharp_verdict = ""
-        is_tharp_safe = False
-
-        if account_size and account_size > 0:
-            # Explicit sizing based on risk
-            risk_amount = account_size * risk_per_trade_pct
-
-            # Prevent div by zero if stop is at entry or above
-            risk_dist_val = max(0.01, curr_close - effective_stop) # Min 1 cent risk per share
-
-            # Calculate shares
-            raw_shares = risk_amount / risk_dist_val
-
-            # Cap at 20% of account (Max Allocation Rule)
-            max_allocation = account_size * 0.20
-            max_shares_allocation = max_allocation / curr_close
-
-            final_shares = int(min(raw_shares, max_shares_allocation))
-
-            position_value = final_shares * curr_close
-            account_used_pct = (position_value / account_size) * 100
-
-            position_size_shares = final_shares
-            max_position_size_str = f"{final_shares} shares (£{int(position_value)})"
-
-            # Verdict
-            is_tharp_safe = True # Calculated to be safe
-            tharp_verdict = f"✅ SAFE (Risk £{int(risk_amount)})"
-
-        else:
-            # Legacy Percentage Recommendation
-            position_size_pct = 0.04
-            risk_dist = max(0.0, dist_to_stop_pct)
-            total_equity_risk_pct = position_size_pct * (risk_dist / 100.0)
-
-            is_tharp_safe = bool(total_equity_risk_pct <= 0.01)
-
-            tharp_verdict = "✅ SAFE" if is_tharp_safe else f"⚠️ RISKY (Risks {total_equity_risk_pct*100:.1f}% Equity)"
-
-            suggested_size_val = 0.0
-            if risk_dist > 0:
-                 suggested_size_val = min(4.0, 1.0 / (risk_dist / 100.0))
-            else:
-                 suggested_size_val = 4.0
-
-            max_position_size_str = f"{suggested_size_val:.1f}%"
-
-        if dist_to_stop_pct <= 0:
-             tharp_verdict = "🛑 STOPPED OUT"
-
-        volatility_pct = (atr_20 / curr_close) * 100
-
-        breakout_date = _calculate_trend_breakout_date(df)
-
-        base_ticker = ticker.split('.')[0]
-        company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-        return {
-            "ticker": ticker,
-            "company_name": company_name,
-            "price": curr_close,
-            "pct_change_1d": pct_change_1d,
-            "signal": signal,
-            "trend_200sma": "Bullish",
-            "breakout_level": round(high_50, 2),
-            "stop_loss_3atr": round(stop_price, 2),
-            "stop_loss": round(stop_price, 2), # Alias for unified UI
-            "target": round(curr_close + (6 * atr_20), 2), # 6x ATR Target for Trend Following
-            "trailing_exit_20d": round(low_20, 2),
-            "volatility_pct": round(volatility_pct, 2),
-            "atr_20": round(atr_20, 2),
-            "atr_value": round(atr_20, 2),
-            "risk_per_share": round(risk_per_share, 2),
-            "dist_to_stop_pct": round(dist_to_stop_pct, 2),
-            "tharp_verdict": tharp_verdict,
-            "max_position_size": max_position_size_str,
-            "shares": position_size_shares,
-            "position_value": round(position_value, 2),
-            "risk_amount": round(risk_amount, 2),
-            "account_used_pct": round(account_used_pct, 1),
-            "breakout_date": breakout_date,
-            "safe_to_trade": is_tharp_safe,
-            "atr": round(current_atr, 2),
-            "52_week_high": round(high_52wk, 2) if high_52wk else None,
-            "52_week_low": round(low_52wk, 2) if low_52wk else None,
-            "sector_change": pct_change_1d
-        }
-    except Exception as e:
-        # logger.error(f"ISA ticker error: {e}")
-        return None
 
 # -------------------------------------------------------------------------
 #  FOURIER / CYCLE ANALYSIS HELPERS
