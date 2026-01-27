@@ -1,5 +1,6 @@
 import pandas as pd
 import logging
+import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from typing import List, Callable, Dict, Any, Optional
@@ -302,3 +303,41 @@ class ScreeningRunner:
                     logger.error(f"Thread error: {e}")
 
         return results
+
+
+def _norm_cdf(x):
+    """
+    Cumulative Distribution Function for Standard Normal Distribution.
+    Using approximation (Error < 7.5e-8).
+    """
+    # If x > 6 or < -6, result is 1 or 0 respectively (to avoid overflow/useless calc)
+    if x > 6.0: return 1.0
+    if x < -6.0: return 0.0
+
+    b1 =  0.319381530
+    b2 = -0.356563782
+    b3 =  1.781477937
+    b4 = -1.821255978
+    b5 =  1.330274429
+    p  =  0.2316419
+
+    c2 =  0.39894228
+
+    a = abs(x)
+    t = 1.0 / (1.0 + a * p)
+    b = c2 * math.exp((-x * x) / 2.0)
+    n = ((((b5 * t + b4) * t + b3) * t + b2) * t + b1) * t
+    n = 1.0 - b * n
+    if x < 0:
+        n = 1.0 - n
+    return n
+
+
+def _calculate_put_delta(S, K, T, r, sigma):
+    """
+    Estimates Put Delta using Black-Scholes.
+    S: Spot Price, K: Strike, T: Time to Exp (Years), r: Risk Free Rate, sigma: IV
+    """
+    if T <= 0 or sigma <= 0: return -0.5
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    return _norm_cdf(d1) - 1.0

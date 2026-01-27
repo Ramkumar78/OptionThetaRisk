@@ -7,6 +7,7 @@ SCREENER_CACHE = {}
 
 # Default Configuration
 DEFAULT_ACCOUNT_SIZE = float(os.environ.get("DEFAULT_ACCOUNT_SIZE", 76000.0))
+RISK_FREE_RATE = 0.045
 
 TICKER_NAMES = {
     "ECL": "Ecolab Inc.",
