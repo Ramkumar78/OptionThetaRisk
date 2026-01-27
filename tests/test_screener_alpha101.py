@@ -18,8 +18,9 @@ def create_mock_df(prices, length=20):
     df = pd.DataFrame(data, index=dates)
     return df
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener._resolve_region_tickers')
+# Patching fetch_batch_data_safe in screener_utils where ScreeningRunner is defined
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils._resolve_region_tickers')
 def test_screen_alpha_101_strong_buy(mock_resolve, mock_fetch):
     mock_resolve.return_value = ['AAPL']
 
@@ -37,8 +38,8 @@ def test_screen_alpha_101_strong_buy(mock_resolve, mock_fetch):
     assert "STRONG BUY" in res['signal']
     assert res['alpha_101'] > 0.9
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener._resolve_region_tickers')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils._resolve_region_tickers')
 def test_screen_alpha_101_strong_sell(mock_resolve, mock_fetch):
     mock_resolve.return_value = ['TSLA']
 
@@ -54,8 +55,8 @@ def test_screen_alpha_101_strong_sell(mock_resolve, mock_fetch):
     assert "STRONG SELL" in res['signal']
     assert res['alpha_101'] < -0.9
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener._resolve_region_tickers')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils._resolve_region_tickers')
 def test_screen_alpha_101_neutral_filter(mock_resolve, mock_fetch):
     mock_resolve.return_value = ['MSFT']
 
