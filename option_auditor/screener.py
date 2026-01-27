@@ -40,6 +40,21 @@ try:
 except ImportError:
     def get_sp500_tickers(): return []
 
+# Import Refactored Utilities and Constants
+from option_auditor.common.screener_utils import (
+    ScreeningRunner,
+    _resolve_region_tickers,
+    _get_filtered_sp500,
+    DEFAULT_RSI_LENGTH,
+    DEFAULT_ATR_LENGTH,
+    DEFAULT_SMA_FAST,
+    DEFAULT_SMA_SLOW,
+    DEFAULT_EMA_FAST,
+    DEFAULT_EMA_MED,
+    DEFAULT_EMA_SLOW,
+    DEFAULT_DONCHIAN_WINDOW
+)
+
 # Update with S&P 500 Names if available in constants?
 # Constants.py updates TICKER_NAMES with SP500_NAMES already.
 
@@ -56,36 +71,6 @@ def _get_market_regime():
     except:
         pass
     return 15.0 # Safe default
-
-def _resolve_region_tickers(region: str) -> list:
-    """
-    Helper to resolve ticker list based on region.
-    Default: US (Sector Components + Watch)
-    """
-    if region == "uk_euro":
-        return get_uk_euro_tickers()
-    elif region == "uk":
-        try:
-            return get_uk_tickers()
-        except ImportError:
-            # Fallback to UK/Euro or empty
-            return get_uk_euro_tickers()
-    elif region == "united_states":
-        return get_united_states_stocks()
-    elif region == "india":
-        return get_indian_tickers()
-    elif region == "sp500":
-        # S&P 500 (Volume Filtered) + Watch List
-        # Note: We use check_trend=False to get the universe.
-        sp500 = _get_filtered_sp500(check_trend=False)
-        watch_list = SECTOR_COMPONENTS.get("WATCH", [])
-        return list(set(sp500 + watch_list))
-    else: # us / combined default
-        all_tickers = []
-        for t_list in SECTOR_COMPONENTS.values():
-            all_tickers.extend(t_list)
-        return list(set(all_tickers))
-
 
 def enrich_with_fundamentals(results_list: list) -> list:
     """
@@ -141,198 +126,72 @@ def enrich_with_fundamentals(results_list: list) -> list:
 
     return results_list
 
-def _get_filtered_sp500(check_trend: bool = True) -> list:
-    """
-    Returns a filtered list of S&P 500 tickers based on Volume (>500k) and optionally Trend (>SMA200).
-    """
-    base_tickers = get_sp500_tickers()
-    if not base_tickers:
-        return []
-
-    # Batch download 1y data for volume and sma using safe utility
-    # import pandas_ta as ta # Now global
-
-    filtered_list = []
-
-    # Use CACHED data to prevent timeouts and redundant downloads.
-    # We use "market_scan_v1" which contains 2y data for S&P 500.
-    # If the cache is missing, this will download it (heavy), but future calls will be instant.
-    try:
-        data = get_cached_market_data(base_tickers, period="2y", cache_name="market_scan_v1")
-    except Exception as e:
-        logger.error(f"Failed to get S&P 500 cache: {e}")
-        data = pd.DataFrame()
-
-    if data.empty:
-        # Fallback to returning the base list if data unavailable, to allow scanning to proceed (albeit unfiltered)
-        logger.warning("S&P 500 filter data unavailable. Returning raw list.")
-        return base_tickers
-
-    # Iterate through the downloaded data to check criteria
-    # OPTIMIZED ITERATION
-    if isinstance(data.columns, pd.MultiIndex):
-        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
-    else:
-        # Fallback for single ticker result (rare)
-        iterator = [(base_tickers[0], data)] if not data.empty and len(base_tickers)==1 else []
-
-    for ticker, df in iterator:
-        try:
-             # CLEANUP: Drop the top level index to make it a standard OHLVC df
-            if isinstance(df.columns, pd.MultiIndex):
-                df = df.droplevel(0, axis=1)
-
-            df = df.dropna(how='all')
-            if len(df) < 20: continue
-
-            # 1. Volume Filter (> 500k avg over last 20 days)
-            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-            if avg_vol < 500000: continue
-
-            # 2. Trend Filter (> SMA 200)
-            if check_trend:
-                if len(df) < 200: continue
-                sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-                curr_price = df['Close'].iloc[-1]
-                if curr_price < sma_200: continue
-
-            filtered_list.append(ticker)
-        except:
-            continue
-
-    return filtered_list
-
 def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: float, time_frame: str) -> list:
     """
-    Internal helper to screen a list of tickers.
+    Internal helper to screen a list of tickers using ScreeningRunner.
     """
-    # Map time_frame to yfinance interval and resample rule
-    yf_interval = "1d"
-    resample_rule = None
-    is_intraday = False
+    runner = ScreeningRunner(ticker_list=tickers, time_frame=time_frame, region="us") # Region param mainly for resolution, but tickers already resolved
 
-    # Default period
-    period = "1y"
-
-    if time_frame == "49m":
-        yf_interval = "5m"
-        resample_rule = "49min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "98m":
-        yf_interval = "5m"
-        resample_rule = "98min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "196m":
-        yf_interval = "5m"
-        resample_rule = "196min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "1wk":
-        yf_interval = "1wk"
-        period = "2y" # Need more history for SMA50 on weekly
-        is_intraday = False
-    elif time_frame == "1mo":
-        yf_interval = "1mo"
-        period = "5y" # Need more history for SMA50 on monthly
-        is_intraday = False
-
-    # Batch download result container
-    batch_data = None
-
-    # If daily, try batch download first
-    if not is_intraday and tickers:
+    def strategy(symbol, df):
         try:
-            if len(tickers) > 100:
-                cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
-                if not cached.empty:
-                    # Check coverage
-                    # MultiIndex columns (Ticker, Price)
-                    if isinstance(cached.columns, pd.MultiIndex):
-                        available_tickers = cached.columns.levels[0]
-                        intersection = len(set(tickers).intersection(available_tickers))
-                        if intersection / len(tickers) > 0.8:
-                            batch_data = cached
-
-            # If no cache or cache empty/insufficient, fetch fresh
-            if batch_data is None:
-                batch_data = fetch_batch_data_safe(tickers, period=period, interval=yf_interval)
-        except Exception as e:
-            logger.error(f"Failed to batch download ticker data: {e}")
-            batch_data = None
-
-    def process_symbol(symbol):
-        try:
-            # Use shared helper
-            df = _prepare_data_for_ticker(symbol, batch_data, time_frame, period, yf_interval, resample_rule, is_intraday)
-
-            if df is None: return None
-
             # Volume Filter: If scanning daily/weekly (not intraday), skip illiquid stocks (< 500k avg volume)
-            if not is_intraday and len(df) >= 20:
-                avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-                if avg_vol < 500000:
-                    return None
+            if not runner.is_intraday and len(df) >= 20:
+                if 'Volume' in df.columns:
+                    avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+                    if avg_vol < 500000:
+                        return None
 
-            # Calculate % Change before resampling
+            # Calculate % Change
             pct_change_1d = None
             pct_change_1w = None
 
             try:
-                if is_intraday:
-                    unique_dates = sorted(list(set(df.index.date)))
+                curr_close = float(df['Close'].iloc[-1])
 
+                if runner.is_intraday:
+                    unique_dates = sorted(list(set(df.index.date)))
                     if len(unique_dates) > 1:
                         prev_date = unique_dates[-2]
                         prev_day_df = df[df.index.date == prev_date]
                         if not prev_day_df.empty:
                             prev_close = float(prev_day_df['Close'].iloc[-1])
-                            curr_close = float(df['Close'].iloc[-1])
                             pct_change_1d = ((curr_close - prev_close) / prev_close) * 100
 
                     if len(unique_dates) > 5:
-                         week_ago_date = unique_dates[-6] # 5 days ago approx
+                         week_ago_date = unique_dates[-6]
                          week_df = df[df.index.date == week_ago_date]
                          if not week_df.empty:
                              week_close = float(week_df['Close'].iloc[-1])
-                             curr_close = float(df['Close'].iloc[-1])
                              pct_change_1w = ((curr_close - week_close) / week_close) * 100
                 else:
                     if len(df) >= 2:
                         prev_close = float(df['Close'].iloc[-2])
-                        curr_close = float(df['Close'].iloc[-1])
                         pct_change_1d = ((curr_close - prev_close) / prev_close) * 100
 
-                    if yf_interval == "1d":
-                        if len(df) >= 6:
-                            week_close = float(df['Close'].iloc[-6])
-                            curr_close = float(df['Close'].iloc[-1])
-                            pct_change_1w = ((curr_close - week_close) / week_close) * 100
-                    elif yf_interval == "1wk":
-                         if len(df) >= 5:
-                             month_close = float(df['Close'].iloc[-5])
-                             curr_close = float(df['Close'].iloc[-1])
-                             pct_change_1w = ((curr_close - month_close) / month_close) * 100
+                    # 1 Week change approximation based on interval
+                    if runner.yf_interval == "1d" and len(df) >= 6:
+                        week_close = float(df['Close'].iloc[-6])
+                        pct_change_1w = ((curr_close - week_close) / week_close) * 100
+                    elif runner.yf_interval == "1wk" and len(df) >= 5:
+                         month_close = float(df['Close'].iloc[-5])
+                         pct_change_1w = ((curr_close - month_close) / month_close) * 100
+
             except Exception as e:
-                logger.debug(f"Error calculating % change for {symbol}: {e}")
                 pass
 
             # 3. Calculate Indicators
             if len(df) < 50:
                 return None
 
-            rsi_series = ta.rsi(df['Close'], length=14)
-            if rsi_series is None:
-                return None
+            rsi_series = ta.rsi(df['Close'], length=DEFAULT_RSI_LENGTH)
+            if rsi_series is None: return None
             df['RSI'] = rsi_series
 
-            sma_series = ta.sma(df['Close'], length=50)
-            if sma_series is None:
-                return None
+            sma_series = ta.sma(df['Close'], length=DEFAULT_SMA_FAST)
+            if sma_series is None: return None
             df['SMA_50'] = sma_series
 
-            atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            atr_series = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
             current_atr = atr_series.iloc[-1] if atr_series is not None and not atr_series.empty else 0.0
 
             current_price = float(df['Close'].iloc[-1])
@@ -340,7 +199,8 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
             current_rsi = float(df['RSI'].iloc[-1])
             current_sma = float(df['SMA_50'].iloc[-1])
 
-            # Fetch PE Ratio (Separate blocking call if not cached, risky inside thread but better than sequential)
+            # Fetch PE Ratio (Separate blocking call if not cached)
+            # This is slow inside a thread pool of 4, but let's keep it for parity
             pe_ratio = "N/A"
             try:
                 t = yf.Ticker(symbol)
@@ -364,23 +224,16 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 elif current_rsi < 30:
                     signal = "🔵 OVERSOLD"
             else:
-                # Bearish Trend
                 if current_rsi < 30:
                     signal = "🔵 OVERSOLD (Bearish)"
                 elif current_rsi > 70:
                     signal = "🔴 OVERBOUGHT (Bearish)"
 
-            # Use TICKER_NAMES if available
             company_name = TICKER_NAMES.get(symbol, symbol)
-
-            # Calculate Breakout Date (Trend Age)
             breakout_date = _calculate_trend_breakout_date(df)
 
-            # Standard Stop/Target for Market Screener (2x ATR Stop, 4x ATR Target)
             stop_loss = current_price - (2 * current_atr) if trend == "BULLISH" else current_price + (2 * current_atr)
             target_price = current_price + (4 * current_atr) if trend == "BULLISH" else current_price - (4 * current_atr)
-
-            time.sleep(0.1)
 
             return {
                 "ticker": symbol,
@@ -402,26 +255,11 @@ def _screen_tickers(tickers: list, iv_rank_threshold: float, rsi_threshold: floa
                 "pe_ratio": pe_ratio,
                 "breakout_date": breakout_date
             }
-
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
             return None
 
-    results = []
-
-    # Use ThreadPoolExecutor for parallel processing
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        future_to_symbol = {executor.submit(process_symbol, sym): sym for sym in tickers}
-        for future in as_completed(future_to_symbol):
-            try:
-                data = future.result()
-                if data:
-                    results.append(data)
-            except Exception as e:
-                 logger.error(f"Thread execution error for {future_to_symbol[future]}: {e}")
-                 pass
-
-    return results
+    return runner.run(strategy)
 
 def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, time_frame: str = "1d", region: str = "us") -> dict:
     """
@@ -523,13 +361,9 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
     Screens for Turtle Trading Setups (20-Day Breakouts).
     Supports multiple timeframes.
     """
-    import yfinance as yf
     import pandas_ta as ta
-    import pandas as pd
 
-    # If list is None, use default based on region
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
 
     # Additional names for ETFs not in TICKER_NAMES
     ETF_NAMES = {
@@ -542,77 +376,22 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
         "TLT": "iShares 20+ Year Treasury Bond ETF",
     }
 
-    # Timeframe logic
-    yf_interval = "1d"
-    resample_rule = None
-    is_intraday = False
-    period = "3mo"
-
-    if time_frame == "49m":
-        yf_interval = "5m"
-        resample_rule = "49min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "98m":
-        yf_interval = "5m"
-        resample_rule = "98min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "196m":
-        yf_interval = "5m"
-        resample_rule = "196min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "1wk":
-        yf_interval = "1wk"
-        period = "2y"
-    elif time_frame == "1mo":
-        yf_interval = "1mo"
-        period = "5y"
-
-    results = []
-
-    # Bulk download if not intraday
-    data = None
-    if not is_intraday:
+    def strategy(ticker, df):
         try:
-            # Optimization: Check Master Cache coverage
-            if len(ticker_list) > 100:
-                 cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
-                 if not cached.empty:
-                     # Verify coverage
-                     if isinstance(cached.columns, pd.MultiIndex):
-                         available = cached.columns.levels[0]
-                         intersection = len(set(ticker_list).intersection(available))
-                         if intersection / len(ticker_list) > 0.8:
-                             data = cached
-
-            if data is None:
-                # Use safe batch fetch
-                data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
-        except Exception as e:
-            logger.error(f"Failed to bulk download for turtle setups: {e}")
-            pass
-
-    for ticker in ticker_list:
-        try:
-            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
-
             min_length = 21 if check_mode else 21 # Turtle needs 20 bars for Donchian
-            if df is None or len(df) < min_length:
-                continue
+            if len(df) < min_length: return None
 
             # --- TURTLE & DARVAS CALCULATIONS ---
             # 1. Donchian Channels (20-day High/Low)
-            df['20_High'] = df['High'].rolling(window=20).max().shift(1)
-            df['20_Low'] = df['Low'].rolling(window=20).min().shift(1)
+            df['20_High'] = df['High'].rolling(window=DEFAULT_DONCHIAN_WINDOW).max().shift(1)
+            df['20_Low'] = df['Low'].rolling(window=DEFAULT_DONCHIAN_WINDOW).min().shift(1)
 
             # Darvas / 10-day Box for faster breakouts
             df['10_High'] = df['High'].rolling(window=10).max().shift(1)
             df['10_Low'] = df['Low'].rolling(window=10).min().shift(1)
 
-            # 2. ATR (Volatility 'N')
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=20)
+            # 2. ATR (Volatility 'N') - Using Donchian Window for N as per Turtle
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_DONCHIAN_WINDOW)
 
             curr_close = float(df['Close'].iloc[-1])
 
@@ -622,11 +401,11 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
                 try:
                     prev_close_px = float(df['Close'].iloc[-2])
                     pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception as e:
-                    logger.debug(f"Error calc % change for {ticker}: {e}")
+                except Exception:
+                    pass
 
             if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
-                continue
+                return None
 
             prev_high = float(df['20_High'].iloc[-1])
             prev_low = float(df['20_Low'].iloc[-1])
@@ -635,8 +414,6 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
             # 10-day values
             prev_high_10 = float(df['10_High'].iloc[-1]) if not pd.isna(df['10_High'].iloc[-1]) else prev_high
             prev_low_10 = float(df['10_Low'].iloc[-1]) if not pd.isna(df['10_Low'].iloc[-1]) else prev_low
-
-            volatility_pct = (atr / curr_close) * 100 if curr_close > 0 else 0.0
 
             signal = "WAIT"
             buy_price = 0.0
@@ -670,7 +447,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
             breakout_date = _calculate_trend_breakout_date(df)
 
             # Additional Calcs for Consistency
-            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
+            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH).iloc[-1] if len(df) >= DEFAULT_ATR_LENGTH else 0.0
             high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
             low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
 
@@ -685,7 +462,7 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
                 company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
-                results.append({
+                return {
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": curr_close,
@@ -698,17 +475,17 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
                     "atr": round(current_atr, 2),
                     "52_week_high": round(high_52wk, 2) if high_52wk else None,
                     "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                    "sector_change": pct_change_1d, # Returning stocks own change as placeholder for now as sector mapping requires fetching sector ticker
+                    "sector_change": pct_change_1d,
                     "trailing_exit_10d": round(prev_low_10, 2),
                     "breakout_date": breakout_date,
                     "atr_value": round(current_atr, 2)
-                })
-
+                }
         except Exception as e:
             logger.error(f"Error processing turtle setup for {ticker}: {e}")
-            continue
+            return None
+        return None
 
-    return results
+    return runner.run(strategy)
 
 def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
@@ -719,11 +496,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
     except ImportError:
         return []
 
-    import yfinance as yf
-    import pandas as pd
-
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
 
     # Additional names for ETFs not in TICKER_NAMES
     ETF_NAMES = {
@@ -737,72 +510,18 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
         "BITO": "ProShares Bitcoin Strategy ETF",
     }
 
-    # Timeframe logic
-    yf_interval = "1d"
-    resample_rule = None
-    is_intraday = False
-    period = "3mo"
-
-    if time_frame == "49m":
-        yf_interval = "5m"
-        resample_rule = "49min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "98m":
-        yf_interval = "5m"
-        resample_rule = "98min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "196m":
-        yf_interval = "5m"
-        resample_rule = "196min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "1wk":
-        yf_interval = "1wk"
-        period = "2y"
-    elif time_frame == "1mo":
-        yf_interval = "1mo"
-        period = "5y"
-
-    results = []
-
-    # Bulk download if not intraday
-    data = None
-    if not is_intraday:
+    def strategy(ticker, df):
         try:
-            # Optimization: Check Master Cache coverage
-            if len(ticker_list) > 100:
-                 cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
-                 if not cached.empty:
-                     if isinstance(cached.columns, pd.MultiIndex):
-                         available = cached.columns.levels[0]
-                         intersection = len(set(ticker_list).intersection(available))
-                         if intersection / len(ticker_list) > 0.8:
-                             data = cached
-
-            if data is None:
-                # Use safe batch fetch
-                data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
-        except Exception as e:
-            logger.error(f"Failed to bulk download for 5/13 setups: {e}")
-            pass
-
-    for ticker in ticker_list:
-        try:
-            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
-
             min_length = 22 if check_mode else 22 # Need 21 for EMA 21
-            if df is None or len(df) < min_length:
-                continue
+            if len(df) < min_length: return None
 
             # --- EMA CALCULATIONS ---
-            df['EMA_5'] = ta.ema(df['Close'], length=5)
-            df['EMA_13'] = ta.ema(df['Close'], length=13)
-            df['EMA_21'] = ta.ema(df['Close'], length=21)
+            df['EMA_5'] = ta.ema(df['Close'], length=DEFAULT_EMA_FAST)
+            df['EMA_13'] = ta.ema(df['Close'], length=DEFAULT_EMA_MED)
+            df['EMA_21'] = ta.ema(df['Close'], length=DEFAULT_EMA_SLOW)
 
             # ATR for standard reporting
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
             current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
 
             # Current & Previous values
@@ -818,7 +537,6 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
             volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
             # Calc ATR, 52wk
-            # current_atr is already calculated above
             high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
             low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
             
@@ -834,8 +552,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
                 try:
                     prev_close_px = float(df['Close'].iloc[-2])
                     pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception as e:
-                    logger.debug(f"Error calculating pct change for {ticker}: {e}")
+                except Exception:
                     pass
 
             # Logic Priority:
@@ -891,10 +608,6 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
 
             # Calculate Trend Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
-            
-            # Additional Calcs for Consistency
-            # current_atr is already calculated above
-            # high_52wk and low_52wk are already calculated above
 
             # Calculate Target based on 2R relative to EMA stop or 4 ATR
             # If long, target = price + (price - stop) * 2
@@ -916,7 +629,7 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
                 # Handle cases where ticker has suffix (e.g. .L or .NS) but key in TICKER_NAMES does not
                 base_ticker = ticker.split('.')[0]
                 company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
-                results.append({
+                return {
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": curr_close,
@@ -937,11 +650,14 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
                     "volatility_pct": round(volatility_pct, 2),
                     "diff_pct": ((curr_5 - ema_slow)/ema_slow)*100,
                     "breakout_date": breakout_date
-                })
+                }
 
         except Exception as e:
             logger.error(f"Error processing 5/13 setup for {ticker}: {e}")
-            continue
+            return None
+        return None
+
+    results = runner.run(strategy)
     # Sort by "Freshness" (Breakouts first)
     results.sort(key=lambda x: 0 if "FRESH" in x['signal'] else 1)
     return results
@@ -949,18 +665,11 @@ def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region:
 def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for Darvas Box Breakouts.
-    Strategy:
-    1. Trend: Stock near 52-week High.
-    2. Box: Price breaks above a "Ceiling" established by a recent high (3-day non-penetration).
-    3. Volume: Spike on breakout.
     """
-    import yfinance as yf
     import pandas_ta as ta
-    import pandas as pd
     import numpy as np
 
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
 
     ETF_NAMES = {
         "SPY": "SPDR S&P 500 ETF Trust",
@@ -972,64 +681,10 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
         "TLT": "iShares 20+ Year Treasury Bond ETF",
     }
 
-    # Timeframe logic
-    yf_interval = "1d"
-    resample_rule = None
-    is_intraday = False
-    period = "1y" # Need longer history for 52-week high
-
-    if time_frame == "49m":
-        yf_interval = "5m"
-        resample_rule = "49min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "98m":
-        yf_interval = "5m"
-        resample_rule = "98min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "196m":
-        yf_interval = "5m"
-        resample_rule = "196min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "1wk":
-        yf_interval = "1wk"
-        period = "2y"
-    elif time_frame == "1mo":
-        yf_interval = "1mo"
-        period = "5y"
-
-    results = []
-
-    # Bulk download if not intraday
-    data = None
-    if not is_intraday:
+    def strategy(ticker, df):
         try:
-            # Optimization: Check Master Cache coverage
-            if len(ticker_list) > 100:
-                 cached = get_cached_market_data(None, cache_name="market_scan_v1", lookup_only=True)
-                 if not cached.empty:
-                     if isinstance(cached.columns, pd.MultiIndex):
-                         available = cached.columns.levels[0]
-                         intersection = len(set(ticker_list).intersection(available))
-                         if intersection / len(ticker_list) > 0.8:
-                             data = cached
-
-            if data is None:
-                # Use safe batch fetch
-                data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
-        except Exception as e:
-            logger.error(f"Failed to bulk download for Darvas screener: {e}")
-            pass
-
-    def _process_darvas(ticker):
-        try:
-            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
-
             min_length = 50 if check_mode else 50 # Darvas needs enough history for pivots
-            if df is None or len(df) < min_length:
-                return None
+            if len(df) < min_length: return None
 
             curr_close = float(df['Close'].iloc[-1])
             curr_volume = float(df['Volume'].iloc[-1]) if 'Volume' in df.columns else 0
@@ -1065,8 +720,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                     ceiling = curr_h
                     break
 
-            if found_top_idx == -1:
-                return None # No defined top recently
+            if found_top_idx == -1: return None
 
             found_bot_idx = -1
 
@@ -1084,11 +738,8 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                     floor = curr_l
                     break
 
-            if floor is None:
-                pass
-
             # Calc ATR, 52wk
-            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=14).iloc[-1] if len(df) >= 14 else 0.0
+            current_atr = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH).iloc[-1] if len(df) >= DEFAULT_ATR_LENGTH else 0.0
             high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
             low_52wk = df['Low'].rolling(252).min().iloc[-1] if len(df) >= 252 else df['Low'].min()
             pct_change_1d = ((curr_close - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100) if len(df) >= 2 else 0.0
@@ -1127,10 +778,6 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             if not is_valid_volume and not check_mode:
                 return None
 
-            if "BREAKOUT" in signal and not check_mode:
-                if curr_close < period_high * 0.95:
-                     pass
-
             volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
             stop_loss = floor if floor else (ceiling - 2*current_atr if ceiling else curr_close * 0.95)
@@ -1139,10 +786,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
 
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ETF_NAMES.get(ticker, ticker)))
-
             breakout_date = _calculate_trend_breakout_date(df)
-
-            time.sleep(0.1)
 
             return {
                 "ticker": ticker,
@@ -1154,7 +798,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
                 "floor_level": floor,
                 "stop_loss": stop_loss,
                 "target_price": target,
-                "target": target, # Alias for unified UI
+                "target": target,
                 "high_52w": period_high,
                 "atr_value": round(current_atr, 2),
                 "volatility_pct": round(volatility_pct, 2),
@@ -1170,19 +814,7 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
             logger.error(f"Error processing Darvas for {ticker}: {e}")
             return None
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        future_to_symbol = {executor.submit(_process_darvas, sym): sym for sym in ticker_list}
-        for future in as_completed(future_to_symbol):
-            try:
-                # FIX: Do not shadow 'data' variable
-                res_data = future.result()
-                if res_data:
-                    results.append(res_data)
-            except Exception as e:
-                logger.error(f"Darvas thread error for {future_to_symbol[future]}: {e}")
-                pass
-
-    return results
+    return runner.run(strategy)
 
 # -------------------------------------------------------------------------
 #  SMC / ICT HELPER FUNCTIONS
@@ -1249,49 +881,18 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
     """
     Screens for ICT Market Maker Models + OTE (Optimal Trade Entry).
     """
-    import pandas as pd
-    import numpy as np
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import pandas_ta as ta
 
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
 
-    yf_interval = "1h"
-    period = "60d" # Max 60d for 1h data in yfinance
-    is_intraday = True
-
-    if time_frame == "15m":
-        yf_interval = "15m"
-        period = "1mo"
-    elif time_frame == "1d":
-        yf_interval = "1d"
-        period = "1y"
-        is_intraday = False
-
-    resample_rule = None
-
-    # Bulk download
-    data = None
-    try:
-        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
-    except Exception as e:
-        logger.error(f"Failed to batch download for OTE: {e}")
-        return []
-
-    results = []
-
-    def _process_ote(ticker):
+    def strategy(ticker, df):
         try:
-            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
-
             min_length = 50 if check_mode else 50
-            if df is None or len(df) < min_length:
-                return None
+            if len(df) < min_length: return None
 
             curr_close = float(df['Close'].iloc[-1])
 
-            import pandas_ta as ta
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
             current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
             volatility_pct = (current_atr / curr_close * 100) if curr_close > 0 else 0.0
 
@@ -1373,8 +974,6 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                                      "target": peak_up_high + range_up
                                  }
 
-            time.sleep(0.1)
-
             breakout_date = _calculate_trend_breakout_date(df)
 
             high_52wk = df['High'].rolling(252).max().iloc[-1] if len(df) >= 252 else df['High'].max()
@@ -1410,25 +1009,12 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                     "52_week_low": round(low_52wk, 2) if low_52wk else None,
                     "sector_change": pct_change_1d
                 }
-
         except Exception as e:
             logger.error(f"Error processing OTE for {ticker}: {e}")
             return None
         return None
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        future_to_symbol = {executor.submit(_process_ote, sym): sym for sym in ticker_list}
-        for future in as_completed(future_to_symbol):
-            try:
-                # FIX: Do not shadow 'data' variable
-                res_data = future.result()
-                if res_data:
-                    results.append(res_data)
-            except Exception as e:
-                logger.error(f"OTE thread error for {future_to_symbol[future]}: {e}")
-                pass
-
-    return results
+    return runner.run(strategy)
 
 # -------------------------------------------------------------------------
 #  OPTIONS STRATEGY HELPERS
@@ -3006,71 +2592,12 @@ def screen_alpha_101(ticker_list: list = None, region: str = "us", time_frame: s
     Paper Source: 101 Formulaic Alphas (Kakushadze, 2015)
     Logic: Delay-1 Momentum. If stock runs up intraday (Close >> Open), go Long.
     """
-    import pandas as pd
-    import numpy as np
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import pandas_ta as ta
 
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
 
-    results = []
-
-    # Timeframe logic
-    yf_interval = "1d"
-    resample_rule = None
-    is_intraday = False
-    period = "1y"
-
-    if time_frame == "49m":
-        yf_interval = "5m"
-        resample_rule = "49min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "98m":
-        yf_interval = "5m"
-        resample_rule = "98min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "196m":
-        yf_interval = "5m"
-        resample_rule = "196min"
-        is_intraday = True
-        period = "1mo"
-    elif time_frame == "1wk":
-        yf_interval = "1wk"
-        period = "2y"
-    elif time_frame == "1mo":
-        yf_interval = "1mo"
-        period = "5y"
-    elif time_frame == "1h":
-        yf_interval = "1h"
-        period = "60d" # Max for 1h
-        is_intraday = True
-    elif time_frame == "4h":
-        yf_interval = "1h"
-        resample_rule = "4h"
-        is_intraday = True
-        period = "60d"
-
-    # 1. Batch Fetch Data
-    try:
-        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
-    except Exception as e:
-        logger.error(f"Alpha 101 Data Fetch Error: {e}")
-        return []
-
-    # Handle Flat vs MultiIndex Data
-    if isinstance(data.columns, pd.MultiIndex):
-        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
-    else:
-        iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
-
-    def process_ticker(ticker, raw_df):
+    def strategy(ticker, df):
         try:
-            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
-            if df is None: return None
-
-            df = df.dropna(how='all')
             if len(df) < 5: return None
 
             # --- ALPHA #101 CALCULATION ---
@@ -3105,15 +2632,11 @@ def screen_alpha_101(ticker_list: list = None, region: str = "us", time_frame: s
                 color = "orange"
 
             # Filter: Only show active signals to reduce noise?
-            # Or show all for ranking. Let's return all non-neutral for the screener.
             if abs(alpha_val) < 0.25:
                 return None
 
             # --- METRICS ---
-            import pandas_ta as ta
-            if 'ATR' not in df.columns:
-                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
             atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (c * 0.01)
 
             # Risk Management (Paper suggests holding 1-6 days)
@@ -3147,17 +2670,10 @@ def screen_alpha_101(ticker_list: list = None, region: str = "us", time_frame: s
         except Exception as e:
             return None
 
-    # Threaded Execution
-    active_results = []
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(process_ticker, t, d): t for t, d in iterator}
-        for future in as_completed(futures):
-            res = future.result()
-            if res: active_results.append(res)
-
+    results = runner.run(strategy)
     # Sort by Alpha Value (Positive/Strongest first)
-    active_results.sort(key=lambda x: x['alpha_101'], reverse=True)
-    return active_results
+    results.sort(key=lambda x: x['alpha_101'], reverse=True)
+    return results
 
 def screen_my_strategy(ticker_list: list = None, region: str = "us") -> list:
     """
@@ -3165,32 +2681,13 @@ def screen_my_strategy(ticker_list: list = None, region: str = "us") -> list:
     1. Filter: Price > 200 SMA & Price > 50 SMA (Trend).
     2. Trigger: Alpha #101 > 0.5 (Momentum).
     """
-    import pandas as pd
     import pandas_ta as ta
-    import numpy as np
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    # 2y period for 200 SMA
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame="1d", region=region)
 
-    results = []
-
-    # 1. Fetch Data (1 Year required for Alpha 101 & 200 SMA)
-    try:
-        data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
-    except Exception as e:
-        logger.error(f"MyStrategy Data Fetch Error: {e}")
-        return []
-
-    # Iterator setup (Handling MultiIndex vs Flat)
-    if isinstance(data.columns, pd.MultiIndex):
-        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
-    else:
-        iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
-
-    def process_ticker(ticker, df):
+    def strategy(ticker, df):
         try:
-            df = df.dropna(how='all')
             if len(df) < 200: return None # Need 200 SMA
 
             # --- 1. MACRO DATA (ISA TREND) ---
@@ -3199,14 +2696,14 @@ def screen_my_strategy(ticker_list: list = None, region: str = "us") -> list:
             curr_high = float(df['High'].iloc[-1])
             curr_low = float(df['Low'].iloc[-1])
 
-            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
-            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
+            sma_50 = df['Close'].rolling(DEFAULT_SMA_FAST).mean().iloc[-1]
+            sma_200 = df['Close'].rolling(DEFAULT_SMA_SLOW).mean().iloc[-1]
 
             # 50-Day High (Breakout Level)
-            high_50 = df['High'].rolling(50).max().shift(1).iloc[-1]
+            high_50 = df['High'].rolling(DEFAULT_SMA_FAST).max().shift(1).iloc[-1]
 
             # ATR (Volatility)
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
             atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_close * 0.01)
 
             # Trend Check
@@ -3248,26 +2745,18 @@ def screen_my_strategy(ticker_list: list = None, region: str = "us") -> list:
                  score = 60
 
             # --- 4. RISK MANAGEMENT (Populate Fields) ---
-            # Stop Loss:
-            # If Snipering (Alpha > 0.5), use Today's Low (Tight).
-            # Otherwise, use 3x ATR (Wide/Trend).
             if alpha_val > 0.5:
                 stop_loss = curr_low - (atr * 0.5)
             else:
                 stop_loss = curr_close - (3 * atr)
 
-            # Target:
-            # 2x Risk (Reward to Risk 2:1)
             risk = curr_close - stop_loss
             target = curr_close + (risk * 2) if risk > 0 else curr_close + (5 * atr)
 
-            # Breakout Date
             breakout_date = _calculate_trend_breakout_date(df)
-
             base_ticker = ticker.split('.')[0]
             company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
 
-            # Filter out pure "WAIT" unless you want to see everything
             if signal == "WAIT": return None
 
             return {
@@ -3291,14 +2780,7 @@ def screen_my_strategy(ticker_list: list = None, region: str = "us") -> list:
         except Exception as e:
             return None
 
-    # Threaded Execution
-    results = []
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(process_ticker, t, d): t for t, d in iterator}
-        for future in as_completed(futures):
-            res = future.result()
-            if res: results.append(res)
-
+    results = runner.run(strategy)
     # Sort by Score (Best Setups first)
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
@@ -3553,71 +3035,16 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
 def screen_liquidity_grabs(ticker_list: list = None, time_frame: str = "1h", region: str = "us") -> list:
     """
     Screens for Liquidity Grabs (Sweeps) of recent Swing Highs/Lows.
-    Concepts: ICT/SMC (Smart Money Concepts).
-
-    Bullish Sweep:
-    1. Identify recent Swing Lows.
-    2. Price pierces below a Swing Low but Closes ABOVE it (Rejection).
-    3. Often happens with volume spike.
-
-    Bearish Sweep:
-    1. Identify recent Swing Highs.
-    2. Price pierces above a Swing High but Closes BELOW it.
     """
-    import pandas as pd
     import pandas_ta as ta
-    import numpy as np
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
 
-    # Timeframe logic
-    yf_interval = "1h"
-    period = "60d" # Max for 1h
-    is_intraday = True
-    resample_rule = None
-
-    if time_frame == "15m":
-        yf_interval = "15m"
-        period = "1mo"
-    elif time_frame == "5m":
-        yf_interval = "5m"
-        period = "5d"
-    elif time_frame == "4h":
-        yf_interval = "1h"
-        resample_rule = "4h"
-        period = "60d"
-    elif time_frame == "1d":
-        yf_interval = "1d"
-        period = "1y"
-        is_intraday = False
-    elif time_frame == "1wk":
-        yf_interval = "1wk"
-        period = "2y"
-        is_intraday = False
-
-    # 1. Batch Fetch Data
-    try:
-        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
-    except Exception as e:
-        logger.error(f"Liquidity Grab Data Fetch Error: {e}")
-        return []
-
-    results = []
-
-    def process_ticker(ticker):
+    def strategy(ticker, df):
         try:
-            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
-            if df is None: return None
-
-            df = df.dropna(how='all')
             if len(df) < 50: return None
 
             # Identify Swings
-            # We want recent swings, so we look back e.g. 50 bars
-            # _identify_swings uses a small lookback (2-3 bars) for fractals
-            # We must use _identify_swings from global scope (defined earlier in file)
             df_swings = _identify_swings(df, lookback=3)
 
             # Current Candle
@@ -3668,8 +3095,7 @@ def screen_liquidity_grabs(ticker_list: list = None, time_frame: str = "1h", reg
             if signal == "WAIT": return None
 
             # ATR & Vol
-            if 'ATR' not in df.columns:
-                 df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
             atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_c * 0.01)
 
             # Volume Confirmation
@@ -3710,17 +3136,10 @@ def screen_liquidity_grabs(ticker_list: list = None, time_frame: str = "1h", reg
         except Exception as e:
             return None
 
-    # Threaded Execution
-    active_results = []
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(process_ticker, t): t for t in ticker_list}
-        for future in as_completed(futures):
-            res = future.result()
-            if res: active_results.append(res)
-
+    results = runner.run(strategy)
     # Sort by Displacement/Score
-    active_results.sort(key=lambda x: x['score'], reverse=True)
-    return active_results
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return results
 
 def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", check_mode: bool = False) -> list:
     """
@@ -3993,30 +3412,11 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
     Bullish: Price Lower Low, RSI Higher Low.
     Bearish: Price Higher High, RSI Lower High.
     """
-    import pandas as pd
-    import numpy as np
     import pandas_ta as ta
+    import numpy as np
     from scipy.signal import argrelextrema
 
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
-
-    # 1. Fetch Data
-    # Divergence needs history to find peaks. 1y is safe.
-    try:
-        # Use simple batch fetch
-        data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d")
-    except Exception as e:
-        logger.error(f"RSI Div Data Fetch Error: {e}")
-        return []
-
-    # Handle Flat vs MultiIndex Data
-    if isinstance(data.columns, pd.MultiIndex):
-        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
-    else:
-        iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
-
-    results = []
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
 
     def _find_divergence(price, rsi, lookback=30, order=3):
         # Find peaks (Highs)
@@ -4073,19 +3473,14 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
 
         return signal, div_type
 
-    for ticker, df in iterator:
+    def strategy(ticker, df):
         try:
-            if isinstance(df.columns, pd.MultiIndex):
-                df = df.droplevel(0, axis=1)
-
-            df = df.dropna(how='all')
-            if len(df) < 50: continue
-
-            if 'Close' not in df.columns: continue
+            if len(df) < 50: return None
+            if 'Close' not in df.columns: return None
 
             # Calc RSI
-            rsi = ta.rsi(df['Close'], length=14)
-            if rsi is None: continue
+            rsi = ta.rsi(df['Close'], length=DEFAULT_RSI_LENGTH)
+            if rsi is None: return None
             df['RSI'] = rsi
 
             # Find Div
@@ -4096,7 +3491,7 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
                 curr_rsi = df['RSI'].iloc[-1]
 
                 # ATR for stop/target
-                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
                 atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_price * 0.01)
 
                 stop_loss = curr_price - (3*atr) if div_type == "Bullish" else curr_price + (3*atr)
@@ -4109,7 +3504,7 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
                 if len(df) >= 2:
                     pct_change_1d = ((curr_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
 
-                results.append({
+                return {
                     "ticker": ticker,
                     "company_name": company_name,
                     "price": round(curr_price, 2),
@@ -4123,12 +3518,12 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
                     "target": round(target, 2),
                     "breakout_date": _calculate_trend_breakout_date(df),
                     "score": 90
-                })
-
+                }
         except Exception as e:
-            continue
+            return None
+        return None
 
-    return results
+    return runner.run(strategy)
 
 def screen_bollinger_squeeze(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
@@ -4136,46 +3531,11 @@ def screen_bollinger_squeeze(ticker_list: list = None, time_frame: str = "1d", r
     Squeeze ON = Volatility Compression (Expect Breakout).
     """
     import pandas_ta as ta
-    import pandas as pd
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
 
-    # Timeframe logic
-    yf_interval = "1d"
-    period = "1y" # Squeeze needs context
-    resample_rule = None
-    is_intraday = False
-
-    if time_frame == "1h":
-        yf_interval = "1h"
-        period = "60d"
-        is_intraday = True
-    elif time_frame == "4h":
-        yf_interval = "1h"
-        resample_rule = "4h"
-        period = "60d"
-        is_intraday = True
-
-    try:
-        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
-    except Exception as e:
-        logger.error(f"Squeeze Data Fetch Error: {e}")
-        return []
-
-    # Iterator setup
-    if isinstance(data.columns, pd.MultiIndex):
-        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
-    else:
-        iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
-
-    def process_ticker(ticker, raw_df):
+    def strategy(ticker, df):
         try:
-            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
-            if df is None: return None
-
-            df = df.dropna(how='all')
             if len(df) < 50: return None
 
             curr_close = float(df['Close'].iloc[-1])
@@ -4186,12 +3546,10 @@ def screen_bollinger_squeeze(ticker_list: list = None, time_frame: str = "1d", r
             if bb is None: return None
 
             # Columns: BBL, BBM, BBU, Bandwidth, Percent
-            # Safe access by index to avoid naming issues across versions
             bb_lower = bb.iloc[:, 0]
             bb_upper = bb.iloc[:, 2]
 
             # 2. Keltner Channels (20, 1.5)
-            # Default mamode is ema.
             kc = ta.kc(df['High'], df['Low'], df['Close'], length=20, scalar=1.5)
             if kc is None: return None
 
@@ -4216,7 +3574,7 @@ def screen_bollinger_squeeze(ticker_list: list = None, time_frame: str = "1d", r
             breakout_date = _calculate_trend_breakout_date(df)
 
             # Calculate ATR for UI
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
             atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_close * 0.01)
 
             base_ticker = ticker.split('.')[0]
@@ -4251,12 +3609,4 @@ def screen_bollinger_squeeze(ticker_list: list = None, time_frame: str = "1d", r
         except Exception as e:
             return None
 
-    # Threaded Execution
-    active_results = []
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(process_ticker, t, d): t for t, d in iterator}
-        for future in as_completed(futures):
-            res = future.result()
-            if res: active_results.append(res)
-
-    return active_results
+    return runner.run(strategy)
