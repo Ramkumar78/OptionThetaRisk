@@ -15,6 +15,7 @@ Specifically tuned for the UK market, this screener identifies stocks transition
 * **VCP Detection**: Uses Volatility Contraction Pattern logic to find institutional accumulation.
 * **Relative Strength (RS)**: Automatically ranks stocks against the S&P 500 to ensure you are holding leaders, not laggards.
 * **Institutional Verdicts**: Provides clear 'Buy', 'Watch', or 'Avoid' signals based on 50/150/200 EMA alignment.
+* **Dynamic Position Sizing**: Automatically calculates optimal share count based on a £76k account (configurable) using 1% risk per trade and a 20% max allocation limit.
 
 ### 🧪 Integrated Strategy Backtester (`unified_backtester.py`)
 Verify your edge before risking capital. Most traders fail because they don't know their historical expectancy.
