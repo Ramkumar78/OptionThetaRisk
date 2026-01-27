@@ -31,6 +31,7 @@ The difference between a 5% return and a 15% return is often "Leakage."
 Detects high-probability reversal setups using Institutional Logic.
 *   **Liquidity Grab (SMC)**: Identifies Bullish/Bearish Sweeps where price breaches a swing point to "grab liquidity" before rejecting.
 *   **RSI Divergence**: Finds trend exhaustion points where momentum (RSI) disagrees with price action.
+*   **Bollinger Squeeze**: Identifies volatility compression (TTM Squeeze) for potential explosive breakouts.
 *   **Backtesting Support**: Verify these strategies historically using the Unified Backtester.
 
 👉 **[See SCANNERS.md for detailed documentation](SCANNERS.md)**

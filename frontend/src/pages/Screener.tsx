@@ -303,6 +303,23 @@ const STRATEGIES: Record<string, {
                 ]
             }
         ]
+    },
+    squeeze: {
+        id: 'squeeze',
+        name: 'Bollinger Squeeze',
+        endpoint: '/screen/squeeze',
+        description: 'Identifies volatility compression (Squeeze) where Bollinger Bands move inside Keltner Channels. Often precedes explosive moves.',
+        params: ['region', 'time_frame'],
+        legend: [
+            {
+                title: 'TTM Squeeze',
+                desc: 'Volatility Compression',
+                items: [
+                    { label: 'Squeeze ON', text: 'Bollinger Bands are inside Keltner Channels.' },
+                    { label: 'Momentum', text: 'Direction based on Price vs SMA(20).' }
+                ]
+            }
+        ]
     }
 };
 
