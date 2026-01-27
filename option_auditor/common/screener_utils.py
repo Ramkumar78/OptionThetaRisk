@@ -93,7 +93,7 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
 
     return filtered_list
 
-def _resolve_region_tickers(region: str) -> list:
+def resolve_region_tickers(region: str) -> list:
     """
     Helper to resolve ticker list based on region.
     Default: US (Sector Components + Watch)
@@ -218,10 +218,10 @@ class ScreeningRunner:
 
     def run(self, strategy_func: Callable[[str, pd.DataFrame], Optional[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         if self.ticker_list is None:
-            self.ticker_list = _resolve_region_tickers(self.region)
+            self.ticker_list = resolve_region_tickers(self.region)
 
         # Apply ETF resolution if needed?
-        # Generally _resolve_region_tickers handles lists.
+        # Generally resolve_region_tickers handles lists.
         # But if the user passed a list, we use it.
 
         if not self.ticker_list:

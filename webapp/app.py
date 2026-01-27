@@ -28,6 +28,7 @@ from option_auditor.unified_backtester import UnifiedBacktester
 from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.strategies.turtle import TurtleStrategy
 from option_auditor.common.data_utils import get_cached_market_data
+from option_auditor.common.screener_utils import resolve_region_tickers
 # from option_auditor.unified_screener import screen_universal_dashboard
 
 # Import Data Lists
@@ -94,21 +95,6 @@ def get_cached_screener_result(key):
 
 def cache_screener_result(key, data):
     screener_cache.set(key, data)
-
-# --- HELPER: Get Tickers by Region ---
-def get_tickers_for_region(region):
-    region = region.lower()
-    if region == 'uk':
-        return list(set(get_uk_tickers())) # Ensure unique
-    elif region == 'india':
-        return list(set(INDIA_TICKERS))
-    elif region == 'uk_euro':
-        # Combine UK with some major Euro tickers if available, for now just UK + placeholders
-        return list(set(get_uk_tickers()))
-    elif region == 'united_states':
-        return get_united_states_stocks()
-    else: # Default 'us'
-        return list(set(SP500_TICKERS))
 
 # Cached storage provider singleton at application level (if appropriate)
 # Since we might rely on app context (e.g. SQLite path), we use Flask's `g` or memoize based on app instance.
@@ -580,7 +566,11 @@ def create_app(testing: bool = False) -> Flask:
             app.logger.info("Serving cached ISA screen result")
             return jsonify({"results": cached})
 
-        tickers = get_tickers_for_region(region)
+        # For ISA, if region is 'us', we prefer the broader S&P 500 list
+        if region == 'us':
+            tickers = resolve_region_tickers('sp500')
+        else:
+            tickers = resolve_region_tickers(region)
 
         # Correct Cache Name logic to use Shared Cache for US/SP500
         cache_name = f"market_scan_{region}"

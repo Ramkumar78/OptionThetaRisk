@@ -14,11 +14,11 @@ def test_screen_isa_region_selection():
     mock_get_uk = MagicMock(return_value=["AZN.L", "BP.L"])
     mock_get_india = MagicMock(return_value=["RELIANCE.NS", "TCS.NS"])
 
-    with patch('option_auditor.screener._get_filtered_sp500', mock_get_sp500), \
-         patch('option_auditor.screener.get_uk_euro_tickers', mock_get_uk), \
-         patch('option_auditor.screener.get_indian_tickers', mock_get_india), \
+    with patch('option_auditor.common.screener_utils._get_filtered_sp500', mock_get_sp500), \
+         patch('option_auditor.common.screener_utils.get_uk_euro_tickers', mock_get_uk), \
+         patch('option_auditor.common.screener_utils.get_indian_tickers', mock_get_india), \
          patch('option_auditor.screener.yf.download') as mock_download, \
-              patch('option_auditor.screener.SECTOR_COMPONENTS', {"WATCH": ["WATCH1", "SPY"]}):
+              patch('option_auditor.common.screener_utils.SECTOR_COMPONENTS', {"WATCH": ["WATCH1", "SPY"]}):
 
          # Mock download response to avoid crash
          mock_download.return_value = MagicMock()

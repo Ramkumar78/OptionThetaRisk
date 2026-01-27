@@ -43,7 +43,7 @@ except ImportError:
 # Import Refactored Utilities and Constants
 from option_auditor.common.screener_utils import (
     ScreeningRunner,
-    _resolve_region_tickers,
+    resolve_region_tickers,
     _get_filtered_sp500,
     DEFAULT_RSI_LENGTH,
     DEFAULT_ATR_LENGTH,
@@ -267,7 +267,7 @@ def screen_market(iv_rank_threshold: float = 30.0, rsi_threshold: float = 50.0, 
     Returns:
         Dict[str, List[dict]]: Keys are 'Sector Name (Ticker)', Values are lists of ticker results.
     """
-    all_tickers = _resolve_region_tickers(region)
+    all_tickers = resolve_region_tickers(region)
 
     flat_results = _screen_tickers(list(set(all_tickers)), iv_rank_threshold, rsi_threshold, time_frame)
 
@@ -1044,7 +1044,7 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
     - Liquid (>1M Vol)
     """
     if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+        ticker_list = resolve_region_tickers(region)
 
     # TASTYTRADE PARAMETERS
     RISK_FREE_RATE = 0.045
@@ -1295,7 +1295,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         risk_per_trade_pct = 0.01
 
     if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+        ticker_list = resolve_region_tickers(region)
 
     results = []
 
@@ -1620,7 +1620,7 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
     import numpy as np # Ensure numpy is imported
 
     if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+        ticker_list = resolve_region_tickers(region)
 
     results = []
 
@@ -1813,7 +1813,7 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     import numpy as np
 
     if ticker_list is None:
-        ticker_list = _resolve_region_tickers(region)
+        ticker_list = resolve_region_tickers(region)
     
     if ticker_list:
         ticker_list = [t.upper() for t in ticker_list]
@@ -2037,7 +2037,7 @@ def screen_master_convergence(ticker_list: list = None, region: str = "us", chec
              ticker_list = SECTOR_COMPONENTS.get("WATCH", [])
         else:
              # For other regions (or explicit sp500 request), use standard resolution
-             ticker_list = _resolve_region_tickers(region)
+             ticker_list = resolve_region_tickers(region)
 
     is_large = len(ticker_list) > 100 or region == "sp500"
 
@@ -2372,7 +2372,7 @@ def screen_quantum_setups(ticker_list: list = None, region: str = "us", time_fra
         if region == "us":
             ticker_list = LIQUID_OPTION_TICKERS
         else:
-            ticker_list = _resolve_region_tickers(region)
+            ticker_list = resolve_region_tickers(region)
 
     # Resolve tickers (Fix for Ticker Resolution Failure)
     if ticker_list:
@@ -3128,7 +3128,7 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
 
     if ticker_list is None:
         # Default to US liquid list + Sectors if not provided
-        ticker_list = _resolve_region_tickers(region)
+        ticker_list = resolve_region_tickers(region)
 
     # 1. BATCH FETCH DATA (Trend & Stock Liquidity)
     # We fetch 1 year to ensure 200 SMA is valid

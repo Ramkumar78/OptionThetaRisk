@@ -1,11 +1,12 @@
 # Sector and Ticker Constants
+import os
 from option_auditor.us_stock_data import SECTOR_NAMES, SECTOR_COMPONENTS
 
 # In-Memory Cache for Circuit Breaker Fallbacks
 SCREENER_CACHE = {}
 
 # Default Configuration
-DEFAULT_ACCOUNT_SIZE = 76000.0
+DEFAULT_ACCOUNT_SIZE = float(os.environ.get("DEFAULT_ACCOUNT_SIZE", 76000.0))
 
 TICKER_NAMES = {
     "ECL": "Ecolab Inc.",
