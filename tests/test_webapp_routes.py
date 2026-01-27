@@ -13,8 +13,8 @@ class TestWebappRoutes(unittest.TestCase):
     def tearDown(self):
         self.ctx.pop()
 
-    @patch('webapp.app.screener.screen_hybrid_strategy')
-    @patch('webapp.app.get_cached_screener_result')
+    @patch('webapp.blueprints.screener_routes.screener.screen_hybrid_strategy')
+    @patch('webapp.blueprints.screener_routes.get_cached_screener_result')
     def test_screen_hybrid_passes_region_param(self, mock_get_cache, mock_screen_hybrid):
         """
         Regression Test: Ensure that the 'region' query parameter is correctly
@@ -40,8 +40,8 @@ class TestWebappRoutes(unittest.TestCase):
         self.assertEqual(call_args.kwargs['region'], 'uk')
         self.assertEqual(call_args.kwargs['time_frame'], '1d')
 
-    @patch('webapp.app.screener.screen_hybrid_strategy')
-    @patch('webapp.app.get_cached_screener_result')
+    @patch('webapp.blueprints.screener_routes.screener.screen_hybrid_strategy')
+    @patch('webapp.blueprints.screener_routes.get_cached_screener_result')
     def test_screen_hybrid_defaults_to_us(self, mock_get_cache, mock_screen_hybrid):
         """Verify default behavior is US if no region provided"""
         mock_get_cache.return_value = None

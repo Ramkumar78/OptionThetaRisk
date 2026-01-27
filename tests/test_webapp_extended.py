@@ -4,7 +4,9 @@ import uuid
 import time
 import io
 from unittest.mock import patch, MagicMock, ANY
-from webapp.app import create_app, get_cached_screener_result, cache_screener_result, screener_cache, _get_env_or_docker_default, send_email_notification
+from webapp.app import create_app, cleanup_job
+from webapp.cache import get_cached_screener_result, cache_screener_result, screener_cache
+from webapp.utils import _get_env_or_docker_default, send_email_notification
 
 @pytest.fixture
 def client():
@@ -14,8 +16,38 @@ def client():
 
 @pytest.fixture
 def mock_storage():
-    with patch('webapp.app.get_storage_provider') as mock:
-        yield mock
+    # Patch the factory in webapp.storage so it propagates if patched early?
+    # No, imports are already done.
+    # We must patch where it is used.
+    # It is used in main_routes (feedback, dashboard) and journal_routes (journal) and analysis_routes (analyze).
+    # And app.py (cleanup_job).
+
+    # We can use patch.object if we import the blueprint modules?
+    # Or just patch string paths.
+
+    p1 = patch('webapp.blueprints.main_routes._get_storage_provider')
+    p2 = patch('webapp.blueprints.journal_routes._get_storage_provider')
+    p3 = patch('webapp.blueprints.analysis_routes._get_storage_provider')
+    p4 = patch('webapp.app._get_storage_provider')
+
+    m1 = p1.start()
+    m2 = p2.start()
+    m3 = p3.start()
+    m4 = p4.start()
+
+    # Return one mock that all use
+    mock = MagicMock()
+    m1.return_value = mock
+    m2.return_value = mock
+    m3.return_value = mock
+    m4.return_value = mock
+
+    yield mock
+
+    p1.stop()
+    p2.stop()
+    p3.stop()
+    p4.stop()
 
 def test_cache_logic():
     # Test caching mechanism directly
@@ -51,25 +83,25 @@ def test_env_or_docker_default():
         with patch('os.path.exists', return_value=True):
              assert _get_env_or_docker_default('TEST_KEY', 'default') == 'docker_value'
 
-@patch('webapp.app.resend')
+@patch('webapp.utils.resend')
 def test_send_email_notification(mock_resend):
     # Missing API Key
-    with patch('webapp.app._get_env_or_docker_default', return_value=None):
+    with patch('webapp.utils._get_env_or_docker_default', return_value=None):
         send_email_notification("Subject", "Body")
         mock_resend.Emails.send.assert_not_called()
 
     # Success
-    with patch('webapp.app._get_env_or_docker_default', return_value="fake_key"):
+    with patch('webapp.utils._get_env_or_docker_default', return_value="fake_key"):
         mock_resend.Emails.send.return_value = {'id': '123'}
         send_email_notification("Subject", "Body")
         mock_resend.Emails.send.assert_called_once()
 
 def test_feedback_route(client, mock_storage):
     # Valid feedback
-    with patch('webapp.app.send_email_notification') as mock_email:
+    with patch('webapp.blueprints.main_routes.send_email_notification') as mock_email:
         res = client.post('/feedback', data={'message': 'Great app!', 'name': 'John', 'email': 'john@example.com'})
         assert res.status_code == 200
-        mock_storage.return_value.save_feedback.assert_called_once()
+        mock_storage.save_feedback.assert_called_once()
 
     # Empty message
     res = client.post('/feedback', data={'message': ''})
@@ -83,9 +115,9 @@ def test_dashboard_route_no_session(client):
 def test_dashboard_route_with_data(client, mock_storage):
     # Mock portfolio data
     mock_data = json.dumps({"test": "data"}).encode('utf-8')
-    mock_storage.return_value.get_portfolio.return_value = mock_data
+    mock_storage.get_portfolio.return_value = mock_data
 
-    with patch('webapp.app.refresh_dashboard_data') as mock_refresh:
+    with patch('webapp.blueprints.main_routes.refresh_dashboard_data') as mock_refresh:
         mock_refresh.return_value = {"test": "refreshed"}
         res = client.get('/dashboard')
         assert res.status_code == 200
@@ -97,6 +129,7 @@ def test_health_route(client):
     assert res.data == b"OK"
 
 def test_screen_route_params(client):
+    # Patch where used: screener_routes
     with patch('option_auditor.screener.screen_market') as mock_screen:
         mock_screen.return_value = {}
         with patch('option_auditor.screener.screen_sectors') as mock_sectors:
@@ -127,7 +160,7 @@ def test_screen_routes_specific(client):
 
 def test_journal_routes(client, mock_storage):
     # Add
-    mock_storage.return_value.save_journal_entry.return_value = "123"
+    mock_storage.save_journal_entry.return_value = "123"
     res = client.post('/journal/add', json={"symbol": "AAPL"})
     assert res.status_code == 200
     assert res.json['id'] == "123"
@@ -135,26 +168,27 @@ def test_journal_routes(client, mock_storage):
     # Delete
     res = client.delete('/journal/delete/123')
     assert res.status_code == 200
-    mock_storage.return_value.delete_journal_entry.assert_called_with(ANY, "123")
+    mock_storage.delete_journal_entry.assert_called_with(ANY, "123")
 
     # Import
-    mock_storage.return_value.save_journal_entries.return_value = 1
+    mock_storage.save_journal_entries.return_value = 1
     res = client.post('/journal/import', json=[{"symbol": "AAPL", "pnl": 100}])
     assert res.status_code == 200
     assert res.json['count'] == 1
-    mock_storage.return_value.save_journal_entries.assert_called()
+    mock_storage.save_journal_entries.assert_called()
 
     # Analyze
-    mock_storage.return_value.get_journal_entries.return_value = []
-    with patch('webapp.app.journal_analyzer.analyze_journal') as mock_analyze:
+    mock_storage.get_journal_entries.return_value = []
+    # Patch journal_analyzer in blueprint
+    with patch('webapp.blueprints.journal_routes.journal_analyzer.analyze_journal') as mock_analyze:
         mock_analyze.return_value = {}
         res = client.post('/journal/analyze')
         assert res.status_code == 200
 
 def test_analyze_route_manual(client, mock_storage):
     manual_data = json.dumps([{"date": "2023-01-01", "symbol": "AAPL", "action": "BUY", "quantity": 10, "price": 150}])
-    # Patch where it is imported in webapp/app.py
-    with patch('webapp.app.analyze_csv') as mock_analyze:
+    # Patch where it is imported in blueprint
+    with patch('webapp.blueprints.analysis_routes.analyze_csv') as mock_analyze:
         mock_analyze.return_value = {"results": "success"}
 
         res = client.post('/analyze', data={
@@ -169,36 +203,31 @@ def test_analyze_route_manual(client, mock_storage):
 
 def test_analyze_route_file(client, mock_storage):
     data = {'csv': (io.BytesIO(b"date,symbol,action\n2023-01-01,AAPL,BUY"), 'test.csv')}
-    # Patch where it is imported in webapp/app.py
-    with patch('webapp.app.analyze_csv') as mock_analyze:
+    with patch('webapp.blueprints.analysis_routes.analyze_csv') as mock_analyze:
         mock_analyze.return_value = {"results": "success", "excel_report": io.BytesIO(b"excel")}
 
         res = client.post('/analyze', data=data, content_type='multipart/form-data')
 
         assert res.status_code == 200
-        mock_storage.return_value.save_report.assert_called() # Should save excel
-        mock_storage.return_value.save_portfolio.assert_called()
+        mock_storage.save_report.assert_called() # Should save excel
+        mock_storage.save_portfolio.assert_called()
 
 def test_download_route(client, mock_storage):
-    mock_storage.return_value.get_report.return_value = b"file_content"
+    mock_storage.get_report.return_value = b"file_content"
     res = client.get('/download/token123/report.xlsx')
     assert res.status_code == 200
     assert res.data == b"file_content"
 
-    mock_storage.return_value.get_report.return_value = None
+    mock_storage.get_report.return_value = None
     res = client.get('/download/token123/missing.xlsx')
     assert res.status_code == 404
 
-def test_cleanup_job():
-    # Test cleanup job logic (mock storage)
+def test_cleanup_job(mock_storage):
     app = create_app(testing=True)
-    # Patch _get_storage_provider because cleanup_job calls it directly
-    with patch('webapp.app._get_storage_provider') as mock_storage_prov:
-        with patch('time.sleep', side_effect=InterruptedError): # Break loop
-            try:
-                # Import cleanup_job function locally to test
-                from webapp.app import cleanup_job
-                cleanup_job(app)
-            except InterruptedError:
-                pass
-        mock_storage_prov.return_value.cleanup_old_reports.assert_called()
+    # mock_storage is already patching _get_storage_provider in app.py via the fixture!
+    with patch('time.sleep', side_effect=InterruptedError): # Break loop
+        try:
+            cleanup_job(app)
+        except InterruptedError:
+            pass
+    mock_storage.cleanup_old_reports.assert_called()
