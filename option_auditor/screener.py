@@ -4085,3 +4085,134 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
             continue
 
     return results
+
+def screen_bollinger_squeeze(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
+    """
+    Screens for TTM Squeeze (Bollinger Bands inside Keltner Channels).
+    Squeeze ON = Volatility Compression (Expect Breakout).
+    """
+    import pandas_ta as ta
+    import pandas as pd
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if ticker_list is None:
+        ticker_list = _resolve_region_tickers(region)
+
+    # Timeframe logic
+    yf_interval = "1d"
+    period = "1y" # Squeeze needs context
+    resample_rule = None
+    is_intraday = False
+
+    if time_frame == "1h":
+        yf_interval = "1h"
+        period = "60d"
+        is_intraday = True
+    elif time_frame == "4h":
+        yf_interval = "1h"
+        resample_rule = "4h"
+        period = "60d"
+        is_intraday = True
+
+    try:
+        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
+    except Exception as e:
+        logger.error(f"Squeeze Data Fetch Error: {e}")
+        return []
+
+    # Iterator setup
+    if isinstance(data.columns, pd.MultiIndex):
+        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
+    else:
+        iterator = [(ticker_list[0], data)] if len(ticker_list) == 1 and not data.empty else []
+
+    def process_ticker(ticker, raw_df):
+        try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+            if df is None: return None
+
+            df = df.dropna(how='all')
+            if len(df) < 50: return None
+
+            curr_close = float(df['Close'].iloc[-1])
+
+            # --- CALCULATIONS ---
+            # 1. Bollinger Bands (20, 2)
+            bb = ta.bbands(df['Close'], length=20, std=2.0)
+            if bb is None: return None
+
+            # Columns: BBL, BBM, BBU, Bandwidth, Percent
+            # Safe access by index to avoid naming issues across versions
+            bb_lower = bb.iloc[:, 0]
+            bb_upper = bb.iloc[:, 2]
+
+            # 2. Keltner Channels (20, 1.5)
+            # Default mamode is ema.
+            kc = ta.kc(df['High'], df['Low'], df['Close'], length=20, scalar=1.5)
+            if kc is None: return None
+
+            # Columns: Lower, Basis, Upper
+            kc_lower = kc.iloc[:, 0]
+            kc_upper = kc.iloc[:, 2]
+
+            if bb_upper is None or kc_upper is None: return None
+
+            # 3. Squeeze Condition (Most Recent)
+            # Squeeze is ON if BB Upper < KC Upper AND BB Lower > KC Lower
+            sq_on = (bb_upper.iloc[-1] < kc_upper.iloc[-1]) and (bb_lower.iloc[-1] > kc_lower.iloc[-1])
+
+            if not sq_on: return None
+
+            # 4. Momentum (Close - SMA(20))
+            sma_20 = df['Close'].rolling(20).mean().iloc[-1]
+            mom = curr_close - sma_20
+            mom_color = "green" if mom > 0 else "red"
+            signal_desc = "BULLISH SQUEEZE" if mom > 0 else "BEARISH SQUEEZE"
+
+            breakout_date = _calculate_trend_breakout_date(df)
+
+            # Calculate ATR for UI
+            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_close * 0.01)
+
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            pct_change_1d = 0.0
+            if len(df) >= 2:
+                prev_c = float(df['Close'].iloc[-2])
+                pct_change_1d = ((curr_close - prev_c) / prev_c) * 100
+
+            stop_loss = curr_close - (2*atr) if mom > 0 else curr_close + (2*atr)
+            target = curr_close + (3*atr) if mom > 0 else curr_close - (3*atr)
+
+            return {
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": round(curr_close, 2),
+                "squeeze_status": "ON",
+                "verdict": signal_desc, # UI
+                "signal": signal_desc,
+                "momentum_val": round(mom, 2),
+                "momentum_color": mom_color,
+                "pct_change_1d": round(pct_change_1d, 2),
+                "atr": round(atr, 2),
+                "breakout_date": breakout_date,
+                "score": 100, # High priority
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target, 2),
+                "Setup": signal_desc # Generic UI map
+            }
+
+        except Exception as e:
+            return None
+
+    # Threaded Execution
+    active_results = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process_ticker, t, d): t for t, d in iterator}
+        for future in as_completed(futures):
+            res = future.result()
+            if res: active_results.append(res)
+
+    return active_results

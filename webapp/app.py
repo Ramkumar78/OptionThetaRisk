@@ -732,7 +732,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -766,7 +766,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
 
@@ -798,7 +798,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
 
@@ -808,6 +808,41 @@ def create_app(testing: bool = False) -> Flask:
             return jsonify(results)
         except Exception as e:
             app.logger.exception(f"Liquidity Grab Screen Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/screen/squeeze", methods=["GET"])
+    def screen_squeeze():
+        try:
+            time_frame = request.args.get("time_frame", "1d")
+            region = request.args.get("region", "us")
+            app.logger.info(f"Squeeze Screen request: region={region}, tf={time_frame}")
+
+            cache_key = ("squeeze", region, time_frame)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                ticker_list = get_united_states_stocks()
+            elif region == "sp500":
+                # For squeeze, use S&P 500 filtered
+                filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
+                watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+                ticker_list = list(set(filtered_sp500 + watch_list))
+
+            results = screener.screen_bollinger_squeeze(ticker_list=ticker_list, time_frame=time_frame, region=region)
+            app.logger.info(f"Squeeze Screen completed. Results: {len(results)}")
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            app.logger.exception(f"Squeeze Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
     @app.route("/screen/hybrid", methods=["GET"])
@@ -830,7 +865,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -903,7 +938,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -937,7 +972,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
@@ -970,7 +1005,7 @@ def create_app(testing: bool = False) -> Flask:
             elif region == "india":
                 ticker_list = screener.get_indian_tickers()
             elif region == "united_states":
-                 ticker_list = get_united_states_stocks()
+                ticker_list = get_united_states_stocks()
             elif region == "sp500":
                 raw_sp500 = screener.get_sp500_tickers()
                 watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])

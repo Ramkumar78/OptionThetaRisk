@@ -79,3 +79,21 @@ results = bt.run()
 print(f"Strategy Return: {results['strategy_return']}%")
 print(f"Win Rate: {results['win_rate']}")
 ```
+
+---
+
+## 4. Bollinger Squeeze Screener
+
+**Strategy ID:** `squeeze`
+**Endpoint:** `/screen/squeeze`
+
+The **Bollinger Squeeze Screener** identifies stocks in a period of low volatility (consolidation) that often precedes a violent breakout. It uses the relationship between Bollinger Bands and Keltner Channels (TTM Squeeze concept).
+
+### Logic
+*   **Squeeze ON:** The Bollinger Bands (Length 20, Std 2.0) are completely *inside* the Keltner Channels (Length 20, ATR Mult 1.5). This indicates volatility is compressed relative to the average range.
+*   **Momentum:** Uses the relationship between Price and the 20 SMA to determine potential breakout direction (Bullish or Bearish).
+
+### Output
+*   **Verdict:** "BULLISH SQUEEZE" or "BEARISH SQUEEZE".
+*   **Momentum:** Directional bias.
+*   **Target/Stop:** Based on ATR expansion.
