@@ -171,12 +171,42 @@ class UnifiedBacktester:
         stop_loss = 0.0
         target_price = 0.0
 
+        # Swing Points Memory (Price, RSI, Index)
+        recent_swing_highs = [] # List of tuples
+        recent_swing_lows = []
+
         for i in range(len(sim_data)):
             if i < 20: continue # Warmup
 
             date = sim_data.index[i]
             row = sim_data.iloc[i]
             prev_row = sim_data.iloc[i-1]
+
+            # --- FRACTAL IDENTIFICATION (Confirmed at i, happened at i-1) ---
+            # Check if i-1 was a swing point
+            # We need i-2, i-1, i
+            if i >= 2:
+                row_minus_1 = sim_data.iloc[i-1]
+                row_minus_2 = sim_data.iloc[i-2]
+
+                # Swing High: H[i-1] > H[i-2] and H[i-1] > H[i]
+                if row_minus_1['High'] > row_minus_2['High'] and row_minus_1['High'] > row['High']:
+                    recent_swing_highs.append({
+                        'price': row_minus_1['High'],
+                        'rsi': row_minus_1['rsi'] if 'rsi' in row_minus_1 else 50,
+                        'idx': i-1
+                    })
+                    # Keep only last 10
+                    if len(recent_swing_highs) > 10: recent_swing_highs.pop(0)
+
+                # Swing Low: L[i-1] < L[i-2] and L[i-1] < L[i]
+                if row_minus_1['Low'] < row_minus_2['Low'] and row_minus_1['Low'] < row['Low']:
+                    recent_swing_lows.append({
+                        'price': row_minus_1['Low'],
+                        'rsi': row_minus_1['rsi'] if 'rsi' in row_minus_1 else 50,
+                        'idx': i-1
+                    })
+                    if len(recent_swing_lows) > 10: recent_swing_lows.pop(0)
 
             price = row['Close']
             buy_signal = False
@@ -326,6 +356,77 @@ class UnifiedBacktester:
                 if is_trend_up and row['alpha101'] > 0.5:
                     buy_signal = True
 
+            elif self.strategy_type == 'liquidity_grab':
+                # Bullish Sweep: Price Low < Swing Low AND Close > Swing Low
+                # Check against recent swing lows (excluding the one just formed if any)
+                # We need a swing low OLDER than current bar.
+                curr_l = row['Low']
+                curr_c = row['Close']
+                curr_h = row['High']
+
+                # Check Bullish Sweeps
+                for swing in recent_swing_lows:
+                    # Ignore if swing is too recent (e.g. formed at i-1, we are at i... valid)
+                    # But if we just formed it, it's effectively the current low range.
+                    # Usually we want to sweep a SIGNIFICANT swing.
+
+                    # Logic: Dipped below swing, Closed above swing
+                    if curr_l < swing['price'] and curr_c > swing['price']:
+                        # Filter: Ensure we aren't just ranging.
+                        # Maybe ensure trend is up or down?
+                        # Pure liquidity grab is a reversal.
+                        buy_signal = True
+                        break # Found one
+
+                # Exit Logic (Trailing or Target)
+                # If we are IN, check for Bearish Sweep (Reversal against us)
+                if self.state == "IN":
+                    for swing in recent_swing_highs:
+                        if curr_h > swing['price'] and curr_c < swing['price']:
+                            sell_signal = True
+                            current_stop_reason = "BEARISH SWEEP"
+                            break
+
+            elif self.strategy_type == 'rsi' or self.strategy_type == 'rsi_divergence':
+                # Trigger on CONFIRMED SWING (i-1)
+                # If i-1 was a Swing Low, check divergence against previous Swing Lows
+
+                # Check if we just formed a swing low at i-1
+                is_new_swing_low = False
+                if i >= 2:
+                    r1 = sim_data.iloc[i-1]
+                    r2 = sim_data.iloc[i-2]
+                    if r1['Low'] < r2['Low'] and r1['Low'] < row['Low']:
+                        is_new_swing_low = True
+
+                if is_new_swing_low and len(recent_swing_lows) >= 2:
+                    # The latest one in list is the one at i-1
+                    latest = recent_swing_lows[-1]
+                    # Check against previous ones
+                    for prev in recent_swing_lows[:-1]:
+                        # Bullish Div: Lower Price, Higher RSI
+                        if latest['price'] < prev['price'] and latest['rsi'] > prev['rsi']:
+                            buy_signal = True
+                            break
+
+                # Exit: Bearish Divergence
+                if self.state == "IN":
+                    is_new_swing_high = False
+                    if i >= 2:
+                        r1 = sim_data.iloc[i-1]
+                        r2 = sim_data.iloc[i-2]
+                        if r1['High'] > r2['High'] and r1['High'] > row['High']:
+                            is_new_swing_high = True
+
+                    if is_new_swing_high and len(recent_swing_highs) >= 2:
+                        latest = recent_swing_highs[-1]
+                        for prev in recent_swing_highs[:-1]:
+                            # Bearish Div: Higher Price, Lower RSI
+                            if latest['price'] > prev['price'] and latest['rsi'] < prev['rsi']:
+                                sell_signal = True
+                                current_stop_reason = "BEARISH DIVERGENCE"
+                                break
+
             # ==============================
             # EXECUTION
             # ==============================
@@ -366,6 +467,16 @@ class UnifiedBacktester:
 
                     risk = price - stop_loss
                     target_price = price + (risk * 2) if risk > 0 else price + (5 * atr)
+                elif self.strategy_type == 'liquidity_grab':
+                    # Stop below the sweep low (Low of current candle)
+                    stop_loss = row['Low'] - (0.5 * atr)
+                    # Target 3:1
+                    risk = price - stop_loss
+                    target_price = price + (3 * risk) if risk > 0 else price + (4 * atr)
+                elif self.strategy_type == 'rsi' or self.strategy_type == 'rsi_divergence':
+                    # Stop below the swing low
+                    stop_loss = row['Low'] - (1.0 * atr)
+                    target_price = price + (3.0 * atr)
                 else:
                     stop_loss = price - (2 * atr)
                     target_price = price + (4 * atr)
@@ -387,7 +498,7 @@ class UnifiedBacktester:
                      current_stop_reason = "INITIAL STOP HIT"
                 elif hit_target and self.strategy_type not in ['grandmaster', 'isa', 'turtle']:
                      # Trend followers (ISA/Turtle/Grandmaster) don't use fixed targets usually, they trail.
-                     if self.strategy_type in ['market', 'fourier', 'alpha101', 'mystrategy']:
+                     if self.strategy_type in ['market', 'fourier', 'alpha101', 'mystrategy', 'liquidity_grab', 'rsi', 'rsi_divergence']:
                         sell_signal = True
                         current_stop_reason = "TARGET HIT"
 
