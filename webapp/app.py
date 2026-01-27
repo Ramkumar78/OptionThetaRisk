@@ -778,6 +778,38 @@ def create_app(testing: bool = False) -> Flask:
             app.logger.exception(f"MMS Screen Error: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/screen/liquidity_grabs", methods=["GET"])
+    def screen_liquidity_grabs():
+        try:
+            time_frame = request.args.get("time_frame", "1h")
+            region = request.args.get("region", "us")
+            app.logger.info(f"Liquidity Grab Screen request: region={region}, tf={time_frame}")
+
+            cache_key = ("liquidity_grabs", region, time_frame)
+            cached = get_cached_screener_result(cache_key)
+            if cached:
+                return jsonify(cached)
+
+            ticker_list = None
+            if region == "uk_euro":
+                ticker_list = screener.get_uk_euro_tickers()
+            elif region == "uk":
+                ticker_list = get_uk_tickers()
+            elif region == "india":
+                ticker_list = screener.get_indian_tickers()
+            elif region == "united_states":
+                 ticker_list = get_united_states_stocks()
+            elif region == "sp500":
+                ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+
+            results = screener.screen_liquidity_grabs(ticker_list=ticker_list, time_frame=time_frame, region=region)
+            app.logger.info(f"Liquidity Grab Screen completed. Results: {len(results)}")
+            cache_screener_result(cache_key, results)
+            return jsonify(results)
+        except Exception as e:
+            app.logger.exception(f"Liquidity Grab Screen Error: {e}")
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/screen/hybrid", methods=["GET"])
     def screen_hybrid():
         try:

@@ -27,11 +27,13 @@ The difference between a 5% return and a 15% return is often "Leakage."
 * **Monte Carlo Projections**: Simulates 1,000+ versions of your future equity curve to calculate your **Probability of Ruin**.
 * **Fee Audit**: Highlighting how much your broker is eating into your Alpha.
 
-### 🔮 RSI Divergence Screener
-Detects potential trend reversals by identifying divergences between Price action and the Relative Strength Index (RSI).
-*   **Bullish Divergence**: Price makes a Lower Low while RSI makes a Higher Low (Buy Signal).
-*   **Bearish Divergence**: Price makes a Higher High while RSI makes a Lower High (Sell Signal).
-*   **Precision Timing**: Uses localized peak detection logic to find actionable signals within recent bars.
+### 🔮 Advanced Screeners (SMC & Divergence)
+Detects high-probability reversal setups using Institutional Logic.
+*   **Liquidity Grab (SMC)**: Identifies Bullish/Bearish Sweeps where price breaches a swing point to "grab liquidity" before rejecting.
+*   **RSI Divergence**: Finds trend exhaustion points where momentum (RSI) disagrees with price action.
+*   **Backtesting Support**: Verify these strategies historically using the Unified Backtester.
+
+👉 **[See SCANNERS.md for detailed documentation](SCANNERS.md)**
 
 ## 🛠️ Quick Start (Professional Setup)
 

@@ -3506,6 +3506,178 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
     results.sort(key=lambda x: (1 if "GREEN" in x['verdict'] else 0, x['roc']), reverse=True)
     return results
 
+def screen_liquidity_grabs(ticker_list: list = None, time_frame: str = "1h", region: str = "us") -> list:
+    """
+    Screens for Liquidity Grabs (Sweeps) of recent Swing Highs/Lows.
+    Concepts: ICT/SMC (Smart Money Concepts).
+
+    Bullish Sweep:
+    1. Identify recent Swing Lows.
+    2. Price pierces below a Swing Low but Closes ABOVE it (Rejection).
+    3. Often happens with volume spike.
+
+    Bearish Sweep:
+    1. Identify recent Swing Highs.
+    2. Price pierces above a Swing High but Closes BELOW it.
+    """
+    import pandas as pd
+    import pandas_ta as ta
+    import numpy as np
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if ticker_list is None:
+        ticker_list = _resolve_region_tickers(region)
+
+    # Timeframe logic
+    yf_interval = "1h"
+    period = "60d" # Max for 1h
+    is_intraday = True
+    resample_rule = None
+
+    if time_frame == "15m":
+        yf_interval = "15m"
+        period = "1mo"
+    elif time_frame == "5m":
+        yf_interval = "5m"
+        period = "5d"
+    elif time_frame == "4h":
+        yf_interval = "1h"
+        resample_rule = "4h"
+        period = "60d"
+    elif time_frame == "1d":
+        yf_interval = "1d"
+        period = "1y"
+        is_intraday = False
+    elif time_frame == "1wk":
+        yf_interval = "1wk"
+        period = "2y"
+        is_intraday = False
+
+    # 1. Batch Fetch Data
+    try:
+        data = fetch_batch_data_safe(ticker_list, period=period, interval=yf_interval)
+    except Exception as e:
+        logger.error(f"Liquidity Grab Data Fetch Error: {e}")
+        return []
+
+    results = []
+
+    def process_ticker(ticker):
+        try:
+            df = _prepare_data_for_ticker(ticker, data, time_frame, period, yf_interval, resample_rule, is_intraday)
+            if df is None: return None
+
+            df = df.dropna(how='all')
+            if len(df) < 50: return None
+
+            # Identify Swings
+            # We want recent swings, so we look back e.g. 50 bars
+            # _identify_swings uses a small lookback (2-3 bars) for fractals
+            # We must use _identify_swings from global scope (defined earlier in file)
+            df_swings = _identify_swings(df, lookback=3)
+
+            # Current Candle
+            curr = df.iloc[-1]
+            curr_c = float(curr['Close'])
+            curr_h = float(curr['High'])
+            curr_l = float(curr['Low'])
+
+            # Previous Swings (excluding current candle)
+            history = df_swings.iloc[:-1].tail(50)
+
+            swing_highs = history[history['Swing_High'].notna()]['Swing_High']
+            swing_lows = history[history['Swing_Low'].notna()]['Swing_Low']
+
+            signal = "WAIT"
+            verdict_color = "gray"
+            sweep_level = 0.0
+            displacement_pct = 0.0
+
+            # BULLISH SWEEP CHECK
+            if not swing_lows.empty:
+                breached_lows = swing_lows[swing_lows > curr_l] # Lows that are higher than current low (so we dipped below them)
+
+                if not breached_lows.empty:
+                    # Check if we closed ABOVE them (Rejection)
+                    valid_sweeps = breached_lows[breached_lows < curr_c]
+
+                    if not valid_sweeps.empty:
+                        sweep_level = valid_sweeps.min()
+                        signal = "🐂 BULLISH SWEEP"
+                        verdict_color = "green"
+                        displacement_pct = ((curr_c - sweep_level) / sweep_level) * 100
+
+            # BEARISH SWEEP CHECK
+            if signal == "WAIT" and not swing_highs.empty:
+                breached_highs = swing_highs[swing_highs < curr_h] # Highs lower than current high (so we spiked above)
+
+                if not breached_highs.empty:
+                    # Check if we closed BELOW them (Rejection)
+                    valid_sweeps = breached_highs[breached_highs > curr_c]
+
+                    if not valid_sweeps.empty:
+                        sweep_level = valid_sweeps.max()
+                        signal = "🐻 BEARISH SWEEP"
+                        verdict_color = "red"
+                        displacement_pct = ((curr_c - sweep_level) / sweep_level) * 100
+
+            if signal == "WAIT": return None
+
+            # ATR & Vol
+            if 'ATR' not in df.columns:
+                 df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_c * 0.01)
+
+            # Volume Confirmation
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+            curr_vol = df['Volume'].iloc[-1]
+            vol_spike = (curr_vol > avg_vol * 1.5)
+
+            if vol_spike:
+                signal += " (Vol Spike)"
+
+            # Targets/Stops
+            stop_loss = curr_l - atr if "BULL" in signal else curr_h + atr
+            target = curr_c + (3 * atr) if "BULL" in signal else curr_c - (3 * atr)
+
+            base_ticker = ticker.split('.')[0]
+            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
+
+            pct_change_1d = 0.0
+            if len(df) >= 2:
+                prev_c = float(df['Close'].iloc[-2])
+                pct_change_1d = ((curr_c - prev_c) / prev_c) * 100
+
+            return {
+                "ticker": ticker,
+                "company_name": company_name,
+                "price": round(curr_c, 2),
+                "signal": signal,
+                "verdict": signal,
+                "pct_change_1d": round(pct_change_1d, 2),
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target, 2),
+                "atr": round(atr, 2),
+                "breakout_level": round(sweep_level, 2),
+                "score": abs(displacement_pct) * 100,
+                "breakout_date": _calculate_trend_breakout_date(df)
+            }
+
+        except Exception as e:
+            return None
+
+    # Threaded Execution
+    active_results = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process_ticker, t): t for t in ticker_list}
+        for future in as_completed(futures):
+            res = future.result()
+            if res: active_results.append(res)
+
+    # Sort by Displacement/Score
+    active_results.sort(key=lambda x: x['score'], reverse=True)
+    return active_results
+
 def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for High Probability Vertical Put Credit Spreads (Bull Put).
