@@ -1706,9 +1706,10 @@ def resolve_ticker(query: str) -> str:
 
     return query
 
-def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False, time_frame: str = "1d") -> list:
+def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False, time_frame: str = "1d", account_size: float = None) -> list:
     """
     The 'Legendary Trend' Screener for ISA Accounts (Long Only).
+    Supports Dynamic Position Sizing if account_size is provided.
     """
     import yfinance as yf
     import pandas_ta as ta
@@ -1799,13 +1800,13 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
                 if ticker not in ticker_list: continue
 
                 # Process
-                res = _process_isa_ticker(ticker, df, check_mode)
+                res = _process_isa_ticker(ticker, df, check_mode, account_size, risk_per_trade_pct)
                 if res: results.append(res)
             except: continue
     else:
         # Single Ticker Case
         if len(ticker_list) == 1:
-             res = _process_isa_ticker(ticker_list[0], data, check_mode)
+             res = _process_isa_ticker(ticker_list[0], data, check_mode, account_size, risk_per_trade_pct)
              if res: results.append(res)
 
     # Sort by signal priority
@@ -1818,7 +1819,7 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
     results.sort(key=sort_key)
     return results
 
-def _process_isa_ticker(ticker, df, check_mode):
+def _process_isa_ticker(ticker, df, check_mode, account_size=None, risk_per_trade_pct=0.01):
     try:
         import pandas_ta as ta
         df = df.dropna(how='all')
@@ -1885,23 +1886,62 @@ def _process_isa_ticker(ticker, df, check_mode):
         if curr_close > 0:
             dist_to_stop_pct = ((curr_close - effective_stop) / curr_close) * 100
 
-        position_size_pct = 0.04
-        risk_dist = max(0.0, dist_to_stop_pct)
-        total_equity_risk_pct = position_size_pct * (risk_dist / 100.0)
+        # --- POSITION SIZING LOGIC ---
+        position_size_shares = 0
+        position_value = 0.0
+        risk_amount = 0.0
+        account_used_pct = 0.0
+        max_position_size_str = ""
+        tharp_verdict = ""
+        is_tharp_safe = False
 
-        is_tharp_safe = bool(total_equity_risk_pct <= 0.01)
+        if account_size and account_size > 0:
+            # Explicit sizing based on risk
+            risk_amount = account_size * risk_per_trade_pct
 
-        tharp_verdict = "✅ SAFE" if is_tharp_safe else f"⚠️ RISKY (Risks {total_equity_risk_pct*100:.1f}% Equity)"
+            # Prevent div by zero if stop is at entry or above
+            risk_dist_val = max(0.01, curr_close - effective_stop) # Min 1 cent risk per share
+
+            # Calculate shares
+            raw_shares = risk_amount / risk_dist_val
+
+            # Cap at 20% of account (Max Allocation Rule)
+            max_allocation = account_size * 0.20
+            max_shares_allocation = max_allocation / curr_close
+
+            final_shares = int(min(raw_shares, max_shares_allocation))
+
+            position_value = final_shares * curr_close
+            account_used_pct = (position_value / account_size) * 100
+
+            position_size_shares = final_shares
+            max_position_size_str = f"{final_shares} shares (£{int(position_value)})"
+
+            # Verdict
+            is_tharp_safe = True # Calculated to be safe
+            tharp_verdict = f"✅ SAFE (Risk £{int(risk_amount)})"
+
+        else:
+            # Legacy Percentage Recommendation
+            position_size_pct = 0.04
+            risk_dist = max(0.0, dist_to_stop_pct)
+            total_equity_risk_pct = position_size_pct * (risk_dist / 100.0)
+
+            is_tharp_safe = bool(total_equity_risk_pct <= 0.01)
+
+            tharp_verdict = "✅ SAFE" if is_tharp_safe else f"⚠️ RISKY (Risks {total_equity_risk_pct*100:.1f}% Equity)"
+
+            suggested_size_val = 0.0
+            if risk_dist > 0:
+                 suggested_size_val = min(4.0, 1.0 / (risk_dist / 100.0))
+            else:
+                 suggested_size_val = 4.0
+
+            max_position_size_str = f"{suggested_size_val:.1f}%"
+
         if dist_to_stop_pct <= 0:
              tharp_verdict = "🛑 STOPPED OUT"
 
-        suggested_size_val = 0.0
-        if risk_dist > 0:
-             suggested_size_val = min(4.0, 1.0 / (risk_dist / 100.0))
-        else:
-             suggested_size_val = 4.0
-
-        max_position_size_str = f"{suggested_size_val:.1f}%"
         volatility_pct = (atr_20 / curr_close) * 100
 
         breakout_date = _calculate_trend_breakout_date(df)
@@ -1928,6 +1968,10 @@ def _process_isa_ticker(ticker, df, check_mode):
             "dist_to_stop_pct": round(dist_to_stop_pct, 2),
             "tharp_verdict": tharp_verdict,
             "max_position_size": max_position_size_str,
+            "shares": position_size_shares,
+            "position_value": round(position_value, 2),
+            "risk_amount": round(risk_amount, 2),
+            "account_used_pct": round(account_used_pct, 1),
             "breakout_date": breakout_date,
             "safe_to_trade": is_tharp_safe,
             "atr": round(current_atr, 2),

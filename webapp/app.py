@@ -418,6 +418,15 @@ def create_app(testing: bool = False) -> Flask:
 
             app.logger.info(f"ISA Check request for {query}")
 
+            # Position Sizing Param (Default £76k)
+            account_size = 76000.0
+            acc_size_str = request.args.get("account_size", "").strip()
+            if acc_size_str:
+                try:
+                    account_size = float(acc_size_str)
+                except ValueError:
+                    pass
+
             entry_price = None
             entry_str = request.args.get("entry_price", "").strip()
             if entry_str:
@@ -430,7 +439,7 @@ def create_app(testing: bool = False) -> Flask:
             if not ticker:
                 ticker = query.upper()
 
-            results = screener.screen_trend_followers_isa(ticker_list=[ticker])
+            results = screener.screen_trend_followers_isa(ticker_list=[ticker], account_size=account_size)
 
             if not results:
                 app.logger.warning(f"ISA Check: No data found for {ticker}")
@@ -549,8 +558,23 @@ def create_app(testing: bool = False) -> Flask:
         time_frame = request.args.get('time_frame', '1d')
         app.logger.info(f"ISA Screen request: region={region}, time_frame={time_frame}")
 
-        # Check result cache first
-        cache_key = ("isa", region, time_frame)
+        # Position Sizing Param (Default £76k)
+        account_size = 76000.0
+        acc_size_str = request.args.get("account_size", "").strip()
+        if acc_size_str:
+            try:
+                account_size = float(acc_size_str)
+            except ValueError:
+                pass
+
+        # Check result cache first (Note: caching ignores custom account size for now, assumes default or user refreshes)
+        # To strictly support custom sizing per user, we should include account_size in cache key
+        # or calculate sizing on the fly after fetching.
+        # For simplicity/performance, we bind it to the cache key if provided different than default?
+        # Actually, let's keep it simple: Cache Key includes account size if non-standard?
+        # If the user changes account size, they expect new numbers.
+
+        cache_key = ("isa", region, time_frame, account_size)
         cached = get_cached_screener_result(cache_key)
         if cached:
             app.logger.info("Serving cached ISA screen result")
@@ -605,7 +629,7 @@ def create_app(testing: bool = False) -> Flask:
                         if isinstance(df.columns, pd.MultiIndex):
                             df = df.droplevel(0, axis=1)
 
-                        strategy = IsaStrategy(ticker, df)
+                        strategy = IsaStrategy(ticker, df, account_size=account_size)
                         res = strategy.analyze()
                         if res and res['Signal'] != 'WAIT':
                             results.append(res)
@@ -1070,6 +1094,15 @@ def create_app(testing: bool = False) -> Flask:
             entry_price_str = request.args.get("entry_price", "").strip()
             entry_date_str = request.args.get("entry_date", "").strip()
             
+            # Position Sizing Param (Default £76k)
+            account_size = 76000.0
+            acc_size_str = request.args.get("account_size", "").strip()
+            if acc_size_str:
+                try:
+                    account_size = float(acc_size_str)
+                except ValueError:
+                    pass
+
             app.logger.info(f"Check Stock: {ticker_query}, Strategy: {strategy}")
 
             if not ticker_query:
@@ -1110,7 +1143,7 @@ def create_app(testing: bool = False) -> Flask:
 
             results = []
             if strategy == "isa":
-                results = screener.screen_trend_followers_isa(ticker_list=[ticker], check_mode=True)
+                results = screener.screen_trend_followers_isa(ticker_list=[ticker], check_mode=True, account_size=account_size)
             elif strategy == "turtle":
                 results = screener.screen_turtle_setups(ticker_list=[ticker], time_frame=time_frame, check_mode=True)
             elif strategy == "darvas":

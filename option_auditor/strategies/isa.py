@@ -12,9 +12,11 @@ class IsaStrategy:
     - Breakout: Price crosses 50-day High (Donchian Channel)
     - Volatility: ATR logic for stops
     """
-    def __init__(self, ticker, df):
+    def __init__(self, ticker, df, account_size=None, risk_per_trade_pct=0.01):
         self.ticker = ticker
         self.df = df
+        self.account_size = account_size
+        self.risk_per_trade_pct = risk_per_trade_pct
 
     def analyze(self):
         try:
@@ -68,6 +70,36 @@ class IsaStrategy:
             # Stop Loss (3 ATR)
             stop_loss = curr_price - (3 * atr)
 
+            # --- POSITION SIZING LOGIC ---
+            position_size_shares = 0
+            position_value = 0.0
+            risk_amount = 0.0
+            account_used_pct = 0.0
+            max_position_size_str = "20%" # Default fallback
+
+            if self.account_size and self.account_size > 0:
+                # Explicit sizing based on risk
+                risk_amount = self.account_size * self.risk_per_trade_pct
+
+                # Prevent div by zero
+                # If stop is at or above price (which shouldn't happen for long), use min risk
+                risk_dist = max(0.01, curr_price - stop_loss)
+
+                # Calculate shares based on risk
+                raw_shares = risk_amount / risk_dist
+
+                # Cap at 20% of account (Max Allocation Rule)
+                max_allocation = self.account_size * 0.20
+                max_shares_allocation = max_allocation / curr_price
+
+                final_shares = int(min(raw_shares, max_shares_allocation))
+
+                position_value = final_shares * curr_price
+                account_used_pct = (position_value / self.account_size) * 100
+
+                position_size_shares = final_shares
+                max_position_size_str = f"{final_shares} shares (£{int(position_value)})"
+
             # Formatting for Frontend
             return {
                 "Ticker": self.ticker,
@@ -79,7 +111,11 @@ class IsaStrategy:
                 "volatility_pct": round((atr / curr_price) * 100, 2),
                 "risk_per_share": round(curr_price - stop_loss, 2),
                 "tharp_verdict": "BULL" if trend_ok else "BEAR",
-                "max_position_size": "20%", # Hardcoded safe limit
+                "max_position_size": max_position_size_str,
+                "shares": position_size_shares,
+                "position_value": round(position_value, 2),
+                "risk_amount": round(risk_amount, 2),
+                "account_used_pct": round(account_used_pct, 1),
                 "breakout_date": breakout_date # Fix 4: Populate the field
             }
 
