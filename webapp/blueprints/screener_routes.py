@@ -5,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 
 from option_auditor import screener
-from option_auditor.master_screener import screen_master_convergence
+from option_auditor.strategies.master import screen_master_convergence
 from option_auditor.unified_backtester import UnifiedBacktester
 from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.common.resilience import data_api_breaker

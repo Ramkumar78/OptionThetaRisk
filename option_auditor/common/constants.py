@@ -9,6 +9,20 @@ SCREENER_CACHE = {}
 DEFAULT_ACCOUNT_SIZE = float(os.environ.get("DEFAULT_ACCOUNT_SIZE", 76000.0))
 RISK_FREE_RATE = 0.045
 
+# --- STRATEGY SPECIFIC CONFIGURATION ---
+ISA_ACCOUNT_GBP = 100000.0
+OPTIONS_ACCOUNT_USD = 9500.0
+RISK_PER_TRADE_PCT = 0.0125  # 1.25% Risk
+
+# HARDENED GATES
+MIN_PRICE_USD = 10.0
+MIN_PRICE_GBP = 100.0 # Pence
+MIN_PRICE_INR = 100.0 # Rupees
+
+MIN_TURNOVER_USD = 20_000_000
+MIN_TURNOVER_GBP = 2_000_000
+MIN_TURNOVER_INR = 50_000_000 # 5 Crores INR
+
 TICKER_NAMES = {
     "ECL": "Ecolab Inc.",
     "PLTR": "Palantir Technologies Inc.",
@@ -354,7 +368,7 @@ TICKER_NAMES = {
     "RTX": "RTX Corporation",
     "DUK": "Duke Energy Corporation (Holdin",
     "AMT": "American Tower Corporation (REI",
-    "AXP": "American Express Company",
+    "AXP": "American Electric Power Company",
     "GE": "GE Aerospace",
     "TMUS": "T-Mobile US, Inc.",
     "UNH": "UnitedHealth Group Incorporated",
