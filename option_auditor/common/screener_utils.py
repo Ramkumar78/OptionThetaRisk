@@ -400,3 +400,38 @@ def _get_market_regime():
     except:
         pass
     return 15.0 # Safe default
+
+def run_screening_strategy(
+    strategy_class: Callable,
+    ticker_list: Optional[List[str]] = None,
+    time_frame: str = "1d",
+    region: str = "us",
+    check_mode: bool = False,
+    sorting_key: Optional[Callable] = None,
+    reverse_sort: bool = False,
+    **strategy_kwargs
+) -> List[Dict[str, Any]]:
+    """
+    Generic runner for class-based strategies.
+    Instantiates the strategy class for each ticker and runs .analyze().
+    """
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
+
+    def strategy_wrapper(ticker, df):
+        try:
+             # Try passing check_mode and kwargs
+             return strategy_class(ticker, df, check_mode=check_mode, **strategy_kwargs).analyze()
+        except TypeError:
+             try:
+                 # Try passing just kwargs (some don't take check_mode)
+                 return strategy_class(ticker, df, **strategy_kwargs).analyze()
+             except TypeError:
+                  # Fallback: Try passing ONLY ticker and df (no kwargs support?)
+                  return strategy_class(ticker, df).analyze()
+
+    results = runner.run(strategy_wrapper)
+
+    if sorting_key:
+        results.sort(key=sorting_key, reverse=reverse_sort)
+
+    return results

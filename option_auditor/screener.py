@@ -35,7 +35,9 @@ from option_auditor.strategies.rsi_divergence import RsiDivergenceStrategy
 from option_auditor.strategies.fourier import FourierStrategy
 from option_auditor.strategies.quantum import screen_quantum_setups
 from option_auditor.strategies.options_only import screen_options_only_strategy
-from option_auditor.common.screener_utils import ScreeningRunner
+from option_auditor.strategies.five_thirteen import FiveThirteenStrategy
+from option_auditor.strategies.darvas import DarvasBoxStrategy
+from option_auditor.common.screener_utils import ScreeningRunner, run_screening_strategy
 
 # --- IMPORT NEWLY REFACTORED STRATEGIES ---
 from option_auditor.strategies.market import (
@@ -64,41 +66,40 @@ def screen_turtle_setups(ticker_list: list = None, time_frame: str = "1d", regio
     Supports multiple timeframes.
     DELEGATES TO: option_auditor/strategies/turtle.py
     """
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
-
-    def strategy(ticker, df):
-        return TurtleStrategy(ticker, df, check_mode=check_mode).analyze()
-
-    return runner.run(strategy)
+    return run_screening_strategy(
+        TurtleStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region,
+        check_mode=check_mode
+    )
 
 def screen_5_13_setups(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for 5/13 and 5/21 EMA Crossovers (Momentum Breakouts).
     DELEGATES TO: option_auditor/strategies/five_thirteen.py
     """
-    from option_auditor.strategies.five_thirteen import FiveThirteenStrategy
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
-
-    def strategy(ticker, df):
-        return FiveThirteenStrategy(ticker, df, check_mode=check_mode).analyze()
-
-    results = runner.run(strategy)
-    # Sort by "Freshness" (Breakouts first)
-    results.sort(key=lambda x: 0 if "FRESH" in x['signal'] else 1)
-    return results
+    return run_screening_strategy(
+        FiveThirteenStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region,
+        check_mode=check_mode,
+        sorting_key=lambda x: 0 if "FRESH" in x['signal'] else 1
+    )
 
 def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
     """
     Screens for Darvas Box Breakouts.
     DELEGATES TO: option_auditor/strategies/darvas.py
     """
-    from option_auditor.strategies.darvas import DarvasBoxStrategy
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
-
-    def strategy(ticker, df):
-        return DarvasBoxStrategy(ticker, df, check_mode=check_mode).analyze()
-
-    return runner.run(strategy)
+    return run_screening_strategy(
+        DarvasBoxStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region,
+        check_mode=check_mode
+    )
 
 def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: float = 0.01, region: str = "us", check_mode: bool = False, time_frame: str = "1d", account_size: float = DEFAULT_ACCOUNT_SIZE) -> list:
     """
@@ -110,13 +111,6 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         logger.warning(f"risk_per_trade_pct {risk_per_trade_pct} out of bounds (0.001-0.1). Resetting to 0.01.")
         risk_per_trade_pct = 0.01
 
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
-
-    def strategy(ticker, df):
-        return IsaStrategy(ticker, df, check_mode=check_mode, account_size=account_size, risk_per_trade_pct=risk_per_trade_pct).analyze()
-
-    results = runner.run(strategy)
-
     # Sort by signal priority
     def sort_key(x):
         s = x.get('signal', '')
@@ -124,8 +118,16 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
         if "WATCH" in s: return 1
         return 2
 
-    results.sort(key=sort_key)
-    return results
+    return run_screening_strategy(
+        IsaStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region,
+        check_mode=check_mode,
+        sorting_key=sort_key,
+        account_size=account_size,
+        risk_per_trade_pct=risk_per_trade_pct
+    )
 
 def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
@@ -133,12 +135,6 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
     FIX: Removed fixed period limits (5-60d). Now detects geometric turns.
     DELEGATES TO: option_auditor/strategies/fourier.py
     """
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
-
-    def strategy(ticker, df):
-        return FourierStrategy(ticker, df).analyze()
-
-    results = runner.run(strategy)
     # Sort by strength (descending)
     def get_sort_key(x):
         if not x: return 0
@@ -150,8 +146,14 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
                 return 0
         return s
 
-    results.sort(key=get_sort_key, reverse=True)
-    return results
+    return run_screening_strategy(
+        FourierStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region,
+        sorting_key=get_sort_key,
+        reverse_sort=True
+    )
 
 def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
@@ -160,9 +162,9 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
     Bearish: Price Higher High, RSI Lower High.
     DELEGATES TO: option_auditor/strategies/rsi_divergence.py
     """
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
-
-    def strategy(ticker, df):
-        return RsiDivergenceStrategy(ticker, df).analyze()
-
-    return runner.run(strategy)
+    return run_screening_strategy(
+        RsiDivergenceStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region
+    )

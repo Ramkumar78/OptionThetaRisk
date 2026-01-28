@@ -66,7 +66,7 @@ def test_calculate_hilbert_phase_math():
         assert -np.pi <= phase <= np.pi
         assert strength >= 0
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
 def test_screen_fourier_cycles_integration(mock_fetch):
     # Setup Data
     dates = pd.date_range(end=pd.Timestamp.now(), periods=100)
@@ -124,7 +124,7 @@ def test_screen_fourier_cycles_integration(mock_fetch):
 
         pass
 
-@patch('option_auditor.screener.fetch_batch_data_safe', return_value=pd.DataFrame())
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe', return_value=pd.DataFrame())
 def test_screen_fourier_empty(mock_fetch):
     results = screen_fourier_cycles(ticker_list=["EMPTY"])
     assert len(results) == 0

@@ -76,3 +76,5 @@
 - **Inconsistent/Conditional Imports**: Removed unnecessary `try...except` block for `pandas_ta` in `screener.py`.
 - **God Object / Complex Logic in `webapp/blueprints/screener_routes.py`**: Extracted business logic (specifically `check_unified_stock`) to `webapp/services/check_service.py`.
 - **Hardcoded Market Regime Logic**: Replaced hardcoded VIX thresholds with constants in `option_auditor/common/constants.py`.
+- **Screener Boilerplate**: Implemented `run_screening_strategy` in `screener_utils.py` and refactored `screener.py` to use it, reducing code duplication.
+- **Inconsistent Strategy Invocation**: Standardized strategy invocation in `screener.py` using the generic runner and consistent top-level imports.
