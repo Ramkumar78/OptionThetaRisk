@@ -1,11 +1,8 @@
 import logging
-from option_auditor.quant_engine import QuantPhysicsEngine
+from option_auditor.strategies.math_utils import generate_human_verdict
 
 # Configure logger
 logger = logging.getLogger(__name__)
-
-# Export centralized verdict logic for unified_screener
-generate_human_verdict = QuantPhysicsEngine.generate_human_verdict
 
 # Import Unified Screener
 from option_auditor.unified_screener import screen_universal_dashboard

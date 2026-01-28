@@ -6,10 +6,13 @@ from option_auditor.screener import screen_quantum_setups
 
 class TestQuantumScreenerCalculations(unittest.TestCase):
 
-    @patch('option_auditor.common.screener_utils.get_cached_market_data')
-    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
-    @patch('option_auditor.screener.QuantPhysicsEngine')
-    def test_risk_management_calculations(self, mock_engine, mock_fetch, mock_cache):
+    @patch('option_auditor.strategies.quantum.get_cached_market_data')
+    @patch('option_auditor.strategies.quantum.fetch_batch_data_safe')
+    @patch('option_auditor.strategies.quantum.calculate_hurst')
+    @patch('option_auditor.strategies.quantum.shannon_entropy')
+    @patch('option_auditor.strategies.quantum.kalman_filter')
+    @patch('option_auditor.strategies.quantum.generate_human_verdict')
+    def test_risk_management_calculations(self, mock_verdict, mock_kalman, mock_entropy, mock_hurst, mock_fetch, mock_cache):
         # Setup Mock Data
         dates = pd.date_range(start='2023-01-01', periods=250, freq='D')
 
@@ -32,15 +35,13 @@ class TestQuantumScreenerCalculations(unittest.TestCase):
         mock_fetch.return_value = data
 
         # Mock QuantPhysicsEngine to return values triggering a BUY
-        mock_engine.calculate_hurst.return_value = 0.8
-        mock_engine.shannon_entropy.return_value = 0.5
+        mock_hurst.return_value = 0.8
+        mock_entropy.return_value = 0.5
         # Provide dummy series for kalman/breakout
-        mock_engine.kalman_filter.return_value = pd.Series([100]*250)
-        mock_engine.instantaneous_phase.return_value = 0.0
-        mock_engine.analyze_breakout.return_value = {}
+        mock_kalman.return_value = pd.Series([100]*250)
 
         # Force a "BUY" verdict so we check the Long logic
-        mock_engine.generate_human_verdict.return_value = ("BUY (🔥 Strong)", "Test Rationale")
+        mock_verdict.return_value = ("BUY (🔥 Strong)", "Test Rationale")
 
         # Run Screener
         # Use simple list to avoid resolving region tickers if we mock cache
@@ -49,12 +50,14 @@ class TestQuantumScreenerCalculations(unittest.TestCase):
         self.assertEqual(len(results), 1)
         res = results[0]
 
-        atr = res['ATR']
-        price = res['price']
-        target = res['Target']
-        stop = res['Stop Loss']
+        # Data has TR=10 (105-95). ATR(14) should be 10.
+        atr = res.get('ATR')
+        price = res.get('price')
+        target = res.get('Target')
+        stop = res.get('Stop Loss')
 
         # Verify ATR is approx 10
+        self.assertIsNotNone(atr)
         self.assertAlmostEqual(atr, 10.0, places=1)
 
         # Verify Stop Loss: Price - 2.5 * ATR (New Requirement)

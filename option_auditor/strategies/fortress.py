@@ -55,9 +55,12 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None, time_frame: str
             if ticker not in ticker_list: continue
 
             df = df.dropna(how='all')
-            if len(df) < 100: continue
+            if len(df) < 100:
+                 logger.debug(f"{ticker}: Insufficient data {len(df)}")
+                 continue
 
             curr_close = df['Close'].iloc[-1]
+            logger.debug(f"{ticker}: Close={curr_close}")
 
             # --- CRITICAL FILTER: DEAD MONEY CHECK ---
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
@@ -66,6 +69,7 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None, time_frame: str
             atr_pct = (atr / curr_close) * 100
 
             if atr_pct < 2.0 and current_vix < 20:
+                logger.debug(f"{ticker}: Dead Money (ATR% {atr_pct:.2f} < 2.0)")
                 continue
 
             sma_50 = df['Close'].rolling(50).mean().iloc[-1]
@@ -73,14 +77,18 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None, time_frame: str
 
             trend_status = "Bullish" if curr_close > sma_200 else "Neutral"
 
-            if curr_close < sma_50: continue
+            if curr_close < sma_50:
+                logger.debug(f"{ticker}: Below SMA50 ({curr_close} < {sma_50})")
+                continue
 
             # --- STRIKE CALCULATION ---
             ema_20 = ta.ema(df['Close'], length=20).iloc[-1]
 
             safe_floor = ema_20 - (safety_k * atr)
 
-            if safe_floor >= curr_close: continue
+            if safe_floor >= curr_close:
+                logger.debug(f"{ticker}: Safe Floor >= Price ({safe_floor} >= {curr_close})")
+                continue
 
             if curr_close < 100:
                 short_strike = float(int(safe_floor))

@@ -94,18 +94,17 @@ def test_screeners_include_company_name(mock_ticker, mock_cached, mock_batch, mo
             if res_mms:
                 # screen_mms_ote_setups returns None if no signal, let's force a signal?
                 # It's hard to force OTE signal with simple mock data.
-                # However, we can check if the code *attempts* to add it if we inspect result keys
-                # Or we can just trust the code inspection for this one if it returns None.
-                # But let's check code logic: if it returns a dict, it should have the key.
                 pass
 
-            # 5. Quantum (Existing)
+            # 5. Quantum (Updated)
             with patch('option_auditor.common.screener_utils.get_cached_market_data') as mock_cache_q:
                  mock_cache_q.return_value = pd.concat({ticker: mock_df}, axis=1)
                  # Mock physics engine to return valid verdict
-                 with patch('option_auditor.quant_engine.QuantPhysicsEngine.calculate_hurst', return_value=0.7):
-                     with patch('option_auditor.quant_engine.QuantPhysicsEngine.generate_human_verdict', return_value=("BUY", "Rationale")):
-                         res_q = screen_quantum_setups(ticker_list=[ticker])
-                         if res_q:
-                             assert 'company_name' in res_q[0], "Quantum Screener missing company_name"
-                             assert res_q[0]['company_name'] == "Apple Inc."
+                 with patch('option_auditor.strategies.quantum.calculate_hurst', return_value=0.7):
+                     with patch('option_auditor.strategies.quantum.generate_human_verdict', return_value=("BUY", "Rationale")):
+                         with patch('option_auditor.strategies.quantum.shannon_entropy', return_value=0.5):
+                             with patch('option_auditor.strategies.quantum.kalman_filter', return_value=pd.Series([100]*200)):
+                                 res_q = screen_quantum_setups(ticker_list=[ticker])
+                                 if res_q:
+                                     assert 'company_name' in res_q[0], "Quantum Screener missing company_name"
+                                     assert res_q[0]['company_name'] == "Apple Inc."

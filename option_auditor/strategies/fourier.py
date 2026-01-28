@@ -1,83 +1,16 @@
 from .base import BaseStrategy
 import pandas as pd
 import numpy as np
-from scipy.signal import hilbert, detrend
 import pandas_ta as ta
 from option_auditor.common.constants import TICKER_NAMES
 from option_auditor.common.data_utils import _calculate_trend_breakout_date
+from option_auditor.strategies.math_utils import calculate_hilbert_phase, calculate_dominant_cycle
 
 class FourierStrategy(BaseStrategy):
     def __init__(self, ticker: str, df: pd.DataFrame, check_mode: bool = False):
         self.ticker = ticker
         self.df = df
         self.check_mode = check_mode
-
-    def _calculate_hilbert_phase(self, prices):
-        """
-        Calculates Instantaneous Phase using the Hilbert Transform.
-        FIX: Replaces rigid FFT with Analytic Signal for non-stationary data.
-        Returns:
-            - phase: (-pi to +pi) where -pi/pi is a trough/peak.
-            - strength: Magnitude of the cycle (Amplitude).
-        """
-        try:
-            if len(prices) < 30: return None, None
-
-            # 1. Log Returns to normalize magnitude
-            # We work with price deviations, but log prices are safer for trends
-            log_prices = np.log(prices)
-
-            # 2. Detrend (Linear) to isolate oscillatory component
-            # 'linear' detrending removes the primary trend so we see the cycle
-            detrended = detrend(log_prices, type='linear')
-
-            # 3. Apply Hilbert Transform to get Analytic Signal
-            analytic_signal = hilbert(detrended)
-
-            # 4. Extract Phase (Angle) and Amplitude (Abs)
-            # Phase ranges from -pi to +pi radians
-            phase = np.angle(analytic_signal)[-1]
-            amplitude = np.abs(analytic_signal)[-1]
-
-            return phase, amplitude
-
-        except Exception:
-            return None, None
-
-    def _calculate_dominant_cycle(self, prices):
-        """
-        Uses FFT to find the dominant cycle period (in days) of a price series.
-        Returns: (period_days, current_phase_position)
-        """
-        N = len(prices)
-        if N < 64: return None
-
-        window_size = 64
-        y = np.array(prices[-window_size:])
-        x = np.arange(window_size)
-
-        p = np.polyfit(x, y, 1)
-        trend = np.polyval(p, x)
-        detrended = y - trend
-
-        windowed = detrended * np.hanning(window_size)
-
-        fft_output = np.fft.rfft(windowed)
-        frequencies = np.fft.rfftfreq(window_size)
-
-        amplitudes = np.abs(fft_output)
-
-        peak_idx = np.argmax(amplitudes[1:]) + 1
-
-        dominant_freq = frequencies[peak_idx]
-        period = 1.0 / dominant_freq if dominant_freq > 0 else 0
-
-        current_val = detrended[-1]
-        cycle_range = np.max(detrended) - np.min(detrended)
-
-        rel_pos = current_val / (cycle_range / 2.0) if cycle_range > 0 else 0
-
-        return round(period, 1), rel_pos
 
     def analyze(self) -> dict:
         try:
@@ -91,7 +24,7 @@ class FourierStrategy(BaseStrategy):
             # Use 'Close' series values
             closes = df['Close'].values
 
-            phase, strength = self._calculate_hilbert_phase(closes)
+            phase, strength = calculate_hilbert_phase(closes)
 
             if phase is None: return None
 
@@ -131,7 +64,7 @@ class FourierStrategy(BaseStrategy):
                 pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
 
             # Calculate dominant period for context
-            period, rel_pos = self._calculate_dominant_cycle(closes) or (0, 0)
+            period, rel_pos = calculate_dominant_cycle(closes) or (0, 0)
 
             # ATR for Stop/Target
             if 'ATR' not in df.columns:

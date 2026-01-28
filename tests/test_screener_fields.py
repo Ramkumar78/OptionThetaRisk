@@ -165,7 +165,7 @@ class TestScreenerFields(unittest.TestCase):
             self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.get_cached_market_data')
-    @patch('option_auditor.common.screener_utils._get_market_regime')
+    @patch('option_auditor.strategies.fortress._get_market_regime')
     def test_fortress_screener_fields(self, mock_vix, mock_cached):
         mock_vix.return_value = 15.0
         mock_cached.return_value = self.mock_df
@@ -175,10 +175,10 @@ class TestScreenerFields(unittest.TestCase):
             self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.get_cached_market_data')
-    @patch('option_auditor.quant_engine.QuantPhysicsEngine.calculate_hurst')
-    @patch('option_auditor.quant_engine.QuantPhysicsEngine.shannon_entropy')
-    @patch('option_auditor.quant_engine.QuantPhysicsEngine.kalman_filter')
-    @patch('option_auditor.quant_engine.QuantPhysicsEngine.generate_human_verdict')
+    @patch('option_auditor.strategies.quantum.calculate_hurst')
+    @patch('option_auditor.strategies.quantum.shannon_entropy')
+    @patch('option_auditor.strategies.quantum.kalman_filter')
+    @patch('option_auditor.strategies.quantum.generate_human_verdict')
     def test_quantum_screener_fields(self, mock_verdict, mock_kalman, mock_entropy, mock_hurst, mock_cached):
         mock_cached.return_value = self.mock_df
         mock_hurst.return_value = 0.6
