@@ -3,7 +3,6 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import logging
-from option_auditor.unified_screener import analyze_ticker_hardened, get_market_regime
 from option_auditor.backtesting_strategies import get_strategy
 
 logging.basicConfig(level=logging.INFO)

@@ -52,7 +52,7 @@ def test_unified_screener_execution(mock_yf_download):
     mock_yf_download.return_value = batch_df
 
     # Mock Regime to GREEN to allow scanning
-    with patch("option_auditor.unified_screener.get_market_regime", return_value=("GREEN", "Test Mode")):
+    with patch("option_auditor.unified_screener.get_market_regime_verdict", return_value=("GREEN", "Test Mode")):
         # We also need to patch fetch_batch_data_safe since screen_universal_dashboard uses it
         with patch("option_auditor.common.data_utils.fetch_batch_data_safe", return_value=batch_df):
             response = screen_universal_dashboard(ticker_list=tickers)
