@@ -9,20 +9,20 @@
     - `screen_quantum_setups`
     - `screen_alpha_101`
     - `screen_options_only_strategy`
-    - `screen_5_13_setups`
-    - `screen_darvas_box`
     - `screen_mms_ote_setups`
     - `screen_my_strategy`
 - **Impact**: Extremely difficult to maintain, test, and extend. High risk of breaking existing functionality.
 - **Priority**: High
 - **Status**: Partially Addressed.
-    - `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, `screen_bollinger_squeeze`, `screen_rsi_divergence`, and `screen_fourier_cycles` have been refactored to `option_auditor/strategies/`.
-    - `screen_liquidity_grabs` and `screen_dynamic_volatility_fortress` are being refactored to `option_auditor/strategies/` (In Progress).
+    - `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, `screen_bollinger_squeeze`, `screen_rsi_divergence`, `screen_fourier_cycles`, `screen_liquidity_grabs`, and `screen_dynamic_volatility_fortress` have been refactored to `option_auditor/strategies/`.
+    - **[NEW]** `screen_5_13_setups` refactored to `option_auditor/strategies/five_thirteen.py`.
+    - **[NEW]** `screen_darvas_box` refactored to `option_auditor/strategies/darvas.py`.
 
 ## 2. Missing/Incomplete Unit Tests
 - **Issue**: Comprehensive tests for all screener functions are lacking. Many strategies rely on "happy path" tests or implicit integration tests via `screener.py`.
 - **Impact**: Increases risk of regression when refactoring. Hard to verify individual strategy logic.
 - **Priority**: High
+- **Status**: In Progress. Added direct unit tests for `FiveThirteenStrategy` and `DarvasBoxStrategy`.
 
 ## 3. Low-Level Math Mixed with Business Logic
 - **Issue**: Mathematical functions like `_calculate_hilbert_phase`, `_calculate_dominant_cycle` are defined directly inside `screener.py`.
