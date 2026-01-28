@@ -1,6 +1,12 @@
 # Technical Debt Log
 
-## 1. God Object / Complex Logic in `option_auditor/screener.py`
+## 1. Potential Dead Code in `option_auditor/screener.py`
+- **Issue**: There are unused imports (e.g. `traceback`, `time`) remaining after refactoring.
+- **Impact**: Clutters the codebase.
+- **Priority**: Low
+- **Status**: Identified.
+
+## 2. God Object / Complex Logic in `option_auditor/screener.py`
 - **Issue**: The file is approx 1700 lines long and contains all screening logic, mixed levels of abstraction, and repetitive patterns.
 - **Specifics**: The following functions are still monolithic and need extraction:
     - `screen_market`
@@ -15,7 +21,7 @@
     - All major strategies including `screen_market`, `screen_hybrid_strategy`, `screen_master_convergence`, `screen_alpha_101`, `screen_mms_ote_setups`, `screen_my_strategy`, and `screen_monte_carlo_forecast` have been extracted to `option_auditor/strategies/`.
     - `option_auditor/screener.py` now serves as a facade importing these strategies.
 
-## 2. Missing/Incomplete Unit Tests
+## 3. Missing/Incomplete Unit Tests
 - **Issue**: Comprehensive tests for all screener functions are lacking. Many strategies rely on "happy path" tests or implicit integration tests via `screener.py`.
 - **Impact**: Increases risk of regression when refactoring. Hard to verify individual strategy logic.
 - **Priority**: High
@@ -23,7 +29,7 @@
     - Added unit tests for new strategy modules: `tests/strategies/test_market.py`, `tests/strategies/test_mms_ote.py`, `tests/strategies/test_alpha.py`, `tests/strategies/test_hybrid.py`, `tests/strategies/test_monte_carlo.py`.
     - Existing tests updated to reflect refactoring.
 
-## 3. Low-Level Math Mixed with Business Logic
+## 4. Low-Level Math Mixed with Business Logic
 - **Issue**: Mathematical functions like `_calculate_hilbert_phase`, `_calculate_dominant_cycle` are defined directly inside `screener.py`.
 - **Impact**: Reduces readability and reusability. Harder to test math in isolation.
 - **Priority**: Medium
@@ -32,13 +38,13 @@
     - `_calculate_hilbert_phase` moved to `option_auditor/strategies/fourier.py`.
     - `_calculate_dominant_cycle` moved to `option_auditor/strategies/utils.py`.
 
-## 4. Inconsistent Error Handling
+## 5. Inconsistent Error Handling
 - **Issue**: Many routes in `webapp/blueprints/screener_routes.py` used generic `try...except Exception` blocks.
 - **Impact**: Poor user experience and difficult debugging.
 - **Priority**: Medium
 - **Status**: Addressed via `handle_screener_errors` decorator in `webapp/blueprints/screener_routes.py`.
 
-## 5. God Object in `option_auditor/unified_backtester.py`
+## 6. God Object in `option_auditor/unified_backtester.py`
 - **Issue**: The `UnifiedBacktester` class contained a monolithic loop with hardcoded logic for 15+ strategies, violating the Single Responsibility Principle and Open/Closed Principle.
 - **Impact**: Adding new strategies required modifying the core loop, risking regressions in other strategies.
 - **Priority**: High
@@ -46,7 +52,7 @@
     - Extracted strategy logic into `option_auditor/backtesting_strategies.py` using a Strategy Pattern.
     - `UnifiedBacktester` now delegates logic to `AbstractBacktestStrategy` subclasses.
 
-## 6. Test Suite Fragmentation / Bloat
+## 7. Test Suite Fragmentation / Bloat
 - **Issue**: The `tests/` directory contained redundant and unmaintained files (e.g., `test_screener_coverage_new.py`) that had broken imports due to refactoring.
 - **Impact**: Hard to maintain tests, false positives/negatives, and confusion about which tests are authoritative.
 - **Priority**: Medium
@@ -54,21 +60,6 @@
     - Merged valid tests from `tests/test_screener_coverage_new.py` into `tests/test_screener_coverage.py`.
     - Fixed broken imports and mocks in `tests/test_screener_coverage.py`.
     - Deleted `tests/test_screener_coverage_new.py`.
-
-## 7. Dead/Commented Code
-- **Issue**: There are commented-out imports and deprecated code blocks in `screener.py`.
-- **Impact**: Confuses developers and clutters the codebase.
-- **Priority**: Low
-
-## 10. Hardcoded Market Regime Logic
-- **Issue**: `AbstractBacktestStrategy` contains hardcoded VIX thresholds (20, 28) for market regime determination.
-- **Impact**: Difficult to tune or reuse across the application.
-- **Priority**: Medium
-
-## 11. God Object / Complex Logic in `webapp/blueprints/screener_routes.py`
-- **Issue**: Route handlers contain significant business logic (ticker resolution, caching, result formatting) that should be in the service layer.
-- **Impact**: Hard to test routes, code duplication, violation of SoC.
-- **Priority**: High
 
 ## Resolved Items
 - **Monolithic Controller**: Refactored `webapp/app.py` to use Blueprints (`webapp/blueprints/`).
@@ -83,3 +74,5 @@
 - **Test Suite Fragmentation**: Consolidated and fixed `test_screener_coverage.py`.
 - **Duplicate Ticker Resolution in `screener_routes.py`**: Refactored routes to use `resolve_region_tickers` with standardized `check_trend` parameter.
 - **Inconsistent/Conditional Imports**: Removed unnecessary `try...except` block for `pandas_ta` in `screener.py`.
+- **God Object / Complex Logic in `webapp/blueprints/screener_routes.py`**: Extracted business logic (specifically `check_unified_stock`) to `webapp/services/check_service.py`.
+- **Hardcoded Market Regime Logic**: Replaced hardcoded VIX thresholds with constants in `option_auditor/common/constants.py`.
