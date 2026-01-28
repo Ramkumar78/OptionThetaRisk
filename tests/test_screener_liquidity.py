@@ -29,8 +29,8 @@ def test_screen_liquidity_grabs_bullish_sweep():
     # Low goes to 89, Close is 91 (Rejection)
     data.iloc[-1] = [95.0, 98.0, 89.0, 91.0, 2000000.0]
 
-    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch:
-        with patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+    with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch:
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker') as mock_prep:
             mock_prep.return_value = data
 
             results = screen_liquidity_grabs(["TEST"], time_frame="1h")
@@ -59,8 +59,8 @@ def test_screen_liquidity_grabs_bearish_sweep():
     # Current candle sweeps 110 (High=111) but closes below (109)
     data.iloc[-1] = [108.0, 111.0, 105.0, 109.0, 1000000.0]
 
-    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch:
-        with patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+    with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch:
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker') as mock_prep:
             mock_prep.return_value = data
 
             results = screen_liquidity_grabs(["TEST"], time_frame="1h")

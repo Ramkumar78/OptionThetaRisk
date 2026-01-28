@@ -1,6 +1,8 @@
 import os
 import resend
 import threading
+import functools
+from flask import jsonify, current_app
 
 def _allowed_filename(filename: str) -> bool:
     ALLOWED_EXTENSIONS = {".csv"}
@@ -52,3 +54,16 @@ def send_email_notification(subject, body):
         print(f"✅ Email sent successfully! ID: {email.get('id')}", flush=True)
     except Exception as e:
         print(f"❌ Failed to send email: {e}", flush=True)
+
+def handle_screener_errors(f):
+    """
+    Decorator to handle exceptions in screener routes.
+    """
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            current_app.logger.exception(f"Screener Error in {f.__name__}: {e}")
+            return jsonify({"error": str(e)}), 500
+    return wrapper

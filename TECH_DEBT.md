@@ -7,15 +7,15 @@
     - `screen_fourier_cycles` (Low-level math mixed with logic)
     - `screen_hybrid_strategy`
     - `screen_master_convergence`
-    - `screen_dynamic_volatility_fortress`
     - `screen_quantum_setups`
     - `screen_alpha_101`
     - `screen_options_only_strategy`
-    - `screen_liquidity_grabs`
     - `screen_rsi_divergence`
 - **Impact**: Extremely difficult to maintain, test, and extend. High risk of breaking existing functionality.
 - **Priority**: High
-- **Status**: Partially Addressed. `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, and `screen_bollinger_squeeze` have been refactored to `option_auditor/strategies/`.
+- **Status**: Partially Addressed.
+    - `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, and `screen_bollinger_squeeze` have been refactored to `option_auditor/strategies/`.
+    - `screen_liquidity_grabs` and `screen_dynamic_volatility_fortress` are being refactored to `option_auditor/strategies/` (In Progress).
 
 ## 2. Missing/Incomplete Unit Tests
 - **Issue**: Comprehensive tests for all screener functions are lacking. Many strategies rely on "happy path" tests or implicit integration tests via `screener.py`.
@@ -23,17 +23,19 @@
 - **Priority**: High
 
 ## 3. Low-Level Math Mixed with Business Logic
-- **Issue**: Mathematical functions like `_calculate_hilbert_phase`, `_calculate_dominant_cycle`, `_identify_swings`, `_detect_fvgs` are defined directly inside `screener.py` or alongside strategy logic.
+- **Issue**: Mathematical functions like `_calculate_hilbert_phase`, `_calculate_dominant_cycle` are defined directly inside `screener.py`.
 - **Impact**: Reduces readability and reusability. Harder to test math in isolation.
 - **Priority**: Medium
+- **Status**: Partially Addressed. `_identify_swings` and `_detect_fvgs` have been moved to `option_auditor/strategies/liquidity.py`.
 
 ## 4. Inconsistent Error Handling
-- **Issue**: Many routes in `webapp/blueprints/screener_routes.py` and functions in `screener.py` use generic `try...except Exception` blocks that just return 500 or `None` without specific error details or recovery mechanisms.
+- **Issue**: Many routes in `webapp/blueprints/screener_routes.py` used generic `try...except Exception` blocks.
 - **Impact**: Poor user experience and difficult debugging.
 - **Priority**: Medium
+- **Status**: Addressed via `handle_screener_errors` decorator in `webapp/blueprints/screener_routes.py`.
 
 ## 5. Complex Functions (Specifics)
-- **Issue**: `screen_options_only_strategy` and `screen_dynamic_volatility_fortress` are very long and contain nested logic.
+- **Issue**: `screen_options_only_strategy` is very long and contains nested logic.
 - **Impact**: Reduces readability and maintainability.
 - **Priority**: Low
 
