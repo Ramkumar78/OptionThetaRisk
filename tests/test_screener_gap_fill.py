@@ -3,19 +3,20 @@ from unittest.mock import patch, MagicMock
 import pandas as pd
 import numpy as np
 from option_auditor.screener import (
-    _get_filtered_sp500,
-    fetch_data_with_retry,
-    _prepare_data_for_ticker,
     screen_turtle_setups,
     screen_5_13_setups,
     screen_darvas_box,
     screen_mms_ote_setups,
     screen_bull_put_spreads,
-    screen_trend_followers_isa,
-    SECTOR_COMPONENTS,
-    _identify_swings,
-    _detect_fvgs
+    screen_trend_followers_isa
 )
+from option_auditor.common.screener_utils import _get_filtered_sp500
+from option_auditor.common.data_utils import (
+    fetch_data_with_retry,
+    prepare_data_for_ticker as _prepare_data_for_ticker
+)
+from option_auditor.common.constants import SECTOR_COMPONENTS
+from option_auditor.strategies.liquidity import _identify_swings, _detect_fvgs
 from option_auditor.common.screener_utils import resolve_ticker, _calculate_put_delta
 
 # --- Mocks ---
@@ -73,13 +74,13 @@ def test_screen_turtle_setups_exceptions(mock_yf_download):
     mock_yf_download.return_value = pd.DataFrame() # Empty batch
 
     # Mock prepare to raise exception or return None
-    with patch("option_auditor.screener._prepare_data_for_ticker", side_effect=Exception("Data error")):
+    with patch("option_auditor.common.screener_utils.prepare_data_for_ticker", side_effect=Exception("Data error")):
         res = screen_turtle_setups(["AAPL"])
         assert res == []
 
 def test_screen_5_13_setups_edge_cases():
     # Test with insufficient data
-    with patch("option_auditor.screener._prepare_data_for_ticker", return_value=pd.DataFrame()):
+    with patch("option_auditor.common.screener_utils.prepare_data_for_ticker", return_value=pd.DataFrame()):
         res = screen_5_13_setups(["AAPL"])
         assert res == []
 
@@ -110,7 +111,7 @@ def test_screen_darvas_box_logic():
     df.loc[dates[-2], "Close"] = 100 # Previous was below
 
     # Mock prepare
-    with patch("option_auditor.screener._prepare_data_for_ticker", return_value=df):
+    with patch("option_auditor.common.screener_utils.prepare_data_for_ticker", return_value=df):
         res = screen_darvas_box(["AAPL"])
         # Should find at least one result or handle it gracefully
         # Note: Threading is used, so we need to ensure mock works in threads or use side_effect

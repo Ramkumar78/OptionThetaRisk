@@ -4,9 +4,10 @@ import numpy as np
 from unittest.mock import patch, MagicMock
 from option_auditor.screener import (
     screen_trend_followers_isa, screen_fourier_cycles,
-    _calculate_dominant_cycle, fetch_data_with_retry,
     screen_mms_ote_setups
 )
+from option_auditor.strategies.utils import calculate_dominant_cycle as _calculate_dominant_cycle
+from option_auditor.common.data_utils import fetch_data_with_retry
 
 # --- Helper to create synthetic data ---
 def create_trend_data(periods=300, start_price=100, trend='up', volatility=1.0):
@@ -132,7 +133,7 @@ class TestScreenerImprovements:
         results = screen_trend_followers_isa(['PENNY', 'PENNY2'])
         assert len(results) == 0
 
-    @patch('option_auditor.screener.fetch_data_with_retry')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_isa_single_ticker_mode(self, mock_fetch):
         """Test the single ticker path (Check Stock)."""
         df = create_trend_data(periods=300)
@@ -145,7 +146,7 @@ class TestScreenerImprovements:
         assert len(results) == 1
         assert results[0]['ticker'] == 'AAPL'
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_fourier_cycles(self, mock_fetch):
         """Test Fourier Transform Cycle Detection."""
         # Create a perfect sine wave with 20 day period
@@ -188,8 +189,8 @@ class TestScreenerImprovements:
         res = _calculate_dominant_cycle(prices)
         assert res is None
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
-    @patch('option_auditor.screener._prepare_data_for_ticker')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.prepare_data_for_ticker')
     def test_mms_bullish_setup(self, mock_prep, mock_fetch):
         """Test Bullish OTE Logic (Market Maker Buy Model)."""
         # Logic:

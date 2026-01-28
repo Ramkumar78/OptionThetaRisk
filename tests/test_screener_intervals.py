@@ -2,10 +2,10 @@ import unittest
 from unittest.mock import MagicMock, patch
 import pandas as pd
 import pandas_ta as ta
-from option_auditor.screener import _screen_tickers
+from option_auditor.strategies.market import screen_tickers_helper as _screen_tickers
 
 class TestScreenerIntervals(unittest.TestCase):
-    @patch('option_auditor.screener.yf.download')
+    @patch('yfinance.download')
     def test_screen_tickers_weekly(self, mock_download):
         # Mock Data for Weekly: 2 years of weekly data
         dates = pd.date_range(start='2022-01-01', end='2024-01-01', freq='W-FRI')
@@ -34,7 +34,7 @@ class TestScreenerIntervals(unittest.TestCase):
         # Verify 1D % (which is 1W % for weekly interval logic) is calculated
         self.assertIsNotNone(res['pct_change_1d'])
 
-    @patch('option_auditor.screener.yf.download')
+    @patch('yfinance.download')
     def test_screen_tickers_monthly(self, mock_download):
         # Mock Data for Monthly: 5 years of monthly data
         # 'ME' alias is not available in pandas < 2.2, use 'M'

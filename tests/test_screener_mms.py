@@ -3,7 +3,8 @@ import pytest
 import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock
-from option_auditor.screener import _identify_swings, _detect_fvgs, screen_mms_ote_setups
+from option_auditor.strategies.liquidity import _identify_swings, _detect_fvgs
+from option_auditor.strategies.mms_ote import screen_mms_ote_setups
 
 # --- Test Data Fixtures ---
 
@@ -115,8 +116,8 @@ def test_detect_fvgs():
 
 def test_screen_mms_ote_setup(bearish_ote_df):
     # Mock batch fetch and prepare
-    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch, \
-         patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+    with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch, \
+         patch('option_auditor.common.screener_utils.prepare_data_for_ticker') as mock_prep:
         
         mock_fetch.return_value = MagicMock() # Just to pass the check
         mock_prep.return_value = bearish_ote_df
@@ -135,8 +136,8 @@ def test_screen_mms_ote_setup(bearish_ote_df):
         assert res['stop_loss'] == 115.0
 
 def test_screen_mms_no_setup(sample_df):
-    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch, \
-         patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+    with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch, \
+         patch('option_auditor.common.screener_utils.prepare_data_for_ticker') as mock_prep:
         
         mock_fetch.return_value = MagicMock()
         mock_prep.return_value = sample_df
@@ -146,8 +147,8 @@ def test_screen_mms_no_setup(sample_df):
         assert len(results) == 0
 
 def test_screen_mms_empty_data():
-    with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch, \
-         patch('option_auditor.screener._prepare_data_for_ticker') as mock_prep:
+    with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch, \
+         patch('option_auditor.common.screener_utils.prepare_data_for_ticker') as mock_prep:
         
         mock_fetch.return_value = MagicMock()
         mock_prep.return_value = None # Prepare returns None if data issue

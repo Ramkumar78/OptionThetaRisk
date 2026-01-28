@@ -3,7 +3,8 @@ import pytest
 import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock
-from option_auditor.screener import _screen_tickers, screen_market, screen_sectors, screen_turtle_setups, screen_5_13_setups, screen_darvas_box, SECTOR_NAMES, SECTOR_COMPONENTS
+from option_auditor.strategies.market import screen_tickers_helper as _screen_tickers
+from option_auditor.screener import screen_market, screen_sectors, screen_turtle_setups, screen_5_13_setups, screen_darvas_box, SECTOR_NAMES, SECTOR_COMPONENTS
 import sys
 import time
 
@@ -176,7 +177,7 @@ class TestScreenerCoverageExtended:
         # Continuous drop -> RSI very low -> OVERSOLD
         assert "OVERSOLD" in results[0]['signal']
 
-    @patch('option_auditor.screener._screen_tickers')
+    @patch('option_auditor.strategies.market.screen_tickers_helper')
     def test_screen_market_grouping(self, mock_screen):
         """Test that screen_market groups results correctly."""
         # Mock _screen_tickers return
@@ -193,7 +194,7 @@ class TestScreenerCoverageExtended:
         assert len(results["Technology (XLK)"]) == 1
         assert results["Technology (XLK)"][0]['ticker'] == 'AAPL'
 
-    @patch('option_auditor.screener._screen_tickers')
+    @patch('option_auditor.strategies.market.screen_tickers_helper')
     def test_screen_sectors(self, mock_screen):
         """Test screen_sectors logic."""
         mock_screen.return_value = [{'ticker': 'XLK'}]

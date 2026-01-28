@@ -5,9 +5,11 @@ import numpy as np
 from option_auditor.screener import (
     screen_market, screen_sectors, screen_turtle_setups,
     screen_5_13_setups, screen_darvas_box, screen_mms_ote_setups,
-    screen_bull_put_spreads, _screen_tickers, _prepare_data_for_ticker,
-    _calculate_put_delta
+    screen_bull_put_spreads
 )
+from option_auditor.strategies.market import screen_tickers_helper as _screen_tickers
+from option_auditor.common.data_utils import prepare_data_for_ticker as _prepare_data_for_ticker
+from option_auditor.common.screener_utils import _calculate_put_delta
 
 # --- Fixtures ---
 
@@ -101,7 +103,7 @@ def test_screen_market_integration(mock_yf_download, sample_daily_df):
 
     # Patch SECTOR_COMPONENTS to ensure AAPL/MSFT are mapped to XLK (Technology)
     # Otherwise test environment might not have the mapping
-    with patch('option_auditor.screener.SECTOR_COMPONENTS', {"XLK": ["AAPL", "MSFT"]}):
+    with patch('option_auditor.strategies.market.SECTOR_COMPONENTS', {"XLK": ["AAPL", "MSFT"]}):
         results = screen_market(iv_rank_threshold=30, rsi_threshold=70, time_frame='1d')
 
         # Should return a dict of sectors
