@@ -1,14 +1,4 @@
-import yfinance as yf
-import pandas as pd
-import numpy as np
-import math
-from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
-import time
-import traceback
-import pandas_ta as ta
-
 from option_auditor.quant_engine import QuantPhysicsEngine
 
 # Configure logger
