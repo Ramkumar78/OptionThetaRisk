@@ -96,7 +96,7 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
 
     return filtered_list
 
-def resolve_region_tickers(region: str) -> list:
+def resolve_region_tickers(region: str, check_trend: bool = False, only_watch: bool = False) -> list:
     """
     Helper to resolve ticker list based on region.
     Default: US (Sector Components + Watch)
@@ -114,10 +114,11 @@ def resolve_region_tickers(region: str) -> list:
     elif region == "india":
         return get_indian_tickers()
     elif region == "sp500":
-        # S&P 500 (Volume Filtered) + Watch List
-        # Note: We use check_trend=False to get the universe.
-        sp500 = _get_filtered_sp500(check_trend=False)
         watch_list = SECTOR_COMPONENTS.get("WATCH", [])
+        if only_watch:
+            return watch_list
+        # S&P 500 (Volume Filtered) + Watch List
+        sp500 = _get_filtered_sp500(check_trend=check_trend)
         return list(set(sp500 + watch_list))
     else: # us / combined default
         all_tickers = []

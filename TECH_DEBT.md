@@ -60,6 +60,16 @@
 - **Impact**: Confuses developers and clutters the codebase.
 - **Priority**: Low
 
+## 10. Hardcoded Market Regime Logic
+- **Issue**: `AbstractBacktestStrategy` contains hardcoded VIX thresholds (20, 28) for market regime determination.
+- **Impact**: Difficult to tune or reuse across the application.
+- **Priority**: Medium
+
+## 11. God Object / Complex Logic in `webapp/blueprints/screener_routes.py`
+- **Issue**: Route handlers contain significant business logic (ticker resolution, caching, result formatting) that should be in the service layer.
+- **Impact**: Hard to test routes, code duplication, violation of SoC.
+- **Priority**: High
+
 ## Resolved Items
 - **Monolithic Controller**: Refactored `webapp/app.py` to use Blueprints (`webapp/blueprints/`).
 - **Global State Usage**: Moved `screener_cache` to `webapp/cache.py`.
@@ -71,3 +81,5 @@
 - **Missing/Incomplete Unit Tests**: Added unit tests for extracted strategies.
 - **God Object in Unified Backtester**: Refactored to Strategy Pattern in `option_auditor/backtesting_strategies.py`.
 - **Test Suite Fragmentation**: Consolidated and fixed `test_screener_coverage.py`.
+- **Duplicate Ticker Resolution in `screener_routes.py`**: Refactored routes to use `resolve_region_tickers` with standardized `check_trend` parameter.
+- **Inconsistent/Conditional Imports**: Removed unnecessary `try...except` block for `pandas_ta` in `screener.py`.
