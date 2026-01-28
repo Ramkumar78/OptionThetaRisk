@@ -11,13 +11,12 @@ from option_auditor.screener import (
     screen_darvas_box,
     screen_mms_ote_setups,
     screen_bull_put_spreads,
-    resolve_ticker,
     screen_trend_followers_isa,
     SECTOR_COMPONENTS,
     _identify_swings,
-    _detect_fvgs,
-    _calculate_put_delta
+    _detect_fvgs
 )
+from option_auditor.common.screener_utils import resolve_ticker, _calculate_put_delta
 
 # --- Mocks ---
 
@@ -37,9 +36,9 @@ def test_get_filtered_sp500_fallback(mock_yf_download):
     # Simulate download exception
     mock_yf_download.side_effect = Exception("Download failed")
 
-    # Mock SP500_NAMES indirectly by patching get_sp500_tickers
-    with patch("option_auditor.screener.get_sp500_tickers", return_value=["AAPL", "GOOG"]):
-        with patch("option_auditor.screener.get_cached_market_data", return_value=pd.DataFrame()):
+    # Mock SP500_NAMES indirectly by patching get_sp500_tickers in screener_utils
+    with patch("option_auditor.common.screener_utils.get_sp500_tickers", return_value=["AAPL", "GOOG"]):
+        with patch("option_auditor.common.screener_utils.get_cached_market_data", return_value=pd.DataFrame()):
             res = _get_filtered_sp500(check_trend=True)
             # Should return base tickers (fallback)
             assert res == ["AAPL", "GOOG"]
@@ -153,7 +152,7 @@ def test_screen_bull_put_spreads_no_chain(mock_yf_ticker):
 
 def test_resolve_ticker():
     # Test standard resolution
-    with patch.dict("option_auditor.screener.TICKER_NAMES", {"AAPL": "Apple Inc."}):
+    with patch.dict("option_auditor.common.screener_utils.TICKER_NAMES", {"AAPL": "Apple Inc."}):
         assert resolve_ticker("AAPL") == "AAPL"
         assert resolve_ticker("Apple Inc.") == "AAPL"
         assert resolve_ticker("Apple") == "AAPL" # Partial
