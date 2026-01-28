@@ -13,7 +13,7 @@ from option_auditor.common.data_utils import (
     get_cached_market_data,
     _calculate_trend_breakout_date
 )
-from option_auditor.strategies.utils import calculate_dominant_cycle
+from option_auditor.strategies.math_utils import calculate_dominant_cycle
 
 logger = logging.getLogger(__name__)
 

@@ -63,10 +63,10 @@
     - Consolidated `test_master_screener_new.py` into `test_master_screener.py`.
     - Remaining `_new.py` files need review.
 
-## 10. God Object / Logic Duplication (QuantPhysicsEngine)
-- **Issue**: `QuantPhysicsEngine` in `option_auditor/quant_engine.py` contains low-level math logic (Hurst, Entropy) that is duplicated or overlaps with `strategies/fourier.py` and `strategies/utils.py`.
-- **Impact**: Maintenance burden, potential for inconsistent calculations.
-- **Priority**: Medium
+## 13. Slow Test Suite
+- **Issue**: The full test suite takes a long time to run or times out.
+- **Impact**: Slow feedback loop, reduced developer productivity.
+- **Priority**: High
 - **Status**: Open.
 
 ## Resolved Items
@@ -96,3 +96,6 @@
 - **Duplicate Logic in Unified Screener**: Addressed by refactoring `unified_screener.py` to remove duplicate regime check and strategy logic.
 - **Unused/Stale Code (PortfolioOptimizer)**: Deleted `option_auditor/optimization.py` and `tests/test_optimization.py`.
 - **Broken Tests due to Invalid Patch Paths**: Fixed 20+ test files by updating patch paths to correct locations (`common.screener_utils`, `strategies.*`, `yfinance`) and resolving `AttributeError`s caused by refactoring.
+- **God Object / Logic Duplication (QuantPhysicsEngine)**: Dismantled `QuantPhysicsEngine` and consolidated math logic into `option_auditor/strategies/math_utils.py`. Moved `analyze_breakout` to `option_auditor/strategies/market.py`.
+- **Duplicate Test Files**: Addressed by merging overlapping tests and clarifying strategy test locations.
+- **Unwanted/Stale Test Files**: Deleted `test_quantum_reproduce.py` and `test_screener_fortress_repro.py` after merging into main tests.
