@@ -4,17 +4,19 @@
 - **Issue**: The file is approx 1700 lines long and contains all screening logic, mixed levels of abstraction, and repetitive patterns.
 - **Specifics**: The following functions are still monolithic and need extraction:
     - `screen_market`
-    - `screen_fourier_cycles` (Low-level math mixed with logic)
     - `screen_hybrid_strategy`
     - `screen_master_convergence`
     - `screen_quantum_setups`
     - `screen_alpha_101`
     - `screen_options_only_strategy`
-    - `screen_rsi_divergence`
+    - `screen_5_13_setups`
+    - `screen_darvas_box`
+    - `screen_mms_ote_setups`
+    - `screen_my_strategy`
 - **Impact**: Extremely difficult to maintain, test, and extend. High risk of breaking existing functionality.
 - **Priority**: High
 - **Status**: Partially Addressed.
-    - `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, and `screen_bollinger_squeeze` have been refactored to `option_auditor/strategies/`.
+    - `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, `screen_bollinger_squeeze`, `screen_rsi_divergence`, and `screen_fourier_cycles` have been refactored to `option_auditor/strategies/`.
     - `screen_liquidity_grabs` and `screen_dynamic_volatility_fortress` are being refactored to `option_auditor/strategies/` (In Progress).
 
 ## 2. Missing/Incomplete Unit Tests
@@ -26,7 +28,7 @@
 - **Issue**: Mathematical functions like `_calculate_hilbert_phase`, `_calculate_dominant_cycle` are defined directly inside `screener.py`.
 - **Impact**: Reduces readability and reusability. Harder to test math in isolation.
 - **Priority**: Medium
-- **Status**: Partially Addressed. `_identify_swings` and `_detect_fvgs` have been moved to `option_auditor/strategies/liquidity.py`.
+- **Status**: Partially Addressed. `_identify_swings` and `_detect_fvgs` have been moved to `option_auditor/strategies/liquidity.py`. `_calculate_hilbert_phase` moved to `option_auditor/strategies/fourier.py`.
 
 ## 4. Inconsistent Error Handling
 - **Issue**: Many routes in `webapp/blueprints/screener_routes.py` used generic `try...except Exception` blocks.
