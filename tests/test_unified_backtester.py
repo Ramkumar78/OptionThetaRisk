@@ -63,6 +63,60 @@ def create_mock_df():
 
     return df
 
+def create_reentry_mock_df():
+    # Create ~3 years of data
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=800, freq='B')
+
+    # Construct a price series that:
+    # 1. Establishes a strong trend (Price > 50 > 150 > 200)
+    # 2. Pulls back below SMA 20 but stays above SMA 50/200
+    # 3. Crosses back above SMA 20 (Re-Entry Trigger)
+    # 4. But stays below previous High 20 (No Breakout Trigger)
+
+    # Base trend
+    x = np.linspace(0, 800, 800)
+    base_trend = 100 + (x * 0.2) # Steady uptrend from 100 to ~260
+
+    # Add a dip and recovery near the end
+    price = base_trend.copy()
+
+    # Last 50 days: Dip then Recover
+    # Day 750-770: Dip
+    price[750:770] -= 10
+    # Day 770-800: Recover slightly (cross SMA 20) but not new High
+    price[770:] -= 5
+
+    high = price + 2
+    low = price - 2
+    open_p = price # Simple open = close for this test
+
+    # SPY: Bullish
+    spy = np.linspace(300, 500, 800)
+    # VIX: Low
+    vix = np.full(800, 15)
+
+    data = {
+        ('Close', 'TEST'): price,
+        ('High', 'TEST'): high,
+        ('Low', 'TEST'): low,
+        ('Open', 'TEST'): open_p,
+        ('Volume', 'TEST'): [1000000] * 800,
+        ('Close', 'SPY'): spy,
+        ('Close', '^VIX'): vix,
+        # Dummy cols for SPY/VIX extra levels
+        ('High', 'SPY'): spy,
+        ('Low', 'SPY'): spy,
+        ('Open', 'SPY'): spy,
+        ('Volume', 'SPY'): [1] * 800,
+    }
+
+    columns = pd.MultiIndex.from_tuples(data.keys())
+    df = pd.DataFrame(data, index=dates)
+    df.columns = columns
+    return df
+
+# --- Tests from Base ---
+
 def test_fetch_data_success(mock_yf_download):
     mock_df = create_mock_df()
     mock_yf_download.return_value = mock_df
@@ -123,16 +177,6 @@ def test_run_master_strategy(mock_yf_download):
     assert "error" not in result
     assert result["ticker"] == "TEST"
     assert result["strategy"] == "MASTER"
-    # With stepped data, we should have trades
-    # But check if minervini (SMA alignment) passes
-    # SMA 200 needs to be established.
-    # Our data is 750 days. 500 up, 250 down.
-    # SMA 200 will be lagging price in uptrend. Price > 50 > 150 > 200 should hold eventually.
-
-    # If trades are 0, it might be due to strict Minervini or VIX.
-    # But assertion is just checking presence of keys, not trade count > 0 strictly if logic is tough.
-    # But for a test we want to see it works.
-    # Let's check keys.
     assert "trades" in result
     assert "win_rate" in result
 
@@ -166,3 +210,98 @@ def test_run_no_data(mock_yf_download):
 
     assert "error" in result
     assert result["error"] == "No data found"
+
+# --- Tests from New (Ported) ---
+
+def test_backtest_duration_calculation(mock_yf_download):
+    ticker = "TEST"
+    backtester = UnifiedBacktester(ticker)
+
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=1000, freq='D')
+    close = np.linspace(100, 200, 1000)
+    close[-10:] = 100
+
+    data = pd.DataFrame({
+        'Close': close,
+        'High': close + 5,
+        'Low': close - 5,
+        'Open': close,
+        'Volume': np.ones(1000) * 1000000
+    }, index=dates)
+
+    columns = pd.MultiIndex.from_product([['Close', 'High', 'Low', 'Open', 'Volume'], [ticker, 'SPY', '^VIX']])
+    mock_df = pd.DataFrame(np.tile(data.values, (1, 3)), index=dates, columns=columns)
+
+    mock_yf_download.return_value = mock_df
+
+    result = backtester.run()
+
+    assert 'buy_hold_days' in result
+    assert 'avg_days_held' in result
+    assert 'log' in result
+    assert result['buy_hold_days'] >= 728
+
+    if result['log']:
+        for trade in result['log']:
+            assert 'days' in trade
+            if trade['type'] == 'SELL':
+                 assert isinstance(trade['days'], int)
+
+def test_backtest_avg_days_held(mock_yf_download):
+    ticker = "TEST"
+    backtester = UnifiedBacktester(ticker)
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=1000, freq='D')
+    close = np.linspace(100, 200, 1000)
+    data = pd.DataFrame({
+        'Close': close,
+        'High': close + 5,
+        'Low': close - 5,
+        'Open': close,
+        'Volume': np.ones(1000) * 1000000
+    }, index=dates)
+    columns = pd.MultiIndex.from_product([['Close', 'High', 'Low', 'Open', 'Volume'], [ticker, 'SPY', '^VIX']])
+    mock_df = pd.DataFrame(np.tile(data.values, (1, 3)), index=dates, columns=columns)
+    mock_yf_download.return_value = mock_df
+
+    result = backtester.run()
+
+    assert isinstance(result['avg_days_held'], int)
+    assert isinstance(result['buy_hold_days'], int)
+
+# --- Tests from V2 (Ported) ---
+
+def test_reentry_logic_master(mock_yf_download):
+    mock_df = create_reentry_mock_df()
+    mock_yf_download.return_value = mock_df
+    bt = UnifiedBacktester("TEST", strategy_type="master")
+    result = bt.run()
+    assert "error" not in result
+    assert result["strategy"] == "MASTER"
+    assert result["trades"] >= 0
+    assert "buy_hold_return" in result
+    assert isinstance(result["buy_hold_return"], float)
+
+def test_exact_date_alignment(mock_yf_download):
+    mock_df = create_reentry_mock_df()
+    mock_yf_download.return_value = mock_df
+    bt = UnifiedBacktester("TEST", strategy_type="master")
+    result = bt.run()
+    assert "start_date" in result
+    assert "end_date" in result
+
+def test_isa_reentry_logic(mock_yf_download):
+    mock_df = create_reentry_mock_df()
+    mock_yf_download.return_value = mock_df
+    bt = UnifiedBacktester("TEST", strategy_type="isa")
+    result = bt.run()
+    assert result["strategy"] == "ISA"
+    assert result["trades"] >= 0
+
+def test_fetch_data_multiindex_handling(mock_yf_download):
+    mock_df = create_reentry_mock_df()
+    mock_yf_download.return_value = mock_df
+    bt = UnifiedBacktester("TEST")
+    df = bt.fetch_data()
+    assert isinstance(df, pd.DataFrame)
+    assert 'Close' in df.columns
+    assert 'Spy' in df.columns
