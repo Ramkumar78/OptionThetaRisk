@@ -337,17 +337,7 @@ def screen_bull_put():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-            ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-            ticker_list = get_uk_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-            filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
-            watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-            ticker_list = list(set(filtered_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=True)
 
     results = screener.screen_bull_put_spreads(ticker_list=ticker_list, time_frame=time_frame)
     current_app.logger.info(f"Bull Put Screen completed. Results: {len(results)}")
@@ -385,19 +375,7 @@ def screen_darvas():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
-        watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(filtered_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=True)
 
     results = screener.screen_darvas_box(ticker_list=ticker_list, time_frame=time_frame)
     current_app.logger.info(f"Darvas Screen completed. Results: {len(results)}")
@@ -416,19 +394,7 @@ def screen_ema():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        filtered_sp500 = screener._get_filtered_sp500(check_trend=True)
-        watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(filtered_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=True)
 
     results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
     current_app.logger.info(f"EMA Screen completed. Results: {len(results)}")
@@ -447,17 +413,8 @@ def screen_mms():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+    # Use only_watch=True for SP500 to avoid heavy load on intraday screens
+    ticker_list = resolve_region_tickers(region, check_trend=False, only_watch=True)
 
     results = screener.screen_mms_ote_setups(ticker_list=ticker_list, time_frame=time_frame)
     current_app.logger.info(f"MMS Screen completed. Results: {len(results)}")
@@ -476,17 +433,8 @@ def screen_liquidity_grabs():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        ticker_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
+    # Use only_watch=True for SP500 to avoid heavy load on intraday screens
+    ticker_list = resolve_region_tickers(region, check_trend=False, only_watch=True)
 
     results = screener.screen_liquidity_grabs(ticker_list=ticker_list, time_frame=time_frame, region=region)
     current_app.logger.info(f"Liquidity Grab Screen completed. Results: {len(results)}")
@@ -505,20 +453,7 @@ def screen_squeeze():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        # For squeeze, use S&P 500 filtered
-        filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
-        watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(filtered_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=False)
 
     results = screener.screen_bollinger_squeeze(ticker_list=ticker_list, time_frame=time_frame, region=region)
     current_app.logger.info(f"Squeeze Screen completed. Results: {len(results)}")
@@ -537,19 +472,7 @@ def screen_hybrid():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        raw_sp500 = screener.get_sp500_tickers()
-        watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(raw_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=False)
 
     results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=time_frame, region=region)
     current_app.logger.info(f"Hybrid Screen completed. Results: {len(results)}")
@@ -605,19 +528,7 @@ def screen_fourier():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
-        watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(filtered_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=False)
 
     results = screener.screen_fourier_cycles(ticker_list=ticker_list, time_frame=time_frame)
     current_app.logger.info(f"Fourier Screen completed. Results: {len(results)}")
@@ -636,19 +547,7 @@ def screen_rsi_divergence():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        filtered_sp500 = screener._get_filtered_sp500(check_trend=False)
-        watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(filtered_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=False)
 
     results = screener.screen_rsi_divergence(ticker_list=ticker_list, time_frame=time_frame, region=region)
     current_app.logger.info(f"RSI Divergence Screen completed. Results: {len(results)}")
@@ -666,19 +565,7 @@ def screen_universal():
     if cached:
         return jsonify(cached)
 
-    ticker_list = None
-    if region == "uk_euro":
-        ticker_list = screener.get_uk_euro_tickers()
-    elif region == "uk":
-        ticker_list = get_uk_tickers()
-    elif region == "india":
-        ticker_list = screener.get_indian_tickers()
-    elif region == "united_states":
-        ticker_list = get_united_states_stocks()
-    elif region == "sp500":
-        raw_sp500 = screener.get_sp500_tickers()
-        watch_list = screener.SECTOR_COMPONENTS.get("WATCH", [])
-        ticker_list = list(set(raw_sp500 + watch_list))
+    ticker_list = resolve_region_tickers(region, check_trend=False)
 
     results = screener.screen_universal_dashboard(ticker_list=ticker_list)
     current_app.logger.info(f"Universal Screen completed.")

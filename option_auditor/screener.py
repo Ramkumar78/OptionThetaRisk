@@ -7,10 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import time
 import traceback
-try:
-    import pandas_ta as ta # Moved to top level for global availability
-except ImportError as e:
-    raise ImportError("The 'pandas_ta' library is required. Please install it with 'pip install pandas_ta'.") from e
+import pandas_ta as ta
 
 from option_auditor.quant_engine import QuantPhysicsEngine
 
