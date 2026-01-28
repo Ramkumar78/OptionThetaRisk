@@ -4,7 +4,7 @@ import pandas as pd
 from option_auditor.screener import screen_bull_put_spreads
 from datetime import date, timedelta
 
-@patch('option_auditor.screener.yf.Ticker')
+@patch('option_auditor.strategies.bull_put.yf.Ticker')
 def test_screen_bull_put_valid(mock_ticker, mock_market_data):
     # Valid Bull Put:
     # 1. Price > SMA 50
@@ -45,7 +45,7 @@ def test_screen_bull_put_valid(mock_ticker, mock_market_data):
 
     # We need _calculate_put_delta to return -0.30 for one of them
     # Instead of patching the math, let's patch the math function helper
-    with patch('option_auditor.screener._calculate_put_delta') as mock_delta:
+    with patch('option_auditor.strategies.bull_put._calculate_put_delta') as mock_delta:
         # Return -0.30 for strike 95 (Short)
         # Return something else for others
         def delta_side_effect(S, K, T, r, sigma):
@@ -64,7 +64,7 @@ def test_screen_bull_put_valid(mock_ticker, mock_market_data):
         assert res['long_strike'] == 90.0
         assert res['roi_pct'] > 15.0
 
-@patch('option_auditor.screener.yf.Ticker')
+@patch('option_auditor.strategies.bull_put.yf.Ticker')
 def test_screen_bull_put_bearish_trend(mock_ticker, mock_market_data):
     df = mock_market_data(days=250, price=100.0)
     # Price < SMA 50
@@ -78,7 +78,7 @@ def test_screen_bull_put_bearish_trend(mock_ticker, mock_market_data):
     results = screen_bull_put_spreads(ticker_list=["BEAR"], check_mode=False) # check_mode False enforces filters
     assert len(results) == 0
 
-@patch('option_auditor.screener.yf.Ticker')
+@patch('option_auditor.strategies.bull_put.yf.Ticker')
 def test_screen_bull_put_no_options(mock_ticker, mock_market_data):
     df = mock_market_data(days=250, price=100.0)
     mock_instance = MagicMock()
