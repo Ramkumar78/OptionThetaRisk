@@ -440,3 +440,7 @@ LIQUID_OPTION_TICKERS = [
     "PFE", "MRK", "ABBV", "UNH", "CAT", "DE", "MMM", "GE", "HON", "RTX", "LMT",
     "PLTR", "COIN", "MARA", "RIOT", "DKNG", "UBER", "LYFT", "ABNB", "SQ", "PYPL"
 ]
+
+# Market Regime Constants
+VIX_GREEN_THRESHOLD = 20
+VIX_YELLOW_THRESHOLD = 28

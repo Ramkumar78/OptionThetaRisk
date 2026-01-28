@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 import pandas_ta as ta
 import logging
+from option_auditor.common.constants import VIX_GREEN_THRESHOLD, VIX_YELLOW_THRESHOLD
 
 logger = logging.getLogger("BacktestStrategies")
 
@@ -34,9 +35,9 @@ class AbstractBacktestStrategy(ABC):
         spy_sma = row.get('spy_sma200', 0)
         vix_price = row.get('Vix', 99)
 
-        if spy_price > spy_sma and vix_price < 20:
+        if spy_price > spy_sma and vix_price < VIX_GREEN_THRESHOLD:
             return "GREEN"
-        elif spy_price > spy_sma and vix_price < 28:
+        elif spy_price > spy_sma and vix_price < VIX_YELLOW_THRESHOLD:
             return "YELLOW"
         return "RED"
 
