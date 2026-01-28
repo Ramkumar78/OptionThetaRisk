@@ -17,7 +17,7 @@ class TestBullPutScreener(unittest.TestCase):
         """
         # Patch yfinance globally since it is imported inside the function
         with patch('yfinance.Ticker') as mock_Ticker, \
-             patch('option_auditor.screener._calculate_put_delta') as mock_delta:
+             patch('option_auditor.strategies.bull_put._calculate_put_delta') as mock_delta:
 
             # Setup Ticker Factory to return different data for different tickers
             def side_effect_Ticker(ticker):

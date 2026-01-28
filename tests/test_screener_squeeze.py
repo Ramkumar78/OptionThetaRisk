@@ -6,7 +6,7 @@ from option_auditor.screener import screen_bollinger_squeeze
 
 class TestScreenerSqueeze(unittest.TestCase):
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_screen_bollinger_squeeze_logic(self, mock_fetch):
         dates = pd.date_range(end=pd.Timestamp.today(), periods=50)
 
