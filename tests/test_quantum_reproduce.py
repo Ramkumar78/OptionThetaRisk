@@ -3,7 +3,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
 import numpy as np
-from option_auditor.screener import screen_quantum_setups, get_cached_market_data
+from option_auditor.screener import screen_quantum_setups
+from option_auditor.common.data_utils import get_cached_market_data
 
 def test_quantum_fallback_and_nan():
     """
@@ -13,8 +14,8 @@ def test_quantum_fallback_and_nan():
     """
 
     # 1. Setup Mock for Failure of Cache
-    with patch('option_auditor.screener.get_cached_market_data', side_effect=Exception("Cache Missing")):
-        with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch:
+    with patch('option_auditor.strategies.quantum.get_cached_market_data', side_effect=Exception("Cache Missing")):
+        with patch('option_auditor.strategies.quantum.fetch_batch_data_safe') as mock_fetch:
              # Create mock data with NaNs to test serialization
              dates = pd.date_range(start='2023-01-01', periods=250)
              df = pd.DataFrame({
@@ -31,7 +32,7 @@ def test_quantum_fallback_and_nan():
 
              # Mock QuantPhysicsEngine to return NaNs
              # Must patch where it is IMPORTED (screener.py), not where it is defined
-             with patch('option_auditor.screener.QuantPhysicsEngine') as MockEngine:
+             with patch('option_auditor.strategies.quantum.QuantPhysicsEngine') as MockEngine:
                  MockEngine.calculate_hurst.return_value = float('nan')
                  MockEngine.shannon_entropy.return_value = float('inf') # Test Infinity too
                  MockEngine.kalman_filter.return_value = pd.Series([100]*250) # Need series for slope calc

@@ -11,24 +11,26 @@
     - `screen_my_strategy`
 - **Impact**: Extremely difficult to maintain, test, and extend. High risk of breaking existing functionality.
 - **Priority**: High
-- **Status**: Partially Addressed.
-    - `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, `screen_bollinger_squeeze`, `screen_rsi_divergence`, `screen_fourier_cycles`, `screen_liquidity_grabs`, and `screen_dynamic_volatility_fortress` have been refactored to `option_auditor/strategies/`.
-    - **[NEW]** `screen_5_13_setups` refactored to `option_auditor/strategies/five_thirteen.py`.
-    - **[NEW]** `screen_darvas_box` refactored to `option_auditor/strategies/darvas.py`.
-    - **[NEW]** `screen_quantum_setups` refactored to `option_auditor/strategies/quantum.py`.
-    - **[NEW]** `screen_options_only_strategy` refactored to `option_auditor/strategies/options_only.py`.
+- **Status**: Addressed.
+    - All major strategies including `screen_market`, `screen_hybrid_strategy`, `screen_master_convergence`, `screen_alpha_101`, `screen_mms_ote_setups`, `screen_my_strategy`, and `screen_monte_carlo_forecast` have been extracted to `option_auditor/strategies/`.
+    - `option_auditor/screener.py` now serves as a facade importing these strategies.
 
 ## 2. Missing/Incomplete Unit Tests
 - **Issue**: Comprehensive tests for all screener functions are lacking. Many strategies rely on "happy path" tests or implicit integration tests via `screener.py`.
 - **Impact**: Increases risk of regression when refactoring. Hard to verify individual strategy logic.
 - **Priority**: High
-- **Status**: In Progress. Added direct unit tests for `FiveThirteenStrategy` and `DarvasBoxStrategy`.
+- **Status**: Addressed.
+    - Added unit tests for new strategy modules: `tests/strategies/test_market.py`, `tests/strategies/test_mms_ote.py`, `tests/strategies/test_alpha.py`, `tests/strategies/test_hybrid.py`, `tests/strategies/test_monte_carlo.py`.
+    - Existing tests updated to reflect refactoring.
 
 ## 3. Low-Level Math Mixed with Business Logic
 - **Issue**: Mathematical functions like `_calculate_hilbert_phase`, `_calculate_dominant_cycle` are defined directly inside `screener.py`.
 - **Impact**: Reduces readability and reusability. Harder to test math in isolation.
 - **Priority**: Medium
-- **Status**: Partially Addressed. `_identify_swings` and `_detect_fvgs` have been moved to `option_auditor/strategies/liquidity.py`. `_calculate_hilbert_phase` moved to `option_auditor/strategies/fourier.py`.
+- **Status**: Addressed.
+    - `_identify_swings` and `_detect_fvgs` moved to `option_auditor/strategies/liquidity.py`.
+    - `_calculate_hilbert_phase` moved to `option_auditor/strategies/fourier.py`.
+    - `_calculate_dominant_cycle` moved to `option_auditor/strategies/utils.py`.
 
 ## 4. Inconsistent Error Handling
 - **Issue**: Many routes in `webapp/blueprints/screener_routes.py` used generic `try...except Exception` blocks.
@@ -48,3 +50,5 @@
 - **Hardcoded Configuration**: Addressed by loading `DEFAULT_ACCOUNT_SIZE` from environment variables in `option_auditor/common/constants.py`.
 - **Hardcoded Financial Constants**: Addressed by replacing hardcoded values in `screener.py` with imports from `common/constants.py`.
 - **Duplicate Utility Functions**: Moved `resolve_ticker` and added `sanitize` to `option_auditor/common/screener_utils.py` for better reuse.
+- **God Object / Complex Logic in screener.py**: Extracted all monolithic functions to strategy modules.
+- **Missing/Incomplete Unit Tests**: Added unit tests for extracted strategies.
