@@ -23,7 +23,7 @@ def run_fortress_screener(ticker_list):
     # We must patch 'option_auditor.common.data_utils.get_cached_market_data'
 
     with patch('option_auditor.common.data_utils.get_cached_market_data') as mock_data, \
-         patch('option_auditor.screener._get_market_regime') as mock_vix, \
+         patch('option_auditor.common.screener_utils._get_market_regime') as mock_vix, \
          patch('option_auditor.screener._calculate_trend_breakout_date', return_value="2023-01-01"):
 
         # Mock VIX

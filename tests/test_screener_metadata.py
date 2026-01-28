@@ -32,9 +32,9 @@ def mock_market_data():
     data['Close'] = [100 + (i * 0.1) for i in range(200)]
     return data
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener.yf.Ticker')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.get_cached_market_data')
+@patch('yfinance.Ticker')
 def test_screeners_include_company_name(mock_ticker, mock_cached, mock_batch, mock_market_data):
     """
     Verifies that all screeners return a 'company_name' field in their results
@@ -66,7 +66,7 @@ def test_screeners_include_company_name(mock_ticker, mock_cached, mock_batch, mo
     with patch('option_auditor.screener.TICKER_NAMES', {ticker: "Apple Inc."}):
 
         # We need to patch _prepare_data_for_ticker because many screeners use it directly
-        with patch('option_auditor.screener._prepare_data_for_ticker', return_value=mock_df):
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=mock_df):
 
             # 1. Fourier Cycles (Updated)
             res_fourier = screen_fourier_cycles(ticker_list=[ticker])
@@ -75,7 +75,7 @@ def test_screeners_include_company_name(mock_ticker, mock_cached, mock_batch, mo
                 assert res_fourier[0]['company_name'] == "Apple Inc."
 
             # 2. Dynamic Volatility Fortress (Updated)
-            with patch('option_auditor.screener.get_cached_market_data') as mock_cache_fortress:
+            with patch('option_auditor.common.screener_utils.get_cached_market_data') as mock_cache_fortress:
                 # Mock structure for Fortress (iterator expects (ticker, df))
                 mock_cache_fortress.return_value = pd.concat({ticker: mock_df}, axis=1)
                 res_fortress = screen_dynamic_volatility_fortress(ticker_list=[ticker])
@@ -100,7 +100,7 @@ def test_screeners_include_company_name(mock_ticker, mock_cached, mock_batch, mo
                 pass
 
             # 5. Quantum (Existing)
-            with patch('option_auditor.screener.get_cached_market_data') as mock_cache_q:
+            with patch('option_auditor.common.screener_utils.get_cached_market_data') as mock_cache_q:
                  mock_cache_q.return_value = pd.concat({ticker: mock_df}, axis=1)
                  # Mock physics engine to return valid verdict
                  with patch('option_auditor.quant_engine.QuantPhysicsEngine.calculate_hurst', return_value=0.7):

@@ -11,7 +11,7 @@ scenarios('../features/bull_put_strategy.feature')
 @when('I run the Bull Put screener', target_fixture="results")
 def run_bull_put_screener(ticker_list):
     # We need to mock yfinance Ticker heavily here
-    with patch('option_auditor.screener.yf.Ticker') as mock_ticker_cls:
+    with patch('yfinance.Ticker') as mock_ticker_cls:
         mock_ticker = MagicMock()
         mock_ticker_cls.return_value = mock_ticker
 

@@ -8,14 +8,14 @@ from option_auditor.uk_stock_data import get_uk_tickers
 class TestRegionStrategies:
     @pytest.fixture
     def mock_market_data(self):
-        with patch('option_auditor.screener.get_cached_market_data') as mock:
+        with patch('option_auditor.common.screener_utils.get_cached_market_data') as mock:
             # Default to empty DF to prevent AttributeError on .columns lookup
             mock.return_value = pd.DataFrame()
             yield mock
 
     @pytest.fixture
     def mock_cycle(self):
-        with patch('option_auditor.screener._calculate_dominant_cycle') as mock:
+        with patch('option_auditor.strategies.utils.calculate_dominant_cycle') as mock:
             mock.return_value = (20, -0.8) # Cycle bottom
             yield mock
 

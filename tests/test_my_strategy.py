@@ -35,8 +35,8 @@ class TestMyStrategy(unittest.TestCase):
         self.df.iloc[-1, self.df.columns.get_loc('High')] = 200.5
         self.df.iloc[-1, self.df.columns.get_loc('Low')] = 198.0
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
-    @patch('option_auditor.screener._resolve_region_tickers')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.resolve_region_tickers')
     def test_screen_my_strategy_bullish_trigger(self, mock_tickers, mock_fetch):
         mock_tickers.return_value = ['AAPL']
         mock_fetch.return_value = self.df  # Return flat DF for single ticker logic handling or mock MultiIndex
@@ -55,7 +55,7 @@ class TestMyStrategy(unittest.TestCase):
         self.assertIn('breakout_date', res)
         self.assertIn('atr_value', res)
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_screen_my_strategy_bearish_trend(self, mock_fetch):
         # Create Bearish DF (Price < SMA 200)
         df_bear = self.df.copy()
@@ -134,13 +134,13 @@ class TestMyStrategy(unittest.TestCase):
 
     def test_screen_my_strategy_edge_cases(self):
         # Empty Data
-        with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch:
+        with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch:
             mock_fetch.return_value = pd.DataFrame()
             results = screener.screen_my_strategy(ticker_list=['AAPL'])
             self.assertEqual(results, [])
 
         # Short Data (Not enough for SMA 200)
-        with patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch:
+        with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch:
             short_df = self.df.iloc[-100:]
             mock_fetch.return_value = short_df
             results = screener.screen_my_strategy(ticker_list=['AAPL'])

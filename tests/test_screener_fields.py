@@ -23,8 +23,8 @@ class TestScreenerFields(unittest.TestCase):
     def setUp(self):
         self.mock_df = get_mock_df()
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
     @patch('yfinance.Ticker')
     def test_market_screener_fields(self, mock_ticker, mock_cached, mock_fetch):
         # Mock fetch to return our df for "AAPL"
@@ -49,9 +49,9 @@ class TestScreenerFields(unittest.TestCase):
         mock_ticker.return_value = mock_instance
 
         # We patch _prepare_data_for_ticker to just return our DF to skip complex logic
-        with patch('option_auditor.screener._prepare_data_for_ticker', return_value=self.mock_df):
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
             # We call screen_market with a small list to test
-            with patch('option_auditor.screener._resolve_region_tickers', return_value=['AAPL']):
+            with patch('option_auditor.common.screener_utils.resolve_region_tickers', return_value=['AAPL']):
                  # screen_market returns a dict of lists
                  results = screener.screen_market(region='us')
                  # Flatten results
@@ -64,37 +64,37 @@ class TestScreenerFields(unittest.TestCase):
                      self.assertIn('atr', first)
                      self.assertIn('breakout_date', first)
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_turtle_screener_fields(self, mock_fetch):
         mock_fetch.return_value = self.mock_df
-        with patch('option_auditor.screener._prepare_data_for_ticker', return_value=self.mock_df):
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_turtle_setups(ticker_list=['AAPL'])
              if results:
                  self.assertIn('atr', results[0])
                  self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_ema_screener_fields(self, mock_fetch):
         mock_fetch.return_value = self.mock_df
-        with patch('option_auditor.screener._prepare_data_for_ticker', return_value=self.mock_df):
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_5_13_setups(ticker_list=['AAPL'])
              if results:
                  self.assertIn('atr', results[0])
                  self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_darvas_screener_fields(self, mock_fetch):
         mock_fetch.return_value = self.mock_df
-        with patch('option_auditor.screener._prepare_data_for_ticker', return_value=self.mock_df):
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_darvas_box(ticker_list=['AAPL'])
              if results:
                  self.assertIn('atr', results[0])
                  self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_mms_screener_fields(self, mock_fetch):
         mock_fetch.return_value = self.mock_df
-        with patch('option_auditor.screener._prepare_data_for_ticker', return_value=self.mock_df):
+        with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_mms_ote_setups(ticker_list=['AAPL'])
              if results:
                  self.assertIn('atr', results[0])
@@ -118,14 +118,14 @@ class TestScreenerFields(unittest.TestCase):
         mock_ticker.return_value = mock_instance
 
         # Need to patch date to ensure option expiry is valid (~45 days)
-        with patch('option_auditor.screener.date') as mock_date:
+        with patch('option_auditor.strategies.bull_put.date') as mock_date:
             mock_date.today.return_value = pd.to_datetime('2023-10-15').date()
             results = screener.screen_bull_put_spreads(ticker_list=['AAPL'])
             if results:
                 self.assertIn('atr', results[0])
                 self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
     @patch('yfinance.download')
     def test_isa_screener_fields(self, mock_dl, mock_cached):
         mock_cached.return_value = pd.DataFrame() # Force DL
@@ -138,7 +138,7 @@ class TestScreenerFields(unittest.TestCase):
             self.assertIn('atr', results[0])
             self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_fourier_screener_fields(self, mock_fetch):
         # Fourier expects batch data, returns iterator
         mock_fetch.return_value = self.mock_df
@@ -148,7 +148,7 @@ class TestScreenerFields(unittest.TestCase):
             self.assertIn('atr', results[0])
             self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
     def test_hybrid_screener_fields(self, mock_cached):
         mock_cached.return_value = self.mock_df
         results = screener.screen_hybrid_strategy(ticker_list=['AAPL'])
@@ -156,7 +156,7 @@ class TestScreenerFields(unittest.TestCase):
             self.assertIn('atr', results[0])
             self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
     def test_master_screener_fields(self, mock_cached):
         mock_cached.return_value = self.mock_df
         results = screener.screen_master_convergence(ticker_list=['AAPL'])
@@ -164,8 +164,8 @@ class TestScreenerFields(unittest.TestCase):
             self.assertIn('atr', results[0])
             self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.get_cached_market_data')
-    @patch('option_auditor.screener._get_market_regime')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils._get_market_regime')
     def test_fortress_screener_fields(self, mock_vix, mock_cached):
         mock_vix.return_value = 15.0
         mock_cached.return_value = self.mock_df
@@ -174,7 +174,7 @@ class TestScreenerFields(unittest.TestCase):
             self.assertIn('atr', results[0])
             self.assertIn('breakout_date', results[0])
 
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
     @patch('option_auditor.quant_engine.QuantPhysicsEngine.calculate_hurst')
     @patch('option_auditor.quant_engine.QuantPhysicsEngine.shannon_entropy')
     @patch('option_auditor.quant_engine.QuantPhysicsEngine.kalman_filter')

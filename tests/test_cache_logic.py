@@ -45,7 +45,7 @@ def test_screener_uses_cache():
     from option_auditor.screener import screen_master_convergence
 
     # Mock get_cached_market_data
-    with patch("option_auditor.screener.get_cached_market_data") as mock_cache:
+    with patch("option_auditor.common.screener_utils.get_cached_market_data") as mock_cache:
         mock_cache.return_value = pd.DataFrame() # Return empty to avoid downstream processing errors
 
         # Call with list > 100

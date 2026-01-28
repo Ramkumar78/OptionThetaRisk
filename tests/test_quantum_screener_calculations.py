@@ -6,8 +6,8 @@ from option_auditor.screener import screen_quantum_setups
 
 class TestQuantumScreenerCalculations(unittest.TestCase):
 
-    @patch('option_auditor.screener.get_cached_market_data')
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     @patch('option_auditor.screener.QuantPhysicsEngine')
     def test_risk_management_calculations(self, mock_engine, mock_fetch, mock_cache):
         # Setup Mock Data

@@ -49,7 +49,7 @@ def create_mock_divergence_df(pattern="bearish"):
 
     return df
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
 @patch('pandas_ta.rsi')
 @patch('pandas_ta.atr')
 def test_screen_rsi_bearish_divergence(mock_atr, mock_rsi, mock_fetch):
@@ -79,7 +79,7 @@ def test_screen_rsi_bearish_divergence(mock_atr, mock_rsi, mock_fetch):
     assert results[0]['signal'] == "🐻 BEARISH DIVERGENCE"
     assert results[0]['ticker'] == "AAPL"
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
 @patch('pandas_ta.rsi')
 @patch('pandas_ta.atr')
 def test_screen_rsi_bullish_divergence(mock_atr, mock_rsi, mock_fetch):
@@ -108,7 +108,7 @@ def test_screen_rsi_bullish_divergence(mock_atr, mock_rsi, mock_fetch):
     assert len(results) == 1
     assert results[0]['signal'] == "🐂 BULLISH DIVERGENCE"
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
 @patch('pandas_ta.rsi')
 def test_screen_rsi_no_divergence(mock_rsi, mock_fetch):
     # Convergence (Price HH, RSI HH)
