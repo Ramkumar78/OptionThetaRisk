@@ -98,15 +98,20 @@ def test_calculate_indicators():
         'Vix': [15] * 250
     }, index=dates)
 
+    # Test Grandmaster (default)
     bt = UnifiedBacktester("TEST")
-    enriched = bt.calculate_indicators(df)
-
+    enriched = bt.calculate_indicators(df.copy())
     assert 'sma200' in enriched.columns
     assert 'sma50' in enriched.columns
     assert 'atr' in enriched.columns
     assert 'high_20' in enriched.columns
-    assert 'low_10' in enriched.columns # Turtle
-    assert 'high_50' in enriched.columns # ISA
+    # Grandmaster doesn't need low_10
+
+    # Test Turtle
+    bt_turtle = UnifiedBacktester("TEST", strategy_type="turtle")
+    enriched_turtle = bt_turtle.calculate_indicators(df.copy())
+    assert 'low_10' in enriched_turtle.columns
+    assert 'high_20' in enriched_turtle.columns
 
 def test_run_master_strategy(mock_yf_download):
     mock_df = create_mock_df()

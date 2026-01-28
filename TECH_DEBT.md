@@ -38,7 +38,24 @@
 - **Priority**: Medium
 - **Status**: Addressed via `handle_screener_errors` decorator in `webapp/blueprints/screener_routes.py`.
 
-## 6. Dead/Commented Code
+## 5. God Object in `option_auditor/unified_backtester.py`
+- **Issue**: The `UnifiedBacktester` class contained a monolithic loop with hardcoded logic for 15+ strategies, violating the Single Responsibility Principle and Open/Closed Principle.
+- **Impact**: Adding new strategies required modifying the core loop, risking regressions in other strategies.
+- **Priority**: High
+- **Status**: Addressed.
+    - Extracted strategy logic into `option_auditor/backtesting_strategies.py` using a Strategy Pattern.
+    - `UnifiedBacktester` now delegates logic to `AbstractBacktestStrategy` subclasses.
+
+## 6. Test Suite Fragmentation / Bloat
+- **Issue**: The `tests/` directory contained redundant and unmaintained files (e.g., `test_screener_coverage_new.py`) that had broken imports due to refactoring.
+- **Impact**: Hard to maintain tests, false positives/negatives, and confusion about which tests are authoritative.
+- **Priority**: Medium
+- **Status**: Addressed.
+    - Merged valid tests from `tests/test_screener_coverage_new.py` into `tests/test_screener_coverage.py`.
+    - Fixed broken imports and mocks in `tests/test_screener_coverage.py`.
+    - Deleted `tests/test_screener_coverage_new.py`.
+
+## 7. Dead/Commented Code
 - **Issue**: There are commented-out imports and deprecated code blocks in `screener.py`.
 - **Impact**: Confuses developers and clutters the codebase.
 - **Priority**: Low
@@ -52,3 +69,5 @@
 - **Duplicate Utility Functions**: Moved `resolve_ticker` and added `sanitize` to `option_auditor/common/screener_utils.py` for better reuse.
 - **God Object / Complex Logic in screener.py**: Extracted all monolithic functions to strategy modules.
 - **Missing/Incomplete Unit Tests**: Added unit tests for extracted strategies.
+- **God Object in Unified Backtester**: Refactored to Strategy Pattern in `option_auditor/backtesting_strategies.py`.
+- **Test Suite Fragmentation**: Consolidated and fixed `test_screener_coverage.py`.

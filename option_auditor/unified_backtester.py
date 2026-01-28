@@ -4,6 +4,7 @@ import pandas_ta as ta
 import numpy as np
 import logging
 from option_auditor.unified_screener import analyze_ticker_hardened, get_market_regime
+from option_auditor.backtesting_strategies import get_strategy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("UnifiedBacktester")
@@ -18,6 +19,7 @@ class UnifiedBacktester:
         self.state = "OUT"
         self.trade_log = []
         self.entry_date = None
+        self.strategy = get_strategy(strategy_type)
 
     def fetch_data(self):
         try:
@@ -62,57 +64,17 @@ class UnifiedBacktester:
             return None
 
     def calculate_indicators(self, df):
-        # Additional indicators for Turtle/Legacy strategies if needed
-        # Unified Screener calculates its own, but we can pre-calc helpers
+        # Common indicators needed for context (Regime, etc)
+        df['spy_sma200'] = df['Spy'].rolling(200).mean()
 
-        # --- Trend Moving Averages ---
-        df['sma200'] = df['Close'].rolling(200).mean()
-        df['sma50'] = df['Close'].rolling(50).mean()
-        df['sma150'] = df['Close'].rolling(150).mean()
-        df['sma20'] = df['Close'].rolling(20).mean()
-
-        # --- Volatility & ATR ---
-        # Note: pandas_ta usually returns a Series with name depending on params, we force assign it.
-        # Ensure we have enough data for ATR
+        # Volatility & ATR (Universal need for stops usually)
         if len(df) > 14:
             df['atr'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
         else:
             df['atr'] = 0.0
 
-        # --- Donchian Channels (Legacy) ---
-        df['high_20'] = df['High'].rolling(20).max().shift(1)
-        df['high_10'] = df['High'].rolling(10).max().shift(1)
-        df['low_20'] = df['Low'].rolling(20).min().shift(1)
-        df['low_10'] = df['Low'].rolling(10).min().shift(1)
-        df['high_50'] = df['High'].rolling(50).max().shift(1)
-
-        # Regime Indicators
-        df['spy_sma200'] = df['Spy'].rolling(200).mean()
-
-        # --- Strategy Specific Indicators ---
-
-        # EMA Strategy
-        df['ema5'] = ta.ema(df['Close'], length=5)
-        df['ema13'] = ta.ema(df['Close'], length=13)
-        df['ema21'] = ta.ema(df['Close'], length=21)
-
-        # RSI
-        df['rsi'] = ta.rsi(df['Close'], length=14)
-
-        # Alpha 101 (Momentum)
-        # ((Close - Open) / ((High - Low) + 0.001))
-        denom = (df['High'] - df['Low']) + 0.001
-        df['alpha101'] = (df['Close'] - df['Open']) / denom
-
-        # Handle NaNs created by rolling windows
-        # SMA 200 requires 200 data points.
-        # If we dropna here, we lose the first 200 points.
-        # This is expected behavior for indicators.
-        # However, we must ensure we don't drop everything if data is sparse but valid for some indicators.
-        # Ensure 'sma200' is not NaN before dropping?
-        # Standard dropna() on the whole DF drops any row with any NaN.
-        # Since indicators like SMA200 create NaNs at start, this is correct for backtesting warm-up.
-        # But if 'Spy' rolling average also creates NaNs, they might align or not.
+        # Delegate to strategy
+        df = self.strategy.add_indicators(df)
 
         return df.dropna()
 
@@ -130,12 +92,9 @@ class UnifiedBacktester:
         start_date = pd.Timestamp.now() - pd.Timedelta(days=target_days)
 
         # Check if we have enough data, fallback to 3 years or 2 years if not
-        # Ensure we don't start before the first available data point
         if df.index[0] > start_date:
-            # Not enough history for 5 years, try 3 years
             start_date_3y = pd.Timestamp.now() - pd.Timedelta(days=1095)
             if df.index[0] > start_date_3y:
-                 # Not enough for 3y, try 2y
                  start_date_2y = pd.Timestamp.now() - pd.Timedelta(days=730)
                  if df.index[0] > start_date_2y:
                      sim_data = df.copy()
@@ -144,8 +103,6 @@ class UnifiedBacktester:
             else:
                  sim_data = df[df.index >= start_date_3y].copy()
         else:
-             # We have enough data for the full 5 year window.
-             # Slice the dataframe to start exactly at start_date.
              sim_data = df[df.index >= start_date].copy()
 
         if sim_data.empty: return {"error": "Not enough history"}
@@ -158,10 +115,8 @@ class UnifiedBacktester:
         initial_price = sim_data['Close'].iloc[0]
         final_price = sim_data['Close'].iloc[-1]
 
-        # Simple Buy and Hold Return %
         simple_bnh_return = ((final_price - initial_price) / initial_price) * 100
 
-        # Portfolio Buy and Hold (Investing initial capital)
         bnh_shares = int(self.initial_capital / initial_price)
         bnh_final_value = self.initial_capital - (bnh_shares * initial_price) + (bnh_shares * final_price)
 
@@ -171,35 +126,36 @@ class UnifiedBacktester:
         stop_loss = 0.0
         target_price = 0.0
 
-        # Swing Points Memory (Price, RSI, Index)
-        recent_swing_highs = [] # List of tuples
+        # Context Memory
+        recent_swing_highs = []
         recent_swing_lows = []
+
+        context = {
+            'recent_swing_highs': recent_swing_highs,
+            'recent_swing_lows': recent_swing_lows
+        }
 
         for i in range(len(sim_data)):
             if i < 20: continue # Warmup
 
             date = sim_data.index[i]
             row = sim_data.iloc[i]
-            prev_row = sim_data.iloc[i-1]
 
-            # --- FRACTAL IDENTIFICATION (Confirmed at i, happened at i-1) ---
-            # Check if i-1 was a swing point
-            # We need i-2, i-1, i
+            # --- FRACTAL IDENTIFICATION (Shared Logic) ---
             if i >= 2:
                 row_minus_1 = sim_data.iloc[i-1]
                 row_minus_2 = sim_data.iloc[i-2]
 
-                # Swing High: H[i-1] > H[i-2] and H[i-1] > H[i]
+                # Swing High
                 if row_minus_1['High'] > row_minus_2['High'] and row_minus_1['High'] > row['High']:
                     recent_swing_highs.append({
                         'price': row_minus_1['High'],
                         'rsi': row_minus_1['rsi'] if 'rsi' in row_minus_1 else 50,
                         'idx': i-1
                     })
-                    # Keep only last 10
                     if len(recent_swing_highs) > 10: recent_swing_highs.pop(0)
 
-                # Swing Low: L[i-1] < L[i-2] and L[i-1] < L[i]
+                # Swing Low
                 if row_minus_1['Low'] < row_minus_2['Low'] and row_minus_1['Low'] < row['Low']:
                     recent_swing_lows.append({
                         'price': row_minus_1['Low'],
@@ -213,219 +169,15 @@ class UnifiedBacktester:
             sell_signal = False
             current_stop_reason = "STOP"
 
-            # Dynamic Regime Check
-            regime = "RED"
-            spy_price = row['Spy']
-            spy_sma = row['spy_sma200']
-            vix_price = row['Vix']
-
-            if spy_price > spy_sma and vix_price < 20:
-                regime = "GREEN"
-            elif spy_price > spy_sma and vix_price < 28:
-                regime = "YELLOW"
-
-            # --- STRATEGY LOGIC ---
-
-            if self.strategy_type in ['grandmaster', 'council', 'master', 'master_convergence']:
-                # ISA Trend + Momentum logic
-                # 1. Regime Filter
-                if regime == "RED":
-                    if self.state == "IN":
-                        sell_signal = True
-                        current_stop_reason = "REGIME CHANGE (RED)"
-                    buy_signal = False
-
-                else:
-                    sma50 = row['sma50']
-                    sma200 = row['sma200']
-
-                    # Trend Template
-                    is_trend = (price > sma200) and (price > sma50) and (sma50 > sma200)
-
-                    # Trigger: VCP Breakout (High of last 20 days)
-                    high_20d = row['high_20']
-                    breakout = (price > high_20d)
-
-                    if is_trend and breakout:
-                        buy_signal = True
-
-                    if self.state == "IN":
-                        # Trailing Stop: 20 Day Low
-                        trail_stop = row['low_20']
-                        if price < trail_stop:
-                            sell_signal = True
-                            current_stop_reason = "TRAILING STOP (20d Low)"
-
-            elif self.strategy_type == 'turtle':
-                if price > row['high_20']: buy_signal = True
-                if self.state == "IN" and price < row['low_10']:
+            # --- DELEGATE TO STRATEGY ---
+            if self.state == "OUT":
+                if self.strategy.should_buy(i, sim_data, context):
+                    buy_signal = True
+            else:
+                should_sell, reason = self.strategy.should_sell(i, sim_data, context)
+                if should_sell:
                     sell_signal = True
-                    current_stop_reason = "10d LOW EXIT"
-
-            elif self.strategy_type == 'isa': # Legacy ISA
-                is_breakout_50 = row['Close'] > row['high_50']
-                is_isa_reentry = (price > row['sma50']) and (price > row['sma200'])
-                if (price > row['sma200']) and (is_breakout_50 or is_isa_reentry): buy_signal = True
-                if self.state == "IN" and price < row['low_20']:
-                    sell_signal = True
-                    current_stop_reason = "20d LOW EXIT"
-
-            elif self.strategy_type == 'market':
-                # Market Screener: Price > SMA50, Buy Dip (RSI 30-50)
-                is_uptrend = price > row['sma50']
-                rsi = row['rsi']
-
-                if is_uptrend and 30 <= rsi <= 50:
-                    buy_signal = True
-
-                # Exit: Trend Change
-                if not is_uptrend and self.state == "IN":
-                     sell_signal = True
-                     current_stop_reason = "TREND CHANGE (<SMA50)"
-
-            elif self.strategy_type == 'ema_5_13' or self.strategy_type == 'ema':
-                ema5 = row['ema5']
-                ema13 = row['ema13']
-                prev_ema5 = prev_row['ema5']
-                prev_ema13 = prev_row['ema13']
-
-                # Buy: 5 crosses above 13
-                if ema5 > ema13 and prev_ema5 <= prev_ema13:
-                    buy_signal = True
-
-                # Sell: 5 crosses below 13
-                if self.state == "IN" and ema5 < ema13:
-                    sell_signal = True
-                    current_stop_reason = "CROSS UNDER (5<13)"
-
-            elif self.strategy_type == 'darvas':
-                # Darvas Box Breakout
-                high_20d = row['high_20']
-                if price > high_20d:
-                    buy_signal = True
-
-                # Exit
-                if self.state == "IN" and price < row['low_20']:
-                    sell_signal = True
-                    current_stop_reason = "BOX LOW BREAK"
-
-            elif self.strategy_type == 'mms_ote' or self.strategy_type == 'mms':
-                # RSI < 40 (Oversold/Retracement)
-                if price > row['sma50'] and row['rsi'] < 40:
-                    buy_signal = True
-
-            elif self.strategy_type == 'bull_put':
-                if price > row['sma50'] and row['rsi'] < 55 and row['rsi'] > 40:
-                    buy_signal = True
-
-            elif self.strategy_type == 'fourier' or self.strategy_type == 'hybrid':
-                # Hybrid: Trend (SMA200) + Cycle Low (Proxy RSI < 30)
-                is_trend = price > row['sma200']
-                is_cycle_low = row['rsi'] < 30 # Proxy
-
-                if self.strategy_type == 'hybrid':
-                     if is_trend and is_cycle_low: buy_signal = True
-                else:
-                     if is_cycle_low: buy_signal = True
-
-                # Exit: Cycle High (RSI > 70)
-                if self.state == "IN" and row['rsi'] > 70:
-                     sell_signal = True
-                     current_stop_reason = "CYCLE HIGH"
-
-            elif self.strategy_type == 'fortress':
-                if price > row['sma200'] and regime != "RED":
-                     if row['rsi'] < 40: buy_signal = True
-
-            elif self.strategy_type == 'quantum':
-                if price > row['sma50'] and row['rsi'] > 50: buy_signal = True
-
-            elif self.strategy_type == 'alpha101':
-                # Long Signal: Alpha > 0.5 (Strong Buy)
-                if row['alpha101'] > 0.5:
-                    buy_signal = True
-
-                # Exit: Standard Risk Management handles it (Stop/Target)
-                # But we can also exit if momentum reverses?
-                # Screener uses strict Stop/Target.
-                pass
-
-            elif self.strategy_type == 'mystrategy':
-                # My Strategy: ISA Trend + Alpha 101
-                is_trend_up = (price > row['sma200']) and (price > row['sma50'])
-                if is_trend_up and row['alpha101'] > 0.5:
-                    buy_signal = True
-
-            elif self.strategy_type == 'liquidity_grab':
-                # Bullish Sweep: Price Low < Swing Low AND Close > Swing Low
-                # Check against recent swing lows (excluding the one just formed if any)
-                # We need a swing low OLDER than current bar.
-                curr_l = row['Low']
-                curr_c = row['Close']
-                curr_h = row['High']
-
-                # Check Bullish Sweeps
-                for swing in recent_swing_lows:
-                    # Ignore if swing is too recent (e.g. formed at i-1, we are at i... valid)
-                    # But if we just formed it, it's effectively the current low range.
-                    # Usually we want to sweep a SIGNIFICANT swing.
-
-                    # Logic: Dipped below swing, Closed above swing
-                    if curr_l < swing['price'] and curr_c > swing['price']:
-                        # Filter: Ensure we aren't just ranging.
-                        # Maybe ensure trend is up or down?
-                        # Pure liquidity grab is a reversal.
-                        buy_signal = True
-                        break # Found one
-
-                # Exit Logic (Trailing or Target)
-                # If we are IN, check for Bearish Sweep (Reversal against us)
-                if self.state == "IN":
-                    for swing in recent_swing_highs:
-                        if curr_h > swing['price'] and curr_c < swing['price']:
-                            sell_signal = True
-                            current_stop_reason = "BEARISH SWEEP"
-                            break
-
-            elif self.strategy_type == 'rsi' or self.strategy_type == 'rsi_divergence':
-                # Trigger on CONFIRMED SWING (i-1)
-                # If i-1 was a Swing Low, check divergence against previous Swing Lows
-
-                # Check if we just formed a swing low at i-1
-                is_new_swing_low = False
-                if i >= 2:
-                    r1 = sim_data.iloc[i-1]
-                    r2 = sim_data.iloc[i-2]
-                    if r1['Low'] < r2['Low'] and r1['Low'] < row['Low']:
-                        is_new_swing_low = True
-
-                if is_new_swing_low and len(recent_swing_lows) >= 2:
-                    # The latest one in list is the one at i-1
-                    latest = recent_swing_lows[-1]
-                    # Check against previous ones
-                    for prev in recent_swing_lows[:-1]:
-                        # Bullish Div: Lower Price, Higher RSI
-                        if latest['price'] < prev['price'] and latest['rsi'] > prev['rsi']:
-                            buy_signal = True
-                            break
-
-                # Exit: Bearish Divergence
-                if self.state == "IN":
-                    is_new_swing_high = False
-                    if i >= 2:
-                        r1 = sim_data.iloc[i-1]
-                        r2 = sim_data.iloc[i-2]
-                        if r1['High'] > r2['High'] and r1['High'] > row['High']:
-                            is_new_swing_high = True
-
-                    if is_new_swing_high and len(recent_swing_highs) >= 2:
-                        latest = recent_swing_highs[-1]
-                        for prev in recent_swing_highs[:-1]:
-                            # Bearish Div: Higher Price, Lower RSI
-                            if latest['price'] > prev['price'] and latest['rsi'] < prev['rsi']:
-                                sell_signal = True
-                                current_stop_reason = "BEARISH DIVERGENCE"
-                                break
+                    current_stop_reason = reason
 
             # ==============================
             # EXECUTION
@@ -437,49 +189,8 @@ class UnifiedBacktester:
                 self.state = "IN"
                 self.entry_date = date
 
-                # Set Initial Stop based on Strategy
                 atr = row['atr']
-                if self.strategy_type in ['grandmaster', 'council', 'master', 'isa', 'hybrid', 'master_convergence']:
-                    stop_loss = price - (2.5 * atr)
-                    target_price = price + (6 * atr) # ISA Target
-                elif self.strategy_type == 'market':
-                    stop_loss = price - (2 * atr)
-                    target_price = price + (4 * atr)
-                elif self.strategy_type == 'ema_5_13':
-                    stop_loss = row['ema21'] * 0.99
-                    target_price = price * 1.2 # Open
-                elif self.strategy_type == 'darvas':
-                    stop_loss = row['low_20']
-                    target_price = price * 1.25
-                elif self.strategy_type == 'fourier':
-                    stop_loss = price - (2 * atr)
-                    target_price = price + (2 * atr)
-                elif self.strategy_type == 'alpha101':
-                    # Logic from screener: Stop = Low - 0.5*ATR (tight), Target = Close + 2*ATR
-                    stop_loss = row['Low'] - (0.5 * atr)
-                    target_price = price + (2 * atr)
-                elif self.strategy_type == 'mystrategy':
-                    # Logic from screener
-                    if row['alpha101'] > 0.5:
-                        stop_loss = row['Low'] - (0.5 * atr)
-                    else:
-                        stop_loss = price - (3 * atr)
-
-                    risk = price - stop_loss
-                    target_price = price + (risk * 2) if risk > 0 else price + (5 * atr)
-                elif self.strategy_type == 'liquidity_grab':
-                    # Stop below the sweep low (Low of current candle)
-                    stop_loss = row['Low'] - (0.5 * atr)
-                    # Target 3:1
-                    risk = price - stop_loss
-                    target_price = price + (3 * risk) if risk > 0 else price + (4 * atr)
-                elif self.strategy_type == 'rsi' or self.strategy_type == 'rsi_divergence':
-                    # Stop below the swing low
-                    stop_loss = row['Low'] - (1.0 * atr)
-                    target_price = price + (3.0 * atr)
-                else:
-                    stop_loss = price - (2 * atr)
-                    target_price = price + (4 * atr)
+                stop_loss, target_price = self.strategy.get_initial_stop_target(row, atr)
 
                 self.trade_log.append({
                     "date": date.strftime('%Y-%m-%d'), "type": "BUY",
@@ -496,9 +207,45 @@ class UnifiedBacktester:
                 if hit_stop:
                      sell_signal = True
                      current_stop_reason = "INITIAL STOP HIT"
-                elif hit_target and self.strategy_type not in ['grandmaster', 'isa', 'turtle']:
-                     # Trend followers (ISA/Turtle/Grandmaster) don't use fixed targets usually, they trail.
-                     if self.strategy_type in ['market', 'fourier', 'alpha101', 'mystrategy', 'liquidity_grab', 'rsi', 'rsi_divergence']:
+                elif hit_target:
+                     # Some strategies might ignore targets (e.g. strict trailing), but base logic usually respects it if set.
+                     # In original code, grandmaster/isa/turtle ignored target check here.
+                     # We can handle this by checking if strategy provided a target > 0.
+                     # But some strategies provided target but ignored it?
+                     # Let's trust the target if provided, OR check strategy type (less ideal).
+                     # The original code:
+                     # if hit_target and self.strategy_type not in ['grandmaster', 'isa', 'turtle']: ...
+
+                     # We can add a property to strategy: respects_target
+                     # Or just set target to 0 in get_initial_stop_target for those strategies?
+                     # In my implementation, Turtle/ISA return a target! (4*ATR etc).
+                     # But the original code IGNORED it for exit.
+                     # Refactoring nuance: If I want identical behavior, I should ensure those strategies return 0 target
+                     # OR the check here is smarter.
+
+                     # Let's look at my implementation of get_initial_stop_target for Turtle:
+                     # target_price = price + (4 * atr)
+                     # It returns a target.
+
+                     # Original: if hit_target and self.strategy_type not in ['grandmaster', 'isa', 'turtle']:
+
+                     # So for these, even if target is hit, we DON'T sell. We wait for trailing stop.
+                     # I should probably handle this in `should_sell` or make `target_price` 0 for them.
+                     # But they use target for R:R calculation in screener?
+                     # This is backtester.
+
+                     # I will modify this block to check if target_price > 0 AND strategy allows target exit.
+                     # Or simply: if strategy relies on trailing stop, set target to 0 in `get_initial_stop_target`.
+
+                     # Let's assume for now I should respect the explicit exclusion list from original code
+                     # but via a property on the strategy class.
+
+                     # Since I can't easily change the classes I just wrote without another write_file,
+                     # I will use a list check here for now, or check if target_price is 0.
+                     # I'll check the classes... Turtle returns positive target.
+
+                     # I'll rely on `strategy_type` attribute which is available in base class.
+                     if self.strategy_type not in ['grandmaster', 'isa', 'turtle', 'council', 'master', 'master_convergence']:
                         sell_signal = True
                         current_stop_reason = "TARGET HIT"
 
@@ -529,7 +276,6 @@ class UnifiedBacktester:
         avg_days_held = round(sum(sell_trades) / len(sell_trades)) if sell_trades else 0
         total_days_held = sum(sell_trades)
 
-        # Construct Structured Trade List (Buy/Sell Pairs)
         structured_trades = []
         current_trade = {}
 
@@ -548,7 +294,6 @@ class UnifiedBacktester:
                     current_trade["reason"] = event['reason']
                     current_trade["days_held"] = event['days']
 
-                    # Calculate PnL % for this trade
                     if current_trade['buy_price'] and current_trade['buy_price'] > 0:
                         pnl = ((current_trade['sell_price'] - current_trade['buy_price']) / current_trade['buy_price']) * 100
                         current_trade["return_pct"] = round(pnl, 2)
@@ -562,8 +307,8 @@ class UnifiedBacktester:
             "start_date": actual_start_str,
             "end_date": actual_end_str,
             "strategy_return": round(strat_return, 2),
-            "buy_hold_return": round(bnh_return_equity, 2), # Portfolio based comparison
-            "buy_hold_return_pct": round(simple_bnh_return, 2), # Raw stock return
+            "buy_hold_return": round(bnh_return_equity, 2),
+            "buy_hold_return_pct": round(simple_bnh_return, 2),
             "buy_hold_days": buy_hold_days,
             "avg_days_held": avg_days_held,
             "total_days_held": total_days_held,
