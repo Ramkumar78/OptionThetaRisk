@@ -11,7 +11,7 @@ from option_auditor.strategies.market import screen_market, screen_sectors, scre
 from option_auditor.strategies.bull_put import screen_bull_put_spreads
 from option_auditor.strategies.mms_ote import screen_mms_ote_setups
 from option_auditor.strategies.hybrid import screen_hybrid_strategy
-from option_auditor.strategies.utils import calculate_dominant_cycle as _calculate_dominant_cycle
+from option_auditor.strategies.math_utils import calculate_dominant_cycle as _calculate_dominant_cycle
 from option_auditor.screener import (
     screen_turtle_setups, screen_5_13_setups, screen_darvas_box,
     screen_trend_followers_isa, screen_fourier_cycles

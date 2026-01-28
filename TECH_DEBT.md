@@ -69,7 +69,28 @@
 - **Priority**: High
 - **Status**: Open.
 
+## 14. Test Suite Fragmentation (New)
+- **Issue**: `tests/` directory contains numerous temporary or fix-specific test files like `test_india_data_fetch_fix.py`, `test_backtest_extended.py`, etc.
+- **Impact**: Clutters the test suite, potentially duplicates tests, and makes maintenance harder.
+- **Priority**: High
+- **Status**: In Progress.
+    - Merged and deleted `test_hybrid_fix.py` and `test_storage_url_fix.py`.
+    - Remaining files need review.
+
+## 15. Redundant Data Modules
+- **Issue**: `us_stock_data.py`, `uk_stock_data.py`, `india_stock_data.py` duplicate logic for fetching tickers and handling sector lists.
+- **Impact**: Code duplication, harder to update sector logic globally.
+- **Priority**: Medium
+- **Status**: Open.
+
+## 16. Stale Code / Potential Dead Code
+- **Issue**: `option_auditor/strategies/grandmaster_screener.py` exists alongside `option_auditor/strategies/master.py`. `main_analyzer.py` vs `journal_analyzer.py`.
+- **Impact**: Confusion for developers, maintenance burden.
+- **Priority**: Low
+- **Status**: Open.
+
 ## Resolved Items
+- **Environment Configuration Issues**: Fixed `pytest.ini` to remove invalid arguments, enabling tests to collect/run.
 - **Monolithic Controller**: Refactored `webapp/app.py` to use Blueprints (`webapp/blueprints/`).
 - **Global State Usage**: Moved `screener_cache` to `webapp/cache.py`.
 - **Code Duplication in Ticker Resolution**: Addressed by centralizing logic in `option_auditor/common/screener_utils.py`.

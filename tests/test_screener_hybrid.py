@@ -93,3 +93,47 @@ class TestScreenerHybrid(unittest.TestCase):
             r = results[0]
             self.assertEqual(r['trend'], "BULLISH")
             self.assertIn("BREAKOUT BUY", r['verdict'])
+
+    def create_mock_df(self, closes, volume=1000000):
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=len(closes))
+        df = pd.DataFrame({
+            'Open': closes,
+            'High': [c * 1.01 for c in closes],
+            'Low': [c * 0.99 for c in closes],
+            'Close': closes,
+            'Volume': [volume] * len(closes)
+        }, index=dates)
+        return df
+
+    @patch('yfinance.download')
+    def test_hybrid_volume_filtering(self, mock_yf_download):
+        """Test volume filtering logic (Liquid vs Illiquid vs Watchlist)"""
+        tickers = ["LIQUID", "ILLIQUID", "WATCH_ILLIQUID"]
+        closes = [100.0] * 250
+
+        df_liq = self.create_mock_df(closes, volume=1000000)
+        df_ill = self.create_mock_df(closes, volume=100000)
+        df_watch = self.create_mock_df(closes, volume=100000)
+
+        frames = {"LIQUID": df_liq, "ILLIQUID": df_ill, "WATCH_ILLIQUID": df_watch}
+
+        # Construct MultiIndex columns
+        dfs = []
+        keys = []
+        for k, v in frames.items():
+            dfs.append(v)
+            keys.append(k)
+
+        batch_df = pd.concat(dfs, axis=1, keys=keys)
+        mock_yf_download.return_value = batch_df
+
+        # Patch SECTOR_COMPONENTS to include our watch ticker
+        # Note: We patch the dictionary in screener_utils where it is likely used
+        with patch.dict('option_auditor.common.screener_utils.SECTOR_COMPONENTS', {"WATCH": ["WATCH_ILLIQUID"]}):
+             results = screen_hybrid_strategy(ticker_list=tickers, time_frame="1d")
+
+        result_tickers = [r['ticker'] for r in results]
+
+        self.assertIn("LIQUID", result_tickers)
+        self.assertNotIn("ILLIQUID", result_tickers)
+        self.assertIn("WATCH_ILLIQUID", result_tickers)
