@@ -5,79 +5,59 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 from datetime import datetime, timedelta
 
-# Import Strategy Logic (Keep specific calc logic, but we govern execution here)
-from option_auditor.strategies.turtle import TurtleStrategy
+# Import Strategy Logic
+from option_auditor.strategies.isa import IsaStrategy
+# from option_auditor.strategies.bull_put import screen_bull_put_spreads # Use simplified logic for speed if needed
 from option_auditor.common.constants import TICKER_NAMES, SECTOR_COMPONENTS
-from option_auditor.common.data_utils import _calculate_trend_breakout_date
+from option_auditor.common.data_utils import _calculate_trend_breakout_date, fetch_batch_data_safe
+from option_auditor.common.screener_utils import _get_market_regime
 
 logger = logging.getLogger(__name__)
 
-# --- CONFIGURATION FOR 100K GBP ISA & 9.5K USD OPTIONS ---
+# --- CONFIGURATION ---
 ISA_CONFIG = {
     "capital": 100000.0,
     "currency": "GBP",
-    "risk_per_trade": 0.01, # 1% Risk
-    "max_pos_size": 0.20,   # Max 20% in one stock
-    "min_price": 10.0,
-    "min_vol_gbp": 1000000, # £1M daily turnover
-    "min_vol_usd": 20000000 # $20M daily turnover
+    "min_vol_gbp": 1000000,
+    "min_vol_usd": 20000000
 }
 
-OPTIONS_CONFIG = {
-    "capital": 9500.0,
-    "currency": "USD",
-    "risk_per_trade": 0.02, # 2% Risk (More aggressive on small acc)
-    "min_iv_rank": 20,
-    "min_vol_usd": 30000000
-}
-
-def get_market_regime():
+def get_market_regime_verdict():
     """
-    DALIO / SOROS CHECK:
-    Returns 'GREEN', 'YELLOW', 'RED'.
-    If SPY < 200SMA or VIX > 25, we do NOT buy stocks.
+    Returns 'GREEN', 'YELLOW', 'RED' based on SPY/VIX.
+    Refactored to use generic VIX fetch.
     """
     try:
-        tickers = ["SPY", "^VIX"]
-        # FIX: Changed period from "1y" to "2y" to ensure 200SMA has enough data points
-        data = yf.download(tickers, period="2y", progress=False, auto_adjust=True)
+        vix_price = _get_market_regime() # Returns float
 
-        # Handle multi-index columns from yfinance
-        if isinstance(data.columns, pd.MultiIndex):
-            # yfinance returns (Price, Ticker) MultiIndex
-            try:
-                spy = data['Close']['SPY']
-                vix = data['Close']['^VIX']
-            except KeyError:
-                 # Try reverse (Ticker, Price) just in case
-                spy = data['SPY']['Close']
-                vix = data['^VIX']['Close']
+        # We need SPY for the 200 SMA check
+        # Let's fetch SPY efficiently
+        spy = yf.download("SPY", period="2y", progress=False, auto_adjust=True)
+        if spy.empty:
+             return "YELLOW", f"VIX {vix_price:.1f} (SPY Fail)"
+
+        # Handle MultiIndex
+        if isinstance(spy.columns, pd.MultiIndex):
+             spy_close = spy['Close']['SPY'].iloc[-1]
+             spy_sma200 = spy['Close']['SPY'].rolling(200).mean().iloc[-1]
         else:
-            # Fallback if download structure changes
-            return "YELLOW", "Data Error"
+             spy_close = spy['Close'].iloc[-1]
+             spy_sma200 = spy['Close'].rolling(200).mean().iloc[-1]
 
-        # Check if we have enough data
-        if len(spy) < 200:
-             # Fallback if download is short, but "2y" should prevent this
-             return "YELLOW", "Insufficient SPY History"
-
-        spy_price = spy.iloc[-1]
-        spy_sma200 = spy.rolling(200).mean().iloc[-1]
-        vix_price = vix.iloc[-1]
-
-        # Safety check for NaN
         if pd.isna(spy_sma200):
-             # Fallback: If 200 SMA missing, try 50 SMA or just use VIX
-             if not pd.isna(vix_price) and vix_price > 25:
-                 return "RED", f"High Volatility (VIX {vix_price:.1f})"
-             return "YELLOW", "SMA N/A (Using VIX)"
+             spy_sma200 = spy_close # Fallback
 
-        if spy_price > spy_sma200 and vix_price < 20:
-            return "GREEN", f"Bullish (VIX {vix_price:.1f})"
-        elif spy_price > spy_sma200 and vix_price < 28:
-            return "YELLOW", f"Volatile Bull (VIX {vix_price:.1f})"
-        else:
-            return "RED", f"Bearish/Crash (VIX {vix_price:.1f})"
+        if spy_close < spy_sma200:
+             return "RED", f"Bearish (SPY < 200SMA, VIX {vix_price:.1f})"
+
+        if vix_price > 25:
+             return "RED", f"High Volatility (VIX {vix_price:.1f})"
+
+        if vix_price < 20:
+             return "GREEN", f"Bullish (VIX {vix_price:.1f})"
+
+        return "YELLOW", f"Volatile Bull (VIX {vix_price:.1f})"
+
     except Exception as e:
         logger.error(f"Regime Check Failed: {e}")
         return "YELLOW", "Check Failed"
@@ -85,173 +65,140 @@ def get_market_regime():
 def analyze_ticker_hardened(ticker, df, regime, mode="ISA"):
     """
     The Single Reliable Analysis Pipeline.
+    Refactored to use Strategy Classes.
     """
     try:
         # 1. DATA HYGIENE
-        if df.empty or len(df) < 252: return None
-
-        close = df['Close']
-        high = df['High']
-        low = df['Low']
-        volume = df['Volume']
-
-        curr_price = float(close.iloc[-1])
+        if df.empty or len(df) < 200: return None
 
         # 2. LIQUIDITY GATES (Institutional)
+        # Delegate to Strategy or Check here?
+        # Original code checked here.
+        if isinstance(df.columns, pd.MultiIndex):
+             close = df['Close'][ticker]
+             volume = df['Volume'][ticker]
+             high = df['High'][ticker]
+             low = df['Low'][ticker]
+        else:
+             close = df['Close']
+             volume = df['Volume']
+             high = df['High']
+             low = df['Low']
+
+        curr_price = float(close.iloc[-1])
         avg_vol_20 = float(volume.rolling(20).mean().iloc[-1])
         turnover = curr_price * avg_vol_20
 
         is_uk = ticker.endswith(".L")
 
+        # Specific check from original code
         if is_uk:
-            # Normalize Pence to Pounds for turnover calc if needed, usually Yahoo sends pence
-            # Assuming Yahoo sends pence for LSE stocks < 20gbp typically
-            turnover_gbp = (turnover / 100) if curr_price > 500 else turnover
-            if turnover_gbp < ISA_CONFIG["min_vol_gbp"]: return None
+             turnover_gbp = (turnover / 100) if curr_price > 500 else turnover
+             if turnover_gbp < ISA_CONFIG["min_vol_gbp"]: return None
         else:
-            if turnover < ISA_CONFIG["min_vol_usd"]: return None
+             if turnover < ISA_CONFIG["min_vol_usd"]: return None
 
-        # 3. REGIME FILTER (The Kill Switch)
-        # If Regime is RED, we only look for Short setups or Deep Value (not covered here).
-        # We return None to enforce discipline.
-        if regime == "RED":
-            return None
+        # 3. REGIME FILTER
+        if regime == "RED": return None
 
-        # 4. TECHNICAL METRICS
-        sma50 = close.rolling(50).mean().iloc[-1]
-        sma200 = close.rolling(200).mean().iloc[-1]
-        atr = ta.atr(high, low, close, length=14).iloc[-1]
-        rsi = ta.rsi(close, length=14).iloc[-1]
+        # 4. STRATEGY EXECUTION
+        result = None
 
-        # Relative Volume
-        rvol = volume.iloc[-1] / avg_vol_20
+        # Helper: Calculate Common Metrics (RSI, Score)
+        try:
+            rsi_series = ta.rsi(close, length=14)
+            rsi = float(rsi_series.iloc[-1]) if rsi_series is not None else 0.0
 
-        # 5. STRATEGY SELECTION BASED ON MODE
+            atr_series = ta.atr(high, low, close, length=14)
+            atr = float(atr_series.iloc[-1]) if atr_series is not None else 1.0
 
-        setup_type = None
-        action = None
-        stop_loss = 0.0
+            # Score: Slope of 90d reg / ATR
+            if len(close) > 90:
+                slope = (curr_price - float(close.iloc[-90])) / 90.0
+                quality_score = (slope / atr) * 100 if atr > 0 else 0
+            else:
+                quality_score = 0
+        except Exception:
+            rsi = 0.0
+            quality_score = 0.0
 
-        # --- MODE: ISA (Long Only Equity) ---
         if mode == "ISA":
-            # TREND TEMPLATE (Minervini)
-            # 1. Price > 200 SMA
-            # 2. Price > 50 SMA
-            # 3. 50 SMA > 200 SMA
-            # 4. Price at least 25% above 52-week low (Momentum)
-            # 5. Price within 25% of 52-week high (Near leaders)
+            # Use IsaStrategy
+            strategy = IsaStrategy(ticker, df, check_mode=False)
+            isa_res = strategy.analyze()
 
-            low_52w = low.rolling(252).min().iloc[-1]
-            high_52w = high.rolling(252).max().iloc[-1]
+            # IsaStrategy returns a dict if valid, else None.
+            # But IsaStrategy returns "WAIT" signals too.
+            # Original code only returned if "ISA LEADER BREAKOUT".
 
-            is_trend = (curr_price > sma200) and (curr_price > sma50) and (sma50 > sma200)
-            is_leader = (curr_price > 1.25 * low_52w) and (curr_price > 0.75 * high_52w)
+            if isa_res and ("ENTER" in isa_res['signal'] or "WATCH" in isa_res['signal']):
+                # Map to Unified Format
+                result = {
+                    "ticker": ticker,
+                    "company_name": isa_res['company_name'],
+                    "price": isa_res['price'],
+                    "master_verdict": f"🚀 ISA {isa_res['signal']}", # Add Rocket
+                    "action": f"BUY {isa_res.get('shares', 0)} QTY",
+                    "stop_loss": isa_res['stop_loss'],
+                    "vol_scan": f"{isa_res['atr_value']} ATR", # Approx
+                    "rsi": round(rsi, 0),
+                    "quality_score": round(quality_score, 2),
+                    "master_color": "green",
+                    "breakout_date": isa_res['breakout_date']
+                }
 
-            # TRIGGER: VCP Breakout or Pocket Pivot
-            # Simple Trigger: Consolidation breakout (Close > 20 Day High) + Volume
-            high_20d = high.rolling(20).max().shift(1).iloc[-1]
-            breakout = (curr_price > high_20d) and (rvol > 1.2)
-
-            if is_trend and is_leader and breakout:
-                setup_type = "🚀 ISA LEADER BREAKOUT"
-                stop_loss = curr_price - (2.5 * atr) # Wide swing stop
-
-                # POSITION SIZING (Kelly/Fixed Ratio)
-                risk_amt = ISA_CONFIG["capital"] * ISA_CONFIG["risk_per_trade"]
-                risk_per_share = curr_price - stop_loss
-                if risk_per_share <= 0: risk_per_share = curr_price * 0.10
-
-                # FX Conversion for US stocks in ISA
-                fx_rate = 1.0 if is_uk else 0.79 # USD to GBP approx
-
-                shares = int((risk_amt) / (risk_per_share * fx_rate))
-
-                # Cap at max allocation
-                max_shares = int((ISA_CONFIG["capital"] * ISA_CONFIG["max_pos_size"]) / (curr_price * fx_rate))
-                shares = min(shares, max_shares)
-
-                action = f"BUY {shares} QTY"
-
-        # --- MODE: OPTIONS (US Income) ---
         elif mode == "OPTIONS" and not is_uk:
-            # BULL PUT SPREAD (Thorp/Income)
-            # 1. Trend is Up (Price > 50SMA)
-            # 2. Not Overbought (RSI < 70)
-            # 3. High IV Rank (Implied here by ATR ratio > 2.5% of price)
-
+            # Re-implement lightweight Bull Put check or use technicals
+            # Original code: Trend > 50SMA, RSI < 55 (Pullback), ATR > 2%
+            sma50 = close.rolling(50).mean().iloc[-1]
             atr_pct = (atr / curr_price) * 100
+
             is_uptrend = curr_price > sma50
-            pullback = rsi < 55 and rsi > 40 # Slight dip in uptrend
+            pullback = 40 < rsi < 55
 
             if is_uptrend and pullback and atr_pct > 2.0:
-                setup_type = "🛡️ BULL PUT SPREAD"
-                short_strike = round(low.rolling(10).min().iloc[-1], 1) # Support level
-                long_strike = round(short_strike - 5, 1)
-                credit_est = (curr_price - short_strike) * 0.15 # Rough est
+                 short_strike = round(low.rolling(10).min().iloc[-1], 1)
+                 long_strike = round(short_strike - 5, 1)
+                 result = {
+                    "ticker": ticker,
+                    "company_name": TICKER_NAMES.get(ticker, ticker),
+                    "price": curr_price,
+                    "master_verdict": f"🛡️ BULL PUT ({short_strike}/{long_strike})",
+                    "action": "SELL VERTICAL PUT",
+                    "stop_loss": short_strike,
+                    "vol_scan": f"{atr_pct:.1f}% ATR",
+                    "rsi": round(rsi, 0),
+                    "quality_score": round(quality_score, 2),
+                    "master_color": "blue",
+                    "breakout_date": _calculate_trend_breakout_date(df)
+                 }
 
-                setup_type += f" ({short_strike}/{long_strike})"
-                action = "SELL VERTICAL PUT"
-
-        if not setup_type:
-            return None
-
-        # SCORE: Risk Adjusted Momentum
-        # (Slope of 90d reg / ATR) - measures smoothness of trend
-        slope = (curr_price - close.iloc[-90]) / 90
-        quality_score = (slope / atr) * 100
-
-        # Calculate Breakout Date
-        breakout_date = _calculate_trend_breakout_date(df)
-
-        return {
-            "ticker": ticker,
-            "company_name": TICKER_NAMES.get(ticker, ticker),
-            "price": curr_price,
-            "master_verdict": setup_type,
-            "action": action,
-            "stop_loss": round(stop_loss, 2),
-            "vol_scan": f"{rvol:.1f}x Vol",
-            "rsi": round(rsi, 0),
-            "quality_score": round(quality_score, 2),
-            "master_color": "green" if "ISA" in mode else "blue",
-            "breakout_date": breakout_date
-        }
+        return result
 
     except Exception as e:
+        # logger.error(f"Error in analyze_ticker_hardened: {e}")
         return None
 
 def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d") -> dict:
     """
     The Single Entry Point.
-    1. Checks Regime.
-    2. Scans UK/US Universes.
-    3. Returns enriched list in dictionary format:
-       {
-          "regime": "GREEN/YELLOW/RED ...",
-          "results": [...]
-       }
     """
     # 1. DETERMINE REGIME
-    regime_status, regime_note = get_market_regime()
+    regime_status, regime_note = get_market_regime_verdict()
 
     # 2. DEFINE UNIVERSE
-    # Expand the default list to be useful.
     if ticker_list is None:
-        # Default mix of US Tech + UK Blue Chips
         ticker_list = [
-            "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "META", "TSLA", "AMD", "NFLX", # US Leaders
-            "LLOY.L", "AZN.L", "SHEL.L", "HSBA.L", "BP.L", "RIO.L", "GSK.L", "ULVR.L", # UK Leaders
-            "SPY", "QQQ", "IWM", "GLD" # ETFs
+            "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "META", "TSLA", "AMD", "NFLX",
+            "LLOY.L", "AZN.L", "SHEL.L", "HSBA.L", "BP.L", "RIO.L", "GSK.L", "ULVR.L",
+            "SPY", "QQQ", "IWM", "GLD"
         ]
-        # Add Sector Watch
         if "WATCH" in SECTOR_COMPONENTS:
              ticker_list = list(set(ticker_list + SECTOR_COMPONENTS["WATCH"]))
 
     # 3. FETCH DATA
-    from option_auditor.common.data_utils import fetch_batch_data_safe
     data = fetch_batch_data_safe(ticker_list, period="2y", interval="1d")
 
-    # If NO DATA at all, return empty results but still return the regime
     if data.empty:
         return {"regime": regime_note, "results": []}
 
@@ -263,25 +210,19 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
             df = pd.DataFrame()
             if isinstance(data.columns, pd.MultiIndex):
                 # Try both level orders (Price, Ticker) vs (Ticker, Price)
+                # fetch_batch_data_safe usually returns (Price, Ticker) or (Ticker, Price) depending on yfinance version/params
+                # But we can try to extract ticker column
                 try:
                     df = data.xs(ticker, axis=1, level=1).copy()
                 except KeyError:
                     try:
                         df = data.xs(ticker, axis=1, level=0).copy()
                     except KeyError:
-                         # Ticker not found in columns
                          pass
             else:
-                df = data.copy()
+                df = data.copy() # Only if single ticker?
 
             df = df.dropna(how='all')
-
-            # DETECT MODE
-            mode = "ISA" # Default
-            if ticker not in ["LLOY.L", "AZN.L"] and not ticker.endswith(".L"):
-                # If it's a US stock, we might want Options or ISA
-                # For this One Screener, we calculate BOTH and return the best
-                pass
 
             # Check ISA Fit
             res_isa = analyze_ticker_hardened(ticker, df, regime_status, mode="ISA")
@@ -302,10 +243,8 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
         for future in as_completed(futures):
             res = future.result()
             if res:
-                # We no longer inject regime here
                 results.append(res)
 
-    # Sort by Quality Score (Smooth Momentum)
     results.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
 
     return {"regime": regime_note, "results": results}

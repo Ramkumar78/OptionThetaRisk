@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pandas as pd
 from option_auditor.screener import screen_5_13_setups
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
 def test_screen_ema_fresh_breakout(mock_fetch, mock_market_data):
     # Fresh 5/13 Breakout:
     # Curr 5 > 13
@@ -64,7 +64,7 @@ def test_screen_ema_fresh_breakout(mock_fetch, mock_market_data):
              assert "FRESH 5/13 BREAKOUT" in results[0]['signal']
              assert results[0]['color'] == "green"
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
 def test_screen_ema_dump(mock_fetch, mock_market_data):
     df = mock_market_data(days=50, price=100.0)
     mock_fetch.return_value = df
