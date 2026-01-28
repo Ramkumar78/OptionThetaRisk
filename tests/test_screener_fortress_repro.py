@@ -7,8 +7,8 @@ from option_auditor.common.constants import LIQUID_OPTION_TICKERS
 import pandas as pd
 import numpy as np
 
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener.yf.download')
+@patch('option_auditor.common.screener_utils.get_cached_market_data')
+@patch('yfinance.download')
 def test_screen_fortress_performance(mock_download, mock_get_cached_data):
     """
     Test the performance of the Fortress screener using mocks to ensure speed and stability.

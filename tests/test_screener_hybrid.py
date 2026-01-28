@@ -8,7 +8,7 @@ class TestScreenerHybrid(unittest.TestCase):
 
     # Patching where ScreeningRunner calls it
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
-    @patch('option_auditor.common.screener_utils.get_cached_market_data')
+    @patch('option_auditor.strategies.hybrid.get_cached_market_data')
     @patch('option_auditor.common.screener_utils.SECTOR_COMPONENTS', {"WATCH": ["AAPL"]})
     def test_screen_hybrid_strategy_bullish_bottom(self, mock_cache, mock_fetch):
         """Test Scenario A: Bullish Trend + Cycle Bottom"""
@@ -24,11 +24,11 @@ class TestScreenerHybrid(unittest.TestCase):
             'Volume': np.random.randint(1000000, 2000000, 500)
         }, index=dates)
 
-        # We simulate cache miss, forcing fetch
-        mock_cache.return_value = pd.DataFrame()
-        mock_fetch.return_value = df
+        # Mock cache to return the data directly
+        mock_cache.return_value = df
+        mock_fetch.return_value = pd.DataFrame()
 
-        with patch('option_auditor.screener._calculate_dominant_cycle') as mock_cycle:
+        with patch('option_auditor.strategies.hybrid.calculate_dominant_cycle') as mock_cycle:
             mock_cycle.return_value = (20.0, -0.9)
 
             results = screen_hybrid_strategy(ticker_list=["TEST"])
@@ -40,7 +40,8 @@ class TestScreenerHybrid(unittest.TestCase):
 
 
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
-    def test_screen_hybrid_strategy_bearish_top(self, mock_fetch):
+    @patch('option_auditor.strategies.hybrid.get_cached_market_data')
+    def test_screen_hybrid_strategy_bearish_top(self, mock_cache, mock_fetch):
         """Test Scenario C: Bearish Trend + Cycle Top"""
         dates = pd.date_range(end='2023-01-01', periods=500)
 
@@ -52,9 +53,9 @@ class TestScreenerHybrid(unittest.TestCase):
             'Volume': np.random.randint(1000000, 2000000, 500)
         }, index=dates)
 
-        mock_fetch.return_value = df
+        mock_cache.return_value = df
 
-        with patch('option_auditor.screener._calculate_dominant_cycle') as mock_cycle:
+        with patch('option_auditor.strategies.hybrid.calculate_dominant_cycle') as mock_cycle:
             mock_cycle.return_value = (20.0, 0.8)
 
             results = screen_hybrid_strategy(ticker_list=["TEST"])
@@ -65,7 +66,8 @@ class TestScreenerHybrid(unittest.TestCase):
             self.assertIn("TOP", r['cycle'])
 
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
-    def test_screen_hybrid_strategy_momentum_buy(self, mock_fetch):
+    @patch('option_auditor.strategies.hybrid.get_cached_market_data')
+    def test_screen_hybrid_strategy_momentum_buy(self, mock_cache, mock_fetch):
         """Test Scenario B: Bullish + Breakout (High > 50d High)"""
         dates = pd.date_range(end='2023-01-01', periods=500)
         closes = np.linspace(100, 200, 500)
@@ -80,9 +82,9 @@ class TestScreenerHybrid(unittest.TestCase):
             'Volume': np.random.randint(1000000, 2000000, 500)
         }, index=dates)
 
-        mock_fetch.return_value = df
+        mock_cache.return_value = df
 
-        with patch('option_auditor.screener._calculate_dominant_cycle') as mock_cycle:
+        with patch('option_auditor.strategies.hybrid.calculate_dominant_cycle') as mock_cycle:
             mock_cycle.return_value = (20.0, 0.0)
 
             results = screen_hybrid_strategy(ticker_list=["TEST"])

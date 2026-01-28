@@ -22,5 +22,5 @@ def mock_market_data_turtle():
 
 @when(parsers.parse('I run the Turtle screener for timeframe "{time_frame}"'), target_fixture="results")
 def run_turtle_screener(ticker_list, time_frame, mock_market_data_turtle):
-    with patch('option_auditor.screener._prepare_data_for_ticker', return_value=mock_market_data_turtle):
+    with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=mock_market_data_turtle):
         return screen_turtle_setups(ticker_list=ticker_list, time_frame=time_frame)

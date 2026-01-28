@@ -6,7 +6,7 @@ from option_auditor import screener
 
 @pytest.fixture
 def mock_yf_download():
-    with patch('option_auditor.screener.yf.download') as mock:
+    with patch('yfinance.download') as mock:
         yield mock
 
 def create_mock_df(closes, volume=1000000):

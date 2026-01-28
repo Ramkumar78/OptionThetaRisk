@@ -35,5 +35,5 @@ def mock_market_data_alpha():
 
 @when(parsers.parse('I run the Alpha 101 screener for timeframe "{time_frame}"'), target_fixture="results")
 def run_alpha_screener(ticker_list, time_frame, mock_market_data_alpha):
-     with patch('option_auditor.screener._prepare_data_for_ticker', return_value=mock_market_data_alpha):
+     with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=mock_market_data_alpha):
         return screen_alpha_101(ticker_list=ticker_list, time_frame=time_frame)

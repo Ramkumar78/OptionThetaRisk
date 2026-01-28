@@ -84,7 +84,7 @@ def test_risk_pct_validation():
         'Volume': 1000000
     }, index=dates)
 
-    with patch('option_auditor.screener.fetch_data_with_retry', return_value=df), \
+    with patch('option_auditor.common.data_utils.fetch_data_with_retry', return_value=df), \
          patch('option_auditor.screener.logger') as mock_logger:
 
         # Test Case 1: Too high (e.g. 50%)

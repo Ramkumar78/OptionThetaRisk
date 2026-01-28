@@ -127,8 +127,8 @@ class TestCacheLogic:
 class TestScreenerIntegration:
     """Tests for high-level screener functions using the cache."""
 
-    @patch("option_auditor.screener.get_cached_market_data")
-    @patch("option_auditor.screener.yf.download")
+    @patch("option_auditor.common.screener_utils.get_cached_market_data")
+    @patch("yfinance.download")
     def test_screen_trend_followers_isa_large_list(self, mock_yf, mock_cache):
         """Verify ISA screener routes large Indian lists to cache."""
         # > 50 tickers
@@ -140,8 +140,8 @@ class TestScreenerIntegration:
         mock_cache.assert_called_once_with(long_list, period="2y", cache_name="market_scan_india")
         mock_yf.assert_not_called()
 
-    @patch("option_auditor.screener.get_cached_market_data")
-    @patch("option_auditor.screener.yf.download")
+    @patch("option_auditor.common.screener_utils.get_cached_market_data")
+    @patch("yfinance.download")
     def test_screen_hybrid_strategy_india(self, mock_yf, mock_cache):
         """Verify Hybrid screener routes Indian requests to correct cache name."""
         tickers = ["RELIANCE.NS", "TCS.NS"] 
@@ -155,7 +155,7 @@ class TestScreenerIntegration:
         args, kwargs = mock_cache.call_args
         assert kwargs['cache_name'] == "market_scan_india"
 
-    @patch("option_auditor.screener.get_cached_market_data")
+    @patch("option_auditor.common.screener_utils.get_cached_market_data")
     def test_screen_hybrid_strategy_defaults(self, mock_cache):
         """Verify Hybrid screener defaults for US."""
         mock_cache.return_value = pd.DataFrame()

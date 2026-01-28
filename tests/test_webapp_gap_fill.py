@@ -136,7 +136,7 @@ def test_screen_error(client_with_mock_storage):
 def test_screen_turtle_regions(client_with_mock_storage):
     client, _ = client_with_mock_storage
     # Patch BOTH locations to ensure we catch it
-    with patch("option_auditor.screener.get_cached_market_data") as mock_data_screener, \
+    with patch("option_auditor.common.screener_utils.get_cached_market_data") as mock_data_screener, \
          patch("option_auditor.common.data_utils.get_cached_market_data") as mock_data_common:
 
         mock_data_screener.return_value = pd.DataFrame()

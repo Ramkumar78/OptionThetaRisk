@@ -26,8 +26,8 @@ def run_master_screener(ticker_list):
 
     # Patch BOTH get_cached_market_data AND fetch_batch_data_safe
     # because check_mode=True triggers fetch_batch_data_safe
-    with patch('option_auditor.screener.get_cached_market_data', return_value=big_data), \
-         patch('option_auditor.screener.fetch_batch_data_safe', return_value=big_data):
+    with patch('option_auditor.common.screener_utils.get_cached_market_data', return_value=big_data), \
+         patch('option_auditor.common.screener_utils.fetch_batch_data_safe', return_value=big_data):
 
         return screen_master_convergence(ticker_list=ticker_list, check_mode=True)
 

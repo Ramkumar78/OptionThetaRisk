@@ -25,8 +25,8 @@ def run_quantum_screener(ticker_list):
     # Quantum screener logic handles MultiIndex or Flat.
     # It calls get_cached_market_data.
 
-    with patch('option_auditor.screener.get_cached_market_data') as mock_data, \
-         patch('option_auditor.screener.fetch_batch_data_safe') as mock_fetch:
+    with patch('option_auditor.common.screener_utils.get_cached_market_data') as mock_data, \
+         patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch:
 
         # Construct MultiIndex DF to be safe
         dfs = [df for _ in ticker_list]

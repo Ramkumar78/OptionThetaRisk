@@ -20,5 +20,5 @@ def mock_market_data():
 
 @when(parsers.parse('I run the 5/13 screener for timeframe "{time_frame}"'), target_fixture="results")
 def run_screener(ticker_list, time_frame, mock_market_data):
-    with patch('option_auditor.screener._prepare_data_for_ticker', return_value=mock_market_data):
+    with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=mock_market_data):
         return screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)

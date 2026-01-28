@@ -63,6 +63,12 @@
     - Consolidated `test_master_screener_new.py` into `test_master_screener.py`.
     - Remaining `_new.py` files need review.
 
+## 10. God Object / Logic Duplication (QuantPhysicsEngine)
+- **Issue**: `QuantPhysicsEngine` in `option_auditor/quant_engine.py` contains low-level math logic (Hurst, Entropy) that is duplicated or overlaps with `strategies/fourier.py` and `strategies/utils.py`.
+- **Impact**: Maintenance burden, potential for inconsistent calculations.
+- **Priority**: Medium
+- **Status**: Open.
+
 ## Resolved Items
 - **Monolithic Controller**: Refactored `webapp/app.py` to use Blueprints (`webapp/blueprints/`).
 - **Global State Usage**: Moved `screener_cache` to `webapp/cache.py`.
@@ -88,3 +94,5 @@
 - **Mixed Logic in Unified Screener**: Refactored `option_auditor/unified_screener.py` to delegate to `IsaStrategy` and reused components.
 - **Resurfaced Test Suite Fragmentation (Unwanted Files)**: Deleted `test_backtester_new.py`, `test_webapp_coverage_new.py`, `test_screener_extended_more.py`, etc.
 - **Duplicate Logic in Unified Screener**: Addressed by refactoring `unified_screener.py` to remove duplicate regime check and strategy logic.
+- **Unused/Stale Code (PortfolioOptimizer)**: Deleted `option_auditor/optimization.py` and `tests/test_optimization.py`.
+- **Broken Tests due to Invalid Patch Paths**: Fixed 20+ test files by updating patch paths to correct locations (`common.screener_utils`, `strategies.*`, `yfinance`) and resolving `AttributeError`s caused by refactoring.

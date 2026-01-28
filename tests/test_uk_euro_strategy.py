@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from option_auditor.screener import screen_hybrid_strategy
 
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener._calculate_dominant_cycle')
+@patch('option_auditor.common.screener_utils.get_cached_market_data')
+@patch('option_auditor.strategies.utils.calculate_dominant_cycle')
 def test_screen_hybrid_strategy_uk_euro(mock_cycle, mock_get_data):
     # Setup mock data for indicators
     # We need enough data for rolling(200), rolling(50), etc.

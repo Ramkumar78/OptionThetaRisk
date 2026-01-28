@@ -20,7 +20,7 @@ def create_mock_data(rows=200, price=100.0, trend=0.1):
 
 class TestHybridMissingKey:
 
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
     def test_hybrid_returns_pct_change(self, mock_download):
         """Test that hybrid screener returns pct_change_1d key."""
         mock_df = create_mock_data(rows=250)
@@ -55,7 +55,7 @@ class TestHybridMissingKey:
         assert 'pct_change_1d' in result, "pct_change_1d missing in hybrid result"
         assert result['pct_change_1d'] is not None
 
-    @patch('option_auditor.screener.fetch_batch_data_safe')
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
     def test_fourier_returns_pct_change(self, mock_fetch):
         """Test Fourier screener returns pct_change_1d."""
         mock_df = create_mock_data(rows=200)
@@ -73,7 +73,7 @@ class TestHybridMissingKey:
         if len(results) > 0:
             assert 'pct_change_1d' in results[0], "pct_change_1d missing in fourier result"
 
-    @patch('option_auditor.screener.get_cached_market_data')
+    @patch('option_auditor.common.screener_utils.get_cached_market_data')
     def test_master_returns_pct_change(self, mock_download):
         """Test Master screener returns pct_change_1d."""
         mock_df = create_mock_data(rows=250)
