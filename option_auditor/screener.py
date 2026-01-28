@@ -48,6 +48,8 @@ from option_auditor.strategies.bull_put import screen_bull_put_spreads
 from option_auditor.strategies.squeeze import screen_bollinger_squeeze
 from option_auditor.strategies.liquidity import screen_liquidity_grabs, _identify_swings, _detect_fvgs
 from option_auditor.strategies.fortress import screen_dynamic_volatility_fortress
+from option_auditor.strategies.rsi_divergence import RsiDivergenceStrategy
+from option_auditor.strategies.fourier import FourierStrategy
 from option_auditor.common.screener_utils import (
     ScreeningRunner,
     resolve_region_tickers,
@@ -900,38 +902,6 @@ def screen_trend_followers_isa(ticker_list: list = None, risk_per_trade_pct: flo
 # -------------------------------------------------------------------------
 import numpy as np
 
-def _calculate_hilbert_phase(prices):
-    """
-    Calculates Instantaneous Phase using the Hilbert Transform.
-    FIX: Replaces rigid FFT with Analytic Signal for non-stationary data.
-    Returns:
-        - phase: (-pi to +pi) where -pi/pi is a trough/peak.
-        - strength: Magnitude of the cycle (Amplitude).
-    """
-    try:
-        if len(prices) < 30: return None, None
-
-        # 1. Log Returns to normalize magnitude
-        # We work with price deviations, but log prices are safer for trends
-        log_prices = np.log(prices)
-
-        # 2. Detrend (Linear) to isolate oscillatory component
-        # 'linear' detrending removes the primary trend so we see the cycle
-        detrended = detrend(log_prices, type='linear')
-
-        # 3. Apply Hilbert Transform to get Analytic Signal
-        analytic_signal = hilbert(detrended)
-
-        # 4. Extract Phase (Angle) and Amplitude (Abs)
-        # Phase ranges from -pi to +pi radians
-        phase = np.angle(analytic_signal)[-1]
-        amplitude = np.abs(analytic_signal)[-1]
-
-        return phase, amplitude
-
-    except Exception:
-        return None, None
-
 def _calculate_dominant_cycle(prices):
     """
     Uses FFT to find the dominant cycle period (in days) of a price series.
@@ -971,133 +941,26 @@ def screen_fourier_cycles(ticker_list: list = None, time_frame: str = "1d", regi
     """
     Screens for Cyclical Turns using Instantaneous Phase (Hilbert Transform).
     FIX: Removed fixed period limits (5-60d). Now detects geometric turns.
+    DELEGATES TO: option_auditor/strategies/fourier.py
     """
-    import pandas as pd
-    import numpy as np # Ensure numpy is imported
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
 
-    if ticker_list is None:
-        ticker_list = resolve_region_tickers(region)
+    def strategy(ticker, df):
+        return FourierStrategy(ticker, df).analyze()
 
-    results = []
+    results = runner.run(strategy)
+    # Sort by strength (descending)
+    def get_sort_key(x):
+        if not x: return 0
+        s = x.get('cycle_strength', '0%')
+        if isinstance(s, str):
+            try:
+                return float(s.replace('%', ''))
+            except:
+                return 0
+        return s
 
-    # Batch fetch logic remains same ...
-    try:
-        data = fetch_batch_data_safe(ticker_list, period="1y", interval="1d", chunk_size=100)
-    except:
-        return []
-
-    # Iterator setup ...
-    if isinstance(data.columns, pd.MultiIndex):
-        iterator = [(ticker, data[ticker]) for ticker in data.columns.unique(level=0)]
-    else:
-        iterator = [(ticker_list[0], data)] if len(ticker_list)==1 and not data.empty else []
-
-    for ticker, df in iterator:
-        try:
-            if isinstance(df.columns, pd.MultiIndex):
-                df = df.droplevel(0, axis=1)
-
-            df = df.dropna(how='all')
-            if len(df) < 50: continue
-            if ticker not in ticker_list: continue
-
-            # --- DSP PHYSICS CALCULATION ---
-            # Use 'Close' series values
-            closes = df['Close'].values
-
-            phase, strength = _calculate_hilbert_phase(closes)
-
-            if phase is None: continue
-
-            # --- SIGNAL LOGIC (Based on Radians) ---
-            # Phase -3.14 (or 3.14) is the TROUGH (Bottom)
-            # Phase 0 is the ZERO CROSSING (Midpoint/Trend)
-            # Phase 1.57 (pi/2) is the PEAK (Top)
-
-            # Normalize phase for display (-1 to 1 scale roughly)
-            norm_phase = phase / np.pi
-
-            signal = "WAIT"
-            verdict_color = "gray"
-
-            # Sine Wave Cycle logic:
-            # We want to catch the turn UP from the bottom.
-            # Bottom is +/- pi. As it crosses from negative to positive?
-            # Actually, Hilbert Phase moves continuously.
-            # Deep cycle low is typically near +/- pi boundaries depending on convention.
-
-            # DEFINITION:
-            # Phase close to +/- Pi = Trough (Oversold Cycle)
-            # Phase close to 0 = Peak (Overbought Cycle) in some implementations,
-            # BUT standard Hilbert on detrended data:
-            # Real part max = Peak, Real part min = Trough.
-            # Phase transitions align with the wave.
-
-            # Simplify: If Phase is turning from Negative to Positive (Sine wave bottom)
-
-            if 0.8 <= abs(norm_phase) <= 1.0:
-                signal = "🌊 CYCLICAL LOW (Bottoming)"
-                verdict_color = "green"
-            elif 0.0 <= abs(norm_phase) <= 0.2:
-                signal = "🏔️ CYCLICAL HIGH (Topping)"
-                verdict_color = "red"
-
-            # Filter weak cycles (Noise)
-            if strength < 0.02: # 2% Amplitude threshold
-                signal = "WAIT (Weak Cycle)"
-                verdict_color = "gray"
-
-            pct_change_1d = None
-            if len(df) >= 2:
-                pct_change_1d = ((closes[-1] - closes[-2]) / closes[-2]) * 100
-
-            # Calculate dominant period for context
-            period, rel_pos = _calculate_dominant_cycle(closes) or (0, 0)
-
-            # ATR for Stop/Target
-            if 'ATR' not in df.columns:
-                 df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            current_atr = df['ATR'].iloc[-1] if 'ATR' in df.columns and not df['ATR'].empty else 0.0
-
-            # Mean Reversion Logic: Stop 2 ATR, Target 2 ATR
-            curr_price = float(closes[-1])
-            if "LOW" in signal:
-                stop_loss = curr_price - (2 * current_atr)
-                target = curr_price + (2 * current_atr)
-            elif "HIGH" in signal:
-                stop_loss = curr_price + (2 * current_atr)
-                target = curr_price - (2 * current_atr)
-            else:
-                stop_loss = curr_price - (2 * current_atr)
-                target = curr_price + (2 * current_atr)
-
-            breakout_date = _calculate_trend_breakout_date(df)
-
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-            results.append({
-                "ticker": ticker,
-                "company_name": company_name,
-                "price": float(closes[-1]),
-                "pct_change_1d": pct_change_1d,
-                "signal": signal,
-                "stop_loss": round(stop_loss, 2),
-                "target": round(target, 2),
-                "cycle_phase": f"{phase:.2f} rad",
-                "cycle_strength": f"{strength*100:.1f}%", # Volatility of the cycle
-                "verdict_color": verdict_color,
-                "method": "Hilbert (Non-Stationary)",
-                "cycle_period": f"{period} days", # Legacy compatibility for tests
-                "breakout_date": breakout_date,
-                "atr_value": round(current_atr, 2),
-                "atr": round(current_atr, 2)
-            })
-
-        except Exception:
-            continue
-
-    results.sort(key=lambda x: x.get('cycle_strength', 0), reverse=True)
+    results.sort(key=get_sort_key, reverse=True)
     return results
 
 class StrategyAnalyzer:
@@ -2232,116 +2095,11 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
     Screens for RSI Divergences (Regular).
     Bullish: Price Lower Low, RSI Higher Low.
     Bearish: Price Higher High, RSI Lower High.
+    DELEGATES TO: option_auditor/strategies/rsi_divergence.py
     """
-    import pandas_ta as ta
-    import numpy as np
-    from scipy.signal import argrelextrema
-
     runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
 
-    def _find_divergence(price, rsi, lookback=30, order=3):
-        # Find peaks (Highs)
-        # argrelextrema returns indices of local maxima/minima
-        # order=3 means it must be the max of 3 neighbors on each side
-
-        if len(price) < lookback: return None, None
-
-        high_idx = argrelextrema(price.values, np.greater, order=order)[0]
-        low_idx = argrelextrema(price.values, np.less, order=order)[0]
-
-        current_idx = len(price) - 1
-        relevant_highs = [i for i in high_idx if (current_idx - i) < lookback]
-        relevant_lows = [i for i in low_idx if (current_idx - i) < lookback]
-
-        signal = None
-        div_type = None
-
-        # BEARISH DIVERGENCE CHECK (Higher Highs in Price, Lower Highs in RSI)
-        if len(relevant_highs) >= 2:
-            p2_idx = relevant_highs[-1] # Most recent peak
-            p1_idx = relevant_highs[-2] # Previous peak
-
-            # Check if recent peak is very recent (within last 5 bars)
-            if (current_idx - p2_idx) <= 5:
-                price_p2 = price.iloc[p2_idx]
-                price_p1 = price.iloc[p1_idx]
-
-                rsi_p2 = rsi.iloc[p2_idx]
-                rsi_p1 = rsi.iloc[p1_idx]
-
-                # Price made Higher High, RSI made Lower High
-                if price_p2 > price_p1 and rsi_p2 < rsi_p1:
-                    signal = "🐻 BEARISH DIVERGENCE"
-                    div_type = "Bearish"
-
-        # BULLISH DIVERGENCE CHECK (Lower Lows in Price, Higher Lows in RSI)
-        if len(relevant_lows) >= 2:
-            p2_idx = relevant_lows[-1]
-            p1_idx = relevant_lows[-2]
-
-            # Check if recent valley is very recent
-            if (current_idx - p2_idx) <= 5:
-                price_p2 = price.iloc[p2_idx]
-                price_p1 = price.iloc[p1_idx]
-
-                rsi_p2 = rsi.iloc[p2_idx]
-                rsi_p1 = rsi.iloc[p1_idx]
-
-                # Price made Lower Low, RSI made Higher Low
-                if price_p2 < price_p1 and rsi_p2 > rsi_p1:
-                    signal = "🐂 BULLISH DIVERGENCE"
-                    div_type = "Bullish"
-
-        return signal, div_type
-
     def strategy(ticker, df):
-        try:
-            if len(df) < 50: return None
-            if 'Close' not in df.columns: return None
-
-            # Calc RSI
-            rsi = ta.rsi(df['Close'], length=DEFAULT_RSI_LENGTH)
-            if rsi is None: return None
-            df['RSI'] = rsi
-
-            # Find Div
-            signal, div_type = _find_divergence(df['Close'], df['RSI'])
-
-            if signal:
-                curr_price = df['Close'].iloc[-1]
-                curr_rsi = df['RSI'].iloc[-1]
-
-                # ATR for stop/target
-                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
-                atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_price * 0.01)
-
-                stop_loss = curr_price - (3*atr) if div_type == "Bullish" else curr_price + (3*atr)
-                target = curr_price + (5*atr) if div_type == "Bullish" else curr_price - (5*atr)
-
-                base_ticker = ticker.split('.')[0]
-                company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-                pct_change_1d = 0.0
-                if len(df) >= 2:
-                    pct_change_1d = ((curr_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
-
-                return {
-                    "ticker": ticker,
-                    "company_name": company_name,
-                    "price": round(curr_price, 2),
-                    "pct_change_1d": round(pct_change_1d, 2),
-                    "signal": signal,
-                    "verdict": signal,
-                    "rsi": round(curr_rsi, 2),
-                    "atr": round(atr, 2),
-                    "atr_value": round(atr, 2),
-                    "stop_loss": round(stop_loss, 2),
-                    "target": round(target, 2),
-                    "breakout_date": _calculate_trend_breakout_date(df),
-                    "score": 90
-                }
-        except Exception as e:
-            return None
-        return None
+        return RsiDivergenceStrategy(ticker, df).analyze()
 
     return runner.run(strategy)
