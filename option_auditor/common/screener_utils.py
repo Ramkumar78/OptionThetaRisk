@@ -1,6 +1,7 @@
 import pandas as pd
 import logging
 import math
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from typing import List, Callable, Dict, Any, Optional
@@ -12,7 +13,7 @@ from option_auditor.common.data_utils import (
     prepare_data_for_ticker,
     _calculate_trend_breakout_date
 )
-from option_auditor.common.constants import SECTOR_COMPONENTS
+from option_auditor.common.constants import SECTOR_COMPONENTS, TICKER_NAMES
 
 from option_auditor.uk_stock_data import get_uk_tickers, get_uk_euro_tickers
 from option_auditor.india_stock_data import get_indian_tickers
@@ -123,6 +124,48 @@ def resolve_region_tickers(region: str) -> list:
         for t_list in SECTOR_COMPONENTS.values():
             all_tickers.extend(t_list)
         return list(set(all_tickers))
+
+def resolve_ticker(query: str) -> str:
+    """
+    Resolves a query (Ticker or Company Name) to a valid ticker symbol.
+    Uses TICKER_NAMES for lookup.
+    """
+    if not query: return ""
+    query = query.strip().upper()
+
+    if query in TICKER_NAMES:
+        return query
+
+    if "." not in query:
+        if f"{query}.L" in TICKER_NAMES: return f"{query}.L"
+        if f"{query}.NS" in TICKER_NAMES: return f"{query}.NS"
+
+    for k, v in TICKER_NAMES.items():
+        if v.upper() == query:
+            return k
+
+    for k, v in TICKER_NAMES.items():
+        if query in v.upper():
+            return k
+
+    return query
+
+def sanitize(val):
+    """
+    Converts NaN, Infinity, and -Infinity to None (JSON null).
+    Also converts numpy floats to standard Python floats.
+    This prevents the 'Out of range float values are not JSON compliant' error.
+    """
+    try:
+        if val is None: return None
+        # Handle numpy types and standard floats
+        if isinstance(val, (float, np.floating)):
+            if np.isnan(val) or np.isinf(val):
+                return None
+            return float(val) # Force conversion to python float
+        return val
+    except:
+        return None
 
 class ScreeningRunner:
     def __init__(self, ticker_list: Optional[List[str]] = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False, workers: int = 4):

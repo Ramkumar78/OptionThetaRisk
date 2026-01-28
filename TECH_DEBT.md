@@ -6,9 +6,7 @@
     - `screen_market`
     - `screen_hybrid_strategy`
     - `screen_master_convergence`
-    - `screen_quantum_setups`
     - `screen_alpha_101`
-    - `screen_options_only_strategy`
     - `screen_mms_ote_setups`
     - `screen_my_strategy`
 - **Impact**: Extremely difficult to maintain, test, and extend. High risk of breaking existing functionality.
@@ -17,6 +15,8 @@
     - `screen_turtle_setups`, `screen_trend_followers_isa`, `screen_vertical_put_spreads`, `screen_bull_put_spreads`, `screen_bollinger_squeeze`, `screen_rsi_divergence`, `screen_fourier_cycles`, `screen_liquidity_grabs`, and `screen_dynamic_volatility_fortress` have been refactored to `option_auditor/strategies/`.
     - **[NEW]** `screen_5_13_setups` refactored to `option_auditor/strategies/five_thirteen.py`.
     - **[NEW]** `screen_darvas_box` refactored to `option_auditor/strategies/darvas.py`.
+    - **[NEW]** `screen_quantum_setups` refactored to `option_auditor/strategies/quantum.py`.
+    - **[NEW]** `screen_options_only_strategy` refactored to `option_auditor/strategies/options_only.py`.
 
 ## 2. Missing/Incomplete Unit Tests
 - **Issue**: Comprehensive tests for all screener functions are lacking. Many strategies rely on "happy path" tests or implicit integration tests via `screener.py`.
@@ -36,11 +36,6 @@
 - **Priority**: Medium
 - **Status**: Addressed via `handle_screener_errors` decorator in `webapp/blueprints/screener_routes.py`.
 
-## 5. Complex Functions (Specifics)
-- **Issue**: `screen_options_only_strategy` is very long and contains nested logic.
-- **Impact**: Reduces readability and maintainability.
-- **Priority**: Low
-
 ## 6. Dead/Commented Code
 - **Issue**: There are commented-out imports and deprecated code blocks in `screener.py`.
 - **Impact**: Confuses developers and clutters the codebase.
@@ -52,3 +47,4 @@
 - **Code Duplication in Ticker Resolution**: Addressed by centralizing logic in `option_auditor/common/screener_utils.py`.
 - **Hardcoded Configuration**: Addressed by loading `DEFAULT_ACCOUNT_SIZE` from environment variables in `option_auditor/common/constants.py`.
 - **Hardcoded Financial Constants**: Addressed by replacing hardcoded values in `screener.py` with imports from `common/constants.py`.
+- **Duplicate Utility Functions**: Moved `resolve_ticker` and added `sanitize` to `option_auditor/common/screener_utils.py` for better reuse.
