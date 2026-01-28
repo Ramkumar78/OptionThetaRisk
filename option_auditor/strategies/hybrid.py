@@ -291,9 +291,10 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
 
-def screen_master_convergence(ticker_list: list = None, region: str = "us", check_mode: bool = False, time_frame: str = "1d") -> list:
+def screen_confluence_scan(ticker_list: list = None, region: str = "us", check_mode: bool = False, time_frame: str = "1d") -> list:
     """
     Runs ALL strategies on the dataset to find CONFLUENCE.
+    Formerly screen_master_convergence (renamed to avoid conflict with Fortress Master).
     """
     if ticker_list is None:
         if region == "us" or region is None:

@@ -42,8 +42,9 @@ from option_auditor.strategies.alpha import (
 )
 from option_auditor.strategies.hybrid import (
     screen_hybrid_strategy,
-    screen_master_convergence
+    screen_confluence_scan
 )
+from option_auditor.strategies.master import screen_master_convergence
 from option_auditor.strategies.monte_carlo import screen_monte_carlo_forecast
 
 # -------------------------------------------------------------------------

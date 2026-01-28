@@ -59,13 +59,22 @@
 - **Issue**: Test files use various naming schemes (`test_..._new.py`, `test_..._extended.py`, `test_..._direct.py`).
 - **Impact**: Hard to organize and discover tests.
 - **Priority**: Low
-- **Status**: Open
+- **Status**: In Progress
+    - Consolidated `test_master_screener_new.py` into `test_master_screener.py`.
+    - Remaining `_new.py` files need review.
 
 ## 10. Design Pattern: Mixed Logic in Unified Screener
 - **Issue**: `option_auditor/unified_screener.py` contains `analyze_ticker_hardened` which mixes ISA (Equity) and Options logic within the dashboard view logic.
 - **Impact**: Reduced cohesiveness and separation of concerns.
 - **Priority**: Low
 - **Status**: Open
+
+## 11. Resurfaced Test Suite Fragmentation
+- **Issue**: Numerous `test_..._new.py` and `test_..._extended.py` files have appeared (e.g., `test_webapp_coverage_new.py`, `test_master_screener_new.py`).
+- **Impact**: Increases maintenance burden and confusion.
+- **Priority**: Medium
+- **Status**: In Progress
+    - `test_master_screener_new.py` has been consolidated.
 
 ## Resolved Items
 - **Monolithic Controller**: Refactored `webapp/app.py` to use Blueprints (`webapp/blueprints/`).
@@ -88,3 +97,4 @@
 - **Broken Tests due to Refactoring**: Fixed `test_strategy_bull_put.py`, `test_strategy_mms.py`, `test_strategy_darvas.py`, `test_strategy_fortress.py` by updating patch paths to reflect new code structure.
 - **Residual Test Suite Fragmentation**: Consolidated `test_unified_backtester_*.py` and `test_screener_coverage_*.py` files into their respective base files and deleted fragments.
 - **Stale Documentation**: Updated `SCANNERS.md` to include all implemented strategies.
+- **God Object in `master_screener.py`**: Deleted `option_auditor/master_screener.py` and replaced with `option_auditor/strategies/master.py` (FortressMasterScreener) using `ScreeningRunner` and modular strategies.
