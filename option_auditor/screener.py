@@ -46,6 +46,8 @@ from option_auditor.strategies.turtle import TurtleStrategy
 from option_auditor.strategies.isa import IsaStrategy
 from option_auditor.strategies.bull_put import screen_bull_put_spreads
 from option_auditor.strategies.squeeze import screen_bollinger_squeeze
+from option_auditor.strategies.liquidity import screen_liquidity_grabs, _identify_swings, _detect_fvgs
+from option_auditor.strategies.fortress import screen_dynamic_volatility_fortress
 from option_auditor.common.screener_utils import (
     ScreeningRunner,
     resolve_region_tickers,
@@ -64,20 +66,6 @@ from option_auditor.common.screener_utils import (
 
 # Update with S&P 500 Names if available in constants?
 # Constants.py updates TICKER_NAMES with SP500_NAMES already.
-
-def _get_market_regime():
-    """
-    Fetches VIX to determine market regime.
-    Returns current VIX level.
-    """
-    try:
-        # 5 day history to get a smoothing or just last close
-        vix = yf.download("^VIX", period="5d", progress=False)
-        if not vix.empty:
-            return float(vix['Close'].iloc[-1])
-    except:
-        pass
-    return 15.0 # Safe default
 
 def enrich_with_fundamentals(results_list: list) -> list:
     """
@@ -698,63 +686,6 @@ def screen_darvas_box(ticker_list: list = None, time_frame: str = "1d", region: 
 # -------------------------------------------------------------------------
 #  SMC / ICT HELPER FUNCTIONS
 # -------------------------------------------------------------------------
-
-def _identify_swings(df: pd.DataFrame, lookback: int = 2) -> pd.DataFrame:
-    """
-    Identifies fractal Swing Highs and Swing Lows.
-    A swing high is a high surrounded by lower highs on both sides.
-    """
-    df = df.copy()
-    # Swing High
-    df['Swing_High'] = df['High'][
-        (df['High'] > df['High'].shift(1)) &
-        (df['High'] > df['High'].shift(-1))
-    ]
-    # Swing Low
-    df['Swing_Low'] = df['Low'][
-        (df['Low'] < df['Low'].shift(1)) &
-        (df['Low'] < df['Low'].shift(-1))
-    ]
-    return df
-
-def _detect_fvgs(df: pd.DataFrame) -> list:
-    """
-    Detects unmitigated Fair Value Gaps (FVGs) in the last 20 candles.
-    Returns a list of dicts: {'type': 'bull/bear', 'top': float, 'bottom': float, 'index': datetime}
-    """
-    fvgs = []
-
-    if len(df) < 3:
-        return []
-
-    highs = df['High'].values
-    lows = df['Low'].values
-    times = df.index
-
-    # Check last 30 candles
-    start_idx = max(2, len(df) - 30)
-
-    for i in range(start_idx, len(df)):
-        if lows[i-2] > highs[i]:
-            gap_size = lows[i-2] - highs[i]
-            if gap_size > (highs[i] * 0.0002):
-                fvgs.append({
-                    "type": "BEARISH",
-                    "top": lows[i-2],
-                    "bottom": highs[i],
-                    "ts": times[i-1]
-                })
-
-        if highs[i-2] < lows[i]:
-            gap_size = lows[i] - highs[i-2]
-            if gap_size > (lows[i] * 0.0002):
-                fvgs.append({
-                    "type": "BULLISH",
-                    "top": lows[i],
-                    "bottom": highs[i-2],
-                    "ts": times[i-1]
-                })
-    return fvgs
 
 def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", region: str = "us", check_mode: bool = False) -> list:
     """
@@ -1644,129 +1575,6 @@ def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 1000):
     except Exception:
         return None
 
-def screen_dynamic_volatility_fortress(ticker_list: list = None, time_frame: str = "1d") -> list:
-    """
-    YIELD-OPTIMIZED STRATEGY:
-    """
-    import pandas as pd
-    import pandas_ta as ta
-    import yfinance as yf
-    from datetime import datetime, timedelta
-    from option_auditor.common.data_utils import get_cached_market_data
-    from option_auditor.common.constants import LIQUID_OPTION_TICKERS
-
-    # --- 1. GET VIX & REGIME ---
-    current_vix = _get_market_regime()
-
-    # --- 2. THE NEW "YIELD" MATH ---
-    safety_k = 1.5 + ((current_vix - 12) / 15.0)
-
-    if safety_k < 1.5: safety_k = 1.5
-    if safety_k > 3.0: safety_k = 3.0
-
-    # --- 3. FILTER UNIVERSE ---
-    if ticker_list is None:
-        ticker_list = LIQUID_OPTION_TICKERS
-
-    all_data = get_cached_market_data(ticker_list, period="1y", cache_name="market_scan_us_liquid")
-    results = []
-
-    today = datetime.now()
-    manage_date = today + timedelta(days=24)
-
-    # OPTIMIZED ITERATION
-    if isinstance(all_data.columns, pd.MultiIndex):
-        # This iterator yields (ticker, dataframe)
-        iterator = [(ticker, all_data[ticker]) for ticker in all_data.columns.unique(level=0)]
-    else:
-        # Fallback for single ticker result (rare) or flat
-        if not all_data.empty and len(ticker_list)==1:
-             iterator = [(ticker_list[0], all_data)]
-        else:
-             iterator = []
-
-    for ticker, df in iterator:
-        try:
-            if isinstance(df.columns, pd.MultiIndex):
-                df = df.droplevel(0, axis=1)
-
-            if ticker not in ticker_list: continue
-
-            df = df.dropna(how='all')
-            if len(df) < 100: continue
-
-            curr_close = df['Close'].iloc[-1]
-
-            # --- CRITICAL FILTER: DEAD MONEY CHECK ---
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
-            atr = df['ATR'].iloc[-1]
-
-            atr_pct = (atr / curr_close) * 100
-
-            if atr_pct < 2.0 and current_vix < 20:
-                continue
-
-            sma_50 = df['Close'].rolling(50).mean().iloc[-1]
-            sma_200 = df['Close'].rolling(200).mean().iloc[-1]
-
-            trend_status = "Bullish" if curr_close > sma_200 else "Neutral"
-
-            if curr_close < sma_50: continue
-
-            # --- STRIKE CALCULATION ---
-            ema_20 = ta.ema(df['Close'], length=20).iloc[-1]
-
-            safe_floor = ema_20 - (safety_k * atr)
-
-            if safe_floor >= curr_close: continue
-
-            if curr_close < 100:
-                short_strike = float(int(safe_floor))
-                spread_width = 1.0
-            elif curr_close < 300:
-                short_strike = float(int(safe_floor / 2.5) * 2.5)
-                spread_width = 5.0
-            else:
-                short_strike = float(int(safe_floor / 5) * 5)
-                spread_width = 10.0
-
-            long_strike = short_strike - spread_width
-
-            score = atr_pct * 10
-            if curr_close > sma_200: score += 15
-
-            breakout_date = _calculate_trend_breakout_date(df)
-
-            # Fortress Stop/Target (Underlying)
-            stock_stop_loss = curr_close - (safety_k * atr)
-            stock_target = curr_close + (safety_k * atr * 2)
-
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-            results.append({
-                "ticker": ticker,
-                "company_name": company_name,
-                "price": round(curr_close, 2),
-                "vix_ref": round(current_vix, 2),
-                "volatility_pct": f"{atr_pct:.1f}%",
-                "safety_mult": f"{safety_k:.1f}x",
-                "sell_strike": short_strike,
-                "buy_strike": long_strike,
-                "stop_loss": round(stock_stop_loss, 2),
-                "target": round(stock_target, 2),
-                "dist_pct": f"{((curr_close - short_strike)/curr_close)*100:.1f}%",
-                "score": round(score, 1),
-                "trend": trend_status,
-                "breakout_date": breakout_date,
-                "atr": round(atr, 2)
-            })
-
-        except Exception: continue
-
-    results.sort(key=lambda x: x['score'], reverse=True)
-    return results
-
 # --- CRITICAL FIX: Sanitize Function ---
 def sanitize(val):
     """
@@ -2419,115 +2227,6 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
     results.sort(key=lambda x: (1 if "GREEN" in x['verdict'] else 0, x['roc']), reverse=True)
     return results
 
-def screen_liquidity_grabs(ticker_list: list = None, time_frame: str = "1h", region: str = "us") -> list:
-    """
-    Screens for Liquidity Grabs (Sweeps) of recent Swing Highs/Lows.
-    """
-    import pandas_ta as ta
-
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region)
-
-    def strategy(ticker, df):
-        try:
-            if len(df) < 50: return None
-
-            # Identify Swings
-            df_swings = _identify_swings(df, lookback=3)
-
-            # Current Candle
-            curr = df.iloc[-1]
-            curr_c = float(curr['Close'])
-            curr_h = float(curr['High'])
-            curr_l = float(curr['Low'])
-
-            # Previous Swings (excluding current candle)
-            history = df_swings.iloc[:-1].tail(50)
-
-            swing_highs = history[history['Swing_High'].notna()]['Swing_High']
-            swing_lows = history[history['Swing_Low'].notna()]['Swing_Low']
-
-            signal = "WAIT"
-            verdict_color = "gray"
-            sweep_level = 0.0
-            displacement_pct = 0.0
-
-            # BULLISH SWEEP CHECK
-            if not swing_lows.empty:
-                breached_lows = swing_lows[swing_lows > curr_l] # Lows that are higher than current low (so we dipped below them)
-
-                if not breached_lows.empty:
-                    # Check if we closed ABOVE them (Rejection)
-                    valid_sweeps = breached_lows[breached_lows < curr_c]
-
-                    if not valid_sweeps.empty:
-                        sweep_level = valid_sweeps.min()
-                        signal = "🐂 BULLISH SWEEP"
-                        verdict_color = "green"
-                        displacement_pct = ((curr_c - sweep_level) / sweep_level) * 100
-
-            # BEARISH SWEEP CHECK
-            if signal == "WAIT" and not swing_highs.empty:
-                breached_highs = swing_highs[swing_highs < curr_h] # Highs lower than current high (so we spiked above)
-
-                if not breached_highs.empty:
-                    # Check if we closed BELOW them (Rejection)
-                    valid_sweeps = breached_highs[breached_highs > curr_c]
-
-                    if not valid_sweeps.empty:
-                        sweep_level = valid_sweeps.max()
-                        signal = "🐻 BEARISH SWEEP"
-                        verdict_color = "red"
-                        displacement_pct = ((curr_c - sweep_level) / sweep_level) * 100
-
-            if signal == "WAIT": return None
-
-            # ATR & Vol
-            df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=DEFAULT_ATR_LENGTH)
-            atr = df['ATR'].iloc[-1] if 'ATR' in df.columns else (curr_c * 0.01)
-
-            # Volume Confirmation
-            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-            curr_vol = df['Volume'].iloc[-1]
-            vol_spike = (curr_vol > avg_vol * 1.5)
-
-            if vol_spike:
-                signal += " (Vol Spike)"
-
-            # Targets/Stops
-            stop_loss = curr_l - atr if "BULL" in signal else curr_h + atr
-            target = curr_c + (3 * atr) if "BULL" in signal else curr_c - (3 * atr)
-
-            base_ticker = ticker.split('.')[0]
-            company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))
-
-            pct_change_1d = 0.0
-            if len(df) >= 2:
-                prev_c = float(df['Close'].iloc[-2])
-                pct_change_1d = ((curr_c - prev_c) / prev_c) * 100
-
-            return {
-                "ticker": ticker,
-                "company_name": company_name,
-                "price": round(curr_c, 2),
-                "signal": signal,
-                "verdict": signal,
-                "pct_change_1d": round(pct_change_1d, 2),
-                "stop_loss": round(stop_loss, 2),
-                "target": round(target, 2),
-                "atr": round(atr, 2),
-                "breakout_level": round(sweep_level, 2),
-                "score": abs(displacement_pct) * 100,
-                "breakout_date": _calculate_trend_breakout_date(df)
-            }
-
-        except Exception as e:
-            return None
-
-    results = runner.run(strategy)
-    # Sort by Displacement/Score
-    results.sort(key=lambda x: x['score'], reverse=True)
-    return results
-
 def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", region: str = "us") -> list:
     """
     Screens for RSI Divergences (Regular).
@@ -2646,4 +2345,3 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
         return None
 
     return runner.run(strategy)
-

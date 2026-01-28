@@ -4,6 +4,7 @@ import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from typing import List, Callable, Dict, Any, Optional
+import yfinance as yf
 
 from option_auditor.common.data_utils import (
     get_cached_market_data,
@@ -341,3 +342,17 @@ def _calculate_put_delta(S, K, T, r, sigma):
     if T <= 0 or sigma <= 0: return -0.5
     d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
     return _norm_cdf(d1) - 1.0
+
+def _get_market_regime():
+    """
+    Fetches VIX to determine market regime.
+    Returns current VIX level.
+    """
+    try:
+        # 5 day history to get a smoothing or just last close
+        vix = yf.download("^VIX", period="5d", progress=False)
+        if not vix.empty:
+            return float(vix['Close'].iloc[-1])
+    except:
+        pass
+    return 15.0 # Safe default

@@ -6,7 +6,8 @@ from option_auditor.screener import screen_dynamic_volatility_fortress
 @pytest.fixture
 def mock_yfinance(monkeypatch):
     mock = MagicMock()
-    monkeypatch.setattr("option_auditor.screener.yf", mock)
+    # Updated path: yf is used in common.screener_utils for _get_market_regime
+    monkeypatch.setattr("option_auditor.common.screener_utils.yf", mock)
     # Mock VIX download
     vix_df = pd.DataFrame({'Close': [16.0]}, index=[pd.Timestamp.now()])
     mock.download.return_value = vix_df
@@ -15,7 +16,8 @@ def mock_yfinance(monkeypatch):
 @pytest.fixture
 def mock_get_cached_data(monkeypatch):
     mock = MagicMock()
-    monkeypatch.setattr("option_auditor.common.data_utils.get_cached_market_data", mock)
+    # Updated path: get_cached_market_data is imported in strategies.fortress
+    monkeypatch.setattr("option_auditor.strategies.fortress.get_cached_market_data", mock)
     return mock
 
 def test_screen_fortress_logic(mock_yfinance, mock_get_cached_data):
