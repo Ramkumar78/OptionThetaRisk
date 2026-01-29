@@ -231,7 +231,8 @@ def screen_bull_put_spreads(ticker_list: list = None, min_roi: float = 0.15, reg
             try:
                 res = future.result()
                 if res: final_list.append(res)
-            except: pass
+            except Exception as e:
+                logger.debug(f"Thread failed: {e}")
 
     # Sort by ROI or POP
     final_list.sort(key=lambda x: x['roi_pct'], reverse=True)

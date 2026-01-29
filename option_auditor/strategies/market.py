@@ -120,7 +120,7 @@ def screen_tickers_helper(tickers: list, iv_rank_threshold: float, rsi_threshold
                          pct_change_1w = ((curr_close - month_close) / month_close) * 100
 
             except Exception as e:
-                pass
+                logger.debug(f"Pct change calc failed: {e}")
 
             # 3. Calculate Indicators
             if len(df) < 50:
@@ -150,8 +150,8 @@ def screen_tickers_helper(tickers: list, iv_rank_threshold: float, rsi_threshold
                 info = t.info
                 if info and 'trailingPE' in info and info['trailingPE'] is not None:
                     pe_ratio = f"{info['trailingPE']:.2f}"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"PE ratio fetch failed: {e}")
 
             # 4. Apply Rules
             trend = "BULLISH" if current_price > current_sma else "BEARISH"

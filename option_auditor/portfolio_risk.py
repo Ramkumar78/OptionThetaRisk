@@ -3,6 +3,9 @@ import numpy as np
 import yfinance as yf
 from option_auditor.common.data_utils import get_cached_market_data
 from option_auditor.common.constants import SECTOR_COMPONENTS, SECTOR_NAMES
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _get_sector_map():
     """Reverse maps your constants to find sectors fast without API calls."""
@@ -61,9 +64,9 @@ def analyze_portfolio_risk(positions: list) -> dict:
                 else:
                     # Fallback if structure is different
                     closes = price_data.xs('Close', level=1, axis=1)
-            except Exception:
+            except Exception as e:
                 # Fallback
-                pass
+                logger.debug(f"Failed to slice multi-index price data: {e}")
         else:
             # Fallback for single ticker or simple df
             if 'Close' in price_data.columns:
@@ -121,7 +124,8 @@ def analyze_portfolio_risk(positions: list) -> dict:
                 real_sector = info.get('sector', 'Other')
                 # Add to map
                 sector_map[t] = real_sector
-            except:
+            except Exception as e:
+                logger.debug(f"Failed to fetch sector for {t}: {e}")
                 sector_map[t] = 'Unknown'
 
     # Calculate Sector Weights

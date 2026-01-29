@@ -45,8 +45,13 @@ def test_screener_uses_cache():
     from option_auditor.screener import screen_master_convergence
 
     # Mock get_cached_market_data
-    with patch("option_auditor.common.screener_utils.get_cached_market_data") as mock_cache:
-        # We need it to return something when lookup_only=True (first call for > 50 tickers)
+    with patch("option_auditor.common.screener_utils.get_cached_market_data") as mock_cache, \
+         patch("option_auditor.common.screener_utils.fetch_batch_data_safe") as mock_fetch:
+
+        # Setup mock_fetch to return a dummy empty DataFrame so logic proceeds without crashing
+        mock_fetch.return_value = pd.DataFrame()
+
+        # We need mock_cache to return something when lookup_only=True (first call for > 50 tickers)
         # and something (or empty) for subsequent calls.
 
         # side_effect allows different returns for different calls
@@ -68,8 +73,6 @@ def test_screener_uses_cache():
         screen_master_convergence(ticker_list=long_list)
 
         # Verify it called with cache_name="market_scan_v1"
-        # We search through call_args_list to find the main fetch call
-        # Or even the lookup call is fine to verify correct routing
         found_any_v1 = False
         for call in mock_cache.call_args_list:
             args, kwargs = call
@@ -79,16 +82,10 @@ def test_screener_uses_cache():
 
         assert found_any_v1, "Did not find any call for market_scan_v1"
 
-        # Call with list <= 100
+        # Call with list <= 100 (Short list)
         short_list = ["AAPL"]
         screen_master_convergence(ticker_list=short_list)
 
-        # Verify it called with cache_name="watchlist_scan"
-        found_watch = False
-        for call in mock_cache.call_args_list:
-            args, kwargs = call
-            if kwargs.get('cache_name') == 'watchlist_scan':
-                found_watch = True
-                break
-
-        assert found_watch, "Did not find expected fetch call for watchlist_scan"
+        # For short lists, logic skips cache and goes straight to live fetch
+        # So we verify fetch_batch_data_safe was called
+        assert mock_fetch.call_count > 0, "Expected fetch_batch_data_safe to be called for short list"

@@ -11,6 +11,9 @@ import yfinance as yf
 from datetime import datetime
 from collections import defaultdict
 import copy
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _calculate_drawdown(strategies: List[Any]) -> float:
     """Returns Max Drawdown ($) based on closed equity curve."""
@@ -243,8 +246,8 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
                             else:
                                 price = float(close_val)
                             price_map[sym] = price
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to extract batch price for {sym}: {e}")
 
     except Exception as e:
         print(f"Batch price fetch failed: {e}")
@@ -272,8 +275,8 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
                 hist = t.history(period="1d")
                 if not hist.empty:
                     price_map[sym] = float(hist["Close"].iloc[-1])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Fallback price fetch failed for {sym}: {e}")
 
     return price_map
 
@@ -490,8 +493,8 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
                  exp_dt = datetime.fromisoformat(p["expiry"])
                  dte = (exp_dt - datetime.now()).days
                  p["dte"] = dte
-             except:
-                 pass
+             except Exception as e:
+                 logger.debug(f"Failed to parse expiry {p.get('expiry')}: {e}")
 
         if dte <= 0:
             p["risk_alert"] = "Expiring Today"
@@ -518,8 +521,8 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
 
                            if is_risky:
                                p["risk_alert"] = "ITM Risk"
-                       except:
-                           pass
+                       except Exception as e:
+                           logger.debug(f"Failed to check ITM risk for {p}: {e}")
 
     # Update Verdict if Risk Changed
     if itm_risk_flag:

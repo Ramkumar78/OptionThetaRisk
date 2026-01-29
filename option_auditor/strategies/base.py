@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BaseStrategy(ABC):
     @abstractmethod
@@ -26,7 +29,7 @@ class BaseStrategy(ABC):
             # If current ATR is > 5x the average, market is too crazy
             if mean_atr > 0 and current_atr > (mean_atr * 5):
                 return "TRIPPED: HIGH VOLATILITY"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Volatility check failed: {e}")
 
         return None

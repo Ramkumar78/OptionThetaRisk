@@ -5,6 +5,9 @@ from typing import Optional, List, Dict
 from datetime import datetime, timedelta
 import re
 from dateutil import parser as dtparser
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TransactionParser(ABC):
     @abstractmethod
@@ -18,7 +21,8 @@ class TransactionParser(ABC):
         # Try dateutil first
         try:
             dt = pd.Timestamp(dtparser.parse(str(val)))
-        except:
+        except Exception:
+            # Expected if format is custom
             pass
 
         # Fallback to custom parsing
@@ -185,7 +189,8 @@ class TastytradeFillsParser(TransactionParser):
                         if k >= len(toks): continue
                         try:
                             strike_val = float(toks[k])
-                        except Exception: continue
+                        except Exception:
+                            continue
                         if k + 1 >= len(toks): continue
                         right_tok = toks[k + 1]
                         if right_tok.lower().startswith('put'):

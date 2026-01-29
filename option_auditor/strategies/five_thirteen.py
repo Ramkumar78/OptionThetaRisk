@@ -76,8 +76,8 @@ class FiveThirteenStrategy(BaseStrategy):
                 try:
                     prev_close_px = float(df['Close'].iloc[-2])
                     pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Pct change calc failed: {e}")
 
             # Logic Priority:
             # 1. Fresh 5/21 Breakout (Stronger/Rarer)
