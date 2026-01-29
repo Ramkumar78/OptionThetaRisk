@@ -1,43 +1,70 @@
 # Repository Coverage
 
-
+[Full report](https://htmlpreview.github.io/?https://github.com/Ramkumar78/OptionThetaRisk/blob/python-coverage-comment-action-data/htmlcov/index.html)
 
 | Name                                                |    Stmts |     Miss |   Cover |   Missing |
 |---------------------------------------------------- | -------: | -------: | ------: | --------: |
 | option\_auditor/\_\_init\_\_.py                     |        2 |        0 |    100% |           |
+| option\_auditor/backtesting\_strategies.py          |      393 |       79 |     80% |16, 21, 26, 31, 41, 197, 223, 235-237, 240-242, 245, 248-251, 256-258, 261-263, 266, 269-272, 307-309, 312-315, 318, 321-324, 329-331, 334-336, 339, 342-345, 350-352, 355-356, 359, 362-365, 390, 401, 421-422, 435-436, 471-476, 501, 503, 507, 509, 511, 520 |
 | option\_auditor/cli.py                              |       57 |       57 |      0% |     1-101 |
-| option\_auditor/common/constants.py                 |        9 |        2 |     78% |   425-426 |
-| option\_auditor/common/data\_utils.py               |      185 |       39 |     79% |24-25, 48-51, 77-81, 88-89, 93-97, 101-102, 106-107, 118-119, 157, 199-201, 213, 216-218, 235-237, 246-248, 300-301 |
+| option\_auditor/common/constants.py                 |       23 |        2 |     91% |   444-445 |
+| option\_auditor/common/data\_utils.py               |      184 |       37 |     80% |25-26, 49-52, 78-82, 89-90, 94-98, 102-103, 107-108, 119-120, 158, 189, 204-206, 218, 221-222, 239-240, 249-250, 302-303 |
+| option\_auditor/common/file\_utils.py               |       28 |       11 |     61% |15-16, 21-28, 36, 49-51 |
 | option\_auditor/common/resilience.py                |       10 |        0 |    100% |           |
+| option\_auditor/common/screener\_utils.py           |      270 |       73 |     73% |23-24, 44, 53-55, 64-98, 110-112, 114, 120, 161-170, 195-198, 200-203, 217-220, 222-224, 226-228, 253-254, 260-262, 348-349, 378, 425-431 |
 | option\_auditor/common/signal\_type.py              |        6 |        0 |    100% |           |
 | option\_auditor/config.py                           |        4 |        0 |    100% |           |
-| option\_auditor/india\_stock\_data.py               |       32 |        5 |     84% |     40-45 |
+| option\_auditor/india\_stock\_data.py               |       16 |        2 |     88% |     19-20 |
 | option\_auditor/journal\_analyzer.py                |       64 |        3 |     95% |104-105, 111 |
-| option\_auditor/main\_analyzer.py                   |      568 |       49 |     91% |94-95, 190, 195, 242, 246-247, 274-276, 356, 410, 433, 441-442, 462, 483, 493-494, 498-499, 521-522, 553-554, 595-596, 604-613, 644, 677-680, 758-759, 763-765, 777-778, 862 |
-| option\_auditor/master\_screener.py                 |      249 |       63 |     75% |47-51, 63, 69-71, 82-83, 97, 99-100, 112-113, 123-136, 151-153, 168-169, 182, 191-193, 210, 241, 250-255, 263-267, 283-294, 300, 321-322, 345-346, 372-374, 379 |
+| option\_auditor/main\_analyzer.py                   |      570 |       61 |     89% |97-98, 120, 166, 193, 198, 245, 249-255, 271-272, 277-279, 359, 413, 436, 444-445, 461-465, 486, 496-497, 501-502, 518, 524-525, 556-557, 573, 598-599, 607-616, 647, 680-683, 761-762, 766-768, 780-781, 865, 935 |
 | option\_auditor/models.py                           |       75 |        2 |     97% |    76, 91 |
-| option\_auditor/optimization.py                     |       94 |       22 |     77% |19-25, 30, 37-38, 57, 63-64, 70-71, 78-79, 95, 100, 162, 166-168 |
-| option\_auditor/parsers.py                          |      269 |       16 |     94% |12, 33-38, 156, 192, 201, 205, 207-208, 330-331, 340 |
-| option\_auditor/portfolio\_risk.py                  |      104 |       15 |     86% |63-66, 76-78, 82, 89, 118-125, 196 |
-| option\_auditor/quant\_engine.py                    |      152 |       97 |     36% |14-65, 90-91, 119, 141-142, 149-158, 166-188, 195-232, 240-270 |
-| option\_auditor/screener.py                         |     1748 |      367 |     79% |13-14, 40-41, 56-58, 70-72, 74, 95-142, 150, 162-164, 177, 183, 200-201, 223-226, 228-231, 252-256, 261-263, 276, 317-319, 327, 332, 350-351, 364-365, 371, 420-422, 476, 479, 552-555, 557-560, 562-565, 567-568, 570-571, 584-588, 593-595, 625-626, 629, 719-720, 747-750, 752-755, 757-760, 762-763, 765-766, 776-782, 787-789, 837-839, 867-877, 887-890, 907, 942-944, 982-985, 987-990, 992-995, 997-998, 1000-1001, 1011-1017, 1022-1024, 1040, 1102, 1105, 1108-1109, 1121-1125, 1128, 1131-1132, 1169-1171, 1181-1183, 1217, 1264-1265, 1267-1269, 1277-1279, 1389-1390, 1414-1416, 1427-1429, 1497, 1539-1540, 1575, 1584, 1666-1668, 1678, 1725-1728, 1732, 1772, 1784, 1804, 1856, 1868-1872, 1896, 1902, 1938-1940, 1976-1977, 2030-2031, 2042, 2141-2142, 2156-2157, 2164-2165, 2178-2179, 2188, 2190, 2196-2197, 2203, 2241, 2256, 2267, 2344-2345, 2362-2364, 2370-2372, 2380-2382, 2394-2395, 2428, 2435-2442, 2448, 2450, 2452, 2461-2463, 2482, 2490-2492, 2509-2510, 2528-2529, 2561, 2571-2622, 2646, 2663, 2668, 2701-2702, 2707-2708, 2742, 2761-2763, 2769-2770, 2774-2777, 2783, 2785, 2792, 2794, 2796, 2798, 2811-2813, 2837-2838, 2877, 2902-2903, 2943-2945, 2970, 2977-2979, 2983, 3014-3015, 3020-3021, 3063-3064 |
+| option\_auditor/parsers.py                          |      272 |       32 |     88% |15, 37-42, 132-133, 160, 188, 197, 199, 202-214, 321-323, 335-336, 345, 378 |
+| option\_auditor/portfolio\_risk.py                  |      107 |       16 |     85% |66-69, 79-81, 85, 92, 121-129, 200 |
+| option\_auditor/screener.py                         |       54 |        3 |     94% |   138-140 |
 | option\_auditor/sp500\_data.py                      |       34 |        5 |     85% |31-32, 50-53 |
 | option\_auditor/strategies/\_\_init\_\_.py          |        6 |        0 |    100% |           |
-| option\_auditor/strategies/base.py                  |       17 |        4 |     76% |12, 20, 29-30 |
-| option\_auditor/strategies/fourier.py               |       42 |       24 |     43% |11-44, 48, 54, 65-66 |
+| option\_auditor/strategies/alpha.py                 |      102 |       21 |     79% |45-46, 51-52, 90-91, 151-163, 169, 198-199 |
+| option\_auditor/strategies/base.py                  |       19 |        4 |     79% |15, 23, 32-33 |
+| option\_auditor/strategies/bull\_put.py             |      114 |        9 |     92% |53, 95-96, 131, 140, 222-224, 234-235 |
+| option\_auditor/strategies/darvas.py                |       90 |       13 |     86% |42, 103, 106-107, 119-123, 126, 160-162 |
+| option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 144, 179-182 |
+| option\_auditor/strategies/fortress.py              |       78 |       14 |     82% |16-18, 31, 53, 81-82, 94-95, 100-101, 135-137 |
+| option\_auditor/strategies/fourier.py               |       57 |        2 |     96% |   112-113 |
 | option\_auditor/strategies/grandmaster\_screener.py |       64 |        7 |     89% |52-58, 117 |
-| option\_auditor/strategies/isa.py                   |       39 |        3 |     92% | 23, 86-88 |
-| option\_auditor/strategies/turtle.py                |       34 |        4 |     88% | 17, 44-46 |
-| option\_auditor/strategies/utils.py                 |       21 |       21 |      0% |      1-62 |
-| option\_auditor/strategy.py                         |      256 |        6 |     98% |16, 35, 155, 204, 208, 279 |
-| option\_auditor/uk\_stock\_data.py                  |       26 |        5 |     81% |     38-43 |
-| option\_auditor/unified\_backtester.py              |      257 |       20 |     92% |35-37, 44, 144, 190, 263-264, 274-275, 279-280, 283-284, 301-306, 358-359 |
-| option\_auditor/unified\_screener.py                |      146 |       97 |     34% |40-83, 93-221, 241-248, 256, 271-275, 297-298, 306 |
-| option\_auditor/us\_stock\_data.py                  |       21 |       15 |     29% |     50-73 |
-| webapp/app.py                                       |      925 |      285 |     69% |41-42, 81, 87, 102, 104, 107, 109, 151-152, 253-254, 294, 308-310, 329-344, 358-359, 369-370, 408-410, 426-427, 431, 461-463, 467-484, 488-501, 512-513, 521-526, 533-534, 540, 546, 553-571, 579-581, 592, 596, 598, 600, 610-612, 624, 628, 630, 632, 634, 658, 662, 664, 668, 670-672, 678-680, 692, 696, 698, 700, 702, 710-712, 724, 728, 732, 734, 736-738, 744-746, 765-767, 782, 789-818, 822-851, 861, 890-892, 906, 910, 916-917, 928, 934-939, 956-961, 964-965, 983, 992, 994, 998-1025, 1028-1033, 1037-1039, 1054, 1064-1066, 1105-1106, 1131-1133, 1141-1153, 1172-1174, 1181-1182, 1204-1212, 1300-1306 |
+| option\_auditor/strategies/hybrid.py                |      279 |       66 |     76% |29-30, 37-38, 49-52, 55-76, 146-147, 164-166, 182-184, 196-197, 230, 263, 278, 289-291, 302-307, 313, 315, 317, 319, 325-328, 333, 336-337, 347, 355-357, 374-375, 393-394, 426-428 |
+| option\_auditor/strategies/isa.py                   |      100 |        9 |     91% |61, 73-77, 142, 147, 186-188 |
+| option\_auditor/strategies/liquidity.py             |       90 |        6 |     93% |38, 75-77, 174-175 |
+| option\_auditor/strategies/market.py                |      182 |       40 |     78% |38-39, 59, 61, 65-68, 85, 122-123, 153-154, 167-168, 173, 201-203, 241-247, 250, 258, 297-327 |
+| option\_auditor/strategies/master.py                |      150 |       41 |     73% |35, 40-45, 48, 58, 64-66, 101-102, 111, 121-123, 125-127, 162-166, 168, 185-201, 213, 240-242 |
+| option\_auditor/strategies/math\_utils.py           |      151 |      114 |     25% |10-59, 66-84, 90-132, 139-160, 166-203, 230-231 |
+| option\_auditor/strategies/mms\_ote.py              |       86 |        6 |     93% |119-120, 143-146 |
+| option\_auditor/strategies/monte\_carlo.py          |       29 |        9 |     69% |19-25, 60-62 |
+| option\_auditor/strategies/options\_only.py         |      144 |       23 |     84% |47-48, 92-95, 103-106, 111-112, 127-128, 148, 154-155, 196, 207, 230-232, 244-245 |
+| option\_auditor/strategies/quantum.py               |       69 |       10 |     86% |27, 58-59, 92-93, 101-102, 126-128 |
+| option\_auditor/strategies/rsi\_divergence.py       |       75 |        3 |     96% |99, 126-127 |
+| option\_auditor/strategies/squeeze.py               |       40 |        2 |     95% |     86-87 |
+| option\_auditor/strategies/turtle.py                |       76 |        6 |     92% |58-59, 62, 137-139 |
+| option\_auditor/strategies/utils.py                 |        1 |        1 |      0% |         1 |
+| option\_auditor/strategies/vertical\_spreads.py     |      140 |       28 |     80% |26, 32-37, 40-41, 47-48, 60, 70, 86-87, 119-124, 133-135, 158-159, 179, 192, 259-261 |
+| option\_auditor/strategy.py                         |      256 |       33 |     87% |16, 35, 148-155, 204, 207-245, 279, 306 |
+| option\_auditor/uk\_stock\_data.py                  |       16 |        2 |     88% |     30-31 |
+| option\_auditor/unified\_backtester.py              |      165 |        5 |     97% |36-38, 45, 73, 105 |
+| option\_auditor/unified\_screener.py                |      125 |       52 |     58% |30-63, 78-81, 96-97, 120-123, 150-162, 178-180, 191-197, 203, 220-223, 238-239 |
+| option\_auditor/us\_stock\_data.py                  |        9 |        3 |     67% |     50-53 |
+| webapp/\_\_init\_\_.py                              |        0 |        0 |    100% |           |
+| webapp/app.py                                       |       72 |       11 |     85% |36-37, 92-93, 97-98, 113-119 |
+| webapp/blueprints/\_\_init\_\_.py                   |        0 |        0 |    100% |           |
+| webapp/blueprints/analysis\_routes.py               |      109 |       28 |     74% |22-34, 53-55, 62-63, 77, 85-93, 142-144 |
+| webapp/blueprints/journal\_routes.py                |       79 |       17 |     78% |27, 37-39, 62, 71-79, 104-106 |
+| webapp/blueprints/main\_routes.py                   |       60 |        9 |     85% |36-38, 46, 60-62, 76, 81 |
+| webapp/blueprints/screener\_routes.py               |      481 |      241 |     50% |38-49, 57-58, 63-64, 74-75, 115, 123-126, 133-134, 138, 143-144, 172-186, 191-202, 207-217, 222-236, 241-327, 339, 351-365, 370-384, 396, 415, 428-443, 448-462, 467-481, 511-537, 542-556, 561-574, 585, 628-631, 636, 640, 646-647, 658, 664-669, 677-678 |
+| webapp/cache.py                                     |       28 |        2 |     93% |    28, 34 |
 | webapp/main.py                                      |       20 |       20 |      0% |      1-35 |
+| webapp/services/\_\_init\_\_.py                     |        0 |        0 |    100% |           |
+| webapp/services/check\_service.py                   |       77 |       32 |     58% |28, 30, 35, 54, 62, 64, 68-94, 97-102 |
 | webapp/storage.py                                   |      391 |       29 |     93% |65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 114, 267, 344-345, 420-421, 440-443, 460, 477-478, 489, 501-502, 521 |
-| **TOTAL**                                           | **5927** | **1282** | **78%** |           |
+| webapp/utils.py                                     |       48 |        7 |     85% |29-30, 55-56, 66-68 |
+| **TOTAL**                                           | **6345** | **1321** | **79%** |           |
 
 
 ## Setup coverage badge
@@ -46,11 +73,22 @@ Below are examples of the badges you can use in your main branch `README` file.
 
 ### Direct image
 
-[![Coverage badge](https://github.com/Ramkumar78/OptionThetaRisk/raw/python-coverage-comment-action-data/badge.svg)](https://github.com/Ramkumar78/OptionThetaRisk/tree/python-coverage-comment-action-data)
+[![Coverage badge](https://raw.githubusercontent.com/Ramkumar78/OptionThetaRisk/python-coverage-comment-action-data/badge.svg)](https://htmlpreview.github.io/?https://github.com/Ramkumar78/OptionThetaRisk/blob/python-coverage-comment-action-data/htmlcov/index.html)
 
 This is the one to use if your repository is private or if you don't want to customize anything.
 
+### [Shields.io](https://shields.io) Json Endpoint
 
+[![Coverage badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Ramkumar78/OptionThetaRisk/python-coverage-comment-action-data/endpoint.json)](https://htmlpreview.github.io/?https://github.com/Ramkumar78/OptionThetaRisk/blob/python-coverage-comment-action-data/htmlcov/index.html)
+
+Using this one will allow you to [customize](https://shields.io/endpoint) the look of your badge.
+It won't work with private repositories. It won't be refreshed more than once per five minutes.
+
+### [Shields.io](https://shields.io) Dynamic Badge
+
+[![Coverage badge](https://img.shields.io/badge/dynamic/json?color=brightgreen&label=coverage&query=%24.message&url=https%3A%2F%2Fraw.githubusercontent.com%2FRamkumar78%2FOptionThetaRisk%2Fpython-coverage-comment-action-data%2Fendpoint.json)](https://htmlpreview.github.io/?https://github.com/Ramkumar78/OptionThetaRisk/blob/python-coverage-comment-action-data/htmlcov/index.html)
+
+This one will always be the same color. It won't work for private repos. I'm not even sure why we included it.
 
 ## What is that?
 

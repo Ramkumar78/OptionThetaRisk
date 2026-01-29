@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Coverage for option_auditor/uk_stock_data.py: 88%</title>
+    <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
+    <link rel="stylesheet" href="style_cb_9ff733b0.css" type="text/css">
+    <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
+</head>
+<body class="pyfile">
+<header>
+    <div class="content">
+        <h1>
+            <span class="text">Coverage for </span><b>option_auditor&#8201;/&#8201;uk_stock_data.py</b>:
+            <span class="pc_cov">88%</span>
+        </h1>
+        <aside id="help_panel_wrapper">
+            <input id="help_panel_state" type="checkbox">
+            <label for="help_panel_state">
+                <img id="keyboard_icon" src="keybd_closed_cb_900cfef5.png" alt="Show/hide keyboard shortcuts">
+            </label>
+            <div id="help_panel">
+                <p class="legend">Shortcuts on this page</p>
+                <div class="keyhelp">
+                    <p>
+                        <kbd>r</kbd>
+                        <kbd>m</kbd>
+                        <kbd>x</kbd>
+                        &nbsp; toggle line displays
+                    </p>
+                    <p>
+                        <kbd>j</kbd>
+                        <kbd>k</kbd>
+                        &nbsp; next/prev highlighted chunk
+                    </p>
+                    <p>
+                        <kbd>0</kbd> &nbsp; (zero) top of page
+                    </p>
+                    <p>
+                        <kbd>1</kbd> &nbsp; (one) first highlighted chunk
+                    </p>
+                    <p>
+                        <kbd>[</kbd>
+                        <kbd>]</kbd>
+                        &nbsp; prev/next file
+                    </p>
+                    <p>
+                        <kbd>u</kbd> &nbsp; up to the index
+                    </p>
+                    <p>
+                        <kbd>?</kbd> &nbsp; show/hide this help
+                    </p>
+                </div>
+            </div>
+        </aside>
+        <h2>
+            <span class="text">16 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">14<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">2<span class="text"> missing</span></button>
+            <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
+        </h2>
+        <p class="text">
+            <a id="prevFileLink" class="nav" href="z_ffaecad9d505ebd2_strategy_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
+            <a id="nextFileLink" class="nav" href="z_ffaecad9d505ebd2_unified_backtester_py.html">&#xbb; next</a>
+            &nbsp; &nbsp; &nbsp;
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
+            created at 2026-01-29 13:25 +0000
+        </p>
+        <aside class="hidden">
+            <button type="button" class="button_next_chunk" data-shortcut="j"></button>
+            <button type="button" class="button_prev_chunk" data-shortcut="k"></button>
+            <button type="button" class="button_top_of_page" data-shortcut="0"></button>
+            <button type="button" class="button_first_chunk" data-shortcut="1"></button>
+            <button type="button" class="button_prev_file" data-shortcut="["></button>
+            <button type="button" class="button_next_file" data-shortcut="]"></button>
+            <button type="button" class="button_to_index" data-shortcut="u"></button>
+            <button type="button" class="button_show_hide_help" data-shortcut="?"></button>
+        </aside>
+    </div>
+</header>
+<main id="source">
+    <p class="run"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="key">import</span> <span class="nam">os</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t"><span class="key">import</span> <span class="nam">logging</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="key">from</span> <span class="nam">option_auditor</span><span class="op">.</span><span class="nam">common</span><span class="op">.</span><span class="nam">file_utils</span> <span class="key">import</span> <span class="nam">load_tickers_from_csv</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="nam">logger</span> <span class="op">=</span> <span class="nam">logging</span><span class="op">.</span><span class="nam">getLogger</span><span class="op">(</span><span class="str">"UK_Stock_Data"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t"><span class="com"># Removed hardcoded UK_TICKERS list in favor of CSV loading</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="nam">UK_EURO_TICKERS</span> <span class="op">=</span> <span class="op">[</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t">    <span class="com"># Top 50 FTSE (UK) - Note: Most should now be in the CSV, but kept for Euro mix</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t">    <span class="str">"AZN.L"</span><span class="op">,</span> <span class="str">"SHEL.L"</span><span class="op">,</span> <span class="str">"HSBA.L"</span><span class="op">,</span> <span class="str">"ULVR.L"</span><span class="op">,</span> <span class="str">"BP.L"</span><span class="op">,</span> <span class="str">"RIO.L"</span><span class="op">,</span> <span class="str">"REL.L"</span><span class="op">,</span> <span class="str">"GSK.L"</span><span class="op">,</span> <span class="str">"DGE.L"</span><span class="op">,</span> <span class="str">"LSEG.L"</span><span class="op">,</span> <span class="str">"BATS.L"</span><span class="op">,</span> <span class="str">"GLEN.L"</span><span class="op">,</span> <span class="str">"BA.L"</span><span class="op">,</span> <span class="str">"CNA.L"</span><span class="op">,</span> <span class="str">"NG.L"</span><span class="op">,</span> <span class="str">"LLOY.L"</span><span class="op">,</span> <span class="str">"RR.L"</span><span class="op">,</span> <span class="str">"BARC.L"</span><span class="op">,</span> <span class="str">"CPG.L"</span><span class="op">,</span> <span class="str">"NWG.L"</span><span class="op">,</span> <span class="str">"RKT.L"</span><span class="op">,</span> <span class="str">"VOD.L"</span><span class="op">,</span> <span class="str">"AAL.L"</span><span class="op">,</span> <span class="str">"SGE.L"</span><span class="op">,</span> <span class="str">"HLN.L"</span><span class="op">,</span> <span class="str">"EXR.L"</span><span class="op">,</span> <span class="str">"TSCO.L"</span><span class="op">,</span> <span class="str">"SSE.L"</span><span class="op">,</span> <span class="str">"MNG.L"</span><span class="op">,</span> <span class="str">"ADM.L"</span><span class="op">,</span> <span class="str">"III.L"</span><span class="op">,</span> <span class="str">"ANTO.L"</span><span class="op">,</span> <span class="str">"SPX.L"</span><span class="op">,</span> <span class="str">"STAN.L"</span><span class="op">,</span> <span class="str">"IMB.L"</span><span class="op">,</span> <span class="str">"WTB.L"</span><span class="op">,</span> <span class="str">"SVT.L"</span><span class="op">,</span> <span class="str">"AUTO.L"</span><span class="op">,</span> <span class="str">"SN.L"</span><span class="op">,</span> <span class="str">"CRDA.L"</span><span class="op">,</span> <span class="str">"WPP.L"</span><span class="op">,</span> <span class="str">"SMIN.L"</span><span class="op">,</span> <span class="str">"DCC.L"</span><span class="op">,</span> <span class="str">"AV.L"</span><span class="op">,</span> <span class="str">"LGEN.L"</span><span class="op">,</span> <span class="str">"KGF.L"</span><span class="op">,</span> <span class="str">"SBRY.L"</span><span class="op">,</span> <span class="str">"MKS.L"</span><span class="op">,</span> <span class="str">"LAND.L"</span><span class="op">,</span> <span class="str">"PSON.L"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t">    <span class="com"># Liquid UK Mid-Caps</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t">    <span class="str">"JD.L"</span><span class="op">,</span> <span class="str">"IAG.L"</span><span class="op">,</span> <span class="str">"EZJ.L"</span><span class="op">,</span> <span class="str">"AML.L"</span><span class="op">,</span> <span class="str">"IDS.L"</span><span class="op">,</span> <span class="str">"DLG.L"</span><span class="op">,</span> <span class="str">"ITM.L"</span><span class="op">,</span> <span class="str">"QQ.L"</span><span class="op">,</span> <span class="str">"GRG.L"</span><span class="op">,</span> <span class="str">"VTY.L"</span><span class="op">,</span> <span class="str">"BTRW.L"</span><span class="op">,</span> <span class="str">"BOO.L"</span><span class="op">,</span> <span class="str">"ASOS.L"</span><span class="op">,</span> <span class="str">"HBR.L"</span><span class="op">,</span> <span class="str">"ENOG.L"</span><span class="op">,</span> <span class="str">"TLW.L"</span><span class="op">,</span> <span class="str">"CWR.L"</span><span class="op">,</span> <span class="str">"GNC.L"</span><span class="op">,</span> <span class="str">"THG.L"</span><span class="op">,</span> <span class="str">"CURY.L"</span><span class="op">,</span> <span class="str">"DOM.L"</span><span class="op">,</span> <span class="str">"SFOR.L"</span><span class="op">,</span> <span class="str">"PETS.L"</span><span class="op">,</span> <span class="str">"MRO.L"</span><span class="op">,</span> <span class="str">"INVP.L"</span><span class="op">,</span> <span class="str">"OCDO.L"</span><span class="op">,</span> <span class="str">"IGG.L"</span><span class="op">,</span> <span class="str">"CMC.L"</span><span class="op">,</span> <span class="str">"PLUS.L"</span><span class="op">,</span> <span class="str">"EMG.L"</span><span class="op">,</span> <span class="str">"HWDN.L"</span><span class="op">,</span> <span class="str">"COST.L"</span><span class="op">,</span> <span class="str">"BEZ.L"</span><span class="op">,</span> <span class="str">"SGRO.L"</span><span class="op">,</span> <span class="str">"PSN.L"</span><span class="op">,</span> <span class="str">"TW.L"</span><span class="op">,</span> <span class="str">"BYG.L"</span><span class="op">,</span> <span class="str">"SAFE.L"</span><span class="op">,</span> <span class="str">"UTG.L"</span><span class="op">,</span> <span class="str">"BBOX.L"</span><span class="op">,</span> <span class="str">"MANG.L"</span><span class="op">,</span> <span class="str">"TPK.L"</span><span class="op">,</span> <span class="str">"HIK.L"</span><span class="op">,</span> <span class="str">"SRO.L"</span><span class="op">,</span> <span class="str">"FRES.L"</span><span class="op">,</span> <span class="str">"KAP.L"</span><span class="op">,</span> <span class="str">"WKP.L"</span><span class="op">,</span> <span class="str">"JMAT.L"</span><span class="op">,</span> <span class="str">"RS1.L"</span><span class="op">,</span> <span class="str">"PNN.L"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t">    <span class="com"># Top 50 Euro</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t">    <span class="str">"ASML.AS"</span><span class="op">,</span> <span class="str">"MC.PA"</span><span class="op">,</span> <span class="str">"SAP.DE"</span><span class="op">,</span> <span class="str">"RMS.PA"</span><span class="op">,</span> <span class="str">"TTE.PA"</span><span class="op">,</span> <span class="str">"SIE.DE"</span><span class="op">,</span> <span class="str">"CDI.PA"</span><span class="op">,</span> <span class="str">"AIR.PA"</span><span class="op">,</span> <span class="str">"SAN.MC"</span><span class="op">,</span> <span class="str">"IBE.MC"</span><span class="op">,</span> <span class="str">"OR.PA"</span><span class="op">,</span> <span class="str">"ALV.DE"</span><span class="op">,</span> <span class="str">"SU.PA"</span><span class="op">,</span> <span class="str">"EL.PA"</span><span class="op">,</span> <span class="str">"AI.PA"</span><span class="op">,</span> <span class="str">"BNP.PA"</span><span class="op">,</span> <span class="str">"DTE.DE"</span><span class="op">,</span> <span class="str">"ENEL.MI"</span><span class="op">,</span> <span class="str">"DG.PA"</span><span class="op">,</span> <span class="str">"BBVA.MC"</span><span class="op">,</span> <span class="str">"CS.PA"</span><span class="op">,</span> <span class="str">"BAS.DE"</span><span class="op">,</span> <span class="str">"ADS.DE"</span><span class="op">,</span> <span class="str">"MUV2.DE"</span><span class="op">,</span> <span class="str">"IFX.DE"</span><span class="op">,</span> <span class="str">"SAF.PA"</span><span class="op">,</span> <span class="str">"ENI.MI"</span><span class="op">,</span> <span class="str">"INGA.AS"</span><span class="op">,</span> <span class="str">"ISP.MI"</span><span class="op">,</span> <span class="str">"KER.PA"</span><span class="op">,</span> <span class="str">"STLAP.PA"</span><span class="op">,</span> <span class="str">"AD.AS"</span><span class="op">,</span> <span class="str">"VOW3.DE"</span><span class="op">,</span> <span class="str">"BMW.DE"</span><span class="op">,</span> <span class="str">"MBG.DE"</span><span class="op">,</span> <span class="str">"BAYN.DE"</span><span class="op">,</span> <span class="str">"DB1.DE"</span><span class="op">,</span> <span class="str">"BN.PA"</span><span class="op">,</span> <span class="str">"RI.PA"</span><span class="op">,</span> <span class="str">"CRH.L"</span><span class="op">,</span> <span class="str">"G.MI"</span><span class="op">,</span> <span class="str">"PHIA.AS"</span><span class="op">,</span> <span class="str">"HEIA.AS"</span><span class="op">,</span> <span class="str">"NOKIA.HE"</span><span class="op">,</span> <span class="str">"VIV.PA"</span><span class="op">,</span> <span class="str">"ORA.PA"</span><span class="op">,</span> <span class="str">"KNEBV.HE"</span><span class="op">,</span> <span class="str">"UMG.AS"</span><span class="op">,</span> <span class="str">"HO.PA"</span><span class="op">,</span> <span class="str">"ABI.BR"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="key">def</span> <span class="nam">get_uk_tickers</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t">    <span class="str">"""</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t"><span class="str">    Returns the UK FTSE 350 list from a CSV file.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t">    <span class="nam">current_dir</span> <span class="op">=</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">dirname</span><span class="op">(</span><span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">abspath</span><span class="op">(</span><span class="nam">__file__</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t">    <span class="nam">csv_path</span> <span class="op">=</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">join</span><span class="op">(</span><span class="nam">current_dir</span><span class="op">,</span> <span class="str">'data'</span><span class="op">,</span> <span class="str">'ftse_350.csv'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t">    <span class="nam">tickers</span> <span class="op">=</span> <span class="nam">load_tickers_from_csv</span><span class="op">(</span><span class="nam">csv_path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t">    <span class="key">if</span> <span class="nam">tickers</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t27" href="#t27">27</a></span><span class="t">        <span class="nam">logger</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span><span class="fst">f"</span><span class="fst">Loaded </span><span class="op">{</span><span class="nam">len</span><span class="op">(</span><span class="nam">tickers</span><span class="op">)</span><span class="op">}</span><span class="fst"> tickers from CSV: </span><span class="op">{</span><span class="nam">csv_path</span><span class="op">}</span><span class="fst">"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t28" href="#t28">28</a></span><span class="t">        <span class="key">return</span> <span class="nam">tickers</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t29" href="#t29">29</a></span><span class="t">    <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t30" href="#t30">30</a></span><span class="t">        <span class="nam">logger</span><span class="op">.</span><span class="nam">warning</span><span class="op">(</span><span class="fst">f"</span><span class="fst">FTSE 350 CSV not found at </span><span class="op">{</span><span class="nam">csv_path</span><span class="op">}</span><span class="fst">.</span><span class="fst">"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t31" href="#t31">31</a></span><span class="t">        <span class="key">return</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t32" href="#t32">32</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t33" href="#t33">33</a></span><span class="t"><span class="key">def</span> <span class="nam">get_uk_euro_tickers</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t34" href="#t34">34</a></span><span class="t">    <span class="str">"""Returns normalized UK/Euro tickers list."""</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t35" href="#t35">35</a></span><span class="t">    <span class="com"># We could potentially merge get_uk_tickers() here, but keeping legacy list for now</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t36" href="#t36">36</a></span><span class="t">    <span class="com"># to preserve the Euro component which is not in the CSV.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t37" href="#t37">37</a></span><span class="t">    <span class="key">return</span> <span class="nam">list</span><span class="op">(</span><span class="nam">set</span><span class="op">(</span><span class="nam">UK_EURO_TICKERS</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+</main>
+<footer>
+    <div class="content">
+        <p>
+            <a class="nav" href="z_ffaecad9d505ebd2_strategy_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
+            <a class="nav" href="z_ffaecad9d505ebd2_unified_backtester_py.html">&#xbb; next</a>
+            &nbsp; &nbsp; &nbsp;
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
+            created at 2026-01-29 13:25 +0000
+        </p>
+    </div>
+</footer>
+</body>
+</html>
