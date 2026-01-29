@@ -1,122 +1,57 @@
 # Technical Debt Log
 
-## 1. God Object / Complex Logic in `option_auditor/screener.py`
-- **Issue**: The file is approx 1700 lines long and contains all screening logic, mixed levels of abstraction, and repetitive patterns.
-- **Specifics**: The following functions are still monolithic and need extraction:
-    - `screen_market`
-    - `screen_hybrid_strategy`
-    - `screen_master_convergence`
-    - `screen_alpha_101`
-    - `screen_mms_ote_setups`
-    - `screen_my_strategy`
-- **Impact**: Extremely difficult to maintain, test, and extend. High risk of breaking existing functionality.
-- **Priority**: High
-- **Status**: Addressed.
-    - All major strategies including `screen_market`, `screen_hybrid_strategy`, `screen_master_convergence`, `screen_alpha_101`, `screen_mms_ote_setups`, `screen_my_strategy`, and `screen_monte_carlo_forecast` have been extracted to `option_auditor/strategies/`.
-    - `option_auditor/screener.py` now serves as a facade importing these strategies.
-
-## 2. Missing/Incomplete Unit Tests
-- **Issue**: Comprehensive tests for all screener functions are lacking. Many strategies rely on "happy path" tests or implicit integration tests via `screener.py`.
-- **Impact**: Increases risk of regression when refactoring. Hard to verify individual strategy logic.
-- **Priority**: High
-- **Status**: Addressed.
-    - Added unit tests for new strategy modules: `tests/strategies/test_market.py`, `tests/strategies/test_mms_ote.py`, `tests/strategies/test_alpha.py`, `tests/strategies/test_hybrid.py`, `tests/strategies/test_monte_carlo.py`.
-    - Existing tests updated to reflect refactoring.
-
-## 3. Low-Level Math Mixed with Business Logic
-- **Issue**: Mathematical functions like `_calculate_hilbert_phase`, `_calculate_dominant_cycle` are defined directly inside `screener.py`.
-- **Impact**: Reduces readability and reusability. Harder to test math in isolation.
-- **Priority**: Medium
-- **Status**: Addressed.
-    - `_identify_swings` and `_detect_fvgs` moved to `option_auditor/strategies/liquidity.py`.
-    - `_calculate_hilbert_phase` moved to `option_auditor/strategies/fourier.py`.
-    - `_calculate_dominant_cycle` moved to `option_auditor/strategies/utils.py`.
-
-## 4. Inconsistent Error Handling
-- **Issue**: Many routes in `webapp/blueprints/screener_routes.py` used generic `try...except Exception` blocks.
-- **Impact**: Poor user experience and difficult debugging.
-- **Priority**: Medium
-- **Status**: Addressed via `handle_screener_errors` decorator in `webapp/blueprints/screener_routes.py`.
-
-## 5. God Object in `option_auditor/unified_backtester.py`
-- **Issue**: The `UnifiedBacktester` class contained a monolithic loop with hardcoded logic for 15+ strategies, violating the Single Responsibility Principle and Open/Closed Principle.
-- **Impact**: Adding new strategies required modifying the core loop, risking regressions in other strategies.
-- **Priority**: High
-- **Status**: Addressed.
-    - Extracted strategy logic into `option_auditor/backtesting_strategies.py` using a Strategy Pattern.
-    - `UnifiedBacktester` now delegates logic to `AbstractBacktestStrategy` subclasses.
-
-## 6. Test Suite Fragmentation / Bloat
-- **Issue**: The `tests/` directory contained redundant and unmaintained files (e.g., `test_screener_coverage_new.py`) that had broken imports due to refactoring.
-- **Impact**: Hard to maintain tests, false positives/negatives, and confusion about which tests are authoritative.
-- **Priority**: Medium
-- **Status**: Addressed.
-    - Merged valid tests from `tests/test_screener_coverage_new.py` into `tests/test_screener_coverage.py`.
-    - Fixed broken imports and mocks in `tests/test_screener_coverage.py`.
-    - Deleted `tests/test_screener_coverage_new.py`.
-
-## 9. Inconsistent Test Naming Conventions
-- **Issue**: Test files use various naming schemes (`test_..._new.py`, `test_..._extended.py`, `test_..._direct.py`).
-- **Impact**: Hard to organize and discover tests.
-- **Priority**: Low
-- **Status**: In Progress
-    - Consolidated `test_master_screener_new.py` into `test_master_screener.py`.
-    - Remaining `_new.py` files need review.
-
 ## 13. Slow Test Suite
 - **Issue**: The full test suite takes a long time to run or times out.
-- **Impact**: Slow feedback loop, reduced developer productivity.
 - **Priority**: High
 - **Status**: Open.
 
-## 14. Test Suite Fragmentation (New)
-- **Issue**: `tests/` directory contains numerous temporary or fix-specific test files like `test_india_data_fetch_fix.py`, `test_backtest_extended.py`, etc.
-- **Impact**: Clutters the test suite, potentially duplicates tests, and makes maintenance harder.
-- **Priority**: High
-- **Status**: In Progress.
-    - Merged and deleted `test_hybrid_fix.py` and `test_storage_url_fix.py`.
-    - Remaining files need review.
-
 ## 15. Redundant Data Modules
-- **Issue**: `us_stock_data.py`, `uk_stock_data.py`, `india_stock_data.py` duplicate logic for fetching tickers and handling sector lists.
-- **Impact**: Code duplication, harder to update sector logic globally.
+- **Issue**: `us_stock_data.py`, `uk_stock_data.py`, `india_stock_data.py` duplicate logic.
 - **Priority**: Medium
 - **Status**: Open.
 
 ## 16. Stale Code / Potential Dead Code
-- **Issue**: `option_auditor/strategies/grandmaster_screener.py` exists alongside `option_auditor/strategies/master.py`. `main_analyzer.py` vs `journal_analyzer.py`.
-- **Impact**: Confusion for developers, maintenance burden.
+- **Issue**: `option_auditor/strategies/grandmaster_screener.py` exists alongside `option_auditor/strategies/master.py`.
 - **Priority**: Low
 - **Status**: Open.
 
+## 17. Failing Tests (Remaining)
+- **Issue**: Several API and Integration tests are failing due to broken patches targeting `webapp.app` instead of Blueprints (`webapp.blueprints.*`).
+    - `tests/test_api_integration.py`
+    - `tests/test_api_master.py`
+    - `tests/test_api_quant.py`
+    - `tests/test_webapp_extra.py`
+    - `tests/test_region_strategies.py` (Missing attributes in `strategies.utils`)
+- **Impact**: Unable to verify full system integration.
+- **Priority**: High
+- **Status**: Open.
+
 ## Resolved Items
-- **Environment Configuration Issues**: Fixed `pytest.ini` to remove invalid arguments, enabling tests to collect/run.
-- **Monolithic Controller**: Refactored `webapp/app.py` to use Blueprints (`webapp/blueprints/`).
-- **Global State Usage**: Moved `screener_cache` to `webapp/cache.py`.
-- **Code Duplication in Ticker Resolution**: Addressed by centralizing logic in `option_auditor/common/screener_utils.py`.
-- **Hardcoded Configuration**: Addressed by loading `DEFAULT_ACCOUNT_SIZE` from environment variables in `option_auditor/common/constants.py`.
-- **Hardcoded Financial Constants**: Addressed by replacing hardcoded values in `screener.py` with imports from `common/constants.py`.
-- **Duplicate Utility Functions**: Moved `resolve_ticker` and added `sanitize` to `option_auditor/common/screener_utils.py` for better reuse.
-- **God Object / Complex Logic in screener.py**: Extracted all monolithic functions to strategy modules.
-- **Missing/Incomplete Unit Tests**: Added unit tests for extracted strategies.
-- **God Object in Unified Backtester**: Refactored to Strategy Pattern in `option_auditor/backtesting_strategies.py`.
-- **Test Suite Fragmentation (Initial Pass)**: Consolidated and fixed `test_screener_coverage.py` (older files).
-- **Duplicate Ticker Resolution in `screener_routes.py`**: Refactored routes to use `resolve_region_tickers` with standardized `check_trend` parameter.
-- **Inconsistent/Conditional Imports**: Removed unnecessary `try...except` block for `pandas_ta` in `screener.py`.
-- **God Object / Complex Logic in `webapp/blueprints/screener_routes.py`**: Extracted business logic (specifically `check_unified_stock`) to `webapp/services/check_service.py`.
-- **Hardcoded Market Regime Logic**: Replaced hardcoded VIX thresholds with constants in `option_auditor/common/constants.py`.
-- **Screener Boilerplate**: Implemented `run_screening_strategy` in `screener_utils.py` and refactored `screener.py` to use it, reducing code duplication.
-- **Inconsistent Strategy Invocation**: Standardized strategy invocation in `screener.py` using the generic runner and consistent top-level imports.
-- **Unused Imports in `screener.py`**: Removed `yf`, `pd`, `np` etc. imports from `option_auditor/screener.py` as it now delegates all logic.
-- **Broken Tests due to Refactoring**: Fixed `test_strategy_bull_put.py`, `test_strategy_mms.py`, `test_strategy_darvas.py`, `test_strategy_fortress.py` by updating patch paths to reflect new code structure.
-- **Residual Test Suite Fragmentation**: Consolidated `test_unified_backtester_*.py` and `test_screener_coverage_*.py` files into their respective base files and deleted fragments.
-- **Stale Documentation**: Updated `SCANNERS.md` to include all implemented strategies.
-- **God Object in `master_screener.py`**: Deleted `option_auditor/master_screener.py` and replaced with `option_auditor/strategies/master.py` (FortressMasterScreener) using `ScreeningRunner` and modular strategies.
-- **Mixed Logic in Unified Screener**: Refactored `option_auditor/unified_screener.py` to delegate to `IsaStrategy` and reused components.
-- **Resurfaced Test Suite Fragmentation (Unwanted Files)**: Deleted `test_backtester_new.py`, `test_webapp_coverage_new.py`, `test_screener_extended_more.py`, etc.
-- **Duplicate Logic in Unified Screener**: Addressed by refactoring `unified_screener.py` to remove duplicate regime check and strategy logic.
-- **Unused/Stale Code (PortfolioOptimizer)**: Deleted `option_auditor/optimization.py` and `tests/test_optimization.py`.
-- **Broken Tests due to Invalid Patch Paths**: Fixed 20+ test files by updating patch paths to correct locations (`common.screener_utils`, `strategies.*`, `yfinance`) and resolving `AttributeError`s caused by refactoring.
-- **God Object / Logic Duplication (QuantPhysicsEngine)**: Dismantled `QuantPhysicsEngine` and consolidated math logic into `option_auditor/strategies/math_utils.py`. Moved `analyze_breakout` to `option_auditor/strategies/market.py`.
-- **Duplicate Test Files**: Addressed by merging overlapping tests and clarifying strategy test locations.
-- **Unwanted/Stale Test Files**: Deleted `test_quantum_reproduce.py` and `test_screener_fortress_repro.py` after merging into main tests.
+- **Environment Configuration Issues**: Fixed `pytest.ini`.
+- **Monolithic Controller**: Refactored `webapp/app.py`.
+- **Global State Usage**: Moved `screener_cache`.
+- **Code Duplication in Ticker Resolution**: Centralized in `screener_utils.py`.
+- **Hardcoded Configuration**: Addressed.
+- **Hardcoded Financial Constants**: Addressed.
+- **Duplicate Utility Functions**: Addressed.
+- **God Object / Complex Logic in screener.py**: Extracted.
+- **Missing/Incomplete Unit Tests**: Added unit tests for new strategy modules.
+- **Low-Level Math Mixed with Business Logic**: Moved to `math_utils.py`.
+- **Inconsistent Error Handling**: Addressed via decorator.
+- **God Object in Unified Backtester**: Refactored.
+- **Test Suite Fragmentation (Initial Pass)**: Consolidated `test_screener_coverage.py`.
+- **Duplicate Ticker Resolution in `screener_routes.py`**: Refactored.
+- **Inconsistent/Conditional Imports**: Addressed.
+- **God Object in `webapp/blueprints/screener_routes.py`**: Extracted.
+- **Hardcoded Market Regime Logic**: Addressed.
+- **Screener Boilerplate**: Implemented `run_screening_strategy`.
+- **Inconsistent Strategy Invocation**: Standardized.
+- **Unused Imports in `screener.py`**: Removed.
+- **Broken Tests due to Refactoring (Initial)**: Fixed initial batch.
+- **Stale Documentation**: Updated `SCANNERS.md`.
+- **God Object in `master_screener.py`**: Deleted.
+- **Mixed Logic in Unified Screener**: Refactored.
+- **Unused/Stale Code (PortfolioOptimizer)**: Deleted.
+- **God Object (QuantPhysicsEngine)**: Dismantled.
+- **Test Suite Fragmentation / Bloat**: Consolidate `_extended.py`, `_gap_fill.py`, `_fix.py` files into main test files. Deleted `tests/test_backtest_extended.py`, `tests/test_storage_extended.py`, `tests/test_webapp_gap_fill.py`. Renamed `tests/test_webapp_extended.py` to `tests/test_webapp_routes.py` and `tests/test_india_data_fetch_fix.py` to `tests/test_india_data.py`.
+- **Broken Tests (Critical)**: Fixed `tests/test_endpoint_check_stock.py` (API patches), `tests/strategies/test_strategy_fourier.py` (Method patching), and `tests/test_india_data.py` (Mock logic).
