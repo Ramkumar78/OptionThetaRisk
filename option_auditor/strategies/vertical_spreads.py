@@ -131,8 +131,8 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
                         days_to_earnings = (earnings_date - date.today()).days
                         if 0 <= days_to_earnings <= 21:
                             return None # Skip (Earnings Risk)
-            except Exception:
-                pass # Proceed if data missing, assume safe but careful
+            except Exception as e:
+                logger.debug(f"Earnings check failed: {e}")
 
             # --- FILTER 4: EXPIRATION SELECTION (21-45 DTE) ---
             expirations = tk.options
@@ -155,7 +155,8 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
                     dte = (d_date - today).days
                     if MIN_DTE <= dte <= MAX_DTE:
                         valid_exps.append((exp, dte))
-                except: continue
+                except Exception:
+                     continue
 
             if not valid_exps: return None
 
@@ -256,6 +257,7 @@ def screen_vertical_put_spreads(ticker_list: list = None, region: str = "us", ch
             }
 
         except Exception as e:
+            logger.debug(f"Vertical spread calc failed: {e}")
             return None
 
     # Threaded Execution for Option Chains

@@ -91,7 +91,8 @@ def _get_filtered_sp500(check_trend: bool = True) -> list:
                 if curr_price < sma_200: continue
 
             filtered_list.append(ticker)
-        except:
+        except Exception as e:
+            logger.warning(f"Error filtering S&P ticker {ticker}: {e}")
             continue
 
     return filtered_list
@@ -397,8 +398,8 @@ def _get_market_regime():
         vix = yf.download("^VIX", period="5d", progress=False)
         if not vix.empty:
             return float(vix['Close'].iloc[-1])
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch VIX: {e}")
     return 15.0 # Safe default
 
 def run_screening_strategy(

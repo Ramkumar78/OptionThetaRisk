@@ -94,8 +94,8 @@ def get_cached_market_data(ticker_list: list = None, period="2y", cache_name="sp
         try:
             logger.warning(f"⚠️  Cache {cache_name} is stale ({file_age}). Returning to prevent timeout.")
             return pd.read_parquet(file_path)
-        except Exception:
-             pass
+        except Exception as e:
+             logger.warning(f"Failed to read stale cache {cache_name}: {e}")
 
     # 3. Lookup Only Mode
     if lookup_only:
@@ -141,7 +141,7 @@ def fetch_data_with_retry(ticker, period="1y", interval="1d", auto_adjust=True, 
         except Exception as e:
             # Check if it is a potentially transient error or just no data
             logger.warning(f"Retry {attempt+1}/{retries} for {ticker} failed: {e}")
-            pass
+            # Fall through to sleep
 
         if attempt < retries - 1:
             sleep_time = (2 ** attempt) + random.random()
@@ -220,7 +220,6 @@ def prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval
                     df = data_source.xs(ticker, axis=1, level=0).copy()
             except Exception as e:
                 logger.debug(f"Error slicing multi-index for {ticker}: {e}")
-                pass
         else:
              df = data_source.copy()
 
@@ -239,7 +238,6 @@ def prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval
             df.columns = df.columns.get_level_values(0)
         except Exception as e:
             logger.debug(f"Error flattening cols for {ticker}: {e}")
-            pass
 
     # Resample if needed
     if resample_rule:
@@ -250,7 +248,6 @@ def prepare_data_for_ticker(ticker, data_source, time_frame, period, yf_interval
             df = df.dropna()
         except Exception as e:
             logger.error(f"Error resampling {ticker}: {e}")
-            pass
 
     return df
 

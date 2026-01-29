@@ -116,8 +116,8 @@ def screen_mms_ote_setups(ticker_list: list = None, time_frame: str = "1h", regi
                     try:
                         prev_close_px = float(df['Close'].iloc[-2])
                         pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Pct change calc failed: {e}")
 
                 base_ticker = ticker.split('.')[0]
                 company_name = TICKER_NAMES.get(ticker, TICKER_NAMES.get(base_ticker, ticker))

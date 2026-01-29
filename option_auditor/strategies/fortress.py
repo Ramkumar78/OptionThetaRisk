@@ -132,7 +132,9 @@ def screen_dynamic_volatility_fortress(ticker_list: list = None, time_frame: str
                 "atr": round(atr, 2)
             })
 
-        except Exception: continue
+        except Exception as e:
+            logger.debug(f"Fortress analysis failed for {ticker}: {e}")
+            continue
 
     results.sort(key=lambda x: x['score'], reverse=True)
     return results

@@ -55,8 +55,8 @@ class TurtleStrategy(BaseStrategy):
                 try:
                     prev_close_px = float(df['Close'].iloc[-2])
                     pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Pct change calc failed: {e}")
 
             if pd.isna(df['20_High'].iloc[-1]) or pd.isna(df['ATR'].iloc[-1]):
                 return None

@@ -8,7 +8,7 @@ from option_auditor.strategies.mms_ote import screen_mms_ote_setups
 def sample_ote_df():
     # Construct a DF that triggers OTE?
     # Or just generic one to ensure it runs without error.
-    dates = pd.date_range(start='2023-01-01', periods=100, freq='H')
+    dates = pd.date_range(start='2023-01-01', periods=100, freq='h')
     data = {
         'Open': np.linspace(100, 110, 100),
         'High': np.linspace(101, 111, 100),

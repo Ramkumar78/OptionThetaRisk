@@ -71,7 +71,7 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
             # Only fetch 5 days. If it fails, abort immediately.
             try:
                 hist = tk.history(period="5d")
-            except:
+            except Exception:
                 return None
 
             if hist.empty or len(hist) < 2: return None
@@ -101,15 +101,14 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
                         earnings_date = dt_val.date()
                     else:
                         earnings_date = None
-            except Exception:
-                # If we can't find earnings, assume safe but flag in UI if needed?
-                # For now, just proceed.
+            except Exception as e:
+                logger.debug(f"Earnings check failed: {e}")
                 earnings_date = None
 
             # --- PHASE 3: EXPIRATIONS ---
             try:
                 expirations = tk.options
-            except:
+            except Exception:
                 return None
 
             if not expirations: return None
@@ -125,7 +124,7 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
                     dt_exp = pd.to_datetime(exp, errors='coerce')
                     if pd.isna(dt_exp): continue
                     exp_date = dt_exp.date()
-                except:
+                except Exception:
                     continue
 
                 dte = (exp_date - today).days
@@ -152,7 +151,7 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
             try:
                 chain = tk.option_chain(target_exp)
                 puts = chain.puts
-            except:
+            except Exception:
                 return None
 
             if puts.empty: return None
@@ -228,8 +227,8 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
                 "delta": round(short_delta, 2)
             }
 
-        except Exception:
-            # Swallow all errors for this ticker to prevent thread crash
+        except Exception as e:
+            logger.debug(f"Options only failed for {ticker}: {e}")
             return None
 
     # --- EXECUTION ---
@@ -242,8 +241,8 @@ def screen_options_only_strategy(region: str = "us", limit: int = 75) -> list:
                 data = future.result()
                 if data:
                     results.append(data)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Future failed: {e}")
 
     results.sort(key=lambda x: (1 if "GREEN" in x['verdict'] else 0, x['roc']), reverse=True)
     return results
