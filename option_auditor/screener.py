@@ -24,7 +24,12 @@ from option_auditor.strategies.quantum import screen_quantum_setups
 from option_auditor.strategies.options_only import screen_options_only_strategy
 from option_auditor.strategies.five_thirteen import FiveThirteenStrategy
 from option_auditor.strategies.darvas import DarvasBoxStrategy
-from option_auditor.common.screener_utils import ScreeningRunner, run_screening_strategy
+from option_auditor.common.screener_utils import (
+    ScreeningRunner,
+    run_screening_strategy,
+    resolve_ticker,
+    resolve_region_tickers
+)
 
 # --- IMPORT NEWLY REFACTORED STRATEGIES ---
 from option_auditor.strategies.market import (

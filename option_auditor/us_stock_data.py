@@ -1,5 +1,5 @@
-import pandas as pd
 import os
+from option_auditor.common.file_utils import load_tickers_from_csv
 
 # US Sector and Ticker Definitions
 # Source: S&P 500 Sector Components
@@ -47,27 +47,7 @@ def get_united_states_stocks():
     Returns a custom list of US tickers from us_sectors.csv
     Includes Top 10 by sector and high liquid symbols.
     """
-    try:
-        # Construct path to the CSV file
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        csv_path = os.path.join(base_dir, 'option_auditor', 'data', 'us_sectors.csv')
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    csv_path = os.path.join(base_dir, 'option_auditor', 'data', 'us_sectors.csv')
 
-        if not os.path.exists(csv_path):
-            print(f"Warning: US Sectors file not found at {csv_path}")
-            return []
-
-        df = pd.read_csv(csv_path)
-        # Assumes the column name is 'Symbol'
-        if 'Symbol' in df.columns:
-            # Clean: Remove duplicates, strip whitespace
-            tickers = df['Symbol'].astype(str).str.strip().unique().tolist()
-            # Filter out empty strings or weird headers
-            tickers = [t for t in tickers if t and t != 'nan' and not t.startswith('/')]
-            return tickers
-        else:
-            # Fallback if no header
-            return df.iloc[:, 0].astype(str).str.strip().unique().tolist()
-
-    except Exception as e:
-        print(f"Error loading US Sectors: {e}")
-        return []
+    return load_tickers_from_csv(csv_path, column_name='Symbol')

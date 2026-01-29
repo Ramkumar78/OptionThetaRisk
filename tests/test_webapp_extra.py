@@ -14,7 +14,7 @@ def test_health_check(client):
     assert response.status_code == 200
     assert response.data.decode('utf-8') == "OK"
 
-@patch('webapp.app.resend.Emails.send')
+@patch('webapp.utils.resend.Emails.send')
 def test_feedback_endpoint(mock_send, client):
     mock_send.return_value = {'id': '123'}
 
@@ -32,7 +32,7 @@ def test_feedback_endpoint(mock_send, client):
     assert response.status_code == 400
     assert 'Message cannot be empty' in response.get_json()['error']
 
-@patch('webapp.app.get_storage_provider')
+@patch('webapp.blueprints.main_routes._get_storage_provider')
 def test_dashboard_endpoint_no_portfolio(mock_get_storage, client):
     mock_db = MagicMock()
     mock_db.get_portfolio.return_value = None
@@ -45,8 +45,8 @@ def test_dashboard_endpoint_no_portfolio(mock_get_storage, client):
     assert response.status_code == 200
     assert response.get_json()['error'] == 'No portfolio found'
 
-@patch('webapp.app.get_storage_provider')
-@patch('webapp.app.refresh_dashboard_data')
+@patch('webapp.blueprints.main_routes._get_storage_provider')
+@patch('webapp.blueprints.main_routes.refresh_dashboard_data')
 def test_dashboard_endpoint_with_portfolio(mock_refresh, mock_get_storage, client):
     mock_db = MagicMock()
     mock_db.get_portfolio.return_value = b'{"total_pnl": 1000}'
@@ -61,8 +61,8 @@ def test_dashboard_endpoint_with_portfolio(mock_refresh, mock_get_storage, clien
     assert response.status_code == 200
     assert response.get_json()['total_pnl'] == 1000
 
-@patch('webapp.app.screener.screen_market')
-@patch('webapp.app.screener.screen_sectors')
+@patch('webapp.blueprints.screener_routes.screener.screen_market')
+@patch('webapp.blueprints.screener_routes.screener.screen_sectors')
 def test_screen_market_endpoint(mock_sectors, mock_market, client):
     mock_market.return_value = {"Tech": []}
     mock_sectors.return_value = []

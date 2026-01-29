@@ -8,14 +8,14 @@ from option_auditor.uk_stock_data import get_uk_tickers
 class TestRegionStrategies:
     @pytest.fixture
     def mock_market_data(self):
-        with patch('option_auditor.common.screener_utils.get_cached_market_data') as mock:
+        with patch('option_auditor.strategies.hybrid.get_cached_market_data') as mock:
             # Default to empty DF to prevent AttributeError on .columns lookup
             mock.return_value = pd.DataFrame()
             yield mock
 
     @pytest.fixture
     def mock_cycle(self):
-        with patch('option_auditor.strategies.utils.calculate_dominant_cycle') as mock:
+        with patch('option_auditor.strategies.math_utils.calculate_dominant_cycle') as mock:
             mock.return_value = (20, -0.8) # Cycle bottom
             yield mock
 
@@ -67,7 +67,8 @@ class TestRegionStrategies:
         Test that region='india' triggers 'market_scan_india' cache.
         """
         # Execute
-        with patch('option_auditor.screener.get_indian_tickers', return_value=["RELIANCE.NS"]):
+        # Patching where resolve_region_tickers calls it (common.screener_utils)
+        with patch('option_auditor.common.screener_utils.get_indian_tickers', return_value=["RELIANCE.NS"]):
             screen_hybrid_strategy(region="india", time_frame="1d")
         
         # Verify

@@ -105,8 +105,9 @@ class TestScreenerHybrid(unittest.TestCase):
         }, index=dates)
         return df
 
+    @patch('option_auditor.strategies.hybrid.get_cached_market_data')
     @patch('yfinance.download')
-    def test_hybrid_volume_filtering(self, mock_yf_download):
+    def test_hybrid_volume_filtering(self, mock_yf_download, mock_get_cached):
         """Test volume filtering logic (Liquid vs Illiquid vs Watchlist)"""
         tickers = ["LIQUID", "ILLIQUID", "WATCH_ILLIQUID"]
         closes = [100.0] * 250
@@ -125,11 +126,12 @@ class TestScreenerHybrid(unittest.TestCase):
             keys.append(k)
 
         batch_df = pd.concat(dfs, axis=1, keys=keys)
-        mock_yf_download.return_value = batch_df
+        # Mock get_cached_market_data to return our batch data immediately
+        mock_get_cached.return_value = batch_df
 
         # Patch SECTOR_COMPONENTS to include our watch ticker
-        # Note: We patch the dictionary in screener_utils where it is likely used
-        with patch.dict('option_auditor.common.screener_utils.SECTOR_COMPONENTS', {"WATCH": ["WATCH_ILLIQUID"]}):
+        # Patching where it is used in hybrid.py
+        with patch.dict('option_auditor.strategies.hybrid.SECTOR_COMPONENTS', {"WATCH": ["WATCH_ILLIQUID"]}):
              results = screen_hybrid_strategy(ticker_list=tickers, time_frame="1d")
 
         result_tickers = [r['ticker'] for r in results]

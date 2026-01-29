@@ -8,8 +8,9 @@ def client():
     with app.test_client() as client:
         yield client
 
+@patch('option_auditor.screener.resolve_ticker', side_effect=lambda x: x)
 @patch('option_auditor.screener.screen_trend_followers_isa')
-def test_check_isa_stock_with_entry_hold(mock_screen, client):
+def test_check_isa_stock_with_entry_hold(mock_screen, mock_resolve, client):
     # Mock return value: Signal is ENTER (Breakout), but we provide entry price
     # So we expect "HOLD"
     mock_screen.return_value = [{
@@ -30,8 +31,9 @@ def test_check_isa_stock_with_entry_hold(mock_screen, client):
     assert data['user_entry_price'] == 145.0
     assert data['pnl_value'] == 5.0 # 150 - 145
 
+@patch('option_auditor.screener.resolve_ticker', side_effect=lambda x: x)
 @patch('option_auditor.screener.screen_trend_followers_isa')
-def test_check_isa_stock_with_entry_exit(mock_screen, client):
+def test_check_isa_stock_with_entry_exit(mock_screen, mock_resolve, client):
     # Case: Price below exit
     mock_screen.return_value = [{
         "ticker": "AAPL",
@@ -48,8 +50,9 @@ def test_check_isa_stock_with_entry_exit(mock_screen, client):
     assert "EXIT" in data['signal']
     assert "Stop Hit" in data['signal']
 
+@patch('option_auditor.screener.resolve_ticker', side_effect=lambda x: x)
 @patch('option_auditor.screener.screen_trend_followers_isa')
-def test_check_isa_stock_downtrend_exit(mock_screen, client):
+def test_check_isa_stock_downtrend_exit(mock_screen, mock_resolve, client):
     # Case: Downtrend
     mock_screen.return_value = [{
         "ticker": "TSLA",
@@ -65,8 +68,9 @@ def test_check_isa_stock_downtrend_exit(mock_screen, client):
     assert "EXIT" in data['signal']
     assert "Downtrend" in data['signal']
 
+@patch('option_auditor.screener.resolve_ticker', side_effect=lambda x: x)
 @patch('option_auditor.screener.screen_trend_followers_isa')
-def test_check_isa_stock_no_entry_default(mock_screen, client):
+def test_check_isa_stock_no_entry_default(mock_screen, mock_resolve, client):
     # Case: No entry price provided -> Default Logic
     mock_screen.return_value = [{
         "ticker": "NVDA",
