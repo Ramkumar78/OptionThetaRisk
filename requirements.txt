@@ -27,11 +27,5 @@ cachetools>=5.3.0
 statsmodels
 matplotlib
 seaborn
-pandas>=2.0.0
-riskfolio-lib
-alphalens-reloaded
-pyfolio-reloaded
-openbb
 ib_insync
-zipline-reloaded
 scikit-learn>=1.0.0
