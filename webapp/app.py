@@ -16,6 +16,7 @@ from webapp.blueprints.screener_routes import screener_bp
 from webapp.blueprints.journal_routes import journal_bp
 from webapp.blueprints.analysis_routes import analysis_bp
 from webapp.blueprints.main_routes import main_bp
+from webapp.services.scheduler_service import start_scheduler
 
 # Load environment variables from .env file
 load_dotenv()
@@ -67,6 +68,8 @@ def create_app(testing: bool = False) -> Flask:
     if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
+        # Start Headless Scanner
+        start_scheduler(app)
 
     # Register Blueprints
     app.register_blueprint(screener_bp)

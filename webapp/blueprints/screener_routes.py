@@ -487,8 +487,18 @@ def screen_master():
     time_frame = request.args.get('time_frame', '1d')
     current_app.logger.info(f"Master Fortress Screen request: region={region}, time_frame={time_frame}")
 
+    # Check Cache first (populated by Headless Scanner)
+    cache_key = ("master", region, time_frame)
+    cached = get_cached_screener_result(cache_key)
+    if cached:
+        current_app.logger.info("Serving cached Master Screen result")
+        return jsonify(cached)
+
     # The adapter handles the list logic internally based on region
     results = screen_master_convergence(region=region, time_frame=time_frame)
+
+    # Cache result
+    cache_screener_result(cache_key, results)
 
     # Ensure it returns a list directly, or wrap in dict if frontend expects {results: [...]}
     # Based on your previous code, it seems to handle both, but let's be safe:

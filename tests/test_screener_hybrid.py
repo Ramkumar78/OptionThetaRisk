@@ -125,7 +125,7 @@ class TestScreenerHybrid(unittest.TestCase):
             dfs.append(v)
             keys.append(k)
 
-        batch_df = pd.concat(dfs, axis=1, keys=keys)
+        batch_df = pd.concat(dfs, axis=1, keys=keys, sort=False)
         # Mock get_cached_market_data to return our batch data immediately
         mock_get_cached.return_value = batch_df
 
