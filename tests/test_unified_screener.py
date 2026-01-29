@@ -48,7 +48,7 @@ def test_unified_screener_execution(mock_yf_download):
         dfs.append(v)
         keys.append(k)
 
-    batch_df = pd.concat(dfs, axis=1, keys=keys)
+    batch_df = pd.concat(dfs, axis=1, keys=keys, sort=False)
     mock_yf_download.return_value = batch_df
 
     # Mock Regime to GREEN to allow scanning
