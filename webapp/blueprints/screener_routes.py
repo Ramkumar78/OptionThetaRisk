@@ -133,7 +133,7 @@ def check_isa_stock():
         except ValueError:
             pass  # Ignore invalid float format
 
-    ticker = screener.resolve_ticker(query)
+    ticker = resolve_ticker(query)
     if not ticker:
         ticker = query.upper()
 

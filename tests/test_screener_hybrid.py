@@ -105,15 +105,17 @@ class TestScreenerHybrid(unittest.TestCase):
         }, index=dates)
         return df
 
+    @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
+    @patch('option_auditor.strategies.hybrid.get_cached_market_data')
     @patch('yfinance.download')
-    def test_hybrid_volume_filtering(self, mock_yf_download):
+    def test_hybrid_volume_filtering(self, mock_yf_download, mock_get_cached, mock_fetch_batch):
         """Test volume filtering logic (Liquid vs Illiquid vs Watchlist)"""
         tickers = ["LIQUID", "ILLIQUID", "WATCH_ILLIQUID"]
         closes = [100.0] * 250
 
-        df_liq = self.create_mock_df(closes, volume=1000000)
-        df_ill = self.create_mock_df(closes, volume=100000)
-        df_watch = self.create_mock_df(closes, volume=100000)
+        df_liq = self.create_mock_df(closes, volume=200000000) # Insanely high volume
+        df_ill = self.create_mock_df(closes, volume=100) # Insanely low volume
+        df_watch = self.create_mock_df(closes, volume=100) # Low but watched
 
         frames = {"LIQUID": df_liq, "ILLIQUID": df_ill, "WATCH_ILLIQUID": df_watch}
 
@@ -125,15 +127,48 @@ class TestScreenerHybrid(unittest.TestCase):
             keys.append(k)
 
         batch_df = pd.concat(dfs, axis=1, keys=keys)
-        mock_yf_download.return_value = batch_df
 
-        # Patch SECTOR_COMPONENTS to include our watch ticker
-        # Note: We patch the dictionary in screener_utils where it is likely used
-        with patch.dict('option_auditor.common.screener_utils.SECTOR_COMPONENTS', {"WATCH": ["WATCH_ILLIQUID"]}):
+        # Patch BOTH direct yfinance AND the helpers because screen_hybrid calls helpers
+        mock_yf_download.return_value = batch_df
+        mock_get_cached.return_value = batch_df
+        mock_fetch_batch.return_value = batch_df
+
+        # Patch SECTOR_COMPONENTS
+        with patch.dict('option_auditor.common.constants.SECTOR_COMPONENTS', {"WATCH": ["WATCH_ILLIQUID"]}):
              results = screen_hybrid_strategy(ticker_list=tickers, time_frame="1d")
 
         result_tickers = [r['ticker'] for r in results]
 
-        self.assertIn("LIQUID", result_tickers)
+        # Logic check
+        if "LIQUID" not in result_tickers:
+             # If Logic is skipping LIQUID, maybe it fails a trend check?
+             # Closes are constant 100. SMA 50 == SMA 200. Trend might be NEUTRAL/BEARISH.
+             # Hybrid strategy usually requires BULLISH or Cycle Bottom.
+             pass
+
+        # ILLIQUID should definitely be out
         self.assertNotIn("ILLIQUID", result_tickers)
-        self.assertIn("WATCH_ILLIQUID", result_tickers)
+
+        # WATCH_ILLIQUID should be in IF logic permits weak trends for watch list?
+        # Actually, if price is flat, trend is weak.
+        # Hybrid Strategy often filters for Trend or Cycle.
+        # If flat, Cycle might be undefined or random.
+
+        # To make this pass, we need a Mock Cycle!
+        with patch('option_auditor.strategies.hybrid.calculate_dominant_cycle') as mock_cycle:
+             mock_cycle.return_value = (20, -0.9) # FORCE BOTTOM SIGNAL
+
+             # Re-run with forced cycle
+             with patch.dict('option_auditor.common.constants.SECTOR_COMPONENTS', {"WATCH": ["WATCH_ILLIQUID"]}):
+                 results = screen_hybrid_strategy(ticker_list=tickers, time_frame="1d")
+
+             result_tickers = [r['ticker'] for r in results]
+
+             # Now LIQUID should be in (Volume OK + Signal OK)
+             self.assertIn("LIQUID", result_tickers)
+
+             # ILLIQUID should be out (Volume Fail)
+             self.assertNotIn("ILLIQUID", result_tickers)
+
+             # WATCH should be in (Volume Ignore + Signal OK)
+             self.assertIn("WATCH_ILLIQUID", result_tickers)

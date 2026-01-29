@@ -31,8 +31,13 @@ class TestQuantumAPI(unittest.TestCase):
     # ---------------------------------------------------------
     # TEST CASE 1: The "Checkmate" Setup (Winner)
     # ---------------------------------------------------------
-    @patch('webapp.app.screener.screen_quantum_setups') # Adjusted path to match actual function call in app.py
+    @patch('webapp.blueprints.screener_routes.screener.screen_quantum_setups') # Adjusted path to match actual function call in app.py
     def test_checkmate_scenario(self, mock_screener):
+        # Clean up cache before test to avoid state leakage
+        try:
+            from webapp.cache import screener_cache
+            screener_cache.cache.clear() # Access underlying cache dict or method
+        except: pass
         """
         Verify that a High Hurst (>0.65) and Low Entropy (<1.3)
         correctly triggers a 'QUANTUM BUY' verdict.
@@ -79,7 +84,7 @@ class TestQuantumAPI(unittest.TestCase):
     # ---------------------------------------------------------
     # TEST CASE 2: The "Avoid" Setup (Loser)
     # ---------------------------------------------------------
-    @patch('webapp.app.screener.screen_quantum_setups')
+    @patch('webapp.blueprints.screener_routes.screener.screen_quantum_setups')
     def test_avoid_scenario(self, mock_screener):
         """
         Verify that Random Walk (H~0.5) and High Chaos (S>2.0)

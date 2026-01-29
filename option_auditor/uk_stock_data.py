@@ -1,6 +1,5 @@
-import os
-import csv
 import logging
+from option_auditor.common.data_loader import load_tickers_from_csv
 
 logger = logging.getLogger("UK_Stock_Data")
 
@@ -19,28 +18,7 @@ def get_uk_tickers():
     """
     Returns the UK FTSE 350 list from a CSV file.
     """
-    tickers = []
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(current_dir, 'data', 'ftse_350.csv')
-
-    if os.path.exists(csv_path):
-        try:
-            with open(csv_path, 'r') as f:
-                reader = csv.reader(f)
-                for row in reader:
-                    if row and row[0].strip():
-                        tickers.append(row[0].strip().upper())
-
-            # Remove duplicates and sort
-            unique_tickers = sorted(list(set(tickers)))
-            logger.info(f"Loaded {len(unique_tickers)} tickers from CSV: {csv_path}")
-            return unique_tickers
-        except Exception as e:
-            logger.error(f"Error loading FTSE 350 from CSV: {e}")
-            return []
-    else:
-        logger.warning(f"FTSE 350 CSV not found at {csv_path}.")
-        return []
+    return load_tickers_from_csv('ftse_350.csv')
 
 def get_uk_euro_tickers():
     """Returns normalized UK/Euro tickers list."""

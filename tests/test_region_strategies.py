@@ -8,14 +8,23 @@ from option_auditor.uk_stock_data import get_uk_tickers
 class TestRegionStrategies:
     @pytest.fixture
     def mock_market_data(self):
-        with patch('option_auditor.common.screener_utils.get_cached_market_data') as mock:
+        # The strategies themselves (e.g., screen_hybrid_strategy) are imported in screener.py
+        # but they are defined in their own modules.
+        # screen_hybrid_strategy is in option_auditor.strategies.hybrid
+        # It calls get_cached_market_data.
+        # So we must patch it where it is used: option_auditor.strategies.hybrid.get_cached_market_data
+
+        # NOTE: screener.py imports screen_hybrid_strategy from option_auditor.strategies.hybrid
+        # It does NOT implement it.
+
+        with patch('option_auditor.strategies.hybrid.get_cached_market_data') as mock:
             # Default to empty DF to prevent AttributeError on .columns lookup
             mock.return_value = pd.DataFrame()
             yield mock
 
     @pytest.fixture
     def mock_cycle(self):
-        with patch('option_auditor.strategies.utils.calculate_dominant_cycle') as mock:
+        with patch('option_auditor.strategies.math_utils.calculate_dominant_cycle') as mock:
             mock.return_value = (20, -0.8) # Cycle bottom
             yield mock
 
@@ -67,7 +76,15 @@ class TestRegionStrategies:
         Test that region='india' triggers 'market_scan_india' cache.
         """
         # Execute
-        with patch('option_auditor.screener.get_indian_tickers', return_value=["RELIANCE.NS"]):
+        # Patch where it is actually imported or used
+        # Since screener.py imports strategies, but `get_indian_tickers` is imported in `strategies.hybrid` if at all,
+        # OR `screener.py` uses `resolve_region_tickers`.
+        # `screen_hybrid_strategy` calls `resolve_region_tickers`.
+        # So we should patch `resolve_region_tickers` behavior implicitly or patch get_indian_tickers where `resolve_region_tickers` uses it.
+        # But `resolve_region_tickers` is in `screener_utils.py`.
+        # Let's patch `option_auditor.strategies.hybrid.resolve_region_tickers` which handles list resolution
+
+        with patch('option_auditor.strategies.hybrid.resolve_region_tickers', return_value=["RELIANCE.NS"]):
             screen_hybrid_strategy(region="india", time_frame="1d")
         
         # Verify
