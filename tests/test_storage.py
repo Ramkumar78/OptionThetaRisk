@@ -2,9 +2,10 @@ import os
 import pytest
 import sqlite3
 import uuid
+import json
 from unittest.mock import MagicMock, patch, ANY
-from webapp.storage import DatabaseStorage, S3Storage, get_storage_provider, StorageProvider, Report
-from sqlalchemy import create_engine
+from webapp.storage import DatabaseStorage, S3Storage, get_storage_provider, Report
+from sqlalchemy import create_engine, inspect, text
 import time
 
 # --- Tests for DatabaseStorage (Both SQLite and Postgres via SQLAlchemy) ---
@@ -138,6 +139,29 @@ def test_db_storage_journal(db_storage):
     entries = db_storage.get_journal_entries("testuser")
     assert len(entries) == 0
 
+def test_db_schema_migration(tmp_path):
+    # Create DB with missing columns manually first
+    db_path = tmp_path / "migration_test.db"
+    db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+
+    # Create table manually without new columns
+    with engine.connect() as conn:
+        conn.execute(text("CREATE TABLE journal_entries (id VARCHAR PRIMARY KEY, username VARCHAR, symbol VARCHAR)"))
+        conn.commit()
+
+    # Initialize storage, should trigger migration
+    storage = DatabaseStorage(db_url)
+
+    # Check if columns added
+    insp = inspect(storage.engine)
+    cols = [c['name'] for c in insp.get_columns('journal_entries')]
+    assert 'entry_date' in cols
+    assert 'entry_time' in cols
+    assert 'sentiment' in cols
+
+    storage.close()
+
 # --- Tests for get_storage_provider factory ---
 
 def test_get_storage_provider_local(monkeypatch, tmp_path):
@@ -216,6 +240,57 @@ def test_s3_storage(mock_boto_client):
 
     storage.save_journal_entry({"username": "u"})
     # Should put object with list
+    mock_s3.put_object.assert_called()
+
+@patch("boto3.client")
+def test_s3_cleanup_detailed(mock_boto_client):
+    mock_s3 = MagicMock()
+    mock_boto_client.return_value = mock_s3
+    storage = S3Storage("bucket")
+
+    # Mock list objects
+    mock_paginator = MagicMock()
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    old_time = time.time() - 2000
+
+    # Mock datetime for timestamp()
+    mock_obj = {'Key': 'old_file', 'LastModified': MagicMock()}
+    mock_obj['LastModified'].timestamp.return_value = old_time
+
+    mock_paginator.paginate.return_value = [{'Contents': [mock_obj]}]
+
+    storage.cleanup_old_reports(1000)
+    mock_s3.delete_objects.assert_called()
+
+@patch("boto3.client")
+def test_s3_journal_ops_detailed(mock_boto_client):
+    mock_s3 = MagicMock()
+    mock_boto_client.return_value = mock_s3
+    storage = S3Storage("bucket")
+
+    # Setup exceptions
+    type(mock_s3).exceptions = MagicMock()
+    class NoSuchKey(Exception): pass
+    mock_s3.exceptions.NoSuchKey = NoSuchKey
+
+    # Initial empty get
+    mock_s3.get_object.side_effect = NoSuchKey("No key")
+
+    entry = {"username": "u1", "symbol": "AAPL"}
+    eid = storage.save_journal_entry(entry)
+    assert eid
+    mock_s3.put_object.assert_called()
+
+    # Mock getting entries
+    mock_s3.get_object.side_effect = None
+    mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps([entry]).encode())}
+
+    entries = storage.get_journal_entries("u1")
+    assert len(entries) == 1
+
+    # Delete
+    storage.delete_journal_entry("u1", eid)
     mock_s3.put_object.assert_called()
 
 # --- Fix Tests ---

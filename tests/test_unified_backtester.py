@@ -115,6 +115,48 @@ def create_reentry_mock_df():
     df.columns = columns
     return df
 
+def create_sine_wave_df():
+    # Helper from extended tests: perfect sine wave for mean reversion/cycling tests
+    end_date = pd.Timestamp.now()
+    dates = pd.date_range(end=end_date, periods=500, freq="D")
+
+    # SINE WAVE + TREND
+    x = np.linspace(0, 4 * np.pi, 500)
+    sine = np.sin(x) * 20
+    trend = np.linspace(100, 200, 500)
+    close = trend + sine
+
+    # Add a sharp jump for Breakouts at mid-point
+    close[250] += 10
+
+    # High/Low envelopes
+    high = close + 2
+    low = close - 2
+    open_p = close - 1
+    volume = np.random.randint(1000000, 5000000, 500)
+
+    spy_price = close # Highly correlated
+    vix_price = np.full(500, 15.0)
+
+    data = {
+        ('Close', 'TEST'): close,
+        ('High', 'TEST'): high,
+        ('Low', 'TEST'): low,
+        ('Open', 'TEST'): open_p,
+        ('Volume', 'TEST'): volume,
+        ('Close', 'SPY'): spy_price,
+        ('Close', '^VIX'): vix_price,
+        ('High', 'SPY'): spy_price,
+        ('Low', 'SPY'): spy_price,
+        ('Volume', 'SPY'): volume,
+        ('Open', 'SPY'): spy_price
+    }
+
+    columns = pd.MultiIndex.from_tuples(data.keys())
+    df = pd.DataFrame(data, index=dates)
+    df.columns = columns
+    return df
+
 # --- Tests from Base ---
 
 def test_fetch_data_success(mock_yf_download):
@@ -305,3 +347,100 @@ def test_fetch_data_multiindex_handling(mock_yf_download):
     assert isinstance(df, pd.DataFrame)
     assert 'Close' in df.columns
     assert 'Spy' in df.columns
+
+# --- Merged from Extended ---
+
+def test_market_strategy_backtest(mock_yf_download):
+    mock_df = create_sine_wave_df()
+    mock_yf_download.return_value = mock_df
+
+    bt = UnifiedBacktester("TEST", strategy_type="market")
+    result = bt.run()
+
+    assert "error" not in result
+    assert result["strategy"] == "MARKET"
+    # Market strategy uses RSI dip in trend, sine wave should provide this
+    assert result["trades"] >= 0
+
+def test_ema_strategy_backtest(mock_yf_download):
+    mock_df = create_sine_wave_df()
+    mock_yf_download.return_value = mock_df
+
+    bt = UnifiedBacktester("TEST", strategy_type="ema_5_13")
+    result = bt.run()
+
+    assert "error" not in result
+    assert result["strategy"] == "EMA_5_13"
+
+def test_darvas_strategy_backtest(mock_yf_download):
+    mock_df = create_sine_wave_df()
+    mock_yf_download.return_value = mock_df
+
+    bt = UnifiedBacktester("TEST", strategy_type="darvas")
+    result = bt.run()
+
+    assert "error" not in result
+    assert result["strategy"] == "DARVAS"
+
+def test_fourier_strategy_backtest(mock_yf_download):
+    mock_df = create_sine_wave_df()
+    mock_yf_download.return_value = mock_df
+
+    bt = UnifiedBacktester("TEST", strategy_type="fourier")
+    result = bt.run()
+
+    assert "error" not in result
+    assert result["strategy"] == "FOURIER"
+    assert result["trades"] >= 0
+
+def test_hybrid_strategy_backtest(mock_yf_download):
+    mock_df = create_sine_wave_df()
+    mock_yf_download.return_value = mock_df
+
+    bt = UnifiedBacktester("TEST", strategy_type="hybrid")
+    result = bt.run()
+
+    assert "error" not in result
+    assert result["strategy"] == "HYBRID"
+    assert result["trades"] >= 0
+
+def test_master_convergence_strategy_backtest(mock_yf_download):
+    mock_df = create_sine_wave_df()
+    mock_yf_download.return_value = mock_df
+
+    bt = UnifiedBacktester("TEST", strategy_type="master_convergence")
+    result = bt.run()
+
+    assert "error" not in result
+    assert result["strategy"] == "MASTER_CONVERGENCE"
+
+def test_edge_case_regime_red(mock_yf_download):
+    # Create data where Vix is HIGH (Red Regime)
+    mock_df = create_sine_wave_df()
+    # Need to manipulate Vix in the multiindex structure if possible or just use the generator's internal structure
+    # The generator returns a DataFrame with MultiIndex columns.
+    # We can modify it.
+
+    # Locate VIX column
+    # The helper `create_sine_wave_df` sets VIX to 15.0.
+
+    idx = pd.IndexSlice
+    # We can't easily use loc with MultiIndex columns for setting efficiently if names not set,
+    # but we can assume column order or names from helper.
+    # Helper: ('Close', '^VIX')
+
+    # Let's create a new one with High VIX
+    # We'll just patch the helper or copy logic:
+    df = mock_df.copy()
+    # Find column with level 1 == '^VIX'
+    # Or just use the known tuple
+    df[('Close', '^VIX')] = 40.0
+
+    mock_yf_download.return_value = df
+
+    bt = UnifiedBacktester("TEST", strategy_type="grandmaster")
+    result = bt.run()
+
+    assert "error" not in result
+    # Grandmaster is long only, so should be 0 trades in RED regime
+    assert result["trades"] == 0

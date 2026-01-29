@@ -14,7 +14,7 @@ class TestUnifiedStockCheck(unittest.TestCase):
     def tearDown(self):
         self.ctx.pop()
 
-    @patch('webapp.app.screener.screen_turtle_setups')
+    @patch('webapp.services.check_service.screener.screen_turtle_setups')
     def test_check_stock_dispatch_turtle(self, mock_screen):
         """Test that strategy='turtle' calls the correct screener function."""
         # Setup
@@ -39,7 +39,7 @@ class TestUnifiedStockCheck(unittest.TestCase):
         # But here we mocking the return, so checking the logic of endpoint passing it through is implicit if we get 200.
         # However, to be thorough, let's update mock return to include them and assert.
         
-    @patch('webapp.app.screener.screen_turtle_setups')
+    @patch('webapp.services.check_service.screener.screen_turtle_setups')
     def test_check_stock_dispatch_turtle_columns(self, mock_screen):
         mock_screen.return_value = [{
             "ticker": "AAPL",
@@ -55,13 +55,13 @@ class TestUnifiedStockCheck(unittest.TestCase):
         self.assertIn('52_week_high', data)
 
 
-    @patch('webapp.app.screener.screen_turtle_setups')
-    @patch('webapp.app.screener.screen_hybrid_strategy')
-    @patch('webapp.app.screener.screen_trend_followers_isa')
-    @patch('webapp.app.screener.screen_mms_ote_setups')
-    @patch('webapp.app.screener.screen_5_13_setups')
-    @patch('webapp.app.screener.screen_darvas_box')
-    @patch('webapp.app.screener.screen_bull_put_spreads')
+    @patch('webapp.services.check_service.screener.screen_turtle_setups')
+    @patch('webapp.services.check_service.screener.screen_hybrid_strategy')
+    @patch('webapp.services.check_service.screener.screen_trend_followers_isa')
+    @patch('webapp.services.check_service.screener.screen_mms_ote_setups')
+    @patch('webapp.services.check_service.screener.screen_5_13_setups')
+    @patch('webapp.services.check_service.screener.screen_darvas_box')
+    @patch('webapp.services.check_service.screener.screen_bull_put_spreads')
     def test_check_stock_all_strategies_data_integrity(self, mock_bull, mock_darvas, mock_513, mock_mms, mock_isa, mock_hybrid, mock_turtle):
         """
         Verify that ALL strategies return the unified data fields required for the UI.
@@ -107,7 +107,7 @@ class TestUnifiedStockCheck(unittest.TestCase):
             # Reset for next iteration
             mock_func.reset_mock()
 
-    @patch('webapp.app.screener.screen_hybrid_strategy')
+    @patch('webapp.services.check_service.screener.screen_hybrid_strategy')
     def test_check_stock_hybrid(self, mock_screen):
         """Test that strategy='hybrid' calls the screener with check_mode=True."""
         mock_screen.return_value = [{
@@ -123,7 +123,7 @@ class TestUnifiedStockCheck(unittest.TestCase):
         self.assertEqual(mock_screen.call_args.kwargs['ticker_list'], ['NVDA'])
         self.assertTrue(mock_screen.call_args.kwargs.get('check_mode'), "check_mode must be True for hybrid check")
 
-    @patch('webapp.app.screener.screen_trend_followers_isa')
+    @patch('webapp.services.check_service.screener.screen_trend_followers_isa')
     def test_check_stock_pnl_calculation(self, mock_screen):
         """Test PnL calculation when entry_price is provided."""
         # Setup
@@ -143,8 +143,8 @@ class TestUnifiedStockCheck(unittest.TestCase):
         self.assertEqual(data['pnl_pct'], 100.0)
         self.assertEqual(data['user_entry_price'], 100.0)
 
-    @patch('webapp.app.screener.screen_trend_followers_isa')
-    @patch('webapp.app.yf.download')
+    @patch('webapp.services.check_service.screener.screen_trend_followers_isa')
+    @patch('webapp.blueprints.screener_routes.yf.download')
     def test_check_stock_historical_entry(self, mock_download, mock_screen):
         """Test fetching historical price when entry_date is provided."""
         # Setup Screener Result
@@ -174,7 +174,7 @@ class TestUnifiedStockCheck(unittest.TestCase):
         mock_download.assert_called_once()
         self.assertEqual(mock_download.call_args.args[0], 'MSFT')
 
-    @patch('webapp.app.screener.screen_trend_followers_isa')
+    @patch('webapp.services.check_service.screener.screen_trend_followers_isa')
     def test_verdict_isa_exit(self, mock_screen):
         """Test ISA verdict logic: Exit if below trailing stop."""
         mock_screen.return_value = [{
@@ -191,7 +191,7 @@ class TestUnifiedStockCheck(unittest.TestCase):
         self.assertIn("EXIT", data['user_verdict'])
         self.assertIn("Stop Hit", data['user_verdict'])
 
-    @patch('webapp.app.screener.screen_turtle_setups')
+    @patch('webapp.services.check_service.screener.screen_turtle_setups')
     def test_verdict_turtle_hold(self, mock_screen):
         """Test Turtle verdict logic: Hold if above stop."""
         mock_screen.return_value = [{
