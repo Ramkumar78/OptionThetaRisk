@@ -10,11 +10,6 @@
 - **Priority**: Medium
 - **Status**: Open.
 
-## 18. Code Quality - Silent Failures
-- **Issue**: Remaining `try-except-continue` blocks in data processing loops. While necessary for resilience, they can mask underlying logic errors. (Critical silent failures in logic were addressed).
-- **Priority**: Low
-- **Status**: Resolved (Silent blocks replaced with logging).
-
 ## 19. Inconsistent Logging
 - **Issue**: Some modules (e.g. `main_analyzer.py` previously) used `print` instead of `logging`. Potential remaining `print` statements in legacy code.
 - **Priority**: Low
@@ -25,7 +20,12 @@
 - **Priority**: High
 - **Status**: Open (Waiting for vendor fix).
 
-## 21. Pandas FutureWarnings
-- **Issue**: `pd.concat` sorting defaults are deprecated. Copy-on-Write mode is becoming default.
+## 22. Test Suite Fragmentation
+- **Issue**: The test suite contains many small, specific test files (e.g. `test_screener_*.py`) that should be consolidated into broader domain tests to reduce file clutter and improve maintainability.
+- **Priority**: Medium
+- **Status**: Open.
+
+## 23. Stale Test Files
+- **Issue**: Several test files were identified as stale or temporary artifacts (`test_coverage_improvements.py`, `test_missing_keys.py`) and have been removed. Future work should continue to audit for unused tests.
 - **Priority**: Low
-- **Status**: In Progress (Fixing test suite usage).
+- **Status**: In Progress.

@@ -15,7 +15,7 @@ This document outlines the strategic vision for evolving `option_auditor` into a
 ## Phase 3: Portfolio Management & Risk Intelligence
 - **Live Greeks Dashboard**: Visualize aggregated Portfolio Delta, Gamma, Theta, and Vega exposure to manage tail risk.
 - **"What-If" Scenario Analysis**: Simulate market shocks (e.g., "What if SPY drops 10% and VIX spikes to 40?") and project portfolio impact.
-- **Correlation Matrix Heatmap**: Visual representation of portfolio diversification to identify unintended concentration risk.
+- **Correlation Matrix Heatmap**: ✅ DONE. Implemented backend logic (`risk_intelligence.py`) and API endpoint (`/analyze/correlation`) for matrix calculation.
 
 ## Phase 4: Automation & Execution (The "Black Box")
 - **Broker API Integration**: Direct integration with IBKR, Tastytrade, or Alpaca for "One-Click" or fully automated execution of signals.
