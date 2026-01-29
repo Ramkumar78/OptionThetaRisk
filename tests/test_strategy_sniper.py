@@ -7,7 +7,7 @@ import pytest
 from option_auditor import screener
 from option_auditor.unified_backtester import UnifiedBacktester
 
-class TestMyStrategy(unittest.TestCase):
+class TestSniperStrategy(unittest.TestCase):
 
     def setUp(self):
         # Create a sample DataFrame that simulates a trending stock

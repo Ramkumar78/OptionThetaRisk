@@ -84,3 +84,24 @@ U123456,USD,SPY,2023-10-25 10:30:00,1,1.50,-150.00,-1.00,100,420,2023-10-27,P,OP
     row = norm.iloc[0]
     assert row["datetime"].strftime("%Y-%m-%d %H:%M:%S") == "2023-10-25 10:30:00"
     assert row["expiry"].strftime("%Y-%m-%d") == "2023-10-27"
+
+def test_ibkr_parser_missing_right_column():
+    """
+    Test detection of stock when 'Put/Call' column is missing or full of NaNs.
+    """
+    parser = IBKRParser()
+    # DataFrame without "Put/Call" column (simulating stock-only export or missing col)
+    df = pd.DataFrame([{
+        "Symbol": "AAPL",
+        "Date/Time": "2023-10-25 10:00:00",
+        "Quantity": "100",
+        "T. Price": "150.00",
+        "Comm/Fee": "1.0"
+    }])
+
+    out = parser.parse(df)
+
+    assert len(out) == 1
+    assert out.iloc[0]["asset_type"] == "STOCK"
+    assert out.iloc[0]["right"] == ""
+    assert out["right"].dtype == "O"

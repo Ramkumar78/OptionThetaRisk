@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from option_auditor import analyze_csv, portfolio_risk
+from option_auditor.risk_intelligence import calculate_correlation_matrix
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import _allowed_filename
 
@@ -31,6 +32,28 @@ def analyze_portfolio_route():
 
     except Exception as e:
         current_app.logger.exception(f"Portfolio Analysis Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@analysis_bp.route("/analyze/correlation", methods=["POST"])
+def analyze_correlation_route():
+    try:
+        data = request.json
+        tickers = data.get("tickers", [])
+
+        if isinstance(tickers, str):
+            tickers = [t.strip() for t in tickers.split(',')]
+
+        period = data.get("period", "1y")
+
+        result = calculate_correlation_matrix(tickers, period=period)
+
+        if "error" in result:
+             return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.exception(f"Correlation Analysis Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze", methods=["POST"])

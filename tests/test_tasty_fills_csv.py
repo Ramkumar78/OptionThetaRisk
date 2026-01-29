@@ -2,7 +2,9 @@ import io
 import os
 import pandas as pd
 import pytest
+import numpy as np
 from option_auditor import analyze_csv
+from option_auditor.parsers import TastytradeParser
 
 def test_tasty_fills_auto_detection_parses_successfully():
     csv = (
@@ -99,3 +101,37 @@ def test_strategy_name_present_in_groups():
     assert "symbol" in g and g["symbol"]
     assert "expiry" in g
     assert "strategy" in g and isinstance(g["strategy"], str)
+
+def test_tasty_parser_nan_option_type():
+    """
+    Test that TastytradeParser handles NaN in 'Option Type' correctly
+    without raising FutureWarning (implicit check) and producing correct output.
+    """
+    parser = TastytradeParser()
+    df = pd.DataFrame({
+        "Time": ["2023-10-25 10:00", "2023-10-25 10:00"],
+        "Underlying Symbol": ["AAPL", "GOOG"],
+        "Quantity": ["100", "1"],
+        "Action": ["Buy", "Buy"],
+        "Price": ["150.0", "5.0"],
+        "Commissions and Fees": ["0.0", "1.0"],
+        "Expiration Date": [None, "2023-11-17"],
+        "Strike Price": [None, "150"],
+        "Option Type": [np.nan, "Call"] # One stock (NaN), one Option
+    })
+
+    # Process
+    out = parser.parse(df)
+
+    # Assertions
+    assert len(out) == 2
+
+    # Check Stock Row
+    stock_row = out[out["asset_type"] == "STOCK"].iloc[0]
+    assert stock_row["right"] == ""
+    # Check dtype of 'right' column
+    assert out["right"].dtype == "O" # Object type
+
+    # Check Option Row
+    opt_row = out[out["asset_type"] == "OPT"].iloc[0]
+    assert opt_row["right"] == "C"

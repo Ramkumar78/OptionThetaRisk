@@ -90,7 +90,9 @@ def test_screen_fourier_cycles_integration(mock_phase, mock_fetch):
     assert "LOW" in results[0]['signal']
 
 @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
-def test_screen_fourier_empty(mock_fetch):
+@patch('option_auditor.common.screener_utils.prepare_data_for_ticker')
+def test_screen_fourier_empty(mock_prepare, mock_fetch):
     mock_fetch.return_value = pd.DataFrame()
+    mock_prepare.return_value = None # Force no data fallback
     results = screen_fourier_cycles(ticker_list=["EMPTY"])
     assert len(results) == 0
