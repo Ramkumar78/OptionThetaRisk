@@ -66,8 +66,8 @@ class StrategyAnalyzer:
                  rsi_s = ta.rsi(self.df['Close'], length=14)
                  if rsi_s is not None and not rsi_s.empty:
                     rsi_val = rsi_s.iloc[-1]
-             except Exception:
-                 pass
+             except Exception as e:
+                 logger.debug(f"RSI calc failed: {e}")
 
         if rsi_val is None or pd.isna(rsi_val): return "NEUTRAL"
 
@@ -143,8 +143,8 @@ def _process_hybrid_ticker(ticker, df, time_frame, check_mode):
             try:
                 prev_close_px = float(df['Close'].iloc[-2])
                 pct_change_1d = ((curr_close - prev_close_px) / prev_close_px) * 100
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Pct change calc failed: {e}")
 
         final_signal = "WAIT"
         color = "gray"
@@ -286,7 +286,9 @@ def screen_hybrid_strategy(ticker_list: list = None, time_frame: str = "1d", reg
             # Process logic
             res = _process_hybrid_ticker(ticker, df, time_frame, check_mode)
             if res: results.append(res)
-        except Exception: continue
+        except Exception as e:
+            logger.debug(f"Hybrid check failed for {ticker}: {e}")
+            continue
 
     results.sort(key=lambda x: x['score'], reverse=True)
     return results
@@ -388,8 +390,8 @@ def screen_confluence_scan(ticker_list: list = None, region: str = "us", check_m
                 try:
                     prev_close_px = float(df['Close'].iloc[-2])
                     pct_change_1d = ((curr_price - prev_close_px) / prev_close_px) * 100
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Pct change calc failed: {e}")
 
             import pandas_ta as ta
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
@@ -421,7 +423,9 @@ def screen_confluence_scan(ticker_list: list = None, region: str = "us", check_m
                 "atr": round(current_atr, 2)
             })
 
-        except Exception: continue
+        except Exception as e:
+            logger.debug(f"Confluence check failed for {ticker}: {e}")
+            continue
 
     results.sort(key=lambda x: x['confluence_score'], reverse=True)
     return results

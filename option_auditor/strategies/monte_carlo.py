@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import yfinance as yf
+import logging
+
+logger = logging.getLogger(__name__)
 
 def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 1000):
     """
@@ -18,7 +21,8 @@ def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 1000):
                     df = df[ticker].copy()
                 else:
                     df.columns = df.columns.get_level_values(0)
-            except: pass
+            except Exception as e:
+                logger.debug(f"MultiIndex fix failed for {ticker}: {e}")
 
         # Calculate Log Returns
         log_returns = np.log(df['Close'] / df['Close'].shift(1)).dropna()
@@ -53,5 +57,6 @@ def screen_monte_carlo_forecast(ticker: str, days: int = 30, sims: int = 1000):
             "volatility_annual": f"{vol_annual * 100:.1f}%",
             "method": "Historical Bootstrapping (Fat Tails)"
         }
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Monte Carlo failed for {ticker}: {e}")
         return None
