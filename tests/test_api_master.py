@@ -20,8 +20,8 @@ def test_screen_master_endpoint(client):
     # So we patch `option_auditor.screener.screen_universal_dashboard` or `option_auditor.unified_screener.screen_universal_dashboard`.
     # Since `webapp.app` calls `screener.screen_universal_dashboard`, we patch that.
 
-    # Patch the function imported in webapp.app
-    with patch('webapp.app.screen_master_convergence') as mock_screen:
+    # Patch the function imported in webapp.blueprints.screener_routes
+    with patch('webapp.blueprints.screener_routes.screen_master_convergence') as mock_screen:
         # It returns a list of dicts
         mock_screen.return_value = [{"ticker": "TEST", "master_verdict": "ISA_BUY", "price": 100}]
 
@@ -39,7 +39,7 @@ def test_screen_master_endpoint(client):
         mock_screen.assert_called()
 
 def test_screen_master_endpoint_uk(client):
-    with patch('webapp.app.screen_master_convergence') as mock_screen:
+    with patch('webapp.blueprints.screener_routes.screen_master_convergence') as mock_screen:
         mock_screen.return_value = []
 
         resp = client.get("/screen/master?region=uk")
