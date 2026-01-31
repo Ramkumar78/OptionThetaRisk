@@ -29,3 +29,4 @@ matplotlib
 seaborn
 ib_insync
 scikit-learn>=1.0.0
+pytest-xdist>=3.0.0
