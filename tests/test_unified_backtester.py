@@ -12,23 +12,19 @@ def mock_yf_download():
 def create_mock_df():
     # Create 3 years of data (approx 750 days)
     dates = pd.date_range(end=pd.Timestamp.now(), periods=750, freq='B')
+    n = len(dates) # Ensure robust length matching
 
     # Create a stepped uptrend to ensure breakouts occur
     # Price stays flat then jumps, then flat then jumps
     price = []
     base = 100
-    for i in range(500):
-        if i % 25 == 0: base += 5 # Jump every 25 days
-        price.append(base + np.random.normal(0, 0.5)) # Add noise
-
-    # Downtrend
-    for i in range(250):
-        if i % 25 == 0: base -= 5
+    # Generate exactly n points
+    for i in range(n):
+        if i < 500:
+             if i % 25 == 0: base += 5
+        else:
+             if i % 25 == 0: base -= 5
         price.append(base + np.random.normal(0, 0.5))
-
-    # Ensure we have 750 points
-    price = price[:750]
-    while len(price) < 750: price.append(base)
 
     # Make Highs/Lows tight so Price > High_20 is easier
     # High is just slightly above Close, Low slightly below
@@ -37,10 +33,10 @@ def create_mock_df():
     open_p = [p - 0.1 for p in price] # Open slightly below close (Green candles)
 
     # Create SPY (Bullish Regime)
-    spy_price = np.linspace(300, 450, 750)
+    spy_price = np.linspace(300, 450, n)
 
     # Create VIX (Low Vol)
-    vix_price = np.random.uniform(15, 20, 750)
+    vix_price = np.random.uniform(15, 20, n)
 
     data = {
         ('Close', 'TEST'): price,
@@ -66,6 +62,7 @@ def create_mock_df():
 def create_reentry_mock_df():
     # Create ~3 years of data
     dates = pd.date_range(end=pd.Timestamp.now(), periods=800, freq='B')
+    n = len(dates)
 
     # Construct a price series that:
     # 1. Establishes a strong trend (Price > 50 > 150 > 200)
@@ -74,40 +71,41 @@ def create_reentry_mock_df():
     # 4. But stays below previous High 20 (No Breakout Trigger)
 
     # Base trend
-    x = np.linspace(0, 800, 800)
+    x = np.linspace(0, n, n)
     base_trend = 100 + (x * 0.2) # Steady uptrend from 100 to ~260
 
     # Add a dip and recovery near the end
     price = base_trend.copy()
 
     # Last 50 days: Dip then Recover
-    # Day 750-770: Dip
-    price[750:770] -= 10
-    # Day 770-800: Recover slightly (cross SMA 20) but not new High
-    price[770:] -= 5
+    if n > 770:
+        # Day 750-770: Dip
+        price[750:770] -= 10
+        # Day 770-800: Recover slightly (cross SMA 20) but not new High
+        price[770:] -= 5
 
     high = price + 2
     low = price - 2
     open_p = price # Simple open = close for this test
 
     # SPY: Bullish
-    spy = np.linspace(300, 500, 800)
+    spy = np.linspace(300, 500, n)
     # VIX: Low
-    vix = np.full(800, 15)
+    vix = np.full(n, 15)
 
     data = {
         ('Close', 'TEST'): price,
         ('High', 'TEST'): high,
         ('Low', 'TEST'): low,
         ('Open', 'TEST'): open_p,
-        ('Volume', 'TEST'): [1000000] * 800,
+        ('Volume', 'TEST'): [1000000] * n,
         ('Close', 'SPY'): spy,
         ('Close', '^VIX'): vix,
         # Dummy cols for SPY/VIX extra levels
         ('High', 'SPY'): spy,
         ('Low', 'SPY'): spy,
         ('Open', 'SPY'): spy,
-        ('Volume', 'SPY'): [1] * 800,
+        ('Volume', 'SPY'): [1] * n,
     }
 
     columns = pd.MultiIndex.from_tuples(data.keys())
@@ -119,24 +117,26 @@ def create_sine_wave_df():
     # Helper from extended tests: perfect sine wave for mean reversion/cycling tests
     end_date = pd.Timestamp.now()
     dates = pd.date_range(end=end_date, periods=500, freq="D")
+    n = len(dates)
 
     # SINE WAVE + TREND
-    x = np.linspace(0, 4 * np.pi, 500)
+    x = np.linspace(0, 4 * np.pi, n)
     sine = np.sin(x) * 20
-    trend = np.linspace(100, 200, 500)
+    trend = np.linspace(100, 200, n)
     close = trend + sine
 
     # Add a sharp jump for Breakouts at mid-point
-    close[250] += 10
+    if n > 250:
+        close[250] += 10
 
     # High/Low envelopes
     high = close + 2
     low = close - 2
     open_p = close - 1
-    volume = np.random.randint(1000000, 5000000, 500)
+    volume = np.random.randint(1000000, 5000000, n)
 
     spy_price = close # Highly correlated
-    vix_price = np.full(500, 15.0)
+    vix_price = np.full(n, 15.0)
 
     data = {
         ('Close', 'TEST'): close,
@@ -184,14 +184,15 @@ def test_fetch_data_failure(mock_yf_download):
 def test_calculate_indicators():
     # We can use fetch_data output simulation
     dates = pd.date_range(end=pd.Timestamp.now(), periods=250, freq='B') # 1 year
+    n = len(dates)
     df = pd.DataFrame({
-        'Close': np.linspace(100, 150, 250),
-        'High': np.linspace(102, 152, 250),
-        'Low': np.linspace(98, 148, 250),
-        'Open': np.linspace(99, 149, 250),
-        'Volume': [1000] * 250,
-        'Spy': np.linspace(300, 400, 250),
-        'Vix': [15] * 250
+        'Close': np.linspace(100, 150, n),
+        'High': np.linspace(102, 152, n),
+        'Low': np.linspace(98, 148, n),
+        'Open': np.linspace(99, 149, n),
+        'Volume': [1000] * n,
+        'Spy': np.linspace(300, 400, n),
+        'Vix': [15] * n
     }, index=dates)
 
     # Test Grandmaster (default)

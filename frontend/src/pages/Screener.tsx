@@ -339,6 +339,25 @@ const Screener: React.FC = () => {
     // Filter State
     const [filterText, setFilterText] = useState('');
 
+    // Watchlist State (Pinned Tickers)
+    const [pinnedTickers, setPinnedTickers] = useState<string[]>(() => {
+        try {
+            return JSON.parse(localStorage.getItem('pinnedTickers') || '[]');
+        } catch {
+            return [];
+        }
+    });
+
+    const togglePin = (ticker: string) => {
+        setPinnedTickers(prev => {
+            const newPins = prev.includes(ticker)
+                ? prev.filter(t => t !== ticker)
+                : [...prev, ticker];
+            localStorage.setItem('pinnedTickers', JSON.stringify(newPins));
+            return newPins;
+        });
+    };
+
     // Backtest State
     const [backtestTicker, setBacktestTicker] = useState('');
     const [backtestStrategy, setBacktestStrategy] = useState('grandmaster');
@@ -447,6 +466,25 @@ const Screener: React.FC = () => {
         // 2. Sort
         if (sortConfig !== null) {
             processed.sort((a, b) => {
+                // Pin Sorting Logic
+                const aTicker = a.Ticker || a.ticker;
+                const bTicker = b.Ticker || b.ticker;
+                const aPinned = pinnedTickers.includes(aTicker);
+                const bPinned = pinnedTickers.includes(bTicker);
+
+                if (sortConfig.key === 'Pin') {
+                     if (aPinned && !bPinned) return sortConfig.direction === 'asc' ? -1 : 1;
+                     if (!aPinned && bPinned) return sortConfig.direction === 'asc' ? 1 : -1;
+                     return 0; // If both pinned or both not pinned, maintain stability (or fall through to secondary sort?)
+                }
+
+                // Always prioritize Pinned items at the top unless specifically sorting by something else that conflicts?
+                // Ideally, "Pinned" is just another sort key, OR we force pinned to top.
+                // Let's force pinned to top ONLY if no sort is active?
+                // Or better: Let user sort by "Pin" column explicitly to bring them to top.
+                // However, "Watchlist" usually implies they are always visible.
+                // Let's strictly follow the sort key. If user sorts by "Pin", they group.
+
                 let aVal = a[sortConfig.key] || a[sortConfig.key.toLowerCase()];
                 let bVal = b[sortConfig.key] || b[sortConfig.key.toLowerCase()];
 
@@ -637,6 +675,7 @@ const Screener: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                                    <th onClick={() => handleSort('Pin')} className="cursor-pointer px-2 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center"><i className="bi bi-star-fill text-yellow-500"></i> <SortIcon colKey="Pin" /></th>
                                     <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker <SortIcon colKey="Ticker" /></th>
                                     <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price <SortIcon colKey="Price" /></th>
 
@@ -694,9 +733,19 @@ const Screener: React.FC = () => {
                                     const companyName = r.company_name || r.name || r.Ticker || r.ticker;
 
                                     const item = r;
+                                    const isPinned = pinnedTickers.includes(r.Ticker || r.ticker);
 
                                     return (
-                                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                        <tr key={i} className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isPinned ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
+                                            <td className="px-2 py-4 text-center">
+                                                <button onClick={() => togglePin(r.Ticker || r.ticker)} className="focus:outline-none transition-transform active:scale-90 hover:scale-110">
+                                                    {isPinned ? (
+                                                        <i className="bi bi-star-fill text-yellow-500 text-lg shadow-sm"></i>
+                                                    ) : (
+                                                        <i className="bi bi-star text-gray-300 dark:text-gray-600 text-lg hover:text-yellow-400"></i>
+                                                    )}
+                                                </button>
+                                            </td>
                                             <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100" title={companyName}>
                                                 <div className="flex flex-col">
                                                     <span>{r.Ticker || r.ticker}</span>

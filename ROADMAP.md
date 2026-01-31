@@ -5,7 +5,7 @@ This document outlines the strategic vision for evolving `option_auditor` into a
 ## Phase 1: Real-Time & Interactive Frontend (React/Vite)
 - **TradingView Integration**: Replace static tables/charts with `lightweight-charts` or TradingView widget for interactive technical analysis (drawing tools, indicators).
 - **WebSocket Streaming**: Implement Socket.IO (Flask-SocketIO) to stream live prices, PnL updates, and screener signals to the dashboard without page refreshes.
-- **Interactive Screener Grid**: Client-side filtering, multi-column sorting, and "Watchlist" management (Pinning tickers, custom tags).
+- **Interactive Screener Grid**: ✅ DONE. Implemented Watchlist (Pinning), client-side filtering, and persistent state in `Screener.tsx`.
 
 ## Phase 2: Advanced Backtesting & Simulation
 - **Visual Backtester UI**: A dedicated page to configure strategy parameters (e.g., "Turtle 20 vs 55"), date ranges, and visualize results (Equity Curves, Drawdown Charts, Trade Logs).
