@@ -65,7 +65,10 @@ def create_app(testing: bool = False) -> Flask:
     # Session config
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90) # Longer session for guest persistence
 
-    if not testing and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
+    # Check for pytest environment to prevent background threads during tests
+    is_pytest = "PYTEST_CURRENT_TEST" in os.environ
+
+    if not testing and not is_pytest and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
         # Start Headless Scanner
