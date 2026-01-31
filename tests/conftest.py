@@ -24,9 +24,8 @@ def client(app):
     """A test client for the app."""
     return app.test_client()
 
-@pytest.fixture
-def authed_client(client):
-    """A test client that is pre-authenticated."""
-    with client.session_transaction() as session:
-        session['username'] = 'testuser'
-    return client
+@pytest.fixture(autouse=True)
+def prevent_background_scheduler():
+    """Prevent the background scheduler from starting during tests."""
+    with patch('webapp.services.scheduler_service.start_scheduler') as mock:
+        yield mock
