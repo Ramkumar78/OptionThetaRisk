@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from option_auditor.screener import screen_hybrid_strategy
 
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.strategies.hybrid.get_cached_market_data')
+@patch('option_auditor.strategies.hybrid.fetch_batch_data_safe')
 def test_screen_hybrid_perfect_buy(mock_fetch, mock_cache, mock_market_data):
     # Hybrid needs:
     # 1. ISA Trend (Close > SMA200) -> BULLISH
@@ -36,14 +36,14 @@ def test_screen_hybrid_perfect_buy(mock_fetch, mock_cache, mock_market_data):
     mock_fetch.return_value = df
 
     # Mock Cycle to Bottom (-0.8)
-    with patch('option_auditor.screener._calculate_dominant_cycle', return_value=(20, -0.8)):
+    with patch('option_auditor.strategies.hybrid.calculate_dominant_cycle', return_value=(20, -0.8)):
         results = screen_hybrid_strategy(ticker_list=["HYBRID"], check_mode=True)
 
         assert len(results) == 1
         assert "PERFECT BUY" in results[0]['verdict']
         assert results[0]['score'] >= 90
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.strategies.hybrid.fetch_batch_data_safe')
 def test_screen_hybrid_perfect_short(mock_fetch, mock_market_data):
     # Bearish Trend + Cycle Top
     df = mock_market_data(days=250, price=100.0, trend="down")
@@ -55,13 +55,13 @@ def test_screen_hybrid_perfect_short(mock_fetch, mock_market_data):
     mock_fetch.return_value = df
 
     # Mock Cycle to Top (0.8)
-    with patch('option_auditor.screener._calculate_dominant_cycle', return_value=(20, 0.8)):
+    with patch('option_auditor.strategies.hybrid.calculate_dominant_cycle', return_value=(20, 0.8)):
         results = screen_hybrid_strategy(ticker_list=["SHORT"], check_mode=True)
 
         assert len(results) == 1
         assert "PERFECT SHORT" in results[0]['verdict']
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
+@patch('option_auditor.strategies.hybrid.fetch_batch_data_safe')
 def test_screen_hybrid_falling_knife(mock_fetch, mock_market_data):
     # Bullish Trend + Bottom + Lower Lows (Falling Knife)
     df = mock_market_data(days=250, price=100.0, trend="up")
@@ -76,7 +76,7 @@ def test_screen_hybrid_falling_knife(mock_fetch, mock_market_data):
 
     mock_fetch.return_value = df
 
-    with patch('option_auditor.screener._calculate_dominant_cycle', return_value=(20, -0.8)):
+    with patch('option_auditor.strategies.hybrid.calculate_dominant_cycle', return_value=(20, -0.8)):
         results = screen_hybrid_strategy(ticker_list=["KNIFE"], check_mode=True)
 
         assert len(results) == 1

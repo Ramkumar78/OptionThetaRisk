@@ -69,9 +69,9 @@ class TestGrandmasterStrategy:
 
 # --- Functional Tests ---
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener.StrategyAnalyzer')
+@patch('option_auditor.strategies.hybrid.fetch_batch_data_safe')
+@patch('option_auditor.strategies.hybrid.get_cached_market_data')
+@patch('option_auditor.strategies.hybrid.StrategyAnalyzer')
 def test_screen_master_strong_buy(mock_analyzer_cls, mock_cache, mock_fetch, mock_market_data):
     df = mock_market_data(days=250, price=100.0)
     mock_cache.return_value = df
@@ -92,9 +92,9 @@ def test_screen_master_strong_buy(mock_analyzer_cls, mock_cache, mock_fetch, moc
     assert res['confluence_score'] == 3
     assert "STRONG BUY" in res['verdict']
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener.StrategyAnalyzer')
+@patch('option_auditor.strategies.hybrid.fetch_batch_data_safe')
+@patch('option_auditor.strategies.hybrid.get_cached_market_data')
+@patch('option_auditor.strategies.hybrid.StrategyAnalyzer')
 def test_screen_master_sell(mock_analyzer_cls, mock_cache, mock_fetch, mock_market_data):
     df = mock_market_data(days=250, price=100.0)
     mock_cache.return_value = df
@@ -112,9 +112,9 @@ def test_screen_master_sell(mock_analyzer_cls, mock_cache, mock_fetch, mock_mark
     assert len(results) == 1
     assert "STRONG SELL" in results[0]['verdict']
 
-@patch('option_auditor.screener.fetch_batch_data_safe')
-@patch('option_auditor.screener.get_cached_market_data')
-@patch('option_auditor.screener.StrategyAnalyzer')
+@patch('option_auditor.strategies.hybrid.fetch_batch_data_safe')
+@patch('option_auditor.strategies.hybrid.get_cached_market_data')
+@patch('option_auditor.strategies.hybrid.StrategyAnalyzer')
 def test_screen_master_wait(mock_analyzer_cls, mock_cache, mock_fetch, mock_market_data):
     df = mock_market_data(days=250, price=100.0)
     mock_cache.return_value = df

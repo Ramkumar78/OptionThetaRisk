@@ -5,35 +5,40 @@ from unittest.mock import patch
 import pandas as pd
 import numpy as np
 
-# Load scenarios from the feature file
 scenarios('../features/alpha101_strategy.feature')
 
 @pytest.fixture
 def mock_market_data_alpha():
-    """Mock yfinance data for Alpha 101. Requires Close > Open and significant move for alpha > 0.5"""
-    dates = pd.date_range(start="2023-01-01", periods=60, freq="B")
-    # Base price movement
-    close = np.linspace(100, 150, 60)
-    open_price = close.copy()
-
-    # Make the last day have a strong alpha
-    # Alpha = (Close - Open) / ((High - Low) + 0.001)
-    # We want Alpha > 0.5
-    # Let High = Close + 1, Low = Open - 1
-    # Let Close = Open + 10 (Big Move)
-    # Alpha = 10 / ((Close+1 - (Open-1)) + 0.001) = 10 / (12 + 0.001) approx 0.8
-
-    open_price[-1] = 150
-    close[-1] = 160
-    high = close + 1
-    low = open_price - 1
+    # Increase to 20 periods to satisfy ATR(14)
+    dates = pd.date_range(start="2023-01-01", periods=20, freq="B")
+    close = np.full(20, 100.0)
+    # Spike on last day: Close >> Open
+    close[-1] = 105.0
+    open_p = np.full(20, 100.0)
+    open_p[-1] = 100.0
 
     df = pd.DataFrame({
-        "Open": open_price, "High": high, "Low": low, "Close": close, "Volume": 1000000
+        "Open": open_p, "High": close+1, "Low": close-1, "Close": close, "Volume": 1000000
     }, index=dates)
     return df
 
 @when(parsers.parse('I run the Alpha 101 screener for timeframe "{time_frame}"'), target_fixture="results")
-def run_alpha_screener(ticker_list, time_frame, mock_market_data_alpha):
-     with patch('option_auditor.screener._prepare_data_for_ticker', return_value=mock_market_data_alpha):
-        return screen_alpha_101(ticker_list=ticker_list, time_frame=time_frame)
+def run_alpha(mock_market_data_alpha, time_frame):
+     # Patch BOTH cache and live fetch to ensure data is returned
+     with patch('option_auditor.common.screener_utils.fetch_batch_data_safe', return_value=mock_market_data_alpha), \
+          patch('option_auditor.common.screener_utils.get_cached_market_data', return_value=mock_market_data_alpha):
+         return screen_alpha_101(ticker_list=["ALPHA"], time_frame=time_frame)
+
+@then('I should receive a list of results')
+def verify_results_list(results):
+    assert isinstance(results, list)
+
+@then('I should see a momentum burst signal')
+def verify_alpha_101_setup_screening(results):
+    assert len(results) > 0
+    assert results[0]['alpha_101'] > 0
+
+@then(parsers.parse('each result should contain a "{field}" field'))
+def verify_field(results, field):
+    assert len(results) > 0
+    assert field in results[0]

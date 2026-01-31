@@ -55,6 +55,18 @@
     - Fixed broken imports and mocks in `tests/test_screener_coverage.py`.
     - Deleted `tests/test_screener_coverage_new.py`.
 
+## 9. Inconsistent Test Naming Conventions
+- **Issue**: Test files use various naming schemes (`test_..._new.py`, `test_..._extended.py`, `test_..._direct.py`).
+- **Impact**: Hard to organize and discover tests.
+- **Priority**: Low
+- **Status**: Open
+
+## 10. Design Pattern: Mixed Logic in Unified Screener
+- **Issue**: `option_auditor/unified_screener.py` contains `analyze_ticker_hardened` which mixes ISA (Equity) and Options logic within the dashboard view logic.
+- **Impact**: Reduced cohesiveness and separation of concerns.
+- **Priority**: Low
+- **Status**: Open
+
 ## Resolved Items
 - **Monolithic Controller**: Refactored `webapp/app.py` to use Blueprints (`webapp/blueprints/`).
 - **Global State Usage**: Moved `screener_cache` to `webapp/cache.py`.
@@ -65,7 +77,7 @@
 - **God Object / Complex Logic in screener.py**: Extracted all monolithic functions to strategy modules.
 - **Missing/Incomplete Unit Tests**: Added unit tests for extracted strategies.
 - **God Object in Unified Backtester**: Refactored to Strategy Pattern in `option_auditor/backtesting_strategies.py`.
-- **Test Suite Fragmentation**: Consolidated and fixed `test_screener_coverage.py`.
+- **Test Suite Fragmentation (Initial Pass)**: Consolidated and fixed `test_screener_coverage.py` (older files).
 - **Duplicate Ticker Resolution in `screener_routes.py`**: Refactored routes to use `resolve_region_tickers` with standardized `check_trend` parameter.
 - **Inconsistent/Conditional Imports**: Removed unnecessary `try...except` block for `pandas_ta` in `screener.py`.
 - **God Object / Complex Logic in `webapp/blueprints/screener_routes.py`**: Extracted business logic (specifically `check_unified_stock`) to `webapp/services/check_service.py`.
@@ -74,3 +86,5 @@
 - **Inconsistent Strategy Invocation**: Standardized strategy invocation in `screener.py` using the generic runner and consistent top-level imports.
 - **Unused Imports in `screener.py`**: Removed `yf`, `pd`, `np` etc. imports from `option_auditor/screener.py` as it now delegates all logic.
 - **Broken Tests due to Refactoring**: Fixed `test_strategy_bull_put.py`, `test_strategy_mms.py`, `test_strategy_darvas.py`, `test_strategy_fortress.py` by updating patch paths to reflect new code structure.
+- **Residual Test Suite Fragmentation**: Consolidated `test_unified_backtester_*.py` and `test_screener_coverage_*.py` files into their respective base files and deleted fragments.
+- **Stale Documentation**: Updated `SCANNERS.md` to include all implemented strategies.
