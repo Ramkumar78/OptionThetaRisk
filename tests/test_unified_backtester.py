@@ -43,12 +43,12 @@ def create_mock_df():
         ('High', 'TEST'): high,
         ('Low', 'TEST'): low,
         ('Open', 'TEST'): open_p,
-        ('Volume', 'TEST'): [1000000] * 750,
+        ('Volume', 'TEST'): [1000000] * n,
         ('Close', 'SPY'): spy_price,
         ('Close', '^VIX'): vix_price,
         ('High', 'SPY'): spy_price, # Dummy
         ('Low', 'SPY'): spy_price, # Dummy
-        ('Volume', 'SPY'): [1] * 750, # Dummy
+        ('Volume', 'SPY'): [1] * n, # Dummy
         ('Open', 'SPY'): spy_price, # Dummy
     }
 
