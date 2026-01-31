@@ -4,7 +4,8 @@ from unittest.mock import patch, MagicMock
 from option_auditor.unified_backtester import UnifiedBacktester
 
 def test_backtester_liquidity_grab_bullish():
-    dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
+    # Use relative dates to ensure data is not sliced off by 2-year window logic
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=100, freq="D")
     df = pd.DataFrame(index=dates)
 
     df['Close'] = 100.0
@@ -58,7 +59,8 @@ def test_backtester_liquidity_grab_bullish():
             assert result['win_rate'] == "100%"
 
 def test_backtester_rsi_bullish_div():
-    dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
+    # Use relative dates to ensure data is not sliced off
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=100, freq="D")
     df = pd.DataFrame(index=dates)
 
     df['Close'] = 100.0

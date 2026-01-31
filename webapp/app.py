@@ -66,7 +66,8 @@ def create_app(testing: bool = False) -> Flask:
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90) # Longer session for guest persistence
 
     # Check for pytest environment to prevent background threads during tests
-    is_pytest = "PYTEST_CURRENT_TEST" in os.environ
+    # Checking sys.modules is more reliable during import time than env vars
+    is_pytest = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
 
     if not testing and not is_pytest and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
