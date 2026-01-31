@@ -130,7 +130,7 @@ def test_screen_market(mock_resolve, mock_screen):
         assert len(results["Technology (XLK)"]) == 1
         assert results["Technology (XLK)"][0]["ticker"] == "AAPL"
 
-@patch('option_auditor.common.screener_utils.yf.download')
+@patch('yfinance.download')
 def test_screen_turtle(mock_download):
     mock_download.side_effect = mock_yf_download
     tickers = ["AAPL", "GOOGL"]
@@ -138,14 +138,14 @@ def test_screen_turtle(mock_download):
     assert len(results) > 0
     assert results[0]["ticker"] in tickers
 
-@patch('option_auditor.common.screener_utils.yf.download')
+@patch('yfinance.download')
 def test_screen_darvas(mock_download):
     mock_download.side_effect = mock_yf_download
     tickers = ["AAPL"]
     results = screener.screen_darvas_box(ticker_list=tickers)
     assert isinstance(results, list)
 
-@patch('option_auditor.common.screener_utils.yf.download')
+@patch('yfinance.download')
 def test_screen_ema(mock_download):
     mock_download.side_effect = mock_yf_download
     tickers = ["AAPL"]
@@ -164,7 +164,7 @@ def test_indian_tickers():
     assert len(tickers) > 0
     assert any(t.endswith(".NS") for t in tickers)
 
-@patch('option_auditor.common.data_utils.yf.download')
+@patch('yfinance.download')
 def test_prepare_data_for_ticker(mock_download):
     mock_df = pd.DataFrame({
         "Close": [100]*10,
@@ -274,7 +274,7 @@ def test_hybrid_strategy_branches(mock_cycle, mock_download):
 
 class TestScreenerCoverageExtended:
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_screen_tickers_timeframes(self, mock_download):
         mock_df = create_mock_data(rows=60)
         mock_download.return_value = mock_df
@@ -282,9 +282,8 @@ class TestScreenerCoverageExtended:
         _screen_tickers(tickers, 30, 50, "49m")
         mock_download.assert_called()
         call_args = mock_download.call_args[1]
-        # Logic likely defaults to '1d' if not standard, or map needs update.
-        # Assuming the fallback is intentional for robustness.
-        assert call_args['interval'] == '1d'
+        # "49m" maps to "5m" interval in screener_utils
+        assert call_args['interval'] == '5m'
         # assert call_args['period'] == '1mo' # Period might also differ
         _screen_tickers(tickers, 30, 50, "1wk")
         call_args = mock_download.call_args[1]
@@ -295,7 +294,7 @@ class TestScreenerCoverageExtended:
         assert call_args['interval'] == '1mo'
         assert call_args['period'] == '5y'
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     @patch('time.sleep', return_value=None)
     def test_screen_tickers_batch_vs_sequential(self, mock_sleep, mock_download):
         mock_df = create_mock_data(rows=60)
@@ -316,7 +315,7 @@ class TestScreenerCoverageExtended:
         assert len(results) == 1
         assert results[0]['ticker'] == 'AAPL'
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     @patch('option_auditor.strategies.market.yf.Ticker')
     def test_screen_tickers_pe_ratio(self, mock_ticker, mock_download):
         mock_df = create_mock_data(rows=60)
@@ -333,7 +332,7 @@ class TestScreenerCoverageExtended:
         results = _screen_tickers(['AAPL'], 30, 50, "1d")
         assert results[0]['pe_ratio'] == "N/A"
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_screen_tickers_insufficient_data(self, mock_download):
         mock_df = create_mock_data(rows=40)
         columns = pd.MultiIndex.from_product([['AAPL'], mock_df.columns])
@@ -342,7 +341,7 @@ class TestScreenerCoverageExtended:
         results = _screen_tickers(['AAPL'], 30, 50, "1d")
         assert len(results) == 0
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_screen_tickers_indicators_signals(self, mock_download):
         dates = pd.date_range(end=pd.Timestamp.now(), periods=100, freq='D')
         close = np.linspace(100, 200, 100)
@@ -387,7 +386,7 @@ class TestScreenerCoverageExtended:
         assert len(results) == 1
         assert results[0]['name'] == 'Technology'
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_screen_turtle_setups_logic(self, mock_download):
         mock_df = create_mock_data(rows=30, price=100)
         mock_df.iloc[-1, mock_df.columns.get_loc('Close')] = 150.0
@@ -402,7 +401,7 @@ class TestScreenerCoverageExtended:
         assert len(results) > 0
         assert "BREAKDOWN" in results[0]['signal']
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_screen_5_13_setups_logic(self, mock_download):
         dates = pd.date_range(end=pd.Timestamp.now(), periods=30, freq='D')
         close = np.full(30, 100.0)
@@ -414,7 +413,7 @@ class TestScreenerCoverageExtended:
         if len(results) > 0:
             assert "BREAKOUT" in results[0]['signal'] or "TRENDING" in results[0]['signal']
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_screen_darvas_box_logic(self, mock_download):
         mock_df = create_mock_data(rows=80, price=100)
         highs = mock_df['High'].values.copy()
@@ -439,7 +438,7 @@ class TestScreenerCoverageExtended:
 
 class TestScreenerImprovements:
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_isa_screener_logic(self, mock_download):
         dates = pd.date_range(end=pd.Timestamp.now(), periods=300, freq='D')
         closes = np.full(300, 100.0)
@@ -476,7 +475,7 @@ class TestScreenerImprovements:
         # AAPL ATR is small (~4), MSFT ATR is huge (~500)
         assert res_msft['shares'] < res_aapl['shares']
 
-    @patch('option_auditor.common.screener_utils.yf.download')
+    @patch('yfinance.download')
     def test_isa_liquidity_filter(self, mock_download):
         df = create_trend_data(periods=300)
         df['Volume'] = 100
@@ -533,7 +532,7 @@ class TestScreenerImprovements:
         assert "BULLISH OTE" in results[0]['signal']
 
     @patch('option_auditor.common.data_utils.time.sleep')
-    @patch('option_auditor.common.data_utils.yf.download')
+    @patch('yfinance.download')
     def test_fetch_data_retry(self, mock_download, mock_sleep):
         df_success = pd.DataFrame({'Close': [100]}, index=[pd.Timestamp.now()])
         mock_download.side_effect = [Exception("Fail 1"), Exception("Fail 2"), df_success]

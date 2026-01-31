@@ -9,8 +9,12 @@ class TestApiQuant(unittest.TestCase):
         self.app = create_app(testing=True)
         self.client = self.app.test_client()
 
-    @patch('option_auditor.strategies.master.screen_master_convergence')
-    def test_screen_quant_redirects_to_master_logic(self, mock_logic):
+    @patch('webapp.blueprints.screener_routes.get_cached_screener_result')
+    @patch('webapp.blueprints.screener_routes.screen_master_convergence')
+    def test_screen_quant_redirects_to_master_logic(self, mock_logic, mock_cache):
+        # Prevent cache hit
+        mock_cache.return_value = None
+
         # Mock underlying logic since screen_master is a local function
         mock_logic.return_value = [{"ticker": "AAPL", "confluence_score": 3}]
 

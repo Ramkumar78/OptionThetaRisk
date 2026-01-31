@@ -17,11 +17,19 @@ def mock_fetch_utils():
     # Mock both direct yf and batch utils to prevent network calls
     with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_batch, \
          patch('option_auditor.common.screener_utils.prepare_data_for_ticker') as mock_prep, \
-         patch('option_auditor.common.screener_utils.yf.download') as mock_download:
+         patch('yfinance.download') as mock_download, \
+         patch('yfinance.Ticker') as mock_ticker:
         
         # Setup returns to avoid iteration errors
         mock_batch.return_value = MagicMock()
         mock_prep.return_value = None # Return None to skip processing loop body
+
+        # Setup Ticker mock for bull put
+        mock_instance = MagicMock()
+        mock_instance.history.return_value = MagicMock(empty=True) # Return empty to fail fast
+        mock_instance.options = []
+        mock_ticker.return_value = mock_instance
+
         yield mock_download
 
 def test_resolve_region_tickers_logic():

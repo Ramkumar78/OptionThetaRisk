@@ -54,7 +54,7 @@ class TestISAStrategyClass:
 # --- Functional Screener Tests ---
 
 @patch('option_auditor.common.screener_utils.get_cached_market_data')
-@patch('option_auditor.common.screener_utils.yf.download')
+@patch('yfinance.download')
 def test_screen_isa_liquidity_filter(mock_download, mock_cache, mock_market_data):
     # Test that low volume stocks are filtered out
     df = mock_market_data(days=250, price=10.0)
@@ -67,7 +67,7 @@ def test_screen_isa_liquidity_filter(mock_download, mock_cache, mock_market_data
     assert len(results) == 0
 
 @patch('option_auditor.common.screener_utils.get_cached_market_data')
-@patch('option_auditor.common.screener_utils.yf.download')
+@patch('yfinance.download')
 def test_screen_isa_valid_entry(mock_download, mock_cache, mock_market_data):
     df = mock_market_data(days=250, price=100.0, trend="up")
     df['Volume'] = 10_000_000 # High volume
@@ -100,7 +100,7 @@ def test_screen_isa_risk_management(mock_cache, mock_market_data):
     mock_cache.return_value = df # Usually expects MultiIndex if list > 50, but for single it handles
 
     # We patch yf.download inside too if list < 50
-    with patch('option_auditor.common.screener_utils.yf.download', return_value=df):
+    with patch('yfinance.download', return_value=df):
         results = screen_trend_followers_isa(ticker_list=["RISKY"])
 
         assert len(results) == 1
