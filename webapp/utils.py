@@ -2,7 +2,10 @@ import os
 import resend
 import threading
 import functools
+import logging
 from flask import jsonify, current_app
+
+logger = logging.getLogger(__name__)
 
 def _allowed_filename(filename: str) -> bool:
     ALLOWED_EXTENSIONS = {".csv"}
@@ -34,13 +37,13 @@ def _get_env_or_docker_default(key, default=None):
 def send_email_notification(subject, body):
     api_key = _get_env_or_docker_default("RESEND_API_KEY")
     if not api_key:
-        print("⚠️  Resend API Key missing. Skipping email.", flush=True)
+        logger.warning("⚠️  Resend API Key missing. Skipping email.")
         return
 
     resend.api_key = api_key
     recipients = ["shriram2222@gmail.com"]
 
-    print(f"📧 Sending email via Resend to {recipients}...", flush=True)
+    logger.info(f"📧 Sending email via Resend to {recipients}...")
 
     try:
         params = {
@@ -51,9 +54,9 @@ def send_email_notification(subject, body):
         }
 
         email = resend.Emails.send(params)
-        print(f"✅ Email sent successfully! ID: {email.get('id')}", flush=True)
+        logger.info(f"✅ Email sent successfully! ID: {email.get('id')}")
     except Exception as e:
-        print(f"❌ Failed to send email: {e}", flush=True)
+        logger.error(f"❌ Failed to send email: {e}")
 
 def handle_screener_errors(f):
     """

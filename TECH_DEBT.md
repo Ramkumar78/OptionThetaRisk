@@ -5,11 +5,6 @@
 - **Priority**: Medium
 - **Status**: Open.
 
-## 19. Inconsistent Logging
-- **Issue**: Some modules (e.g. `main_analyzer.py` previously) used `print` instead of `logging`. Potential remaining `print` statements in legacy code.
-- **Priority**: Low
-- **Status**: Open.
-
 ## 23. Stale Test Files
 - **Issue**: Several test files were identified as stale or temporary artifacts (`test_coverage_improvements.py`, `test_missing_keys.py`) and have been removed. Future work should continue to audit for unused tests.
 - **Priority**: Low

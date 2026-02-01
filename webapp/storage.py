@@ -2,10 +2,13 @@ import os
 import time
 import uuid
 import json
+import logging
 from abc import ABC, abstractmethod
 import boto3
 from sqlalchemy import create_engine, Column, String, LargeBinary, Float, Integer, Text, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -143,19 +146,19 @@ class DatabaseStorage(StorageProvider):
 
                 with engine.connect() as conn:
                     if 'entry_date' not in columns:
-                        print("Migrating: Adding entry_date to journal_entries")
+                        logger.info("Migrating: Adding entry_date to journal_entries")
                         conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_date VARCHAR'))
 
                     if 'entry_time' not in columns:
-                        print("Migrating: Adding entry_time to journal_entries")
+                        logger.info("Migrating: Adding entry_time to journal_entries")
                         conn.execute(text('ALTER TABLE journal_entries ADD COLUMN entry_time VARCHAR'))
 
                     if 'sentiment' not in columns:
-                        print("Migrating: Adding sentiment to journal_entries")
+                        logger.info("Migrating: Adding sentiment to journal_entries")
                         conn.execute(text('ALTER TABLE journal_entries ADD COLUMN sentiment VARCHAR'))
                     conn.commit()
         except Exception as e:
-            print(f"Migration check failed: {e}")
+            logger.error(f"Migration check failed: {e}")
 
     def save_report(self, token: str, filename: str, data: bytes) -> None:
         session = self.Session()
