@@ -395,7 +395,7 @@ def _get_market_regime():
     """
     try:
         # 5 day history to get a smoothing or just last close
-        vix = yf.download("^VIX", period="5d", progress=False)
+        vix = yf.download("^VIX", period="5d", progress=False, auto_adjust=True)
         if not vix.empty:
             return float(vix['Close'].iloc[-1])
     except Exception as e:
