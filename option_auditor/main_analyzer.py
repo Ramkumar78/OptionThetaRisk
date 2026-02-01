@@ -250,7 +250,7 @@ def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
                     logger.debug(f"Failed to extract batch price for {sym}: {e}")
 
     except Exception as e:
-        print(f"Batch price fetch failed: {e}")
+        logger.warning(f"Batch price fetch failed: {e}")
         # Fallback to individual fetch if batch explodes (unlikely but safe)
         pass
 
@@ -679,7 +679,7 @@ def analyze_csv(csv_path: Optional[str] = None,
 
         except Exception as e:
             # Log error if needed
-            print(f"Live price fetch failed: {e}")
+            logger.warning(f"Live price fetch failed: {e}")
             pass
 
     # 6. Metrics Calculation
