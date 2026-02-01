@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_5135671ef08d8819_signal_type_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-02-01 01:52 +0000
+            created at 2026-02-01 08:20 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -477,7 +477,7 @@
     <p class="pln"><span class="n"><a id="t395" href="#t395">395</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t396" href="#t396">396</a></span><span class="t">    <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t397" href="#t397">397</a></span><span class="t">        <span class="com"># 5 day history to get a smoothing or just last close</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t398" href="#t398">398</a></span><span class="t">        <span class="nam">vix</span> <span class="op">=</span> <span class="nam">yf</span><span class="op">.</span><span class="nam">download</span><span class="op">(</span><span class="str">"^VIX"</span><span class="op">,</span> <span class="nam">period</span><span class="op">=</span><span class="str">"5d"</span><span class="op">,</span> <span class="nam">progress</span><span class="op">=</span><span class="key">False</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t398" href="#t398">398</a></span><span class="t">        <span class="nam">vix</span> <span class="op">=</span> <span class="nam">yf</span><span class="op">.</span><span class="nam">download</span><span class="op">(</span><span class="str">"^VIX"</span><span class="op">,</span> <span class="nam">period</span><span class="op">=</span><span class="str">"5d"</span><span class="op">,</span> <span class="nam">progress</span><span class="op">=</span><span class="key">False</span><span class="op">,</span> <span class="nam">auto_adjust</span><span class="op">=</span><span class="key">True</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t399" href="#t399">399</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">vix</span><span class="op">.</span><span class="nam">empty</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t400" href="#t400">400</a></span><span class="t">            <span class="key">return</span> <span class="nam">float</span><span class="op">(</span><span class="nam">vix</span><span class="op">[</span><span class="str">'Close'</span><span class="op">]</span><span class="op">.</span><span class="nam">iloc</span><span class="op">[</span><span class="op">-</span><span class="num">1</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t401" href="#t401">401</a></span><span class="t">    <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -527,7 +527,7 @@
             <a class="nav" href="z_5135671ef08d8819_signal_type_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-02-01 01:52 +0000
+            created at 2026-02-01 08:20 +0000
         </p>
     </div>
 </footer>
