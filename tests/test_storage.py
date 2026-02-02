@@ -194,6 +194,13 @@ def test_get_storage_provider_s3(monkeypatch):
 
 # --- Tests for S3Storage ---
 @patch("boto3.client")
+def test_s3_init_explicit_region(mock_boto_client):
+    """Test S3Storage initialization with explicit region."""
+    storage = S3Storage("my-bucket", "us-east-1")
+    assert storage.bucket_name == "my-bucket"
+    mock_boto_client.assert_called_with("s3", region_name="us-east-1")
+
+@patch("boto3.client")
 def test_s3_storage(mock_boto_client):
     mock_s3 = MagicMock()
     mock_boto_client.return_value = mock_s3
