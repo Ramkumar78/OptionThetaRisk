@@ -4,6 +4,7 @@ import pandas_ta as ta
 import numpy as np
 import logging
 from option_auditor.backtesting_strategies import get_strategy
+from option_auditor.monte_carlo_simulator import MonteCarloSimulator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("UnifiedBacktester")
@@ -328,3 +329,33 @@ class UnifiedBacktester:
         total = wins + losses
         if total == 0: return "0%"
         return f"{round((wins/total)*100)}%"
+
+    def run_monte_carlo(self, simulations=10000):
+        # Run backtest if not already run
+        if not self.trade_log:
+             result = self.run()
+             if "error" in result:
+                 return result
+
+        if not self.trade_log:
+             return {"error": "No trades generated in backtest."}
+
+        structured_trades = []
+        current_trade = {}
+        for event in self.trade_log:
+            if event['type'] == 'BUY':
+                current_trade = {"buy_price": event['price']}
+            elif event['type'] == 'SELL':
+                if current_trade:
+                    current_trade["sell_price"] = event['price']
+                    if current_trade.get('buy_price', 0) > 0:
+                        pnl = ((current_trade['sell_price'] - current_trade['buy_price']) / current_trade['buy_price']) * 100
+                        current_trade["return_pct"] = round(pnl, 2)
+                    structured_trades.append(current_trade)
+                    current_trade = {}
+
+        if not structured_trades:
+             return {"error": "No completed trades to simulate."}
+
+        mc = MonteCarloSimulator(structured_trades, self.initial_capital)
+        return mc.run(simulations=simulations)
