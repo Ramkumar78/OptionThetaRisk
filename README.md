@@ -19,7 +19,7 @@
 | option\_auditor/main\_analyzer.py                   |      570 |       61 |     89% |97-98, 120, 166, 193, 198, 245, 249-255, 271-272, 277-279, 359, 413, 436, 444-445, 461-465, 486, 496-497, 501-502, 518, 524-525, 556-557, 573, 598-599, 607-616, 647, 680-683, 761-762, 766-768, 780-781, 865, 935 |
 | option\_auditor/models.py                           |       75 |        2 |     97% |    76, 91 |
 | option\_auditor/parsers.py                          |      272 |       63 |     77% |15, 24-26, 30-44, 132-133, 160, 162-163, 180-214, 321-323, 335-336, 345, 378 |
-| option\_auditor/portfolio\_risk.py                  |      107 |       16 |     85% |66-69, 79-81, 85, 92, 121-129, 200 |
+| option\_auditor/portfolio\_risk.py                  |      107 |       17 |     84% |66-69, 79-81, 85, 92, 121-129, 184, 200 |
 | option\_auditor/risk\_intelligence.py               |       44 |       11 |     75% |21, 49-57, 60, 73, 93-95 |
 | option\_auditor/screener.py                         |       54 |        3 |     94% |   138-140 |
 | option\_auditor/sp500\_data.py                      |       34 |        5 |     85% |31-32, 50-53 |
@@ -27,8 +27,8 @@
 | option\_auditor/strategies/alpha.py                 |      102 |       21 |     79% |45-46, 51-52, 90-91, 151-163, 169, 198-199 |
 | option\_auditor/strategies/base.py                  |       19 |        4 |     79% |15, 23, 32-33 |
 | option\_auditor/strategies/bull\_put.py             |      114 |        9 |     92% |53, 95-96, 131, 140, 222-224, 234-235 |
-| option\_auditor/strategies/darvas.py                |       90 |       15 |     83% |42, 102-107, 119-123, 126, 160-162 |
-| option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 142, 179-182 |
+| option\_auditor/strategies/darvas.py                |       90 |       13 |     86% |42, 103, 106-107, 119-123, 126, 160-162 |
+| option\_auditor/strategies/five\_thirteen.py        |       98 |       14 |     86% |79-80, 112-113, 128-131, 142, 150, 179-182 |
 | option\_auditor/strategies/fortress.py              |       78 |       17 |     78% |16-18, 31, 45-48, 53, 59-60, 94-95, 100-101, 135-137 |
 | option\_auditor/strategies/fourier.py               |       57 |        2 |     96% |   112-113 |
 | option\_auditor/strategies/grandmaster\_screener.py |       64 |        7 |     89% |52-58, 117 |
