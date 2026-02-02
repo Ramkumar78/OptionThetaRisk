@@ -44,7 +44,10 @@ describe('PortfolioRisk Component', () => {
             sector_warnings: ['Tech Overload'],
             sector_breakdown: [{ name: 'Tech', value: 60 }, { name: 'Cash', value: 40 }],
             high_correlation_pairs: [{ pair: 'NVDA+AMD', score: 0.9, verdict: '🔥 DUPLICATE RISK' }],
-            correlation_matrix: {}
+            correlation_matrix: {
+                "NVDA": {"NVDA": 1.0, "AMD": 0.9},
+                "AMD": {"NVDA": 0.9, "AMD": 1.0}
+            }
         };
 
         mockedAxios.post.mockResolvedValueOnce({ data: mockReport });
@@ -65,6 +68,11 @@ describe('PortfolioRisk Component', () => {
             expect(screen.getByText('Too much NVDA')).toBeInTheDocument();
             expect(screen.getByText('Tech Overload')).toBeInTheDocument();
             expect(screen.getByText('NVDA+AMD')).toBeInTheDocument();
+
+            // Heatmap Checks
+            expect(screen.getByText('Correlation Matrix')).toBeInTheDocument();
+            expect(screen.getAllByText('0.9').length).toBeGreaterThanOrEqual(2); // Matrix cells
+            expect(screen.getAllByText('1.0').length).toBeGreaterThanOrEqual(2); // Diagonals
         });
     });
 

@@ -103,9 +103,9 @@ The following analysis categorizes features into "Mandatory" (Essentials for a f
 - **Gap**: Integration with real news APIs (Benzinga, Alpaca News) or scrapers.
 
 #### 4. Correlation Matrix Heatmap (MEDIUM)
-- **Status**: ✅ **Implemented** (Backend only)
+- **Status**: ✅ **DONE** (Frontend & Backend)
 - **Value**: **Diversification**. Visual grid showing pairwise correlations of all watchlist/portfolio assets. Ensures you aren't actually betting on the same factor multiple times.
-- **Gap**: Backend logic implemented; Frontend visualization pending.
+- **Gap**: None.
 
 #### 5. Interactive Charts (MEDIUM)
 - **Status**: ❌ **Missing**
