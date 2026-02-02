@@ -5,4 +5,4 @@
   - Consolidate and remove `tests/test_check_route.py` and `tests/test_storage_gap_fill.py`.
   - Future work should continue to audit for unused tests.
 - **Priority**: High
-- **Status**: In Progress.
+- **Status**: Resolved.
