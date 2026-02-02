@@ -31,13 +31,13 @@
 | option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 144, 179-182 |
 | option\_auditor/strategies/fortress.py              |       78 |       17 |     78% |16-18, 31, 45-48, 53, 59-60, 94-95, 100-101, 135-137 |
 | option\_auditor/strategies/fourier.py               |       57 |        2 |     96% |   112-113 |
-| option\_auditor/strategies/grandmaster\_screener.py |       64 |        8 |     88% |52-58, 117, 142 |
+| option\_auditor/strategies/grandmaster\_screener.py |       64 |        7 |     89% |52-58, 117 |
 | option\_auditor/strategies/hybrid.py                |      279 |       66 |     76% |29-30, 37-38, 49-52, 55-76, 146-147, 164-166, 182-184, 196-197, 230, 263, 278, 289-291, 302-307, 313, 315, 317, 319, 325-328, 333, 336-337, 347, 355-357, 374-375, 393-394, 426-428 |
 | option\_auditor/strategies/isa.py                   |      100 |        9 |     91% |61, 73-77, 142, 147, 186-188 |
 | option\_auditor/strategies/liquidity.py             |       90 |        6 |     93% |38, 75-77, 174-175 |
 | option\_auditor/strategies/market.py                |      182 |       40 |     78% |38-39, 59, 61, 65-68, 85, 122-123, 153-154, 167-168, 173, 201-203, 241-247, 250, 258, 297-327 |
 | option\_auditor/strategies/master.py                |      150 |       41 |     73% |35, 40-45, 48, 58, 64-66, 101-102, 111, 121-123, 125-127, 162-166, 168, 185-201, 213, 240-242 |
-| option\_auditor/strategies/math\_utils.py           |      151 |      114 |     25% |10-59, 66-84, 90-132, 139-160, 166-203, 230-231 |
+| option\_auditor/strategies/math\_utils.py           |      151 |       16 |     89% |58-59, 83-84, 110, 131-132, 153, 159-160, 189-190, 200-201, 230-231 |
 | option\_auditor/strategies/mms\_ote.py              |       86 |        6 |     93% |119-120, 143-146 |
 | option\_auditor/strategies/monte\_carlo.py          |       29 |        9 |     69% |19-25, 60-62 |
 | option\_auditor/strategies/options\_only.py         |      144 |       23 |     84% |47-48, 92-95, 103-106, 111-112, 127-128, 148, 154-155, 196, 207, 230-232, 244-245 |
@@ -66,7 +66,7 @@
 | webapp/services/scheduler\_service.py               |       38 |       28 |     26% |16-29, 36-61 |
 | webapp/storage.py                                   |      393 |       30 |     92% |68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 117, 270, 347-348, 388, 423-424, 443-446, 463, 480-481, 492, 504-505, 524 |
 | webapp/utils.py                                     |       50 |        7 |     86% |32-33, 58-59, 69-71 |
-| **TOTAL**                                           | **6456** | **1404** | **78%** |           |
+| **TOTAL**                                           | **6456** | **1305** | **80%** |           |
 
 
 ## Setup coverage badge
