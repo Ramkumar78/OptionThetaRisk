@@ -37,7 +37,7 @@ This document outlines the strategic vision for evolving `option_auditor` into a
 
 ### Phase 2: Advanced Backtesting & Simulation
 - **Visual Backtester UI**: A dedicated page to configure strategy parameters (e.g., "Turtle 20 vs 55"), date ranges, and visualize results (Equity Curves, Drawdown Charts, Trade Logs).
-- **Monte Carlo Sandbox**: Interactive playground to run Monte Carlo simulations on backtest results with adjustable assumptions (slippage, variable win rate).
+- **Monte Carlo Sandbox**: ✅ DONE. Implemented backend logic (`monte_carlo_simulator.py`) and API endpoint (`/analyze/monte-carlo`) for bootstrapping simulation.
 - **Walk-Forward Analysis**: Automated optimization engine to find robust parameters over rolling time windows, preventing overfitting.
 
 ### Phase 3: Portfolio Management & Risk Intelligence
@@ -88,9 +88,9 @@ The following analysis categorizes features into "Mandatory" (Essentials for a f
 *Features that provide a competitive edge or advanced validation.*
 
 #### 1. Monte Carlo Simulation Sandbox (HIGH)
-- **Status**: ❌ **Missing**
+- **Status**: ✅ **DONE** (Backend Logic & API)
 - **Value**: **Robustness**. Runs 10,000+ simulations of backtest results with randomized trade ordering and slippage/noise to determine the probability of ruin and realistic drawdown depth.
-- **Gap**: Backend logic needed in `backtester/`.
+- **Gap**: Frontend UI needed.
 
 #### 2. Walk-Forward Optimization (HIGH)
 - **Status**: ❌ **Missing**

@@ -8,6 +8,7 @@ from typing import Optional
 
 from option_auditor import analyze_csv, portfolio_risk
 from option_auditor.risk_intelligence import calculate_correlation_matrix
+from option_auditor.unified_backtester import UnifiedBacktester
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import _allowed_filename
 
@@ -54,6 +55,33 @@ def analyze_correlation_route():
 
     except Exception as e:
         current_app.logger.exception(f"Correlation Analysis Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@analysis_bp.route("/analyze/monte-carlo", methods=["POST"])
+def analyze_monte_carlo_route():
+    try:
+        data = request.json
+        ticker = data.get("ticker")
+        strategy = data.get("strategy", "turtle")
+        try:
+            simulations = int(data.get("simulations", 10000))
+        except ValueError:
+            return jsonify({"error": "Simulations must be an integer"}), 400
+
+        if not ticker:
+            return jsonify({"error": "Ticker required"}), 400
+
+        backtester = UnifiedBacktester(ticker, strategy_type=strategy)
+        # We can call run_monte_carlo directly, it will run the backtest if needed.
+        result = backtester.run_monte_carlo(simulations=simulations)
+
+        if "error" in result:
+             return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.exception(f"Monte Carlo Analysis Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze", methods=["POST"])
