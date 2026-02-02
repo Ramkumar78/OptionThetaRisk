@@ -249,6 +249,69 @@ const PortfolioRisk: React.FC = () => {
                  </div>
              )}
           </div>
+
+          {/* Correlation Heatmap */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 lg:col-span-2">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Correlation Matrix</h3>
+             {Object.keys(report.correlation_matrix).length === 0 ? (
+                  <div className="text-center text-gray-500 py-10">No correlation data available.</div>
+             ) : (
+                 <div className="overflow-x-auto">
+                    <div className="inline-block min-w-full">
+                        <div className="grid gap-1" style={{ gridTemplateColumns: `auto repeat(${Object.keys(report.correlation_matrix).length}, minmax(40px, 1fr))` }}>
+                            {/* Header Row */}
+                            <div className="h-10"></div> {/* Empty corner */}
+                            {Object.keys(report.correlation_matrix).sort().map(ticker => (
+                                <div key={`col-${ticker}`} className="flex items-center justify-center font-bold text-xs text-gray-600 dark:text-gray-400 h-10 w-10">
+                                    {ticker}
+                                </div>
+                            ))}
+
+                            {/* Matrix Rows */}
+                            {Object.keys(report.correlation_matrix).sort().map(rowTicker => (
+                                <React.Fragment key={`row-${rowTicker}`}>
+                                    {/* Row Label */}
+                                    <div className="flex items-center justify-end pr-2 font-bold text-xs text-gray-600 dark:text-gray-400 h-10">
+                                        {rowTicker}
+                                    </div>
+                                    {/* Cells */}
+                                    {Object.keys(report.correlation_matrix).sort().map(colTicker => {
+                                        const value = report.correlation_matrix[rowTicker][colTicker];
+                                        let bgClass = "bg-gray-100 dark:bg-gray-700";
+                                        let textClass = "text-gray-800 dark:text-gray-200";
+
+                                        if (value === 1.0) {
+                                            bgClass = "bg-gray-200 dark:bg-gray-600"; // Diagonal
+                                            textClass = "text-gray-400 dark:text-gray-500";
+                                        } else if (value > 0.8) {
+                                            bgClass = "bg-red-500 text-white";
+                                        } else if (value > 0.6) {
+                                            bgClass = "bg-red-300 text-red-900";
+                                        } else if (value > 0.3) {
+                                            bgClass = "bg-orange-200 text-orange-900";
+                                        } else if (value < 0.0) {
+                                            bgClass = "bg-green-400 text-green-900"; // Hedge
+                                        } else if (value < 0.3) {
+                                            bgClass = "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"; // Low corr
+                                        }
+
+                                        return (
+                                            <div
+                                                key={`${rowTicker}-${colTicker}`}
+                                                className={`h-10 w-10 flex items-center justify-center text-xs rounded-sm ${bgClass} ${textClass} cursor-default`}
+                                                title={`${rowTicker} vs ${colTicker}: ${value.toFixed(2)}`}
+                                            >
+                                                {value.toFixed(1)}
+                                            </div>
+                                        );
+                                    })}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    </div>
+                 </div>
+             )}
+          </div>
         </div>
       )}
     </div>
