@@ -27,8 +27,8 @@
 | option\_auditor/strategies/alpha.py                 |      102 |       21 |     79% |45-46, 51-52, 90-91, 151-163, 169, 198-199 |
 | option\_auditor/strategies/base.py                  |       19 |        4 |     79% |15, 23, 32-33 |
 | option\_auditor/strategies/bull\_put.py             |      114 |        9 |     92% |53, 95-96, 131, 140, 222-224, 234-235 |
-| option\_auditor/strategies/darvas.py                |       90 |       13 |     86% |42, 103, 106-107, 119-123, 126, 160-162 |
-| option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 144, 179-182 |
+| option\_auditor/strategies/darvas.py                |       90 |       15 |     83% |42, 102-107, 119-123, 126, 160-162 |
+| option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 142, 179-182 |
 | option\_auditor/strategies/fortress.py              |       78 |       17 |     78% |16-18, 31, 45-48, 53, 59-60, 94-95, 100-101, 135-137 |
 | option\_auditor/strategies/fourier.py               |       57 |        2 |     96% |   112-113 |
 | option\_auditor/strategies/grandmaster\_screener.py |       64 |        7 |     89% |52-58, 117 |
@@ -50,7 +50,7 @@
 | option\_auditor/strategy.py                         |      256 |       33 |     87% |16, 35, 148-155, 204, 207-245, 279, 306 |
 | option\_auditor/uk\_stock\_data.py                  |       16 |        2 |     88% |     30-31 |
 | option\_auditor/unified\_backtester.py              |      165 |        5 |     97% |36-38, 45, 73, 105 |
-| option\_auditor/unified\_screener.py                |      125 |       52 |     58% |30-63, 78-81, 96-97, 120-123, 150-162, 178-180, 191-197, 203, 220-223, 238-239 |
+| option\_auditor/unified\_screener.py                |      125 |       29 |     77% |37, 41-42, 48, 59-63, 78-81, 96-97, 120-123, 178-180, 191-197, 203, 220-223, 238-239 |
 | option\_auditor/us\_stock\_data.py                  |        9 |        3 |     67% |     50-53 |
 | webapp/\_\_init\_\_.py                              |        0 |        0 |    100% |           |
 | webapp/app.py                                       |       75 |       14 |     81% |37-38, 73-76, 99-100, 104-105, 120-126 |
@@ -58,7 +58,7 @@
 | webapp/blueprints/analysis\_routes.py               |      125 |       32 |     74% |23-35, 44, 55-57, 76-78, 85-86, 100, 108-116, 165-167 |
 | webapp/blueprints/journal\_routes.py                |       79 |       17 |     78% |27, 37-39, 62, 71-79, 104-106 |
 | webapp/blueprints/main\_routes.py                   |       60 |        9 |     85% |36-38, 46, 60-62, 76, 81 |
-| webapp/blueprints/screener\_routes.py               |      487 |      243 |     50% |38-49, 57-58, 63-64, 74-75, 115, 123-126, 133-134, 138, 143-144, 172-186, 191-202, 207-217, 222-236, 241-327, 339, 351-365, 370-384, 396, 415, 428-443, 448-462, 467-481, 494-495, 521-547, 552-566, 571-584, 595, 638-641, 646, 650, 656-657, 668, 674-679, 687-688 |
+| webapp/blueprints/screener\_routes.py               |      487 |       64 |     87% |57-58, 63-64, 74-75, 125-126, 133-134, 138, 179, 228-229, 249-252, 257-258, 264, 270-275, 282-283, 289, 296-299, 311, 317-320, 339, 358, 377, 396, 415, 435, 455, 474, 494-495, 526, 540, 559, 577, 595, 638-641, 650, 656-657, 668, 674-679 |
 | webapp/cache.py                                     |       28 |        1 |     96% |        34 |
 | webapp/main.py                                      |       20 |       20 |      0% |      1-35 |
 | webapp/services/\_\_init\_\_.py                     |        0 |        0 |    100% |           |
@@ -66,7 +66,7 @@
 | webapp/services/scheduler\_service.py               |       38 |       28 |     26% |16-29, 36-61 |
 | webapp/storage.py                                   |      393 |       30 |     92% |68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 117, 270, 347-348, 388, 423-424, 443-446, 463, 480-481, 492, 504-505, 524 |
 | webapp/utils.py                                     |       50 |        7 |     86% |32-33, 58-59, 69-71 |
-| **TOTAL**                                           | **6456** | **1305** | **80%** |           |
+| **TOTAL**                                           | **6456** | **1105** | **83%** |           |
 
 
 ## Setup coverage badge
