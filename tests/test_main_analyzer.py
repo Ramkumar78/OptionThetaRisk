@@ -218,3 +218,109 @@ def test_no_closed_trades(mock_fetch):
     res = analyze_csv(csv_buffer)
     assert len(res["strategy_groups"]) == 1
     assert len(res["open_positions"]) == 1
+
+# --- Migrated from test_main_analyzer_coverage.py ---
+
+@patch('option_auditor.main_analyzer._fetch_live_prices')
+def test_refresh_dashboard_data_redefined(mock_fetch_prices):
+    saved_data = {
+        "summary": {"total_pnl": 100},
+        "open_positions": [
+            {
+                "symbol": "AAPL",
+                "contract_id": "AAPL:2025-01-01:C:150",
+                "contract": "C 150.0",
+                "qty_open": 1,
+                "avg_price": 5.0,
+                "current_price": 0.0,
+                "expiry": "2025-01-01",
+                "strike": 150,
+                "right": "C"
+            }
+        ],
+        "verdict": {"color": "gray"}
+    }
+
+    mock_fetch_prices.return_value = {"AAPL": 155.0}
+
+    updated = aud.refresh_dashboard_data(saved_data)
+
+    pos = updated["open_positions"][0]
+    assert pos["current_price"] == 155.0
+
+
+@patch('option_auditor.main_analyzer._fetch_live_prices')
+def test_refresh_dashboard_data_risk(mock_fetch_prices):
+    saved_data = {
+        "summary": {"total_pnl": 100},
+        "open_positions": [
+            {
+                "symbol": "AAPL",
+                "contract_id": "AAPL:2025-01-01:C:140",
+                "contract": "C 140.0",
+                "qty_open": -5,         # Short 5 Calls
+                "avg_price": 5.0,
+                "current_price": 0.0,
+                "expiry": "2025-01-01",
+                "strike": 140.0,
+                "right": "C"
+            }
+        ],
+        "verdict": {"color": "gray"}
+    }
+
+    mock_fetch_prices.return_value = {"AAPL": 150.0}
+
+    updated = aud.refresh_dashboard_data(saved_data)
+
+    pos = updated["open_positions"][0]
+    assert "risk_alert" in pos
+    assert pos["risk_alert"] == "ITM Risk"
+
+    assert "High Open Risk" in updated["verdict"]
+
+@patch('option_auditor.main_analyzer.TastytradeFillsParser')
+@patch('option_auditor.main_analyzer.build_strategies')
+def test_analyze_csv_empty(mock_build, mock_parser_cls):
+    # If parse returns empty
+    mock_parser = MagicMock()
+    mock_parser_cls.return_value = mock_parser
+    mock_parser.parse.return_value = pd.DataFrame()
+
+    res = analyze_csv(None, "auto")
+    assert "error" in res
+    assert res["error"] == "No input data provided"
+
+@patch('option_auditor.main_analyzer.build_strategies')
+def test_analyze_csv_manual(mock_build):
+    manual_data = [{
+        "symbol": "AAPL",
+        "date": "2023-01-01",
+        "time": "10:00:00",
+        "action": "BUY",
+        "qty": 1,
+        "price": 100
+    }]
+
+    with patch('option_auditor.main_analyzer.ManualInputParser') as MockParser:
+        mock_parser = MagicMock()
+        MockParser.return_value = mock_parser
+
+        mock_parser.parse.return_value = pd.DataFrame({
+            "contract_id": ["C1"],
+            "symbol": ["AAPL"],
+            "datetime": [pd.Timestamp("2023-01-01 10:00:00")],
+            "qty": [1],
+            "price": [100],
+            "fees": [1.0],
+            "proceeds": [-100],
+            "expiry": [pd.NaT],
+            "strike": [None],
+            "right": [None]
+        })
+
+        mock_build.return_value = []
+
+        res = analyze_csv(None, "auto", manual_data=manual_data)
+        assert "error" not in res
+        assert "metrics" in res

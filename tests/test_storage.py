@@ -194,6 +194,13 @@ def test_get_storage_provider_s3(monkeypatch):
 
 # --- Tests for S3Storage ---
 @patch("boto3.client")
+def test_s3_init_explicit_region(mock_boto_client):
+    """Test S3Storage initialization with explicit region."""
+    storage = S3Storage("my-bucket", "us-east-1")
+    assert storage.bucket_name == "my-bucket"
+    mock_boto_client.assert_called_with("s3", region_name="us-east-1")
+
+@patch("boto3.client")
 def test_s3_storage(mock_boto_client):
     mock_s3 = MagicMock()
     mock_boto_client.return_value = mock_s3
@@ -311,3 +318,155 @@ def test_get_storage_provider_postgresql_ok(monkeypatch):
     with patch("webapp.storage.DatabaseStorage") as MockDB:
         get_storage_provider(MagicMock())
         MockDB.assert_called_with("postgresql://user:pass@host/db")
+
+# --- Migrated and Refactored from test_webapp_storage_coverage.py ---
+
+@pytest.fixture
+def coverage_db_storage():
+    db_url = "sqlite:///:memory:"
+    # Clear cache to force new engine
+    DatabaseStorage._engines = {}
+    storage = DatabaseStorage(db_url)
+    yield storage
+    storage.close()
+
+def test_ensure_schema_migrations_mocked():
+    # We need to patch where `inspect` is imported in `webapp.storage`
+    with patch('webapp.storage.inspect') as mock_inspect:
+        mock_inspector = MagicMock()
+        mock_inspect.return_value = mock_inspector
+        mock_inspector.has_table.return_value = True
+        mock_inspector.get_columns.return_value = [{'name': 'id'}]
+
+        # We need a mock engine that returns a mock connection
+        mock_engine = MagicMock()
+        mock_conn = MagicMock()
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+        DatabaseStorage._ensure_schema_migrations(mock_engine)
+
+        assert mock_conn.execute.call_count >= 3
+
+def test_ensure_schema_migrations_exception(coverage_db_storage):
+        with patch('webapp.storage.inspect') as mock_inspect:
+            mock_inspect.side_effect = Exception("Migration Failed")
+            # Should print error but not crash
+            DatabaseStorage._ensure_schema_migrations(coverage_db_storage.engine)
+
+def test_save_user_update(coverage_db_storage):
+    # Test update existing user logic
+    user_data = {"username": "testuser", "first_name": "Test"}
+    coverage_db_storage.save_user(user_data)
+
+    # Update
+    update_data = {"username": "testuser", "first_name": "Updated"}
+    coverage_db_storage.save_user(update_data)
+
+    user = coverage_db_storage.get_user("testuser")
+    assert user['first_name'] == "Updated"
+
+def test_save_journal_entry_sanitization(coverage_db_storage):
+    # Test that extra keys are ignored
+    entry = {
+        "username": "user1",
+        "entry_date": "2023-01-01",
+        "invalid_column": "should_be_ignored"
+    }
+    eid = coverage_db_storage.save_journal_entry(entry)
+
+    saved = coverage_db_storage.get_journal_entries("user1")[0]
+    assert saved['id'] == eid
+    # Ideally we check that no error occurred during save due to invalid key
+
+def test_save_journal_entries_batch_update(coverage_db_storage):
+    # Insert one
+    e1 = {"username": "u1", "symbol": "AAPL", "qty": 10}
+    coverage_db_storage.save_journal_entries([e1])
+    saved = coverage_db_storage.get_journal_entries("u1")[0]
+    eid = saved['id']
+
+    # Update it via batch
+    e1_update = {"id": eid, "username": "u1", "symbol": "AAPL", "qty": 20}
+    count = coverage_db_storage.save_journal_entries([e1_update])
+    assert count == 1
+
+    updated = coverage_db_storage.get_journal_entries("u1")[0]
+    assert updated['qty'] == 20.0
+
+def test_get_user_none(coverage_db_storage):
+    assert coverage_db_storage.get_user("nonexistent") is None
+
+def test_get_report_none(coverage_db_storage):
+    assert coverage_db_storage.get_report("badtoken", "badfile") is None
+
+def test_cleanup_vacuum_sqlite(coverage_db_storage):
+    # Test vacuum execution for sqlite
+    # We need to ensure cleanup_old_reports calls execute("VACUUM")
+
+    # Patch the Session used inside cleanup_old_reports
+    with patch.object(coverage_db_storage, 'Session') as mock_session_cls:
+        mock_session = MagicMock()
+        mock_session_cls.return_value = mock_session
+
+        coverage_db_storage.cleanup_old_reports(0)
+
+        # Check for VACUUM call
+        # It calls session.execute(text("VACUUM"))
+        # We check if execute was called with something containing "VACUUM"
+        found = False
+        for call in mock_session.execute.call_args_list:
+            arg = call[0][0]
+            if "VACUUM" in str(arg):
+                found = True
+                break
+        assert found
+
+@pytest.fixture
+def coverage_s3_storage():
+    storage = S3Storage("test-bucket", "us-east-1")
+    storage.s3 = MagicMock()
+    # Ensure exceptions class exists on mock
+    storage.s3.exceptions.NoSuchKey = Exception
+    return storage
+
+def test_get_report_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.get_object.side_effect = Exception("S3 Error")
+    assert coverage_s3_storage.get_report("t", "f") is None
+
+def test_cleanup_old_reports_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.get_paginator.side_effect = Exception("S3 Error")
+    # Should catch and pass
+    coverage_s3_storage.cleanup_old_reports(100)
+
+def test_save_user_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.put_object.side_effect = Exception("S3 Error")
+    coverage_s3_storage.save_user({"username": "u"})
+
+def test_get_user_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.get_object.side_effect = Exception("S3 Error")
+    assert coverage_s3_storage.get_user("u") is None
+
+def test_save_feedback_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.put_object.side_effect = Exception("S3 Error")
+    coverage_s3_storage.save_feedback("u", "msg")
+
+def test_save_portfolio_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.put_object.side_effect = Exception("S3 Error")
+    coverage_s3_storage.save_portfolio("u", b"data")
+
+def test_get_portfolio_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.get_object.side_effect = Exception("S3 Error")
+    assert coverage_s3_storage.get_portfolio("u") is None
+
+def test_save_journal_entry_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.put_object.side_effect = Exception("S3 Error")
+    assert coverage_s3_storage.save_journal_entry({"username": "u"}) is None
+
+def test_save_journal_entries_batch_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.put_object.side_effect = Exception("S3 Error")
+    count = coverage_s3_storage.save_journal_entries([{"username": "u"}])
+    assert count == 0
+
+def test_delete_journal_entry_exception(coverage_s3_storage):
+    coverage_s3_storage.s3.put_object.side_effect = Exception("S3 Error")
+    coverage_s3_storage.delete_journal_entry("u", "id")
