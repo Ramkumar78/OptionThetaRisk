@@ -191,6 +191,21 @@ class TestUnifiedStockCheck(unittest.TestCase):
         self.assertIn("EXIT", data['user_verdict'])
         self.assertIn("Stop Hit", data['user_verdict'])
 
+    @patch('webapp.services.check_service.screener.screen_trend_followers_isa')
+    def test_verdict_isa_hold(self, mock_screen):
+        """Test ISA verdict logic: Hold if above trailing stop."""
+        mock_screen.return_value = [{
+            "ticker": "AAPL",
+            "price": 150.0,
+            "signal": "ENTER",
+            "trailing_exit_20d": 140.0 # Price above stop
+        }]
+
+        resp = self.client.get('/screen/check?ticker=AAPL&strategy=isa&entry_price=130')
+        data = resp.json
+
+        self.assertIn("HOLD", data['user_verdict'])
+
     @patch('webapp.services.check_service.screener.screen_turtle_setups')
     def test_verdict_turtle_hold(self, mock_screen):
         """Test Turtle verdict logic: Hold if above stop."""
@@ -205,6 +220,14 @@ class TestUnifiedStockCheck(unittest.TestCase):
         data = resp.json
         
         self.assertIn("HOLD", data['user_verdict'])
+
+    @patch('webapp.blueprints.screener_routes.resolve_ticker')
+    def test_check_unknown_strategy(self, mock_resolve):
+        """Test error handling for unknown strategy."""
+        mock_resolve.return_value = 'AAPL'
+        response = self.client.get('/screen/check?ticker=AAPL&strategy=unknown_strat')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unknown strategy", response.get_json()['error'])
 
 if __name__ == '__main__':
     unittest.main()
