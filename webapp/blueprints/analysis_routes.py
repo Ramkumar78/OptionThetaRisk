@@ -35,6 +35,22 @@ def analyze_portfolio_route():
         current_app.logger.exception(f"Portfolio Analysis Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@analysis_bp.route("/analyze/portfolio/greeks", methods=["POST"])
+def analyze_portfolio_greeks_route():
+    try:
+        data = request.json
+        positions = data.get("positions", [])
+
+        if not positions:
+            return jsonify({"error": "No positions provided"}), 400
+
+        report = portfolio_risk.analyze_portfolio_greeks(positions)
+        return jsonify(report)
+
+    except Exception as e:
+        current_app.logger.exception(f"Portfolio Greeks Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @analysis_bp.route("/analyze/correlation", methods=["POST"])
 def analyze_correlation_route():
     try:
