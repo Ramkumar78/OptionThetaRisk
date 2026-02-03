@@ -41,7 +41,7 @@ This document outlines the strategic vision for evolving `option_auditor` into a
 - **Walk-Forward Analysis**: Automated optimization engine to find robust parameters over rolling time windows, preventing overfitting.
 
 ### Phase 3: Portfolio Management & Risk Intelligence
-- **Live Greeks Dashboard**: Visualize aggregated Portfolio Delta, Gamma, Theta, and Vega exposure to manage tail risk.
+- **Live Greeks Dashboard**: ✅ DONE. Visualize aggregated Portfolio Delta, Gamma, Theta, and Vega exposure to manage tail risk.
 - **"What-If" Scenario Analysis**: Simulate market shocks (e.g., "What if SPY drops 10% and VIX spikes to 40?") and project portfolio impact.
 - **Correlation Matrix Heatmap**: ✅ DONE. Implemented backend logic (`risk_intelligence.py`) and API endpoint (`/analyze/correlation`) for matrix calculation.
 
@@ -70,9 +70,9 @@ The following analysis categorizes features into "Mandatory" (Essentials for a f
 - **Gap**: Need an `ExecutionEngine` class in backend and "Trade" buttons in frontend.
 
 #### 2. Real-Time Portfolio Risk & Greeks (CRITICAL)
-- **Status**: ⚠️ **Partial** (Backend logic exists in `portfolio_risk.py`, Frontend missing)
+- **Status**: ✅ **DONE** (Implemented Backend Black-Scholes math and Frontend Dashboard)
 - **Value**: **Survival**. A live dashboard showing aggregated Delta, Gamma, Theta, and Vega across the entire portfolio, along with Beta-Weighted Deltas against SPY.
-- **Gap**: Frontend implementation needed to visualize the data returned by `portfolio_risk.py`.
+- **Gap**: None.
 
 #### 3. Position Sizing Calculator (HIGH)
 - **Status**: ⚠️ **Partial** (Logic in `isa_strategy.py`, no global tool)

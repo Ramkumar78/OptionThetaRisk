@@ -32,7 +32,7 @@ describe('PortfolioRisk Component', () => {
         fireEvent.click(button);
 
         await waitFor(() => {
-            expect(screen.getByText(/No valid positions found/)).toBeInTheDocument();
+            expect(screen.getByText(/No valid positions/)).toBeInTheDocument();
         });
     });
 

@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from datetime import datetime
 from option_auditor.common.data_utils import get_cached_market_data
 from option_auditor.common.constants import SECTOR_COMPONENTS, SECTOR_NAMES
+from option_auditor.strategies.math_utils import calculate_greeks
 import logging
 
 logger = logging.getLogger(__name__)
@@ -211,4 +213,175 @@ def analyze_portfolio_risk(positions: list) -> dict:
         "sector_breakdown": sector_breakdown, # For Pie Chart
         "high_correlation_pairs": high_corr_pairs, # For Table
         "correlation_matrix": corr_matrix_dict # For Heatmap (advanced)
+    }
+
+def analyze_portfolio_greeks(positions: list) -> dict:
+    """
+    Calculates aggregated Greeks for an options portfolio.
+
+    Input: List of dicts with:
+      - ticker: str
+      - type: "call" or "put"
+      - strike: float
+      - expiry: str ("YYYY-MM-DD")
+      - qty: float
+
+    Output:
+      - portfolio_totals: {delta, gamma, theta, vega}
+      - positions: List of details per position
+    """
+    if not positions:
+        return {}
+
+    # 1. Gather Tickers and fetch Prices
+    tickers = list(set([p['ticker'].upper().strip() for p in positions]))
+
+    # Fetch Data (Price + History for Vol)
+    # Using 6mo to get enough history for 30d rolling vol
+    market_data = get_cached_market_data(tickers, period="6mo", cache_name="portfolio_greeks")
+
+    current_prices = {}
+    historical_vols = {}
+
+    # Extract Current Price and Calculate Vol
+    for t in tickers:
+        try:
+            # Handle MultiIndex or Single
+            series = pd.Series()
+
+            if isinstance(market_data.columns, pd.MultiIndex):
+                # Try to find the Close column for this ticker
+                # yfinance often returns (PriceType, Ticker) or (Ticker, PriceType)
+                if t in market_data.columns.get_level_values(0):
+                     # Likely (Ticker, OHLC)
+                     if 'Close' in market_data[t].columns:
+                         series = market_data[t]['Close']
+                elif t in market_data.columns.get_level_values(1):
+                     # Likely (OHLC, Ticker)
+                     # Find column where level 1 is t and level 0 is Close
+                     cols = [c for c in market_data.columns if c[1] == t and c[0] == 'Close']
+                     if cols:
+                         series = market_data[cols[0]]
+            else:
+                 # Single ticker case or flat columns
+                 # If flat columns, check if 'Close' exists or if column name is the ticker (Close only df)
+                 if 'Close' in market_data.columns:
+                     series = market_data['Close']
+                 elif t in market_data.columns:
+                     series = market_data[t]
+
+            if not series.empty:
+                # Ensure sorted by date
+                series = series.sort_index()
+
+                # Get Last Price (Handle NaN at end if any)
+                last_valid = series.dropna().iloc[-1] if not series.dropna().empty else 0
+                current_prices[t] = float(last_valid)
+
+                # Calculate Hist Vol (30d annualized)
+                # Log returns
+                returns = np.log(series / series.shift(1))
+                # 30-day std dev annualized
+                if len(returns) > 30:
+                    vol = returns.rolling(window=30).std().iloc[-1] * np.sqrt(252)
+                else:
+                    vol = returns.std() * np.sqrt(252)
+
+                if pd.isna(vol) or vol < 1e-4:
+                    vol = 0.4 # Default
+                historical_vols[t] = vol
+            else:
+                 # Fallback if fetch failed (use last known or manual entry?)
+                 # For now, 0 price effectively disables greeks
+                 current_prices[t] = 0.0
+                 historical_vols[t] = 0.4
+
+        except Exception as e:
+            logger.error(f"Error processing data for {t}: {e}")
+            current_prices[t] = 0.0
+            historical_vols[t] = 0.4
+
+    # 2. Iterate Positions
+    portfolio_totals = {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+    position_details = []
+
+    now = datetime.now()
+
+    for pos in positions:
+        try:
+            ticker = pos.get('ticker', '').upper().strip()
+            otype = pos.get('type', 'call').lower().strip()
+            strike = float(pos.get('strike', 0))
+            expiry_str = pos.get('expiry', '').strip()
+            qty = float(pos.get('qty', 0))
+
+            if not ticker or not expiry_str:
+                continue
+
+            S = current_prices.get(ticker, 0.0)
+            sigma = historical_vols.get(ticker, 0.4)
+            r = 0.045 # 4.5% Risk Free Rate
+
+            if S <= 0:
+                # Can't calc greeks
+                position_details.append({
+                    "ticker": ticker,
+                    "error": "Price unavailable"
+                })
+                continue
+
+            # TTE
+            try:
+                expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d")
+            except ValueError:
+                 # Try other formats if needed, or skip
+                 continue
+
+            # Set to end of day (16:00)
+            expiry_date = expiry_date.replace(hour=16, minute=0, second=0)
+
+            diff = expiry_date - now
+            days_to_expiry = diff.total_seconds() / 86400.0
+            T = days_to_expiry / 365.0
+
+            # If expired or today
+            if T < 0: T = 0
+
+            greeks = calculate_greeks(S, strike, T, r, sigma, otype)
+
+            # Scale by Qty and Contract Size (100)
+            multiplier = 100 * qty
+
+            pos_delta = greeks['delta'] * multiplier
+            pos_gamma = greeks['gamma'] * multiplier
+            pos_theta = greeks['theta'] * multiplier
+            pos_vega = greeks['vega'] * multiplier
+
+            # Aggregate
+            portfolio_totals['delta'] += pos_delta
+            portfolio_totals['gamma'] += pos_gamma
+            portfolio_totals['theta'] += pos_theta
+            portfolio_totals['vega'] += pos_vega
+
+            position_details.append({
+                "ticker": ticker,
+                "type": otype,
+                "strike": strike,
+                "expiry": expiry_str,
+                "qty": qty,
+                "S": round(S, 2),
+                "IV": round(sigma * 100, 1),
+                "delta": round(pos_delta, 2),
+                "gamma": round(pos_gamma, 2),
+                "theta": round(pos_theta, 2),
+                "vega": round(pos_vega, 2)
+            })
+
+        except Exception as e:
+            logger.error(f"Error calculating greeks for position {pos}: {e}")
+            continue
+
+    return {
+        "portfolio_totals": {k: round(v, 2) for k, v in portfolio_totals.items()},
+        "positions": position_details
     }

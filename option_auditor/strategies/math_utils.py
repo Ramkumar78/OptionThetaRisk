@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.signal import hilbert, detrend
+from scipy.stats import norm
 
 def calculate_hurst(series: pd.Series, max_lag=20) -> float:
     """
@@ -278,3 +279,84 @@ def calculate_dominant_cycle(prices):
     rel_pos = current_val / (cycle_range / 2.0) if cycle_range > 0 else 0
 
     return round(period, 1), rel_pos
+
+def calculate_greeks(S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> dict:
+    """
+    Calculates Black-Scholes Greeks for European options.
+
+    Parameters:
+    - S: Underlying Price
+    - K: Strike Price
+    - T: Time to Expiration (in years)
+    - r: Risk-Free Interest Rate (decimal, e.g. 0.05)
+    - sigma: Volatility (decimal, e.g. 0.20)
+    - option_type: "call" or "put"
+
+    Returns:
+    - Dict with Delta, Gamma, Theta, Vega, Rho
+    """
+    try:
+        # Validate inputs
+        if T <= 0:
+            # Expired: Intrinsic value Greeks
+            delta = 0.0
+            if option_type.lower() == "call":
+                delta = 1.0 if S > K else 0.0
+            else:
+                delta = -1.0 if S < K else 0.0
+            return {"delta": delta, "gamma": 0.0, "theta": 0.0, "vega": 0.0, "rho": 0.0}
+
+        if sigma <= 0: sigma = 1e-5 # Avoid division by zero
+
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+
+        is_call = option_type.lower() == "call"
+
+        # Delta
+        if is_call:
+            delta = norm.cdf(d1)
+        else:
+            delta = norm.cdf(d1) - 1
+
+        # Gamma (Same for Call and Put)
+        gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
+
+        # Vega (Same for Call and Put) - expressed per 1% vol change usually, but here raw.
+        # Often Vega is quoted for 1% change, so multiply by 0.01.
+        # But standard BS formula gives change per 100% vol change (unit vol).
+        # We will return raw BS vega (change per 1 unit of sigma), but frontend usually expects per 1%?
+        # Standard convention: Vega = S * sqrt(T) * N'(d1) * 0.01 (if per 1%)
+        # Here we return "Mathematical Vega" (per 100% vol).
+        # To display nicely, we usually divide by 100 later. Let's return strict math value.
+        vega = S * np.sqrt(T) * norm.pdf(d1)
+
+        # Theta (Annualized)
+        if is_call:
+            theta_part1 = -(S * norm.pdf(d1) * sigma) / (2 * np.sqrt(T))
+            theta_part2 = -r * K * np.exp(-r * T) * norm.cdf(d2)
+            theta = theta_part1 + theta_part2
+        else:
+            theta_part1 = -(S * norm.pdf(d1) * sigma) / (2 * np.sqrt(T))
+            theta_part2 = r * K * np.exp(-r * T) * norm.cdf(-d2)
+            theta = theta_part1 + theta_part2
+
+        # Convert Theta to Daily (approx)
+        theta_daily = theta / 365.0
+
+        # Rho
+        if is_call:
+            rho = K * T * np.exp(-r * T) * norm.cdf(d2)
+        else:
+            rho = -K * T * np.exp(-r * T) * norm.cdf(-d2)
+
+        return {
+            "delta": float(delta),
+            "gamma": float(gamma),
+            "theta": float(theta_daily), # Daily Theta
+            "vega": float(vega / 100.0), # Vega per 1% vol change
+            "rho": float(rho / 100.0)    # Rho per 1% rate change
+        }
+
+    except Exception as e:
+        return {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0, "rho": 0.0, "error": str(e)}
