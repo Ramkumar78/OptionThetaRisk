@@ -3,7 +3,6 @@ pytest
 pytest-cov
 pytest-rerunfailures
 pytest-bdd
-pytest-asyncio
 flake8
 bandit
 pip-audit
