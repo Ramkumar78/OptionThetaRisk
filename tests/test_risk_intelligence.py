@@ -65,3 +65,44 @@ def test_calculate_correlation_single_ticker():
     result = calculate_correlation_matrix(['AAPL'])
     assert "error" in result
     assert "least 2 tickers" in result["error"]
+
+@patch('option_auditor.risk_intelligence.fetch_batch_data_safe')
+def test_calculate_correlation_short_history(mock_fetch):
+    # Create data with only 10 days
+    mock_df = create_mock_multiindex_data(['AAPL', 'MSFT'], length=10)
+    mock_fetch.return_value = mock_df
+
+    result = calculate_correlation_matrix(['AAPL', 'MSFT'])
+
+    assert "error" in result
+    assert "Insufficient overlapping history" in result["error"]
+
+@patch('option_auditor.risk_intelligence.fetch_batch_data_safe')
+def test_calculate_correlation_fetch_error(mock_fetch):
+    mock_fetch.side_effect = Exception("API Down")
+
+    result = calculate_correlation_matrix(['AAPL', 'MSFT'])
+
+    assert "error" in result
+    assert "API Down" in result["error"]
+
+@patch('option_auditor.risk_intelligence.fetch_batch_data_safe')
+def test_calculate_correlation_missing_columns(mock_fetch):
+    # Create data but without 'Adj Close' or 'Close'
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=50, freq='D')
+    df = pd.DataFrame({
+        ('AAPL', 'Open'): np.random.randn(50),
+        ('MSFT', 'Open'): np.random.randn(50)
+    }, index=dates)
+
+    mock_fetch.return_value = df
+
+    result = calculate_correlation_matrix(['AAPL', 'MSFT'])
+
+    assert "error" in result
+    assert "Could not extract prices" in result["error"]
+
+def test_calculate_correlation_no_tickers():
+    result = calculate_correlation_matrix(None)
+    assert "error" in result
+    assert "No tickers" in result["error"]
