@@ -134,8 +134,12 @@ class TestSniperStrategy(unittest.TestCase):
 
     def test_screen_my_strategy_edge_cases(self):
         # Empty Data
-        with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch:
+        with patch('option_auditor.common.screener_utils.fetch_batch_data_safe') as mock_fetch, \
+             patch('option_auditor.common.data_utils.fetch_data_with_retry') as mock_retry_fetch:
+
             mock_fetch.return_value = pd.DataFrame()
+            mock_retry_fetch.return_value = pd.DataFrame()
+
             results = screener.screen_my_strategy(ticker_list=['AAPL'])
             self.assertEqual(results, [])
 
