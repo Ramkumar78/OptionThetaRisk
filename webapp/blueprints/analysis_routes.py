@@ -90,6 +90,32 @@ def analyze_correlation_route():
         current_app.logger.exception(f"Correlation Analysis Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@analysis_bp.route("/analyze/backtest", methods=["POST"])
+def analyze_backtest_route():
+    try:
+        data = request.json
+        ticker = data.get("ticker")
+        strategy = data.get("strategy", "master")
+        try:
+            initial_capital = float(data.get("initial_capital", 10000.0))
+        except ValueError:
+            return jsonify({"error": "Initial Capital must be a number"}), 400
+
+        if not ticker:
+            return jsonify({"error": "Ticker required"}), 400
+
+        backtester = UnifiedBacktester(ticker, strategy_type=strategy, initial_capital=initial_capital)
+        result = backtester.run()
+
+        if "error" in result:
+             return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.exception(f"Backtest Analysis Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @analysis_bp.route("/analyze/monte-carlo", methods=["POST"])
 def analyze_monte_carlo_route():
     try:

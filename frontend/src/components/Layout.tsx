@@ -52,6 +52,7 @@ const Layout: React.FC<LayoutProps> = () => {
   const navLinks = [
     { name: 'Home', path: '/' },
     { name: 'Screener', path: '/screener' },
+    { name: 'Backtest', path: '/backtest' },
     { name: 'Journal', path: '/journal' },
     { name: 'Audit', path: '/audit' },
     { name: 'Risk Map', path: '/portfolio-risk' },
