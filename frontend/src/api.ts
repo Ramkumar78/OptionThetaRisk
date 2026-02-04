@@ -21,6 +21,15 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const runMonteCarloSimulation = async (ticker: string, strategy: string, simulations: number) => {
+  const response = await api.post('/analyze/monte-carlo', {
+    ticker,
+    strategy,
+    simulations
+  });
+  return response.data;
+};
+
 export const runHybridScreener = async (region: string, timeFrame: string) => {
   const response = await api.get('/screen/hybrid', {
     params: { region, time_frame: timeFrame }

@@ -1,0 +1,73 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { vi, describe, it, expect } from 'vitest';
+import MonteCarlo from './MonteCarlo';
+import * as api from '../api';
+
+// Mock the API
+vi.mock('../api', () => ({
+  runMonteCarloSimulation: vi.fn(),
+}));
+
+describe('MonteCarlo', () => {
+  it('renders the form correctly', () => {
+    render(<MonteCarlo />);
+    expect(screen.getByText('Monte Carlo Sandbox')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ticker')).toBeInTheDocument();
+    expect(screen.getByLabelText('Strategy')).toBeInTheDocument();
+    expect(screen.getByLabelText('Simulations')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run Simulation' })).toBeInTheDocument();
+  });
+
+  it('handles API call success', async () => {
+    const mockResult = {
+      prob_ruin_50pct: 2.5,
+      median_final_equity: 12000,
+      initial_capital: 10000,
+      avg_return_pct: 20,
+      worst_case_return: -10,
+      best_case_return: 50,
+      median_drawdown: -15,
+      worst_case_drawdown: -30,
+      message: 'Ran 10000 simulations.'
+    };
+
+    (api.runMonteCarloSimulation as any).mockResolvedValue(mockResult);
+
+    render(<MonteCarlo />);
+
+    const tickerInput = screen.getByLabelText('Ticker');
+    fireEvent.change(tickerInput, { target: { value: 'AAPL' } });
+
+    const runButton = screen.getByRole('button', { name: 'Run Simulation' });
+    fireEvent.click(runButton);
+
+    expect(screen.getByText('Simulating...')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText('Risk of Ruin (>50% DD)')).toBeInTheDocument();
+      expect(screen.getByText('2.5%')).toBeInTheDocument();
+      expect(screen.getByText('$12,000')).toBeInTheDocument();
+      expect(screen.getByText('20%')).toBeInTheDocument();
+
+      const medianDrawdownLabels = screen.getAllByText('Median Drawdown');
+      expect(medianDrawdownLabels.length).toBeGreaterThan(0);
+
+      const medianDrawdownValues = screen.getAllByText('-15%');
+      expect(medianDrawdownValues.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('handles API error', async () => {
+    (api.runMonteCarloSimulation as any).mockResolvedValue({ error: 'Ticker not found' });
+
+    render(<MonteCarlo />);
+
+    const runButton = screen.getByRole('button', { name: 'Run Simulation' });
+    fireEvent.click(runButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('⚠️ Ticker not found')).toBeInTheDocument();
+    });
+  });
+});
