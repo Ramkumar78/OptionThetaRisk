@@ -31,7 +31,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --pre -r requirements.txt
-          pip install pytest pytest-cov bandit pip-audit pytest-rerunfailures
+          pip install pytest pytest-cov bandit pip-audit pytest-rerunfailures playwright pytest-playwright
+          playwright install chromium
 
       - name: Security Scan - Python Static Analysis (Bandit)
         # Scan code, skip B104 (binding to all interfaces), report Medium/High severity

@@ -9,6 +9,7 @@ import Results from './pages/Results';
 import Dashboard from './pages/Dashboard';
 import PortfolioRisk from './pages/PortfolioRisk';
 import MonteCarlo from './pages/MonteCarlo';
+import Backtester from './pages/Backtester';
 
 const App: React.FC = () => {
   return (
@@ -17,6 +18,7 @@ const App: React.FC = () => {
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="screener" element={<Screener />} />
+          <Route path="backtest" element={<Backtester />} />
           <Route path="journal" element={<Journal />} />
           <Route path="audit" element={<Audit />} />
           <Route path="results" element={<Results />} />

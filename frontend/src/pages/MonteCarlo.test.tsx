@@ -4,6 +4,11 @@ import { vi, describe, it, expect } from 'vitest';
 import MonteCarlo from './MonteCarlo';
 import * as api from '../api';
 
+// Mock Chart.js components to avoid canvas errors in JSDOM
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <div data-testid="line-chart">Line Chart</div>
+}));
+
 // Mock the API
 vi.mock('../api', () => ({
   runMonteCarloSimulation: vi.fn(),
@@ -60,6 +65,13 @@ describe('MonteCarlo', () => {
         [10000, 10000, 10100],
         [10000, 9900, 9800]
       ]
+      equity_curves: {
+          p05: [10000, 9900, 9800],
+          p25: [10000, 10000, 10000],
+          p50: [10000, 10100, 10200],
+          p75: [10000, 10200, 10400],
+          p95: [10000, 10500, 11000]
+      }
     };
 
     (api.runMonteCarloSimulation as any).mockResolvedValue(mockResult);
@@ -88,6 +100,9 @@ describe('MonteCarlo', () => {
 
       // Verify chart is rendered
       expect(screen.getByTestId('equity-curve-chart')).toBeInTheDocument();
+      // Verify Chart Section
+      expect(screen.getByText('Projected Equity Curves (Cone)')).toBeInTheDocument();
+      expect(screen.getByTestId('line-chart')).toBeInTheDocument();
     });
   });
 

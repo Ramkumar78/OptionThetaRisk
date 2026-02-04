@@ -80,9 +80,9 @@ The following analysis categorizes features into "Mandatory" (Essentials for a f
 - **Gap**: Interactive UI component needed.
 
 #### 4. Trade Journal & Performance Metrics (MEDIUM)
-- **Status**: ⚠️ **Partial** (Basic CSV storage, limited analytics)
+- **Status**: ✅ **DONE** (Enhanced Analytics & Equity Curve)
 - **Value**: **Improvement**. Automated logging of trades with tagging (Strategy, Mistake, Setup). Computation of Expectancy, Sharpe Ratio, Profit Factor, and Win Rate.
-- **Gap**: Database migration (Postgres) needed for robust storage; Frontend views for equity curves.
+- **Gap**: Database migration (Postgres) needed for robust high-scale storage (Optional).
 
 ### 🟦 Cool Features (The Edge)
 *Features that provide a competitive edge or advanced validation.*
