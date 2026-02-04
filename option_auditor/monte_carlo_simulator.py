@@ -54,6 +54,17 @@ class MonteCarloSimulator:
         # Final Equities
         final_equities = equity_curves[:, -1]
 
+        # Calculate Percentiles of Equity Curves
+        # Axis 0 is simulations, Axis 1 is steps
+        percentiles = [5, 25, 50, 75, 95]
+        curve_percentiles = np.percentile(equity_curves, percentiles, axis=0)
+
+        # Sample Curves
+        # If simulations > 5, take 5 random. Else take all.
+        n_samples = min(simulations, 5)
+        sample_indices = rng.choice(simulations, n_samples, replace=False)
+        sample_curves = equity_curves[sample_indices]
+
         # Max Drawdown Calculation
         # Running Max
         running_max = np.maximum.accumulate(equity_curves, axis=1)
@@ -100,5 +111,13 @@ class MonteCarloSimulator:
             "best_case_return": round(((pct95_return - self.initial_capital)/self.initial_capital)*100, 2),
             "median_drawdown": round(median_dd, 2),
             "worst_case_drawdown": round(pct95_dd, 2), # 95% Confidence Level Max Drawdown
+            "equity_curve_percentiles": {
+                "p5": curve_percentiles[0].tolist(),
+                "p25": curve_percentiles[1].tolist(),
+                "p50": curve_percentiles[2].tolist(),
+                "p75": curve_percentiles[3].tolist(),
+                "p95": curve_percentiles[4].tolist(),
+            },
+            "sample_equity_curves": sample_curves.tolist(),
             "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >50% drawdown."
         }
