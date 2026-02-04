@@ -15,7 +15,6 @@ export default defineConfig({
       '/feedback': 'http://127.0.0.1:5000',
       '/static': 'http://127.0.0.1:5000',
       '/health': 'http://127.0.0.1:5000',
-      '/backtest': 'http://127.0.0.1:5000',
     }
   },
   build: {
