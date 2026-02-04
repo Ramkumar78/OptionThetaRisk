@@ -1,5 +1,28 @@
 import React, { useState } from 'react';
 import { runMonteCarloSimulation } from '../api';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 interface SimulationResult {
   prob_ruin_50pct: number;
@@ -11,6 +34,13 @@ interface SimulationResult {
   median_drawdown: number;
   worst_case_drawdown: number;
   message: string;
+  equity_curves?: {
+      p05: number[];
+      p25: number[];
+      p50: number[];
+      p75: number[];
+      p95: number[];
+  };
 }
 
 const MonteCarlo: React.FC = () => {
@@ -145,6 +175,74 @@ const MonteCarlo: React.FC = () => {
              color="orange"
              desc="Median depth of drawdown encountered."
           />
+
+          {/* Equity Curve Chart */}
+          {result.equity_curves && (
+              <div className="md:col-span-2 lg:col-span-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Projected Equity Curves (Cone)</h3>
+                  <div className="h-96 w-full">
+                      <Line
+                          data={{
+                              labels: result.equity_curves.p50.map((_, i) => i.toString()),
+                              datasets: [
+                                  {
+                                      label: '95th Percentile (Best)',
+                                      data: result.equity_curves.p95,
+                                      borderColor: 'rgba(34, 197, 94, 0.5)', // green-500
+                                      borderDash: [5, 5],
+                                      borderWidth: 2,
+                                      pointRadius: 0,
+                                      fill: false,
+                                  },
+                                  {
+                                      label: 'Median (Expected)',
+                                      data: result.equity_curves.p50,
+                                      borderColor: 'rgba(59, 130, 246, 1)', // blue-500
+                                      borderWidth: 3,
+                                      pointRadius: 0,
+                                      fill: false,
+                                  },
+                                  {
+                                      label: '5th Percentile (Worst)',
+                                      data: result.equity_curves.p05,
+                                      borderColor: 'rgba(239, 68, 68, 0.5)', // red-500
+                                      borderDash: [5, 5],
+                                      borderWidth: 2,
+                                      pointRadius: 0,
+                                      fill: false,
+                                  }
+                              ]
+                          }}
+                          options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              interaction: {
+                                  mode: 'index',
+                                  intersect: false,
+                              },
+                              scales: {
+                                  x: {
+                                      title: { display: true, text: 'Trade Count' },
+                                      grid: { display: false }
+                                  },
+                                  y: {
+                                      title: { display: true, text: 'Account Equity ($)' },
+                                      grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                                  }
+                              },
+                              plugins: {
+                                  legend: { position: 'top' },
+                                  tooltip: {
+                                      callbacks: {
+                                          label: (ctx) => `${ctx.dataset.label}: $${Number(ctx.raw).toLocaleString()}`
+                                      }
+                                  }
+                              }
+                          }}
+                      />
+                  </div>
+              </div>
+          )}
 
           <div className="md:col-span-2 lg:col-span-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Detailed Statistics</h3>
