@@ -3,8 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Journal from './Journal';
 import axios from 'axios';
 import { BrowserRouter } from 'react-router-dom';
+import React from 'react';
 
 vi.mock('axios');
+
+// Mock Chart.js components to avoid canvas errors in JSDOM
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <div data-testid="line-chart">Line Chart</div>
+}));
 
 describe('Journal Component', () => {
   const mockEntries = [
@@ -88,6 +94,46 @@ describe('Journal Component', () => {
             strategy: 'Call',
             notes: 'Test Note'
         }));
+    });
+  });
+
+  it('analyzes journal and shows charts', async () => {
+    (axios.get as any).mockResolvedValue({ data: mockEntries });
+
+    const mockAnalysis = {
+        total_trades: 2,
+        win_rate: 50,
+        total_pnl: 50,
+        best_pattern: "Iron Condor",
+        worst_pattern: "Put Credit Spread",
+        best_time: "Morning",
+        suggestions: ["Good job"],
+        patterns: [],
+        time_analysis: [],
+        equity_curve: [
+            { date: "2023-10-01", cumulative_pnl: 100 },
+            { date: "2023-10-02", cumulative_pnl: 50 }
+        ]
+    };
+
+    (axios.post as any).mockResolvedValue({ data: mockAnalysis });
+
+    render(
+        <BrowserRouter>
+          <Journal />
+        </BrowserRouter>
+    );
+
+    // Click Analyze
+    fireEvent.click(screen.getByRole('button', { name: /Analyze Habits/i }));
+
+    await waitFor(() => {
+        // Check for stats
+        expect(screen.getByText('50%')).toBeInTheDocument(); // Win rate
+
+        // Check for chart
+        expect(screen.getByText('Equity Curve (Cumulative PnL)')).toBeInTheDocument();
+        expect(screen.getByTestId('line-chart')).toBeInTheDocument();
     });
   });
 });
