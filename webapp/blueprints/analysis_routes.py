@@ -3,12 +3,14 @@ import io
 import os
 import uuid
 import json
+import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
 
 from option_auditor import analyze_csv, portfolio_risk
 from option_auditor.risk_intelligence import calculate_correlation_matrix
 from option_auditor.unified_backtester import UnifiedBacktester
+from option_auditor.common.screener_utils import fetch_batch_data_safe
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import _allowed_filename
 
@@ -141,6 +143,74 @@ def analyze_monte_carlo_route():
 
     except Exception as e:
         current_app.logger.exception(f"Monte Carlo Analysis Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@analysis_bp.route("/analyze/market-data", methods=["POST"])
+def analyze_market_data_route():
+    try:
+        data = request.json
+        ticker = data.get("ticker")
+        period = data.get("period", "1y")
+
+        if not ticker:
+            return jsonify({"error": "Ticker required"}), 400
+
+        # Fetch data
+        df = fetch_batch_data_safe([ticker], period=period)
+
+        if df.empty:
+             return jsonify({"error": "No data found"}), 404
+
+        # Handle MultiIndex if present (fetch_batch_data_safe returns MultiIndex for list input)
+        # But we passed a list of 1.
+        # Check structure
+        if isinstance(df.columns, pd.MultiIndex):
+             # Access the ticker level
+             if ticker in df.columns.levels[0]:
+                 df = df[ticker]
+             else:
+                 # Try uppercase
+                 ticker_upper = ticker.upper()
+                 if ticker_upper in df.columns.levels[0]:
+                     df = df[ticker_upper]
+                 else:
+                     return jsonify({"error": "Ticker data structure mismatch"}), 500
+
+        # Clean NaN
+        df = df.dropna()
+
+        # Prepare for Lightweight Charts
+        # Expected format: { time: '2019-04-11', open: 80.01, high: 96.63, low: 76.6, close: 88.80 }
+        chart_data = []
+        for index, row in df.iterrows():
+            # Ensure we have required columns
+            # fetch_batch_data_safe usually returns Capitalized columns (Open, High, Low, Close, Volume)
+            # or lowercase depending on yfinance version. Let's normalize.
+
+            # Helper to get value case-insensitively
+            def get_val(r, key):
+                if key in r: return r[key]
+                if key.lower() in r: return r[key.lower()]
+                if key.capitalize() in r: return r[key.capitalize()]
+                return None
+
+            entry = {
+                "time": index.strftime('%Y-%m-%d'),
+                "open": get_val(row, 'Open'),
+                "high": get_val(row, 'High'),
+                "low": get_val(row, 'Low'),
+                "close": get_val(row, 'Close'),
+                "volume": get_val(row, 'Volume')
+            }
+
+            # Filter incomplete rows
+            if all(v is not None for v in [entry['open'], entry['high'], entry['low'], entry['close']]):
+                chart_data.append(entry)
+
+        return jsonify(chart_data)
+
+    except Exception as e:
+        current_app.logger.exception(f"Market Data Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze", methods=["POST"])

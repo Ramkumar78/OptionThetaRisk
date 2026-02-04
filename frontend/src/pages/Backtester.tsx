@@ -47,6 +47,8 @@ interface BacktestResult {
   final_equity: number;
   trade_list: Trade[];
   equity_curve: { date: string; strategy_equity: number; buy_hold_equity: number }[];
+  equity_curves?: { date: string; strategy_equity: number; buy_hold_equity: number }[];
+  total_days_held: number;
 }
 
 const Backtester: React.FC = () => {
