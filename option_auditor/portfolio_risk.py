@@ -4,7 +4,7 @@ import yfinance as yf
 from datetime import datetime
 from option_auditor.common.data_utils import get_cached_market_data
 from option_auditor.common.constants import SECTOR_COMPONENTS, SECTOR_NAMES
-from option_auditor.strategies.math_utils import calculate_greeks
+from option_auditor.strategies.math_utils import calculate_greeks, calculate_option_price
 import logging
 
 logger = logging.getLogger(__name__)
@@ -384,4 +384,144 @@ def analyze_portfolio_greeks(positions: list) -> dict:
     return {
         "portfolio_totals": {k: round(v, 2) for k, v in portfolio_totals.items()},
         "positions": position_details
+    }
+
+
+def analyze_scenario(positions: list, scenario: dict) -> dict:
+    """
+    Project PnL based on a market shock scenario.
+    scenario: { "price_change_pct": float, "vol_change_pct": float }
+    """
+    if not positions:
+        return {}
+
+    # Extract scenario params
+    price_change_pct = float(scenario.get("price_change_pct", 0.0))
+    vol_change_pct = float(scenario.get("vol_change_pct", 0.0))
+
+    # 1. Gather Tickers and fetch Prices
+    tickers = list(set([p['ticker'].upper().strip() for p in positions]))
+    market_data = get_cached_market_data(tickers, period="6mo", cache_name="portfolio_scenario")
+
+    current_prices = {}
+    historical_vols = {}
+
+    # Fetch Data Logic (Duplicated from Greeks analysis for safety/isolation)
+    for t in tickers:
+        try:
+            series = pd.Series()
+            if isinstance(market_data.columns, pd.MultiIndex):
+                if t in market_data.columns.get_level_values(0):
+                     if 'Close' in market_data[t].columns:
+                         series = market_data[t]['Close']
+                elif t in market_data.columns.get_level_values(1):
+                     cols = [c for c in market_data.columns if c[1] == t and c[0] == 'Close']
+                     if cols:
+                         series = market_data[cols[0]]
+            else:
+                 if 'Close' in market_data.columns:
+                     series = market_data['Close']
+                 elif t in market_data.columns:
+                     series = market_data[t]
+
+            if not series.empty:
+                series = series.sort_index()
+                last_valid = series.dropna().iloc[-1] if not series.dropna().empty else 0
+                current_prices[t] = float(last_valid)
+
+                returns = np.log(series / series.shift(1))
+                if len(returns) > 30:
+                    vol = returns.rolling(window=30).std().iloc[-1] * np.sqrt(252)
+                else:
+                    vol = returns.std() * np.sqrt(252)
+
+                if pd.isna(vol) or vol < 1e-4:
+                    vol = 0.4
+                historical_vols[t] = vol
+            else:
+                 current_prices[t] = 0.0
+                 historical_vols[t] = 0.4
+        except Exception as e:
+            logger.error(f"Error processing data for {t}: {e}")
+            current_prices[t] = 0.0
+            historical_vols[t] = 0.4
+
+    # 2. Calculate PnL Impact
+    total_current_value = 0.0
+    total_new_value = 0.0
+    now = datetime.now()
+    details = []
+
+    for pos in positions:
+        try:
+            ticker = pos.get('ticker', '').upper().strip()
+            otype = pos.get('type', 'call').lower().strip()
+            strike = float(pos.get('strike', 0))
+            expiry_str = pos.get('expiry', '').strip()
+            qty = float(pos.get('qty', 0))
+
+            if not ticker or not expiry_str:
+                continue
+
+            S = current_prices.get(ticker, 0.0)
+            sigma = historical_vols.get(ticker, 0.4)
+            r = 0.045
+
+            if S <= 0: continue
+
+            # Apply Shock
+            S_new = S * (1 + price_change_pct / 100.0)
+            sigma_new = sigma * (1 + vol_change_pct / 100.0)
+            if sigma_new < 0.01: sigma_new = 0.01
+
+            try:
+                expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d")
+            except ValueError:
+                 continue
+
+            expiry_date = expiry_date.replace(hour=16, minute=0, second=0)
+            diff = expiry_date - now
+            days_to_expiry = diff.total_seconds() / 86400.0
+            T = days_to_expiry / 365.0
+            if T < 0: T = 0
+
+            # Calculate Prices
+            price_curr = calculate_option_price(S, strike, T, r, sigma, otype)
+            price_new = calculate_option_price(S_new, strike, T, r, sigma_new, otype)
+
+            val_curr = price_curr * 100 * qty
+            val_new = price_new * 100 * qty
+
+            pnl = val_new - val_curr
+
+            total_current_value += val_curr
+            total_new_value += val_new
+
+            details.append({
+                "ticker": ticker,
+                "type": otype,
+                "strike": strike,
+                "qty": qty,
+                "S_old": round(S, 2),
+                "S_new": round(S_new, 2),
+                "IV_old": round(sigma*100, 1),
+                "IV_new": round(sigma_new*100, 1),
+                "val_old": round(val_curr, 2),
+                "val_new": round(val_new, 2),
+                "pnl": round(pnl, 2)
+            })
+
+        except Exception as e:
+            logger.error(f"Error calculating scenario for {pos}: {e}")
+            continue
+
+    total_pnl = total_new_value - total_current_value
+    pnl_pct = (total_pnl / abs(total_current_value) * 100) if total_current_value != 0 else 0.0
+
+    return {
+        "current_value": round(total_current_value, 2),
+        "new_value": round(total_new_value, 2),
+        "pnl": round(total_pnl, 2),
+        "pnl_pct": round(pnl_pct, 2),
+        "details": details
     }

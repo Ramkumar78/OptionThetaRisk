@@ -126,6 +126,8 @@ class UnifiedBacktester:
         stop_loss = 0.0
         target_price = 0.0
 
+        equity_curve = []
+
         # Context Memory
         recent_swing_highs = []
         recent_swing_lows = []
@@ -134,6 +136,10 @@ class UnifiedBacktester:
             'recent_swing_highs': recent_swing_highs,
             'recent_swing_lows': recent_swing_lows
         }
+
+        # Pre-calc Buy & Hold shares once
+        bnh_shares = int(self.initial_capital / initial_price)
+        bnh_cash_residue = self.initial_capital - (bnh_shares * initial_price)
 
         for i in range(len(sim_data)):
             if i < 20: continue # Warmup
@@ -265,6 +271,19 @@ class UnifiedBacktester:
                         "days": days_held
                     })
 
+            # --- TRACK EQUITY CURVE DAILY ---
+            current_total_equity = self.equity
+            if self.state == "IN":
+                current_total_equity += (self.shares * price)
+
+            bnh_value = bnh_cash_residue + (bnh_shares * price)
+
+            equity_curve.append({
+                "date": date.strftime('%Y-%m-%d'),
+                "strategy_equity": round(current_total_equity, 2),
+                "buy_hold_equity": round(bnh_value, 2)
+            })
+
         # Calculate final equity if still holding
         current_equity_val = self.equity
         if self.state == "IN":
@@ -316,7 +335,8 @@ class UnifiedBacktester:
             "win_rate": self._calculate_win_rate(),
             "final_equity": round(current_equity_val, 2),
             "log": self.trade_log,
-            "trade_list": structured_trades
+            "trade_list": structured_trades,
+            "equity_curve": equity_curve
         }
 
     def _calculate_win_rate(self):

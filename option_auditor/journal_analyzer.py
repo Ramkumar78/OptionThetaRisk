@@ -11,7 +11,8 @@ def analyze_journal(entries: list[dict]) -> dict:
             "best_pattern": "None",
             "worst_pattern": "None",
             "best_time": "None",
-            "suggestions": []
+            "suggestions": [],
+            "equity_curve": []
         }
 
     df = pd.DataFrame(entries)
@@ -20,13 +21,21 @@ def analyze_journal(entries: list[dict]) -> dict:
     df['pnl'] = pd.to_numeric(df['pnl'], errors='coerce').fillna(0.0)
     df['win'] = df['pnl'] > 0
 
+    # Ensure required columns exist
+    if 'entry_date' not in df.columns:
+        df['entry_date'] = datetime.now().date().isoformat()
+    if 'entry_time' not in df.columns:
+        df['entry_time'] = "00:00"
+    if 'strategy' not in df.columns:
+        df['strategy'] = "Unknown"
+
     # Time Analysis
     # Convert entry_time (HH:MM) to datetime objects for comparison or buckets
     def get_time_bucket(t_str):
         if not t_str: return "Unknown"
         try:
             # Assuming HH:MM format
-            parts = t_str.split(':')
+            parts = str(t_str).split(':')
             h = int(parts[0])
             m = int(parts[1])
             t = h * 60 + m
@@ -115,7 +124,43 @@ def analyze_journal(entries: list[dict]) -> dict:
     if total_trades < 10:
         suggestions.append("Keep logging! Need more trades (aim for 50) for reliable patterns.")
 
-    # Format data for charts?
+    # Equity Curve Calculation
+    equity_curve = []
+    try:
+        # Fill NaN dates/times
+        df['temp_date'] = df['entry_date'].fillna(datetime.now().date().isoformat())
+        df['temp_time'] = df['entry_time'].fillna("00:00")
+
+        def combine_dt(row):
+            try:
+                # Handle cases where temp_date/time might not be strings
+                d = str(row['temp_date'])
+                t = str(row['temp_time'])
+                return pd.to_datetime(f"{d} {t}")
+            except:
+                return pd.Timestamp.now()
+
+        df['dt_sort'] = df.apply(combine_dt, axis=1)
+
+        # Sort chronologically
+        df_sorted = df.sort_values(by='dt_sort')
+
+        # Calculate Cumulative Sum
+        df_sorted['cumulative_pnl'] = df_sorted['pnl'].cumsum()
+
+        # Format
+        equity_curve = df_sorted[['dt_sort', 'cumulative_pnl']].apply(
+            lambda x: {
+                'date': x['dt_sort'].isoformat(),
+                'cumulative_pnl': round(x['cumulative_pnl'], 2)
+            }, axis=1
+        ).tolist()
+    except Exception as e:
+        # If something fails in date parsing, fallback to empty curve or unsorted cumsum
+        # For now, just log/ignore to prevent crash
+        print(f"Equity Curve Error: {e}")
+        pass
+
     # Return structure
     return {
         "total_trades": total_trades,
@@ -126,5 +171,6 @@ def analyze_journal(entries: list[dict]) -> dict:
         "best_time": best_time,
         "suggestions": suggestions,
         "patterns": pattern_stats.to_dict(orient='records'),
-        "time_analysis": time_stats.to_dict(orient='records')
+        "time_analysis": time_stats.to_dict(orient='records'),
+        "equity_curve": equity_curve
     }

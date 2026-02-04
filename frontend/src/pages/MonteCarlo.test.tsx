@@ -9,6 +9,26 @@ vi.mock('../api', () => ({
   runMonteCarloSimulation: vi.fn(),
 }));
 
+// Mock react-chartjs-2 to avoid canvas issues
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <div data-testid="equity-curve-chart">Chart</div>,
+}));
+
+// Mock chart.js to avoid registration errors
+vi.mock('chart.js', () => ({
+  Chart: {
+    register: vi.fn(),
+  },
+  CategoryScale: vi.fn(),
+  LinearScale: vi.fn(),
+  PointElement: vi.fn(),
+  LineElement: vi.fn(),
+  Title: vi.fn(),
+  Tooltip: vi.fn(),
+  Legend: vi.fn(),
+  Filler: vi.fn(),
+}));
+
 describe('MonteCarlo', () => {
   it('renders the form correctly', () => {
     render(<MonteCarlo />);
@@ -29,7 +49,18 @@ describe('MonteCarlo', () => {
       best_case_return: 50,
       median_drawdown: -15,
       worst_case_drawdown: -30,
-      message: 'Ran 10000 simulations.'
+      message: 'Ran 10000 simulations.',
+      equity_curves: {
+          p05: [10000, 9900, 9800],
+          p25: [10000, 10000, 10000],
+          p50: [10000, 10100, 10200],
+          p75: [10000, 10200, 10400],
+          p95: [10000, 10500, 11000]
+      },
+      sample_equity_curves: [
+        [10000, 10000, 10100],
+        [10000, 9900, 9800]
+      ]
     };
 
     (api.runMonteCarloSimulation as any).mockResolvedValue(mockResult);
@@ -55,6 +86,10 @@ describe('MonteCarlo', () => {
 
       const medianDrawdownValues = screen.getAllByText('-15%');
       expect(medianDrawdownValues.length).toBeGreaterThan(0);
+
+      // Verify chart is rendered
+      expect(screen.getByTestId('equity-curve-chart')).toBeInTheDocument();
+      expect(screen.getByText('Equity Curve Projections')).toBeInTheDocument();
     });
   });
 

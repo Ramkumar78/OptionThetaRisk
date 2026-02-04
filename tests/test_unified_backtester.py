@@ -418,23 +418,8 @@ def test_master_convergence_strategy_backtest(mock_yf_download):
 def test_edge_case_regime_red(mock_yf_download):
     # Create data where Vix is HIGH (Red Regime)
     mock_df = create_sine_wave_df()
-    # Need to manipulate Vix in the multiindex structure if possible or just use the generator's internal structure
-    # The generator returns a DataFrame with MultiIndex columns.
-    # We can modify it.
 
-    # Locate VIX column
-    # The helper `create_sine_wave_df` sets VIX to 15.0.
-
-    idx = pd.IndexSlice
-    # We can't easily use loc with MultiIndex columns for setting efficiently if names not set,
-    # but we can assume column order or names from helper.
-    # Helper: ('Close', '^VIX')
-
-    # Let's create a new one with High VIX
-    # We'll just patch the helper or copy logic:
     df = mock_df.copy()
-    # Find column with level 1 == '^VIX'
-    # Or just use the known tuple
     df[('Close', '^VIX')] = 40.0
 
     mock_yf_download.return_value = df
@@ -445,3 +430,24 @@ def test_edge_case_regime_red(mock_yf_download):
     assert "error" not in result
     # Grandmaster is long only, so should be 0 trades in RED regime
     assert result["trades"] == 0
+
+def test_equity_curve_generation(mock_yf_download):
+    mock_df = create_mock_df()
+    mock_yf_download.return_value = mock_df
+
+    bt = UnifiedBacktester("TEST", strategy_type="master")
+    result = bt.run()
+
+    assert "error" not in result
+    assert "equity_curve" in result
+    equity_curve = result["equity_curve"]
+    assert isinstance(equity_curve, list)
+    assert len(equity_curve) > 0
+
+    first_point = equity_curve[0]
+    assert "date" in first_point
+    assert "strategy_equity" in first_point
+    assert "buy_hold_equity" in first_point
+
+    # Check simple consistency: equity should move
+    assert equity_curve[-1]["strategy_equity"] != equity_curve[0]["strategy_equity"]

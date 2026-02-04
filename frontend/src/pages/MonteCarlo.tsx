@@ -1,5 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { runMonteCarloSimulation } from '../api';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 interface SimulationResult {
   prob_ruin_50pct: number;
@@ -11,7 +34,127 @@ interface SimulationResult {
   median_drawdown: number;
   worst_case_drawdown: number;
   message: string;
+  equity_curves?: {
+      p05: number[];
+      p25: number[];
+      p50: number[];
+      p75: number[];
+      p95: number[];
+  };
+  sample_equity_curves?: number[][];
 }
+
+const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) => {
+    const data = useMemo(() => {
+        if (!result.equity_curves) return { labels: [], datasets: [] };
+
+        const labels = result.equity_curves.p50.map((_, i) => i.toString());
+
+        // We only want to show samples if they exist, and filter legend to keep it clean
+        const sampleDatasets = (result.sample_equity_curves || []).map((curve, i) => ({
+            label: `Sample ${i + 1}`,
+            data: curve,
+            borderColor: 'rgba(156, 163, 175, 0.3)', // Gray very transparent
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+        }));
+
+        return {
+            labels,
+            datasets: [
+                {
+                    label: 'Median (P50)',
+                    data: result.equity_curves.p50,
+                    borderColor: 'rgb(59, 130, 246)', // Blue
+                    borderWidth: 2,
+                    pointRadius: 0,
+                },
+                {
+                    label: 'Best Case (P95)',
+                    data: result.equity_curves.p95,
+                    borderColor: 'rgba(16, 185, 129, 0.6)', // Green
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    borderDash: [5, 5],
+                },
+                {
+                    label: 'Worst Case (P5)',
+                    data: result.equity_curves.p05,
+                    borderColor: 'rgba(239, 68, 68, 0.6)', // Red
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    borderDash: [5, 5],
+                },
+                ...sampleDatasets
+            ],
+        };
+    }, [result]);
+
+    const options = useMemo(() => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index' as const,
+            intersect: false,
+        },
+        plugins: {
+            legend: {
+                position: 'top' as const,
+                labels: {
+                    // Hide sample curves from legend to avoid clutter
+                     filter: (item: any) => !item.text.includes('Sample')
+                }
+            },
+            title: {
+                display: false,
+                text: 'Equity Curve Projections',
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context: any) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        if (context.parsed.y !== null) {
+                            label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                        }
+                        return label;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: 'Trade Count'
+                },
+                grid: {
+                    display: false
+                }
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Equity ($)'
+                },
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)'
+                }
+            }
+        }
+    }), []);
+
+    if (!result.equity_curves) return null;
+
+    return (
+        <div className="h-80 w-full">
+            <Line options={options} data={data} />
+        </div>
+    );
+};
 
 const MonteCarlo: React.FC = () => {
   const [ticker, setTicker] = useState('SPY');
@@ -145,6 +288,12 @@ const MonteCarlo: React.FC = () => {
              color="orange"
              desc="Median depth of drawdown encountered."
           />
+
+          {/* Chart Section */}
+          <div className="md:col-span-2 lg:col-span-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Equity Curve Projections</h3>
+             <EquityCurveChart result={result} />
+          </div>
 
           <div className="md:col-span-2 lg:col-span-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Detailed Statistics</h3>

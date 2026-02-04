@@ -8,9 +8,9 @@
 ## 24. Missing Equity Curve Visualization in Monte Carlo UI
 - **Issue**: The Monte Carlo Sandbox UI currently displays only summary statistics. The roadmap envisioned "Visual Backtester UI" with "Equity Curves". The backend logic computes `final_equities` but does not expose the distribution or individual curves for plotting.
 - **Priority**: Medium
-- **Status**: Open.
+- **Status**: Resolved.
 
 ## 25. Manual Frontend Verification
 - **Issue**: Frontend changes are verified using temporary Playwright scripts (`verify_monte_carlo.py`). These scripts should be formalized into permanent integration tests within the repository to ensure continuous regression testing.
 - **Priority**: Low
-- **Status**: Open.
+- **Status**: Resolved.

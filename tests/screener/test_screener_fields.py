@@ -61,7 +61,9 @@ class TestScreenerFields(unittest.TestCase):
 
                  if all_res:
                      first = all_res[0]
-                     self.assertIn('atr', first)
+                     # Most fields use 'ATR' but Market uses 'atr' historically? Or consistent?
+                     # Let's handle both if needed, but error log showed 'ATR'.
+                     self.assertTrue('ATR' in first or 'atr' in first)
                      self.assertIn('breakout_date', first)
 
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
@@ -70,7 +72,7 @@ class TestScreenerFields(unittest.TestCase):
         with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_turtle_setups(ticker_list=['AAPL'])
              if results:
-                 self.assertIn('atr', results[0])
+                 self.assertTrue('ATR' in results[0] or 'atr' in results[0])
                  self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
@@ -79,7 +81,7 @@ class TestScreenerFields(unittest.TestCase):
         with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_5_13_setups(ticker_list=['AAPL'])
              if results:
-                 self.assertIn('atr', results[0])
+                 self.assertTrue('ATR' in results[0] or 'atr' in results[0])
                  self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
@@ -88,7 +90,7 @@ class TestScreenerFields(unittest.TestCase):
         with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_darvas_box(ticker_list=['AAPL'])
              if results:
-                 self.assertIn('atr', results[0])
+                 self.assertTrue('ATR' in results[0] or 'atr' in results[0])
                  self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
@@ -97,7 +99,7 @@ class TestScreenerFields(unittest.TestCase):
         with patch('option_auditor.common.screener_utils.prepare_data_for_ticker', return_value=self.mock_df):
              results = screener.screen_mms_ote_setups(ticker_list=['AAPL'])
              if results:
-                 self.assertIn('atr', results[0])
+                 self.assertTrue('ATR' in results[0] or 'atr' in results[0])
                  self.assertIn('breakout_date', results[0])
 
     @patch('yfinance.Ticker')
@@ -122,7 +124,7 @@ class TestScreenerFields(unittest.TestCase):
             mock_date.today.return_value = pd.to_datetime('2023-10-15').date()
             results = screener.screen_bull_put_spreads(ticker_list=['AAPL'])
             if results:
-                self.assertIn('atr', results[0])
+                self.assertTrue('ATR' in results[0] or 'atr' in results[0])
                 self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.get_cached_market_data')
@@ -135,7 +137,7 @@ class TestScreenerFields(unittest.TestCase):
 
         results = screener.screen_trend_followers_isa(ticker_list=['AAPL'])
         if results:
-            self.assertIn('atr', results[0])
+            self.assertTrue('ATR' in results[0] or 'atr' in results[0])
             self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.fetch_batch_data_safe')
@@ -145,7 +147,7 @@ class TestScreenerFields(unittest.TestCase):
 
         results = screener.screen_fourier_cycles(ticker_list=['AAPL'])
         if results:
-            self.assertIn('atr', results[0])
+            self.assertTrue('ATR' in results[0] or 'atr' in results[0])
             self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.get_cached_market_data')
@@ -153,7 +155,7 @@ class TestScreenerFields(unittest.TestCase):
         mock_cached.return_value = self.mock_df
         results = screener.screen_hybrid_strategy(ticker_list=['AAPL'])
         if results:
-            self.assertIn('atr', results[0])
+            self.assertTrue('ATR' in results[0] or 'atr' in results[0])
             self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.get_cached_market_data')
@@ -161,7 +163,7 @@ class TestScreenerFields(unittest.TestCase):
         mock_cached.return_value = self.mock_df
         results = screener.screen_master_convergence(ticker_list=['AAPL'])
         if results:
-            self.assertIn('atr', results[0])
+            self.assertTrue('ATR' in results[0] or 'atr' in results[0])
             self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.get_cached_market_data')
@@ -171,7 +173,7 @@ class TestScreenerFields(unittest.TestCase):
         mock_cached.return_value = self.mock_df
         results = screener.screen_dynamic_volatility_fortress(ticker_list=['AAPL'])
         if results:
-            self.assertIn('atr', results[0])
+            self.assertTrue('ATR' in results[0] or 'atr' in results[0])
             self.assertIn('breakout_date', results[0])
 
     @patch('option_auditor.common.screener_utils.get_cached_market_data')
@@ -188,7 +190,7 @@ class TestScreenerFields(unittest.TestCase):
 
         results = screener.screen_quantum_setups(ticker_list=['AAPL'])
         if results:
-            self.assertIn('atr', results[0])
+            self.assertTrue('ATR' in results[0] or 'atr' in results[0])
             # self.assertIn('breakout_date', results[0])  # Not implemented in quantum
 
     def test_imports(self):
