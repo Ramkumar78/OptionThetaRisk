@@ -10,9 +10,6 @@ vi.mock('axios');
 // Mock Chart.js components to avoid canvas errors in JSDOM
 // Capture props to verify data passed to the chart
 vi.mock('react-chartjs-2', () => ({
-  Line: () => <div data-testid="line-chart">Line Chart</div>
-// Capture props to verify data passed to the chart
-vi.mock('react-chartjs-2', () => ({
   Line: (props: any) => <div data-testid="line-chart" data-props={JSON.stringify(props)}>Line Chart</div>
 }));
 
@@ -137,16 +134,6 @@ describe('Journal Component', () => {
 
         // Check for chart
         expect(screen.getByText('Equity Curve (Cumulative PnL)')).toBeInTheDocument();
-        const chart = screen.getByTestId('line-chart');
-        expect(chart).toBeInTheDocument();
-
-        // Check props passed to chart
-        const props = JSON.parse(chart.getAttribute('data-props') || '{}');
-        expect(props.data.labels).toEqual(["2023-10-01", "2023-10-02"]);
-        expect(props.data.datasets[0].data).toEqual([100, 50]);
-        expect(props.data.datasets[0].label).toBe('Cumulative PnL');
-    });
-  });
         const chart = screen.getByTestId('line-chart');
         expect(chart).toBeInTheDocument();
 
