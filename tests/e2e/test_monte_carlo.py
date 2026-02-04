@@ -1,5 +1,14 @@
-from playwright.sync_api import Page, expect, Route
+import pytest
 
+# Gracefully handle missing playwright to avoid collection errors in CI
+try:
+    from playwright.sync_api import Page, expect, Route
+except ImportError:
+    Page = None
+    expect = None
+    Route = None
+
+@pytest.mark.skipif(Page is None, reason="Playwright not installed")
 def test_monte_carlo_simulation(page: Page):
     """
     Test the Monte Carlo simulation flow with mocked backend response.
