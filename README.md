@@ -15,7 +15,7 @@
 | option\_auditor/common/signal\_type.py              |        6 |        0 |    100% |           |
 | option\_auditor/config.py                           |        4 |        0 |    100% |           |
 | option\_auditor/india\_stock\_data.py               |       16 |        2 |     88% |     19-20 |
-| option\_auditor/journal\_analyzer.py                |       64 |        3 |     95% |104-105, 111 |
+| option\_auditor/journal\_analyzer.py                |       88 |        7 |     92% |30, 113-114, 120, 158-162 |
 | option\_auditor/main\_analyzer.py                   |      570 |       61 |     89% |97-98, 120, 166, 193, 198, 245, 249-255, 271-272, 277-279, 359, 413, 436, 444-445, 461-465, 486, 496-497, 501-502, 518, 524-525, 556-557, 573, 598-599, 607-616, 647, 680-683, 761-762, 766-768, 780-781, 865, 935 |
 | option\_auditor/models.py                           |       75 |        2 |     97% |    76, 91 |
 | option\_auditor/monte\_carlo\_simulator.py          |       42 |        1 |     98% |        19 |
@@ -37,7 +37,7 @@
 | option\_auditor/strategies/isa.py                   |      100 |        9 |     91% |61, 73-77, 142, 147, 186-188 |
 | option\_auditor/strategies/liquidity.py             |       90 |        6 |     93% |38, 75-77, 174-175 |
 | option\_auditor/strategies/market.py                |      182 |       40 |     78% |38-39, 59, 61, 65-68, 85, 122-123, 153-154, 167-168, 173, 201-203, 241-247, 250, 258, 297-327 |
-| option\_auditor/strategies/master.py                |      150 |       40 |     73% |35, 40-45, 48, 64-66, 101-102, 111, 121-123, 125-127, 162-166, 168, 177-180, 189, 192-201, 213, 240-242 |
+| option\_auditor/strategies/master.py                |      150 |       41 |     73% |35, 40-45, 48, 58, 64-66, 101-102, 111, 121-123, 125-127, 162-166, 168, 185-201, 213, 240-242 |
 | option\_auditor/strategies/math\_utils.py           |      198 |       21 |     89% |59-60, 84-85, 111, 132-133, 154, 160-161, 190-191, 201-202, 231-232, 306, 361-362, 386-387 |
 | option\_auditor/strategies/mms\_ote.py              |       86 |        6 |     93% |119-120, 143-146 |
 | option\_auditor/strategies/monte\_carlo.py          |       29 |        6 |     79% |23-25, 60-62 |
@@ -50,13 +50,13 @@
 | option\_auditor/strategies/vertical\_spreads.py     |      140 |       28 |     80% |26, 32-37, 40-41, 47-48, 60, 70, 86-87, 119-124, 133-135, 158-159, 179, 192, 259-261 |
 | option\_auditor/strategy.py                         |      256 |       33 |     87% |16, 35, 148-155, 204, 207-245, 279, 306 |
 | option\_auditor/uk\_stock\_data.py                  |       16 |        2 |     88% |     30-31 |
-| option\_auditor/unified\_backtester.py              |      190 |        7 |     96% |37-39, 46, 74, 106, 341, 358 |
+| option\_auditor/unified\_backtester.py              |      198 |        7 |     96% |37-39, 46, 74, 106, 361, 378 |
 | option\_auditor/unified\_screener.py                |      125 |       29 |     77% |37, 41-42, 48, 59-63, 78-81, 96-97, 120-123, 178-180, 191-197, 203, 220-223, 238-239 |
 | option\_auditor/us\_stock\_data.py                  |        9 |        3 |     67% |     50-53 |
 | webapp/\_\_init\_\_.py                              |        0 |        0 |    100% |           |
 | webapp/app.py                                       |       75 |       14 |     81% |37-38, 73-76, 99-100, 104-105, 120-126 |
 | webapp/blueprints/\_\_init\_\_.py                   |        0 |        0 |    100% |           |
-| webapp/blueprints/analysis\_routes.py               |      171 |       47 |     73% |24-36, 40-52, 78, 89-91, 105, 112, 116-118, 137-139, 146-147, 161, 169-177, 226-228 |
+| webapp/blueprints/analysis\_routes.py               |      191 |       50 |     74% |24-36, 40-52, 78, 89-91, 115-117, 131, 138, 142-144, 163-165, 172-173, 187, 195-203, 252-254 |
 | webapp/blueprints/journal\_routes.py                |       79 |       17 |     78% |27, 37-39, 62, 71-79, 104-106 |
 | webapp/blueprints/main\_routes.py                   |       60 |        9 |     85% |36-38, 46, 60-62, 76, 81 |
 | webapp/blueprints/screener\_routes.py               |      487 |       64 |     87% |57-58, 63-64, 74-75, 125-126, 133-134, 138, 179, 228-229, 249-252, 257-258, 264, 270-275, 282-283, 289, 296-299, 311, 317-320, 339, 358, 377, 396, 415, 435, 455, 474, 494-495, 526, 540, 559, 577, 595, 638-641, 650, 656-657, 668, 674-679 |
@@ -67,7 +67,7 @@
 | webapp/services/scheduler\_service.py               |       38 |       12 |     68% |37-39, 45-46, 52-58 |
 | webapp/storage.py                                   |      393 |       30 |     92% |68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 117, 270, 347-348, 388, 423-424, 443-446, 463, 480-481, 492, 504-505, 524 |
 | webapp/utils.py                                     |       50 |        7 |     86% |32-33, 58-59, 69-71 |
-| **TOTAL**                                           | **6783** | **1047** | **85%** |           |
+| **TOTAL**                                           | **6835** | **1055** | **85%** |           |
 
 
 ## Setup coverage badge
