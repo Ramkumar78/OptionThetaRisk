@@ -2,6 +2,24 @@ import React, { useState, useMemo } from 'react';
 import { runMonteCarloSimulation } from '../api';
 import { Line } from 'react-chartjs-2';
 import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend
+} from 'chart.js';
+
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
@@ -34,6 +52,8 @@ interface SimulationResult {
   median_drawdown: number;
   worst_case_drawdown: number;
   message: string;
+  equity_curve_percentiles: {
+      p5: number[];
   equity_curves?: {
       p05: number[];
       p25: number[];
@@ -42,6 +62,7 @@ interface SimulationResult {
       p95: number[];
   };
   sample_equity_curves?: number[][];
+  sample_equity_curves: number[][];
 }
 
 const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) => {
@@ -52,6 +73,10 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
 
         // We only want to show samples if they exist, and filter legend to keep it clean
         const sampleDatasets = (result.sample_equity_curves || []).map((curve, i) => ({
+        const labels = result.equity_curve_percentiles.p50.map((_, i) => i.toString());
+
+        // We only want to show samples if they exist, and filter legend to keep it clean
+        const sampleDatasets = result.sample_equity_curves.map((curve, i) => ({
             label: `Sample ${i + 1}`,
             data: curve,
             borderColor: 'rgba(156, 163, 175, 0.3)', // Gray very transparent
@@ -66,6 +91,7 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
                 {
                     label: 'Median (P50)',
                     data: result.equity_curves.p50,
+                    data: result.equity_curve_percentiles.p50,
                     borderColor: 'rgb(59, 130, 246)', // Blue
                     borderWidth: 2,
                     pointRadius: 0,
@@ -73,6 +99,7 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
                 {
                     label: 'Best Case (P95)',
                     data: result.equity_curves.p95,
+                    data: result.equity_curve_percentiles.p95,
                     borderColor: 'rgba(16, 185, 129, 0.6)', // Green
                     borderWidth: 1,
                     pointRadius: 0,
@@ -81,6 +108,7 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
                 {
                     label: 'Worst Case (P5)',
                     data: result.equity_curves.p05,
+                    data: result.equity_curve_percentiles.p5,
                     borderColor: 'rgba(239, 68, 68, 0.6)', // Red
                     borderWidth: 1,
                     pointRadius: 0,

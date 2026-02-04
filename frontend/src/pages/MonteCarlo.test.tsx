@@ -55,6 +55,17 @@ describe('MonteCarlo', () => {
       median_drawdown: -15,
       worst_case_drawdown: -30,
       message: 'Ran 10000 simulations.',
+      equity_curve_percentiles: {
+        p5: [10000, 9900, 9800],
+        p25: [10000, 9950, 9900],
+        p50: [10000, 10000, 10100],
+        p75: [10000, 10050, 10200],
+        p95: [10000, 10100, 10300],
+      },
+      sample_equity_curves: [
+        [10000, 10000, 10100],
+        [10000, 9900, 9800]
+      ]
       equity_curves: {
           p05: [10000, 9900, 9800],
           p25: [10000, 10000, 10000],
