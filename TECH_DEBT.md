@@ -13,4 +13,4 @@
 ## 25. Manual Frontend Verification
 - **Issue**: Frontend changes are verified using temporary Playwright scripts (`verify_monte_carlo.py`). These scripts should be formalized into permanent integration tests within the repository to ensure continuous regression testing.
 - **Priority**: Low
-- **Status**: Open.
+- **Status**: Resolved.
