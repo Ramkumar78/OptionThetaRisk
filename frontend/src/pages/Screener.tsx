@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
+import CandlestickChart from '../components/CandlestickChart';
+import { type CandlestickData } from 'lightweight-charts';
 
 // 1. STRATEGY DEFINITIONS
 const STRATEGIES: Record<string, {
@@ -363,6 +365,36 @@ const Screener: React.FC = () => {
     const [backtestStrategy, setBacktestStrategy] = useState('grandmaster');
     const [backtestResult, setBacktestResult] = useState<any | null>(null);
     const [btLoading, setBtLoading] = useState(false);
+
+    // Chart Modal State
+    const [isChartModalOpen, setIsChartModalOpen] = useState(false);
+    const [chartTicker, setChartTicker] = useState('');
+    const [chartData, setChartData] = useState<CandlestickData[]>([]);
+    const [chartLoading, setChartLoading] = useState(false);
+
+    const openChart = async (ticker: string) => {
+        setChartTicker(ticker);
+        setIsChartModalOpen(true);
+        setChartLoading(true);
+        setChartData([]); // Reset previous data
+        try {
+            const res = await fetch('/analyze/market-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticker })
+            });
+            const data = await res.json();
+            if (data.error) {
+                 console.error(data.error);
+            } else {
+                 setChartData(data);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setChartLoading(false);
+        }
+    };
 
     const handleRunScreener = async () => {
         setLoading(true);
@@ -746,9 +778,12 @@ const Screener: React.FC = () => {
                                                     )}
                                                 </button>
                                             </td>
-                                            <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100" title={companyName}>
+                                            <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100 cursor-pointer hover:text-blue-600" onClick={() => openChart(r.Ticker || r.ticker)} title="Click to view Chart">
                                                 <div className="flex flex-col">
-                                                    <span>{r.Ticker || r.ticker}</span>
+                                                    <span className="flex items-center gap-2">
+                                                        {r.Ticker || r.ticker}
+                                                        <i className="bi bi-graph-up-arrow text-xs opacity-50"></i>
+                                                    </span>
                                                     {/* Optional: Show company name in small text below ticker if desired, but request asked for hover */}
                                                 </div>
                                             </td>
@@ -981,6 +1016,56 @@ const Screener: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* CHART MODAL */}
+            {isChartModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
+                        <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-700">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="bg-blue-100 text-blue-800 text-sm font-mono px-2 py-1 rounded">{chartTicker}</span>
+                                Market Chart
+                            </h3>
+                            <button onClick={() => setIsChartModalOpen(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                <i className="bi bi-x-lg text-lg"></i>
+                            </button>
+                        </div>
+                        <div className="p-1 flex-grow overflow-hidden relative min-h-[400px]">
+                            {chartLoading && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-800/50 z-10">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                                </div>
+                            )}
+                            {!chartLoading && chartData.length === 0 && (
+                                <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                                    No data available.
+                                </div>
+                            )}
+                            {chartData.length > 0 && (
+                                <div className="w-full h-full p-2">
+                                     <CandlestickChart data={chartData} />
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-b-xl flex justify-end gap-2">
+                            <button
+                                onClick={() => {
+                                    setIsChartModalOpen(false);
+                                    setBacktestTicker(chartTicker);
+                                    // Scroll to backtest
+                                    document.querySelector('input[placeholder="Enter Ticker (e.g. TSLA)"]')?.scrollIntoView({ behavior: 'smooth' });
+                                }}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                            >
+                                Run Backtest
+                            </button>
+                            <button onClick={() => setIsChartModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded-lg text-sm font-medium">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
