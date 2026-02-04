@@ -234,6 +234,7 @@ class FortressMasterScreener:
                 "Stop": round(stop_loss, 2),
                 "Target": round(gm_result.get('target', curr_price + 3*atr), 2), # Default target if not set
                 "days_since_breakout": 0, # Placeholder
+                "breakout_date": "N/A", # Placeholder
                 "VCP": "YES" if is_vcp else "NO"
             }
 
