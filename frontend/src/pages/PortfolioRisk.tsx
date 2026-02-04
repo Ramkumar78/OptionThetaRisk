@@ -39,12 +39,37 @@ interface PortfolioGreeksReport {
   }>;
 }
 
+interface ScenarioReport {
+  current_value: number;
+  new_value: number;
+  pnl: number;
+  pnl_pct: number;
+  details: Array<{
+    ticker: string;
+    type: string;
+    strike: number;
+    qty: number;
+    S_old: number;
+    S_new: number;
+    IV_old: number;
+    IV_new: number;
+    val_old: number;
+    val_new: number;
+    pnl: number;
+  }>;
+}
+
 const PortfolioRisk: React.FC = () => {
   const [mode, setMode] = useState<'stocks' | 'options'>('stocks');
   const [inputText, setInputText] = useState('');
 
   const [riskReport, setRiskReport] = useState<PortfolioRiskReport | null>(null);
   const [greeksReport, setGreeksReport] = useState<PortfolioGreeksReport | null>(null);
+
+  const [scenarioPrice, setScenarioPrice] = useState(0);
+  const [scenarioVol, setScenarioVol] = useState(0);
+  const [scenarioReport, setScenarioReport] = useState<ScenarioReport | null>(null);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +138,45 @@ const PortfolioRisk: React.FC = () => {
       setError(e.response?.data?.error || e.message || 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleScenarioAnalyze = async () => {
+    setScenarioLoading(true);
+    setScenarioReport(null);
+    try {
+        const lines = inputText.trim().split('\n');
+        const positions = [];
+
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            const parts = line.split(/[,\t]+/);
+            // Ticker, Type, Strike, Expiry, Qty
+            if (parts.length >= 5) {
+                const ticker = parts[0].trim();
+                const type = parts[1].trim();
+                const strike = parseFloat(parts[2].replace(/[^0-9.-]/g, ''));
+                const expiry = parts[3].trim();
+                const qty = parseFloat(parts[4].replace(/[^0-9.-]/g, ''));
+
+                if (ticker && type && !isNaN(strike) && expiry && !isNaN(qty)) {
+                    positions.push({ ticker, type, strike, expiry, qty });
+                }
+            }
+        }
+
+        if (positions.length > 0) {
+            const response = await axios.post('/analyze/scenario', {
+                positions,
+                scenario: { price_change_pct: scenarioPrice, vol_change_pct: scenarioVol }
+            });
+            setScenarioReport(response.data);
+        }
+    } catch (e: any) {
+        console.error(e);
+        setError(e.response?.data?.error || e.message || 'Scenario Error');
+    } finally {
+        setScenarioLoading(false);
     }
   };
 
@@ -385,6 +449,89 @@ const PortfolioRisk: React.FC = () => {
                     </table>
                 </div>
               </div>
+          </div>
+      )}
+
+      {/* SCENARIO ANALYSIS */}
+      {mode === 'options' && (
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">What-If Scenario Analysis</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                  {/* Price Shock Slider */}
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Underlying Price Change: {scenarioPrice > 0 ? '+' : ''}{scenarioPrice}%
+                      </label>
+                      <input
+                          type="range" min="-20" max="20" step="1"
+                          value={scenarioPrice}
+                          onChange={(e) => setScenarioPrice(parseInt(e.target.value))}
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>-20%</span>
+                          <span>0%</span>
+                          <span>+20%</span>
+                      </div>
+                  </div>
+
+                  {/* Vol Shock Slider */}
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Implied Volatility Change: {scenarioVol > 0 ? '+' : ''}{scenarioVol}%
+                      </label>
+                      <input
+                          type="range" min="-50" max="100" step="5"
+                          value={scenarioVol}
+                          onChange={(e) => setScenarioVol(parseInt(e.target.value))}
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>-50%</span>
+                          <span>0%</span>
+                          <span>+100%</span>
+                      </div>
+                  </div>
+              </div>
+
+              <div className="flex justify-end mb-6">
+                  <button
+                    onClick={handleScenarioAnalyze}
+                    disabled={scenarioLoading}
+                    className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {scenarioLoading ? 'Calculating...' : 'Run Scenario'}
+                  </button>
+              </div>
+
+              {/* Scenario Results */}
+              {scenarioReport && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                           <div>
+                               <div className="text-sm text-gray-500 dark:text-gray-400">Current Value</div>
+                               <div className="text-xl font-bold text-gray-900 dark:text-white">${scenarioReport.current_value.toLocaleString()}</div>
+                           </div>
+                           <div>
+                               <div className="text-sm text-gray-500 dark:text-gray-400">Projected Value</div>
+                               <div className="text-xl font-bold text-gray-900 dark:text-white">${scenarioReport.new_value.toLocaleString()}</div>
+                           </div>
+                           <div>
+                               <div className="text-sm text-gray-500 dark:text-gray-400">PnL Impact</div>
+                               <div className={clsx("text-xl font-bold", scenarioReport.pnl >= 0 ? "text-green-600" : "text-red-600")}>
+                                   {scenarioReport.pnl > 0 ? '+' : ''}{scenarioReport.pnl.toLocaleString()}
+                               </div>
+                           </div>
+                           <div>
+                               <div className="text-sm text-gray-500 dark:text-gray-400">ROI</div>
+                               <div className={clsx("text-xl font-bold", scenarioReport.pnl_pct >= 0 ? "text-green-600" : "text-red-600")}>
+                                   {scenarioReport.pnl_pct > 0 ? '+' : ''}{scenarioReport.pnl_pct.toFixed(2)}%
+                               </div>
+                           </div>
+                      </div>
+                  </div>
+              )}
           </div>
       )}
     </div>

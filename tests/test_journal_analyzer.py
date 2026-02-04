@@ -10,6 +10,7 @@ def test_analyze_journal_empty():
     assert result["best_pattern"] == "None"
     assert result["worst_pattern"] == "None"
     assert len(result["suggestions"]) == 0
+    assert result["equity_curve"] == []
 
 def test_analyze_journal_basic():
     """Test basic analysis with mixed trades."""
@@ -33,8 +34,6 @@ def test_analyze_journal_basic():
     assert "Vertical Spread" in result["best_pattern"]
 
     # Worst pattern should be Iron Condor (Total $50 < $200)
-    # Wait, logic is: worst_pattern_row = valid_patterns.sort_values(by=['total_pnl'], ascending=True).iloc[0]
-    # Iron Condor ($50) < Vertical Spread ($200), so Iron Condor is "worst" relative to others, or just the lowest PnL.
     assert "Iron Condor" in result["worst_pattern"]
 
 def test_analyze_journal_time_buckets():
@@ -86,3 +85,41 @@ def test_analyze_journal_invalid_time():
 
     buckets = {item['time_bucket'] for item in result['time_analysis']}
     assert "Unknown" in buckets
+
+def test_analyze_journal_equity_curve():
+    """Test equity curve calculation and sorting."""
+    # Unsorted input
+    entries = [
+        {"strategy": "A", "pnl": 100, "entry_date": "2023-01-02", "entry_time": "10:00"},
+        {"strategy": "A", "pnl": 50, "entry_date": "2023-01-01", "entry_time": "10:00"}, # Should be first
+        {"strategy": "B", "pnl": -20, "entry_date": "2023-01-03", "entry_time": "10:00"},
+    ]
+    result = analyze_journal(entries)
+
+    curve = result["equity_curve"]
+    assert len(curve) == 3
+
+    # Check sorting
+    assert curve[0]['date'].startswith("2023-01-01")
+    assert curve[1]['date'].startswith("2023-01-02")
+    assert curve[2]['date'].startswith("2023-01-03")
+
+    # Check cumulative PnL
+    # 1. 2023-01-01: +50 -> Cum: 50
+    # 2. 2023-01-02: +100 -> Cum: 150
+    # 3. 2023-01-03: -20 -> Cum: 130
+    assert curve[0]['cumulative_pnl'] == 50.0
+    assert curve[1]['cumulative_pnl'] == 150.0
+    assert curve[2]['cumulative_pnl'] == 130.0
+
+def test_analyze_journal_equity_curve_fallback():
+    """Test equity curve handles missing dates by falling back gracefully (not crashing)."""
+    entries = [
+        {"strategy": "A", "pnl": 100}, # Missing date/time
+        {"strategy": "A", "pnl": 50},
+    ]
+    result = analyze_journal(entries)
+
+    # Should not crash, and return a curve (based on default date/time filling)
+    assert len(result["equity_curve"]) == 2
+    # Logic fills with datetime.now(), sorting might be unstable if times are identical "00:00", but it works.

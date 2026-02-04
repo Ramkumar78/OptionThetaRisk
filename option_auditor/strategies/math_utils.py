@@ -360,3 +360,28 @@ def calculate_greeks(S: float, K: float, T: float, r: float, sigma: float, optio
 
     except Exception as e:
         return {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0, "rho": 0.0, "error": str(e)}
+
+def calculate_option_price(S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> float:
+    """
+    Calculates Black-Scholes Price for European options.
+    """
+    try:
+        if T <= 0:
+            if option_type.lower() == "call":
+                return max(0.0, S - K)
+            else:
+                return max(0.0, K - S)
+
+        if sigma <= 0: sigma = 1e-5
+
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+
+        if option_type.lower() == "call":
+            price = S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+        else:
+            price = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+
+        return float(price)
+    except Exception:
+        return 0.0

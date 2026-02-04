@@ -21,6 +21,15 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
+export const runBacktest = async (ticker: string, strategy: string, initialCapital: number) => {
+  const response = await api.post('/analyze/backtest', {
+    ticker,
+    strategy,
+    initial_capital: initialCapital
+  });
+  return response.data;
+};
+
 export const runMonteCarloSimulation = async (ticker: string, strategy: string, simulations: number) => {
   const response = await api.post('/analyze/monte-carlo', {
     ticker,

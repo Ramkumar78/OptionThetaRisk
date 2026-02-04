@@ -51,6 +51,23 @@ def analyze_portfolio_greeks_route():
         current_app.logger.exception(f"Portfolio Greeks Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@analysis_bp.route("/analyze/scenario", methods=["POST"])
+def analyze_scenario_route():
+    try:
+        data = request.json
+        positions = data.get("positions", [])
+        scenario = data.get("scenario", {})
+
+        if not positions:
+            return jsonify({"error": "No positions provided"}), 400
+
+        report = portfolio_risk.analyze_scenario(positions, scenario)
+        return jsonify(report)
+
+    except Exception as e:
+        current_app.logger.exception(f"Scenario Analysis Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @analysis_bp.route("/analyze/correlation", methods=["POST"])
 def analyze_correlation_route():
     try:
@@ -71,6 +88,32 @@ def analyze_correlation_route():
 
     except Exception as e:
         current_app.logger.exception(f"Correlation Analysis Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@analysis_bp.route("/analyze/backtest", methods=["POST"])
+def analyze_backtest_route():
+    try:
+        data = request.json
+        ticker = data.get("ticker")
+        strategy = data.get("strategy", "master")
+        try:
+            initial_capital = float(data.get("initial_capital", 10000.0))
+        except ValueError:
+            return jsonify({"error": "Initial Capital must be a number"}), 400
+
+        if not ticker:
+            return jsonify({"error": "Ticker required"}), 400
+
+        backtester = UnifiedBacktester(ticker, strategy_type=strategy, initial_capital=initial_capital)
+        result = backtester.run()
+
+        if "error" in result:
+             return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.exception(f"Backtest Analysis Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze/monte-carlo", methods=["POST"])
