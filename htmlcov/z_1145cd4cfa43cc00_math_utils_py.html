@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for option_auditor/strategies/math_utils.py: 90%</title>
+    <title>Coverage for option_auditor/strategies/math_utils.py: 89%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_9ff733b0.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>option_auditor&#8201;/&#8201;strategies&#8201;/&#8201;math_utils.py</b>:
-            <span class="pc_cov">90%</span>
+            <span class="pc_cov">89%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -54,9 +54,9 @@
             </div>
         </aside>
         <h2>
-            <span class="text">183 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">164<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">19<span class="text"> missing</span></button>
+            <span class="text">198 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">177<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">21<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_1145cd4cfa43cc00_mms_ote_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-02-04 09:11 +0000
+            created at 2026-02-04 12:05 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -442,6 +442,31 @@
     <p class="pln"><span class="n"><a id="t360" href="#t360">360</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t361" href="#t361">361</a></span><span class="t">    <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t362" href="#t362">362</a></span><span class="t">        <span class="key">return</span> <span class="op">{</span><span class="str">"delta"</span><span class="op">:</span> <span class="num">0.0</span><span class="op">,</span> <span class="str">"gamma"</span><span class="op">:</span> <span class="num">0.0</span><span class="op">,</span> <span class="str">"theta"</span><span class="op">:</span> <span class="num">0.0</span><span class="op">,</span> <span class="str">"vega"</span><span class="op">:</span> <span class="num">0.0</span><span class="op">,</span> <span class="str">"rho"</span><span class="op">:</span> <span class="num">0.0</span><span class="op">,</span> <span class="str">"error"</span><span class="op">:</span> <span class="nam">str</span><span class="op">(</span><span class="nam">e</span><span class="op">)</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t363" href="#t363">363</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t364" href="#t364">364</a></span><span class="t"><span class="key">def</span> <span class="nam">calculate_option_price</span><span class="op">(</span><span class="nam">S</span><span class="op">:</span> <span class="nam">float</span><span class="op">,</span> <span class="nam">K</span><span class="op">:</span> <span class="nam">float</span><span class="op">,</span> <span class="nam">T</span><span class="op">:</span> <span class="nam">float</span><span class="op">,</span> <span class="nam">r</span><span class="op">:</span> <span class="nam">float</span><span class="op">,</span> <span class="nam">sigma</span><span class="op">:</span> <span class="nam">float</span><span class="op">,</span> <span class="nam">option_type</span><span class="op">:</span> <span class="nam">str</span> <span class="op">=</span> <span class="str">"call"</span><span class="op">)</span> <span class="op">-></span> <span class="nam">float</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t365" href="#t365">365</a></span><span class="t">    <span class="str">"""</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t366" href="#t366">366</a></span><span class="t"><span class="str">    Calculates Black-Scholes Price for European options.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t367" href="#t367">367</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t368" href="#t368">368</a></span><span class="t">    <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t369" href="#t369">369</a></span><span class="t">        <span class="key">if</span> <span class="nam">T</span> <span class="op">&lt;=</span> <span class="num">0</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t370" href="#t370">370</a></span><span class="t">            <span class="key">if</span> <span class="nam">option_type</span><span class="op">.</span><span class="nam">lower</span><span class="op">(</span><span class="op">)</span> <span class="op">==</span> <span class="str">"call"</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t371" href="#t371">371</a></span><span class="t">                <span class="key">return</span> <span class="nam">max</span><span class="op">(</span><span class="num">0.0</span><span class="op">,</span> <span class="nam">S</span> <span class="op">-</span> <span class="nam">K</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t372" href="#t372">372</a></span><span class="t">            <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t373" href="#t373">373</a></span><span class="t">                <span class="key">return</span> <span class="nam">max</span><span class="op">(</span><span class="num">0.0</span><span class="op">,</span> <span class="nam">K</span> <span class="op">-</span> <span class="nam">S</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t374" href="#t374">374</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t375" href="#t375">375</a></span><span class="t">        <span class="key">if</span> <span class="nam">sigma</span> <span class="op">&lt;=</span> <span class="num">0</span><span class="op">:</span> <span class="nam">sigma</span> <span class="op">=</span> <span class="num">1e-5</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t376" href="#t376">376</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t377" href="#t377">377</a></span><span class="t">        <span class="nam">d1</span> <span class="op">=</span> <span class="op">(</span><span class="nam">np</span><span class="op">.</span><span class="nam">log</span><span class="op">(</span><span class="nam">S</span> <span class="op">/</span> <span class="nam">K</span><span class="op">)</span> <span class="op">+</span> <span class="op">(</span><span class="nam">r</span> <span class="op">+</span> <span class="num">0.5</span> <span class="op">*</span> <span class="nam">sigma</span><span class="op">**</span><span class="num">2</span><span class="op">)</span> <span class="op">*</span> <span class="nam">T</span><span class="op">)</span> <span class="op">/</span> <span class="op">(</span><span class="nam">sigma</span> <span class="op">*</span> <span class="nam">np</span><span class="op">.</span><span class="nam">sqrt</span><span class="op">(</span><span class="nam">T</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t378" href="#t378">378</a></span><span class="t">        <span class="nam">d2</span> <span class="op">=</span> <span class="nam">d1</span> <span class="op">-</span> <span class="nam">sigma</span> <span class="op">*</span> <span class="nam">np</span><span class="op">.</span><span class="nam">sqrt</span><span class="op">(</span><span class="nam">T</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t379" href="#t379">379</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t380" href="#t380">380</a></span><span class="t">        <span class="key">if</span> <span class="nam">option_type</span><span class="op">.</span><span class="nam">lower</span><span class="op">(</span><span class="op">)</span> <span class="op">==</span> <span class="str">"call"</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t381" href="#t381">381</a></span><span class="t">            <span class="nam">price</span> <span class="op">=</span> <span class="nam">S</span> <span class="op">*</span> <span class="nam">norm</span><span class="op">.</span><span class="nam">cdf</span><span class="op">(</span><span class="nam">d1</span><span class="op">)</span> <span class="op">-</span> <span class="nam">K</span> <span class="op">*</span> <span class="nam">np</span><span class="op">.</span><span class="nam">exp</span><span class="op">(</span><span class="op">-</span><span class="nam">r</span> <span class="op">*</span> <span class="nam">T</span><span class="op">)</span> <span class="op">*</span> <span class="nam">norm</span><span class="op">.</span><span class="nam">cdf</span><span class="op">(</span><span class="nam">d2</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t382" href="#t382">382</a></span><span class="t">        <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t383" href="#t383">383</a></span><span class="t">            <span class="nam">price</span> <span class="op">=</span> <span class="nam">K</span> <span class="op">*</span> <span class="nam">np</span><span class="op">.</span><span class="nam">exp</span><span class="op">(</span><span class="op">-</span><span class="nam">r</span> <span class="op">*</span> <span class="nam">T</span><span class="op">)</span> <span class="op">*</span> <span class="nam">norm</span><span class="op">.</span><span class="nam">cdf</span><span class="op">(</span><span class="op">-</span><span class="nam">d2</span><span class="op">)</span> <span class="op">-</span> <span class="nam">S</span> <span class="op">*</span> <span class="nam">norm</span><span class="op">.</span><span class="nam">cdf</span><span class="op">(</span><span class="op">-</span><span class="nam">d1</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t384" href="#t384">384</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t385" href="#t385">385</a></span><span class="t">        <span class="key">return</span> <span class="nam">float</span><span class="op">(</span><span class="nam">price</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t386" href="#t386">386</a></span><span class="t">    <span class="key">except</span> <span class="nam">Exception</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t387" href="#t387">387</a></span><span class="t">        <span class="key">return</span> <span class="num">0.0</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -451,7 +476,7 @@
             <a class="nav" href="z_1145cd4cfa43cc00_mms_ote_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-02-04 09:11 +0000
+            created at 2026-02-04 12:05 +0000
         </p>
     </div>
 </footer>
