@@ -9,9 +9,9 @@
 | option\_auditor/cli.py                              |       57 |        4 |     93% |71-73, 101 |
 | option\_auditor/common/constants.py                 |       23 |        2 |     91% |   444-445 |
 | option\_auditor/common/data\_utils.py               |      184 |       37 |     80% |25-26, 49-52, 78-82, 89-90, 94-98, 102-103, 107-108, 119-120, 158, 189, 204-206, 218, 221-222, 239-240, 249-250, 302-303 |
-| option\_auditor/common/file\_utils.py               |       28 |       11 |     61% |15-16, 21-28, 36, 49-51 |
+| option\_auditor/common/file\_utils.py               |       28 |        0 |    100% |           |
 | option\_auditor/common/resilience.py                |       10 |        0 |    100% |           |
-| option\_auditor/common/screener\_utils.py           |      270 |       73 |     73% |23-24, 44, 53-55, 64-98, 110-112, 114, 120, 161-170, 195-198, 200-203, 217-220, 222-224, 226-228, 253-254, 260-262, 348-349, 378, 425-431 |
+| option\_auditor/common/screener\_utils.py           |      270 |       50 |     81% |23-24, 44, 53-55, 68, 74, 84, 94-96, 110-112, 114, 120, 161-170, 195-198, 200-203, 217-220, 222-224, 226-228, 253-254, 260-262, 348-349 |
 | option\_auditor/common/signal\_type.py              |        6 |        0 |    100% |           |
 | option\_auditor/config.py                           |        4 |        0 |    100% |           |
 | option\_auditor/india\_stock\_data.py               |       16 |        2 |     88% |     19-20 |
@@ -52,7 +52,7 @@
 | option\_auditor/uk\_stock\_data.py                  |       16 |        2 |     88% |     30-31 |
 | option\_auditor/unified\_backtester.py              |      198 |        7 |     96% |37-39, 46, 74, 106, 361, 378 |
 | option\_auditor/unified\_screener.py                |      125 |       29 |     77% |37, 41-42, 48, 59-63, 78-81, 96-97, 120-123, 178-180, 191-197, 203, 220-223, 238-239 |
-| option\_auditor/us\_stock\_data.py                  |        9 |        3 |     67% |     50-53 |
+| option\_auditor/us\_stock\_data.py                  |        9 |        0 |    100% |           |
 | webapp/\_\_init\_\_.py                              |        0 |        0 |    100% |           |
 | webapp/app.py                                       |       75 |       14 |     81% |37-38, 73-76, 99-100, 104-105, 120-126 |
 | webapp/blueprints/\_\_init\_\_.py                   |        0 |        0 |    100% |           |
@@ -67,7 +67,7 @@
 | webapp/services/scheduler\_service.py               |       38 |       12 |     68% |37-39, 45-46, 52-58 |
 | webapp/storage.py                                   |      393 |       30 |     92% |68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 117, 270, 347-348, 388, 423-424, 443-446, 463, 480-481, 492, 504-505, 524 |
 | webapp/utils.py                                     |       50 |        7 |     86% |32-33, 58-59, 69-71 |
-| **TOTAL**                                           | **6876** | **1068** | **84%** |           |
+| **TOTAL**                                           | **6876** | **1031** | **85%** |           |
 
 
 ## Setup coverage badge
