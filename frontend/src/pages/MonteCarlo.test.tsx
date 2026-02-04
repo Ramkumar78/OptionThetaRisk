@@ -31,6 +31,7 @@ vi.mock('chart.js', () => ({
   Title: vi.fn(),
   Tooltip: vi.fn(),
   Legend: vi.fn(),
+  Filler: vi.fn(),
 }));
 
 describe('MonteCarlo', () => {
@@ -71,6 +72,11 @@ describe('MonteCarlo', () => {
           p50: [10000, 10100, 10200],
           p75: [10000, 10200, 10400],
           p95: [10000, 10500, 11000]
+      },
+      sample_equity_curves: [
+        [10000, 10000, 10100],
+        [10000, 9900, 9800]
+      ]
       }
     };
 
@@ -100,6 +106,7 @@ describe('MonteCarlo', () => {
 
       // Verify chart is rendered
       expect(screen.getByTestId('equity-curve-chart')).toBeInTheDocument();
+      expect(screen.getByText('Equity Curve Projections')).toBeInTheDocument();
       // Verify Chart Section
       expect(screen.getByText('Projected Equity Curves (Cone)')).toBeInTheDocument();
       expect(screen.getByTestId('line-chart')).toBeInTheDocument();

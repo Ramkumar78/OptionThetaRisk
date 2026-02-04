@@ -57,6 +57,7 @@ class MonteCarloSimulator:
         # Calculate Percentiles of Equity Curves
         # Axis 0 is simulations, Axis 1 is steps
         percentiles = [5, 25, 50, 75, 95]
+        equity_quantiles = np.percentile(equity_curves, percentiles, axis=0)
         curve_percentiles = np.percentile(equity_curves, percentiles, axis=0)
 
         # Sample Curves
@@ -133,5 +134,6 @@ class MonteCarloSimulator:
             },
             "sample_equity_curves": sample_curves.tolist(),
             "equity_curves": curves_data,
+            "sample_equity_curves": sample_curves.tolist(),
             "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >50% drawdown."
         }

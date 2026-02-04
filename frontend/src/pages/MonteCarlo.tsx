@@ -61,11 +61,18 @@ interface SimulationResult {
       p75: number[];
       p95: number[];
   };
+  sample_equity_curves?: number[][];
   sample_equity_curves: number[][];
 }
 
 const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) => {
     const data = useMemo(() => {
+        if (!result.equity_curves) return { labels: [], datasets: [] };
+
+        const labels = result.equity_curves.p50.map((_, i) => i.toString());
+
+        // We only want to show samples if they exist, and filter legend to keep it clean
+        const sampleDatasets = (result.sample_equity_curves || []).map((curve, i) => ({
         const labels = result.equity_curve_percentiles.p50.map((_, i) => i.toString());
 
         // We only want to show samples if they exist, and filter legend to keep it clean
@@ -83,6 +90,7 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
             datasets: [
                 {
                     label: 'Median (P50)',
+                    data: result.equity_curves.p50,
                     data: result.equity_curve_percentiles.p50,
                     borderColor: 'rgb(59, 130, 246)', // Blue
                     borderWidth: 2,
@@ -90,6 +98,7 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
                 },
                 {
                     label: 'Best Case (P95)',
+                    data: result.equity_curves.p95,
                     data: result.equity_curve_percentiles.p95,
                     borderColor: 'rgba(16, 185, 129, 0.6)', // Green
                     borderWidth: 1,
@@ -98,6 +107,7 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
                 },
                 {
                     label: 'Worst Case (P5)',
+                    data: result.equity_curves.p05,
                     data: result.equity_curve_percentiles.p5,
                     borderColor: 'rgba(239, 68, 68, 0.6)', // Red
                     borderWidth: 1,
@@ -164,6 +174,8 @@ const EquityCurveChart: React.FC<{ result: SimulationResult }> = ({ result }) =>
             }
         }
     }), []);
+
+    if (!result.equity_curves) return null;
 
     return (
         <div className="h-80 w-full">
