@@ -10,6 +10,9 @@ vi.mock('axios');
 // Mock Chart.js components to avoid canvas errors in JSDOM
 vi.mock('react-chartjs-2', () => ({
   Line: () => <div data-testid="line-chart">Line Chart</div>
+// Capture props to verify data passed to the chart
+vi.mock('react-chartjs-2', () => ({
+  Line: (props: any) => <div data-testid="line-chart" data-props={JSON.stringify(props)}>Line Chart</div>
 }));
 
 describe('Journal Component', () => {
@@ -135,5 +138,52 @@ describe('Journal Component', () => {
         expect(screen.getByText('Equity Curve (Cumulative PnL)')).toBeInTheDocument();
         expect(screen.getByTestId('line-chart')).toBeInTheDocument();
     });
+  });
+        const chart = screen.getByTestId('line-chart');
+        expect(chart).toBeInTheDocument();
+
+        // Check props passed to chart
+        const props = JSON.parse(chart.getAttribute('data-props') || '{}');
+        expect(props.data.labels).toEqual(["2023-10-01", "2023-10-02"]);
+        expect(props.data.datasets[0].data).toEqual([100, 50]);
+        expect(props.data.datasets[0].label).toBe('Cumulative PnL');
+    });
+  });
+
+  it('does not render chart when equity curve is empty', async () => {
+      (axios.get as any).mockResolvedValue({ data: mockEntries });
+
+      const mockAnalysis = {
+          total_trades: 2,
+          win_rate: 50,
+          total_pnl: 50,
+          best_pattern: "Iron Condor",
+          worst_pattern: "Put Credit Spread",
+          best_time: "Morning",
+          suggestions: ["Good job"],
+          patterns: [],
+          time_analysis: [],
+          equity_curve: [] // Empty
+      };
+
+      (axios.post as any).mockResolvedValue({ data: mockAnalysis });
+
+      render(
+          <BrowserRouter>
+            <Journal />
+          </BrowserRouter>
+      );
+
+      // Click Analyze
+      fireEvent.click(screen.getByRole('button', { name: /Analyze Habits/i }));
+
+      await waitFor(() => {
+          // Check for stats to ensure analysis loaded
+          expect(screen.getByText('50%')).toBeInTheDocument();
+
+          // Chart header and component should NOT be present
+          expect(screen.queryByText('Equity Curve (Cumulative PnL)')).not.toBeInTheDocument();
+          expect(screen.queryByTestId('line-chart')).not.toBeInTheDocument();
+      });
   });
 });

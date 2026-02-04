@@ -123,3 +123,58 @@ def test_analyze_journal_equity_curve_fallback():
     # Should not crash, and return a curve (based on default date/time filling)
     assert len(result["equity_curve"]) == 2
     # Logic fills with datetime.now(), sorting might be unstable if times are identical "00:00", but it works.
+
+def test_equity_curve_sorting_and_stability():
+    """Test equity curve sorting with identical timestamps and unsorted input."""
+    entries = [
+        {"strategy": "A", "pnl": 10, "entry_date": "2023-01-01", "entry_time": "12:00"},
+        {"strategy": "A", "pnl": 20, "entry_date": "2023-01-01", "entry_time": "10:00"}, # Earlier same day
+        {"strategy": "A", "pnl": 30, "entry_date": "2023-01-01", "entry_time": "12:00"}, # Same time as first
+    ]
+
+    result = analyze_journal(entries)
+    curve = result["equity_curve"]
+
+    assert len(curve) == 3
+    # Check 10:00 is first
+    assert "10:00" in curve[0]['date']
+    assert curve[0]['cumulative_pnl'] == 20.0
+
+    # Check 12:00 entries
+    # Pandas sort is stable. The original order of index 0 and 2 (relative to each other) should be preserved.
+    # Entry 0 (+10) comes before Entry 2 (+30)
+    assert curve[1]['cumulative_pnl'] == 30.0 # 20 + 10
+    assert curve[2]['cumulative_pnl'] == 60.0 # 30 + 30
+
+def test_equity_curve_invalid_data():
+    """Test equity curve generation with non-numeric PnL and invalid dates."""
+    entries = [
+        {"strategy": "A", "pnl": "invalid", "entry_date": "bad-date", "entry_time": "bad-time"},
+        {"strategy": "A", "pnl": "50.5", "entry_date": "2023-01-01", "entry_time": "10:00"},
+    ]
+
+    result = analyze_journal(entries)
+    curve = result["equity_curve"]
+
+    assert len(curve) == 2
+
+    # "invalid" pnl should be 0.0 (coerced)
+    # "bad-date" causes fallback to datetime.now() -> end of list (after 2023)
+
+    # 2023 entry should be first
+    entry_2023 = next(p for p in curve if "2023-01-01" in p['date'])
+    assert entry_2023['cumulative_pnl'] == 50.5
+
+    # The invalid entry is effectively 0 pnl
+    # If it is after, cum pnl stays 50.5.
+    assert result['total_pnl'] == 50.5
+
+def test_equity_curve_single_entry():
+    """Test equity curve with a single entry."""
+    entries = [
+        {"strategy": "A", "pnl": 100, "entry_date": "2023-01-01"}
+    ]
+    result = analyze_journal(entries)
+    curve = result["equity_curve"]
+    assert len(curve) == 1
+    assert curve[0]['cumulative_pnl'] == 100.0

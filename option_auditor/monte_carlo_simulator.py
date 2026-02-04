@@ -58,6 +58,7 @@ class MonteCarloSimulator:
         # Axis 0 is simulations, Axis 1 is steps
         percentiles = [5, 25, 50, 75, 95]
         equity_quantiles = np.percentile(equity_curves, percentiles, axis=0)
+        curve_percentiles = np.percentile(equity_curves, percentiles, axis=0)
 
         # Sample Curves
         # If simulations > 5, take 5 random. Else take all.
@@ -101,6 +102,11 @@ class MonteCarloSimulator:
         avg_final_equity = np.mean(final_equities)
         avg_return_pct = ((avg_final_equity - self.initial_capital) / self.initial_capital) * 100
 
+        # Calculate Equity Curve Percentiles (Cone)
+        # shape: (5, n_trades + 1)
+        percentiles = [5, 25, 50, 75, 95]
+        equity_quantiles = np.percentile(equity_curves, percentiles, axis=0)
+
         curves_data = {
             "p05": np.round(equity_quantiles[0], 2).tolist(),
             "p25": np.round(equity_quantiles[1], 2).tolist(),
@@ -119,6 +125,14 @@ class MonteCarloSimulator:
             "best_case_return": round(((pct95_return - self.initial_capital)/self.initial_capital)*100, 2),
             "median_drawdown": round(median_dd, 2),
             "worst_case_drawdown": round(pct95_dd, 2), # 95% Confidence Level Max Drawdown
+            "equity_curve_percentiles": {
+                "p5": curve_percentiles[0].tolist(),
+                "p25": curve_percentiles[1].tolist(),
+                "p50": curve_percentiles[2].tolist(),
+                "p75": curve_percentiles[3].tolist(),
+                "p95": curve_percentiles[4].tolist(),
+            },
+            "sample_equity_curves": sample_curves.tolist(),
             "equity_curves": curves_data,
             "sample_equity_curves": sample_curves.tolist(),
             "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >50% drawdown."

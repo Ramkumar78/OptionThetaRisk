@@ -4,6 +4,11 @@ import { vi, describe, it, expect } from 'vitest';
 import MonteCarlo from './MonteCarlo';
 import * as api from '../api';
 
+// Mock Chart.js components to avoid canvas errors in JSDOM
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <div data-testid="line-chart">Line Chart</div>
+}));
+
 // Mock the API
 vi.mock('../api', () => ({
   runMonteCarloSimulation: vi.fn(),
@@ -50,6 +55,17 @@ describe('MonteCarlo', () => {
       median_drawdown: -15,
       worst_case_drawdown: -30,
       message: 'Ran 10000 simulations.',
+      equity_curve_percentiles: {
+        p5: [10000, 9900, 9800],
+        p25: [10000, 9950, 9900],
+        p50: [10000, 10000, 10100],
+        p75: [10000, 10050, 10200],
+        p95: [10000, 10100, 10300],
+      },
+      sample_equity_curves: [
+        [10000, 10000, 10100],
+        [10000, 9900, 9800]
+      ]
       equity_curves: {
           p05: [10000, 9900, 9800],
           p25: [10000, 10000, 10000],
@@ -61,6 +77,7 @@ describe('MonteCarlo', () => {
         [10000, 10000, 10100],
         [10000, 9900, 9800]
       ]
+      }
     };
 
     (api.runMonteCarloSimulation as any).mockResolvedValue(mockResult);
@@ -90,6 +107,9 @@ describe('MonteCarlo', () => {
       // Verify chart is rendered
       expect(screen.getByTestId('equity-curve-chart')).toBeInTheDocument();
       expect(screen.getByText('Equity Curve Projections')).toBeInTheDocument();
+      // Verify Chart Section
+      expect(screen.getByText('Projected Equity Curves (Cone)')).toBeInTheDocument();
+      expect(screen.getByTestId('line-chart')).toBeInTheDocument();
     });
   });
 
