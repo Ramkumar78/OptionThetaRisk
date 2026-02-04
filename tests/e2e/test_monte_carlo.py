@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 # Gracefully handle missing playwright to avoid collection errors in CI
 try:
@@ -8,12 +9,29 @@ except ImportError:
     expect = None
     Route = None
 
+def is_server_running(url):
+    try:
+        # We assume the health endpoint or root is available
+        response = requests.get(f"{url}/health", timeout=2)
+        return response.status_code == 200
+    except Exception:
+        return False
+
 @pytest.mark.skipif(Page is None, reason="Playwright not installed")
-def test_monte_carlo_simulation(page: Page):
+def test_monte_carlo_simulation(page: Page, base_url):
     """
     Test the Monte Carlo simulation flow with mocked backend response.
     This ensures the UI works correctly without relying on external data providers.
     """
+    if not base_url:
+        pytest.skip("No base_url configured")
+
+    # Remove trailing slash for consistency
+    base_url = base_url.rstrip("/")
+
+    if not is_server_running(base_url):
+        pytest.skip(f"Server at {base_url} is not running. Start the server to run E2E tests.")
+
     # Mock the API response
     def handle_analyze(route: Route):
         route.fulfill(
@@ -45,7 +63,8 @@ def test_monte_carlo_simulation(page: Page):
     page.route("**/analyze/monte-carlo", handle_analyze)
 
     # Navigate to the Monte Carlo page
-    page.goto("/monte-carlo")
+    # Using explicit full URL to avoid 'invalid URL' errors if context base_url is missing
+    page.goto(f"{base_url}/monte-carlo")
 
     # Fill in the form
     page.locator("#ticker-input").fill("SPY")
