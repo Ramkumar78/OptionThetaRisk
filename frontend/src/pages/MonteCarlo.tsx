@@ -294,6 +294,73 @@ const MonteCarlo: React.FC = () => {
              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Equity Curve Projections</h3>
              <EquityCurveChart result={result} />
           </div>
+          {/* Equity Curve Chart */}
+          {result.equity_curves && (
+              <div className="md:col-span-2 lg:col-span-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Projected Equity Curves (Cone)</h3>
+                  <div className="h-96 w-full">
+                      <Line
+                          data={{
+                              labels: result.equity_curves.p50.map((_, i) => i.toString()),
+                              datasets: [
+                                  {
+                                      label: '95th Percentile (Best)',
+                                      data: result.equity_curves.p95,
+                                      borderColor: 'rgba(34, 197, 94, 0.5)', // green-500
+                                      borderDash: [5, 5],
+                                      borderWidth: 2,
+                                      pointRadius: 0,
+                                      fill: false,
+                                  },
+                                  {
+                                      label: 'Median (Expected)',
+                                      data: result.equity_curves.p50,
+                                      borderColor: 'rgba(59, 130, 246, 1)', // blue-500
+                                      borderWidth: 3,
+                                      pointRadius: 0,
+                                      fill: false,
+                                  },
+                                  {
+                                      label: '5th Percentile (Worst)',
+                                      data: result.equity_curves.p05,
+                                      borderColor: 'rgba(239, 68, 68, 0.5)', // red-500
+                                      borderDash: [5, 5],
+                                      borderWidth: 2,
+                                      pointRadius: 0,
+                                      fill: false,
+                                  }
+                              ]
+                          }}
+                          options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              interaction: {
+                                  mode: 'index',
+                                  intersect: false,
+                              },
+                              scales: {
+                                  x: {
+                                      title: { display: true, text: 'Trade Count' },
+                                      grid: { display: false }
+                                  },
+                                  y: {
+                                      title: { display: true, text: 'Account Equity ($)' },
+                                      grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                                  }
+                              },
+                              plugins: {
+                                  legend: { position: 'top' },
+                                  tooltip: {
+                                      callbacks: {
+                                          label: (ctx) => `${ctx.dataset.label}: $${Number(ctx.raw).toLocaleString()}`
+                                      }
+                                  }
+                              }
+                          }}
+                      />
+                  </div>
+              </div>
+          )}
 
           <div className="md:col-span-2 lg:col-span-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Detailed Statistics</h3>

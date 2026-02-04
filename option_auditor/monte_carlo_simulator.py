@@ -101,6 +101,11 @@ class MonteCarloSimulator:
         avg_final_equity = np.mean(final_equities)
         avg_return_pct = ((avg_final_equity - self.initial_capital) / self.initial_capital) * 100
 
+        # Calculate Equity Curve Percentiles (Cone)
+        # shape: (5, n_trades + 1)
+        percentiles = [5, 25, 50, 75, 95]
+        equity_quantiles = np.percentile(equity_curves, percentiles, axis=0)
+
         curves_data = {
             "p05": np.round(equity_quantiles[0], 2).tolist(),
             "p25": np.round(equity_quantiles[1], 2).tolist(),
