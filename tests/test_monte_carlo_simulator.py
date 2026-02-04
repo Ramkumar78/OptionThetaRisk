@@ -32,6 +32,23 @@ def test_monte_carlo_logic():
     # Avg return per trade is roughly 2.5% arithmetic.
     assert result["median_final_equity"] > 10000.0
 
+    # New assertions for equity curves
+    assert "equity_curves" in result
+    assert "sample_equity_curves" in result
+    assert len(result["sample_equity_curves"]) == 5  # min(100, 5)
+    # 25 trades + 1 initial point = 26 points
+    assert len(result["equity_curves"]["p50"]) == 26
+    assert isinstance(result["sample_equity_curves"], list)
+    assert isinstance(result["equity_curves"]["p50"], list)
+    assert "equity_curve_percentiles" in result
+    assert "sample_equity_curves" in result
+    assert len(result["sample_equity_curves"]) == 5  # min(100, 5)
+    # 25 trades + 1 initial point = 26 points
+    assert len(result["equity_curve_percentiles"]["p50"]) == 26
+    assert isinstance(result["sample_equity_curves"], list)
+    assert isinstance(result["equity_curve_percentiles"]["p50"], list)
+
+
 def test_monte_carlo_not_enough_trades():
     trades = [{"return_pct": 10.0}] # Only 1 trade
     mc = MonteCarloSimulator(trades)

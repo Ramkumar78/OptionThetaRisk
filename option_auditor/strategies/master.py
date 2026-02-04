@@ -236,6 +236,8 @@ class FortressMasterScreener:
                 "days_since_breakout": 0, # Placeholder
                 "breakout_date": "N/A", # Placeholder
                 "VCP": "YES" if is_vcp else "NO"
+                "VCP": "YES" if is_vcp else "NO",
+                "breakout_date": bk_date_str
             }
 
         except Exception as e:
