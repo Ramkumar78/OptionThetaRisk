@@ -8,7 +8,8 @@ from option_auditor.strategies.math_utils import (
     calculate_momentum_decay,
     generate_human_verdict,
     calculate_hilbert_phase,
-    calculate_dominant_cycle
+    calculate_dominant_cycle,
+    calculate_option_price
 )
 
 # Test calculate_hurst
@@ -188,3 +189,37 @@ def test_calculate_dominant_cycle():
 
 def test_calculate_dominant_cycle_short():
     assert calculate_dominant_cycle(range(10)) is None
+
+# Test calculate_option_price
+def test_calculate_option_price_call():
+    # S=100, K=100, T=1yr, r=5%, sigma=20%
+    # Standard BS Call Price approx 10.45
+    S = 100.0
+    K = 100.0
+    T = 1.0
+    r = 0.05
+    sigma = 0.20
+    price = calculate_option_price(S, K, T, r, sigma, "call")
+    assert np.isclose(price, 10.45, atol=0.01)
+
+def test_calculate_option_price_put():
+    # Put-Call Parity: C - P = S - K*exp(-rT)
+    # 10.45 - P = 100 - 100*exp(-0.05) = 100 - 95.12 = 4.88
+    # P = 10.45 - 4.88 = 5.57
+    S = 100.0
+    K = 100.0
+    T = 1.0
+    r = 0.05
+    sigma = 0.20
+    price = calculate_option_price(S, K, T, r, sigma, "put")
+    assert np.isclose(price, 5.57, atol=0.01)
+
+def test_calculate_option_price_expired():
+    # Expired ITM Call
+    assert calculate_option_price(110, 100, 0, 0.05, 0.2, "call") == 10.0
+    # Expired OTM Call
+    assert calculate_option_price(90, 100, 0, 0.05, 0.2, "call") == 0.0
+    # Expired ITM Put
+    assert calculate_option_price(90, 100, 0, 0.05, 0.2, "put") == 10.0
+    # Expired OTM Put
+    assert calculate_option_price(110, 100, 0, 0.05, 0.2, "put") == 0.0
