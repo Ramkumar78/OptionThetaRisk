@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import PortfolioRisk from './pages/PortfolioRisk';
 import MonteCarlo from './pages/MonteCarlo';
 import Backtester from './pages/Backtester';
+import Docs from './pages/Docs';
 
 const App: React.FC = () => {
   return (
@@ -25,6 +26,7 @@ const App: React.FC = () => {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="portfolio-risk" element={<PortfolioRisk />} />
           <Route path="monte-carlo" element={<MonteCarlo />} />
+          <Route path="docs" element={<Docs />} />
           <Route path="*" element={<div className="text-center p-10">404 Not Found</div>} />
         </Route>
       </Routes>
