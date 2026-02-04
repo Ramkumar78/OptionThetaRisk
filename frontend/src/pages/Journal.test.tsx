@@ -8,6 +8,8 @@ import React from 'react';
 vi.mock('axios');
 
 // Mock Chart.js components to avoid canvas errors in JSDOM
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <div data-testid="line-chart">Line Chart</div>
 // Capture props to verify data passed to the chart
 vi.mock('react-chartjs-2', () => ({
   Line: (props: any) => <div data-testid="line-chart" data-props={JSON.stringify(props)}>Line Chart</div>
@@ -134,6 +136,9 @@ describe('Journal Component', () => {
 
         // Check for chart
         expect(screen.getByText('Equity Curve (Cumulative PnL)')).toBeInTheDocument();
+        expect(screen.getByTestId('line-chart')).toBeInTheDocument();
+    });
+  });
         const chart = screen.getByTestId('line-chart');
         expect(chart).toBeInTheDocument();
 
