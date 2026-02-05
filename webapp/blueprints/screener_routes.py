@@ -18,6 +18,9 @@ from option_auditor.common.constants import SECTOR_COMPONENTS, DEFAULT_ACCOUNT_S
 from webapp.cache import screener_cache, get_cached_screener_result, cache_screener_result
 from webapp.utils import handle_screener_errors
 from webapp.services.check_service import handle_check_stock
+from webapp.validation import validate_schema
+from webapp.schemas import ScreenerFormRequest, StockCheckRequest
+from flask import g
 
 screener_bp = Blueprint('screener', __name__)
 
@@ -50,21 +53,12 @@ def run_backtest():
 
 @screener_bp.route("/screen", methods=["POST"])
 @handle_screener_errors
+@validate_schema(ScreenerFormRequest, source='form')
 def screen():
-    iv_rank = 30.0
-    try:
-        iv_rank = float(request.form.get("iv_rank", 30))
-    except ValueError:
-        pass
-
-    rsi_threshold = 50.0
-    try:
-        rsi_threshold = float(request.form.get("rsi_threshold", 50))
-    except ValueError:
-        pass
-
-    time_frame = request.form.get("time_frame", "1d")
-    region = request.form.get("region", "us")
+    iv_rank = g.validated_data.iv_rank
+    rsi_threshold = g.validated_data.rsi_threshold
+    time_frame = g.validated_data.time_frame
+    region = g.validated_data.region
 
     current_app.logger.info(f"Screen request: region={region}, time={time_frame}")
 
@@ -624,37 +618,20 @@ def screen_quantum():
 
 @screener_bp.route("/screen/check", methods=["GET"])
 @handle_screener_errors
+@validate_schema(StockCheckRequest, source='args')
 def check_unified_stock():
-    ticker_query = request.args.get("ticker", "").strip()
-    strategy = request.args.get("strategy", "isa").lower()
-    time_frame = request.args.get("time_frame", "1d")
-    entry_price_str = request.args.get("entry_price", "").strip()
-    entry_date_str = request.args.get("entry_date", "").strip()
-
-    # Position Sizing Param (Default £76k)
-    account_size = DEFAULT_ACCOUNT_SIZE
-    acc_size_str = request.args.get("account_size", "").strip()
-    if acc_size_str:
-        try:
-            account_size = float(acc_size_str)
-        except ValueError:
-            pass
+    ticker_query = g.validated_data.ticker.strip()
+    strategy = g.validated_data.strategy.lower()
+    time_frame = g.validated_data.time_frame
+    entry_price = g.validated_data.entry_price
+    entry_date_str = g.validated_data.entry_date
+    account_size = g.validated_data.account_size or DEFAULT_ACCOUNT_SIZE
 
     current_app.logger.info(f"Check Stock: {ticker_query}, Strategy: {strategy}")
-
-    if not ticker_query:
-        return jsonify({"error": "No ticker provided"}), 400
 
     ticker = resolve_ticker(ticker_query)
     if not ticker:
         ticker = ticker_query.upper()
-
-    entry_price = None
-    if entry_price_str:
-        try:
-            entry_price = float(entry_price_str)
-        except ValueError:
-            pass  # Ignore invalid float format
 
     if entry_price is None and entry_date_str:
             try:

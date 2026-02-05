@@ -53,7 +53,8 @@ def test_analyze_backtest_missing_ticker(mock_ub_cls, client):
     assert response.status_code == 400
     data = response.get_json()
     assert "error" in data
-    assert "Ticker required" in data["error"]
+    assert "Validation Error" in data["error"]
+    assert any("ticker" in str(d["loc"]) for d in data["details"])
 
 @patch("webapp.blueprints.analysis_routes.UnifiedBacktester")
 def test_analyze_backtest_backend_error(mock_ub_cls, client):
@@ -82,4 +83,5 @@ def test_analyze_backtest_invalid_capital(mock_ub_cls, client):
     assert response.status_code == 400
     data = response.get_json()
     assert "error" in data
-    assert "Initial Capital must be a number" in data["error"]
+    assert "Validation Error" in data["error"]
+    assert any("initial_capital" in str(d["loc"]) for d in data["details"])

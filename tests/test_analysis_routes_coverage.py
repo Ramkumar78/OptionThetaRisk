@@ -81,7 +81,7 @@ def test_market_data_structure_mismatch(mock_fetch, client):
 
     resp = client.post("/analyze/market-data", json={"ticker": "AAPL"})
     assert resp.status_code == 500
-    assert "not found in data structure" in resp.get_json()["error"]
+    assert "structure mismatch" in resp.get_json()["error"]
 
 # --- Greeks Tests ---
 
@@ -109,7 +109,10 @@ def test_greeks_error(mock_greeks, client):
 def test_monte_carlo_missing_ticker(mock_ub, client):
     resp = client.post("/analyze/monte-carlo", json={"simulations": 100})
     assert resp.status_code == 400
-    assert "Ticker required" in resp.get_json()["error"]
+    json_resp = resp.get_json()
+    assert "Validation Error" in json_resp["error"]
+    # Check that 'ticker' is flagged in details
+    assert any("ticker" in str(d["loc"]) for d in json_resp["details"])
 
 @patch('webapp.blueprints.analysis_routes.UnifiedBacktester')
 def test_monte_carlo_backend_error(mock_ub, client):
