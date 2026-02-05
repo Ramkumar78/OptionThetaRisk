@@ -4,12 +4,23 @@ import { Link } from 'react-router-dom';
 import CandlestickChart from '../components/CandlestickChart';
 import { type CandlestickData } from 'lightweight-charts';
 
+const ASSETS = [
+  { symbol: 'SPY', name: 'S&P 500' },
+  { symbol: 'GC=F', name: 'Gold' },
+  { symbol: 'SI=F', name: 'Silver' },
+  { symbol: 'TLT', name: 'Bonds (20Y)' },
+  { symbol: 'GOOG', name: 'Alphabet' },
+  { symbol: 'AAPL', name: 'Apple' },
+  { symbol: 'BRK-B', name: 'Berkshire' },
+];
+
 const Dashboard: React.FC = () => {
   const [portfolioData, setPortfolioData] = useState<any>(null);
   const [loadingPortfolio, setLoadingPortfolio] = useState(true);
 
   // Market State
-  const [spyData, setSpyData] = useState<CandlestickData[]>([]);
+  const [selectedAsset, setSelectedAsset] = useState(ASSETS[0]);
+  const [marketData, setMarketData] = useState<CandlestickData[]>([]);
   const [regime, setRegime] = useState<'BULL' | 'BEAR' | 'LOADING'>('LOADING');
   const [regimeDetails, setRegimeDetails] = useState<string>('');
 
@@ -27,18 +38,23 @@ const Dashboard: React.FC = () => {
         setLoadingPortfolio(false);
       }
     };
+    fetchPortfolio();
+  }, []);
 
-    // 2. Fetch Market Data (SPY) for Regime
+  // 2. Fetch Market Data for Regime
+  useEffect(() => {
     const fetchMarket = async () => {
+      setRegime('LOADING');
+      setMarketData([]);
       try {
         const res = await fetch('/analyze/market-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticker: 'SPY', period: '2y' })
+            body: JSON.stringify({ ticker: selectedAsset.symbol, period: '2y' })
         });
         const data = await res.json();
         if (!data.error && Array.isArray(data) && data.length > 200) {
-             setSpyData(data);
+             setMarketData(data);
 
              // Calculate SMA 200
              const closes = data.map((d: any) => d.close);
@@ -51,22 +67,22 @@ const Dashboard: React.FC = () => {
 
              if (lastClose > sma200) {
                  setRegime('BULL');
-                 setRegimeDetails(`SPY ($${lastClose.toFixed(2)}) > SMA200 ($${sma200.toFixed(2)})`);
+                 setRegimeDetails(`${selectedAsset.symbol} ($${lastClose.toFixed(2)}) > SMA200 ($${sma200.toFixed(2)})`);
              } else {
                  setRegime('BEAR');
-                 setRegimeDetails(`SPY ($${lastClose.toFixed(2)}) < SMA200 ($${sma200.toFixed(2)})`);
+                 setRegimeDetails(`${selectedAsset.symbol} ($${lastClose.toFixed(2)}) < SMA200 ($${sma200.toFixed(2)})`);
              }
         } else {
             setRegime('LOADING'); // Or error
         }
       } catch (e) {
           console.error("Failed to fetch market data", e);
+          setRegime('LOADING');
       }
     };
 
-    fetchPortfolio();
     fetchMarket();
-  }, []);
+  }, [selectedAsset]);
 
   return (
     <div className="space-y-8 animate-fade-in pb-10">
@@ -78,23 +94,42 @@ const Dashboard: React.FC = () => {
       {/* TOP ROW: MARKET STATUS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden">
-               <div className="flex justify-between items-start mb-4">
-                   <div>
-                       <h2 className="text-lg font-bold text-gray-900 dark:text-white">Market Regime (SPY)</h2>
-                       <p className="text-sm text-gray-500">{regimeDetails || 'Analyzing trend...'}</p>
+               <div className="flex flex-col space-y-4 mb-4">
+                   {/* Asset Selector */}
+                   <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+                       {ASSETS.map((asset) => (
+                           <button
+                               key={asset.symbol}
+                               onClick={() => setSelectedAsset(asset)}
+                               className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                                   selectedAsset.symbol === asset.symbol
+                                   ? 'bg-blue-600 text-white shadow-md'
+                                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                               }`}
+                           >
+                               {asset.name}
+                           </button>
+                       ))}
                    </div>
-                   <div className={`px-4 py-1 rounded-full text-sm font-bold ${
-                       regime === 'BULL' ? 'bg-green-100 text-green-800' :
-                       regime === 'BEAR' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
-                   }`}>
-                       {regime}
+
+                   <div className="flex justify-between items-start">
+                       <div>
+                           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Market Regime ({selectedAsset.symbol})</h2>
+                           <p className="text-sm text-gray-500">{regimeDetails || 'Analyzing trend...'}</p>
+                       </div>
+                       <div className={`px-4 py-1 rounded-full text-sm font-bold ${
+                           regime === 'BULL' ? 'bg-green-100 text-green-800' :
+                           regime === 'BEAR' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                       }`}>
+                           {regime}
+                       </div>
                    </div>
                </div>
 
                {/* Mini Chart */}
                <div className="h-48 w-full">
-                   {spyData.length > 0 ? (
-                       <CandlestickChart data={spyData} height={200} />
+                   {marketData.length > 0 ? (
+                       <CandlestickChart data={marketData} height={200} />
                    ) : (
                        <div className="h-full w-full flex items-center justify-center text-gray-400">
                            Loading Market Data...
