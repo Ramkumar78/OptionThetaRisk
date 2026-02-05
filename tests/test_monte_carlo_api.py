@@ -27,4 +27,5 @@ def test_monte_carlo_api_invalid_simulations(mock_backtester, client):
     # Test invalid simulations input
     resp = client.post("/analyze/monte-carlo", json={"ticker": "SPY", "simulations": "invalid"})
     assert resp.status_code == 400
-    assert "Simulations must be an integer" in resp.get_json()["error"]
+    assert "Validation Error" in resp.get_json()["error"]
+    assert any(d["field"] == "simulations" for d in resp.get_json()["details"])
