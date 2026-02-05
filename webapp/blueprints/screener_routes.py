@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 import logging
 from datetime import datetime, timedelta
 import pandas as pd
@@ -18,6 +18,11 @@ from option_auditor.common.constants import SECTOR_COMPONENTS, DEFAULT_ACCOUNT_S
 from webapp.cache import screener_cache, get_cached_screener_result, cache_screener_result
 from webapp.utils import handle_screener_errors
 from webapp.services.check_service import handle_check_stock
+from webapp.validation import validate_schema
+from webapp.schemas import (
+    ScreenerBaseRequest, ScreenerRunRequest, IsaCheckRequest,
+    BacktestRunRequest, FourierScreenRequest, CheckStockRequest, IsaScreenRequest
+)
 
 screener_bp = Blueprint('screener', __name__)
 
@@ -34,54 +39,37 @@ def get_breaker_status():
 
 @screener_bp.route('/backtest/run', methods=['GET'])
 @handle_screener_errors
+@validate_schema(BacktestRunRequest, source='args')
 def run_backtest():
-    ticker = request.args.get('ticker')
-    strategy = request.args.get('strategy', 'master') # master, turtle, isa
+    data: BacktestRunRequest = g.validated_data
+    current_app.logger.info(f"Starting backtest: {data.strategy} on {data.ticker}")
 
-    current_app.logger.info(f"Starting backtest: {strategy} on {ticker}")
-
-    if not ticker:
-        return jsonify({"error": "Ticker required"}), 400
-
-    backtester = UnifiedBacktester(ticker, strategy_type=strategy)
+    backtester = UnifiedBacktester(data.ticker, strategy_type=data.strategy)
     result = backtester.run()
-    current_app.logger.info(f"Backtest completed for {ticker}")
+    current_app.logger.info(f"Backtest completed for {data.ticker}")
     return jsonify(result)
 
 @screener_bp.route("/screen", methods=["POST"])
 @handle_screener_errors
+@validate_schema(ScreenerRunRequest, source='form')
 def screen():
-    iv_rank = 30.0
-    try:
-        iv_rank = float(request.form.get("iv_rank", 30))
-    except ValueError:
-        pass
+    data: ScreenerRunRequest = g.validated_data
+    current_app.logger.info(f"Screen request: region={data.region}, time={data.time_frame}")
 
-    rsi_threshold = 50.0
-    try:
-        rsi_threshold = float(request.form.get("rsi_threshold", 50))
-    except ValueError:
-        pass
-
-    time_frame = request.form.get("time_frame", "1d")
-    region = request.form.get("region", "us")
-
-    current_app.logger.info(f"Screen request: region={region}, time={time_frame}")
-
-    cache_key = ("market", iv_rank, rsi_threshold, time_frame, region)
+    cache_key = ("market", data.iv_rank, data.rsi_threshold, data.time_frame, data.region)
     cached = get_cached_screener_result(cache_key)
     if cached:
         current_app.logger.info("Serving cached screen result")
         return jsonify(cached)
 
-    results = screener.screen_market(iv_rank, rsi_threshold, time_frame, region=region)
-    sector_results = screener.screen_sectors(iv_rank, rsi_threshold, time_frame)
-    data = {
+    results = screener.screen_market(data.iv_rank, data.rsi_threshold, data.time_frame, region=data.region)
+    sector_results = screener.screen_sectors(data.iv_rank, data.rsi_threshold, data.time_frame)
+    data_resp = {
         "results": results,
         "sector_results": sector_results,
-        "params": {"iv_rank": iv_rank, "rsi": rsi_threshold, "time_frame": time_frame, "region": region}
+        "params": {"iv_rank": data.iv_rank, "rsi": data.rsi_threshold, "time_frame": data.time_frame, "region": data.region}
     }
-    cache_screener_result(cache_key, data)
+    cache_screener_result(cache_key, data_resp)
 
     # Count results
     count = 0
@@ -94,48 +82,32 @@ def screen():
     if count == 0:
         current_app.logger.warning("Screen returned 0 results.")
 
-    return jsonify(data)
+    return jsonify(data_resp)
 
 @screener_bp.route('/screen/turtle', methods=['GET'])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_turtle():
-    region = request.args.get('region', 'us')
-    time_frame = request.args.get('time_frame', '1d')
-    current_app.logger.info(f"Turtle Screen request: region={region}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Turtle Screen request: region={data.region}")
 
-    results = screener.screen_turtle_setups(region=region, time_frame=time_frame)
+    results = screener.screen_turtle_setups(region=data.region, time_frame=data.time_frame)
     current_app.logger.info(f"Turtle Screen completed. Results: {len(results)}")
     return jsonify(results)
 
 @screener_bp.route("/screen/isa/check", methods=["GET"])
 @handle_screener_errors
+@validate_schema(IsaCheckRequest, source='args')
 def check_isa_stock():
-    query = request.args.get("ticker", "").strip()
-    if not query:
-        return jsonify({"error": "No ticker provided"}), 400
-
-    current_app.logger.info(f"ISA Check request for {query}")
+    data: IsaCheckRequest = g.validated_data
+    current_app.logger.info(f"ISA Check request for {data.ticker}")
 
     # Position Sizing Param (Default £76k)
-    account_size = DEFAULT_ACCOUNT_SIZE
-    acc_size_str = request.args.get("account_size", "").strip()
-    if acc_size_str:
-        try:
-            account_size = float(acc_size_str)
-        except ValueError:
-            pass
+    account_size = data.account_size if data.account_size is not None else DEFAULT_ACCOUNT_SIZE
 
-    entry_price = None
-    entry_str = request.args.get("entry_price", "").strip()
-    if entry_str:
-        try:
-            entry_price = float(entry_str)
-        except ValueError:
-            pass  # Ignore invalid float format
-
-    ticker = screener.resolve_ticker(query)
+    ticker = screener.resolve_ticker(data.ticker)
     if not ticker:
-        ticker = query.upper()
+        ticker = data.ticker.upper()
 
     results = screener.screen_trend_followers_isa(ticker_list=[ticker], account_size=account_size)
 
@@ -145,11 +117,11 @@ def check_isa_stock():
 
     result = results[0]
 
-    if entry_price and result.get('price'):
+    if data.entry_price and result.get('price'):
         curr = result['price']
-        result['pnl_value'] = curr - entry_price
-        result['pnl_pct'] = ((curr - entry_price) / entry_price) * 100
-        result['user_entry_price'] = entry_price
+        result['pnl_value'] = curr - data.entry_price
+        result['pnl_pct'] = ((curr - data.entry_price) / data.entry_price) * 100
+        result['user_entry_price'] = data.entry_price
 
         signal = result.get('signal', 'WAIT')
         stop_exit = result.get('trailing_exit_20d', 0)
@@ -168,18 +140,18 @@ def check_isa_stock():
 
 @screener_bp.route("/screen/alpha101", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_alpha101():
-    region = request.args.get("region", "us")
-    time_frame = request.args.get("time_frame", "1d")
-    current_app.logger.info(f"Alpha 101 Screen request: region={region}, time_frame={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Alpha 101 Screen request: region={data.region}, time_frame={data.time_frame}")
 
-    cache_key = ("alpha101", region, time_frame)
+    cache_key = ("alpha101", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
     # Use the new function
-    results = screener.screen_alpha_101(region=region, time_frame=time_frame)
+    results = screener.screen_alpha_101(region=data.region, time_frame=data.time_frame)
 
     current_app.logger.info(f"Alpha 101 Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
@@ -187,30 +159,32 @@ def screen_alpha101():
 
 @screener_bp.route("/screen/mystrategy", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_my_strategy_route():
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"MyStrategy Screen request: region={region}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"MyStrategy Screen request: region={data.region}")
 
-    cache_key = ("mystrategy", region)
+    cache_key = ("mystrategy", data.region)
     # Optional: Use caching if you implement it broadly
     cached = get_cached_screener_result(cache_key)
     if cached: return jsonify(cached)
 
-    results = screener.screen_my_strategy(region=region)
+    results = screener.screen_my_strategy(region=data.region)
 
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/fortress", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_fortress():
-    time_frame = request.args.get("time_frame", "1d")
-    current_app.logger.info(f"Fortress Screen request: time_frame={time_frame}")
-    cache_key = ("api_screen_fortress_us", time_frame)
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Fortress Screen request: time_frame={data.time_frame}")
+    cache_key = ("api_screen_fortress_us", data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached: return jsonify(cached)
 
-    results = screener.screen_dynamic_volatility_fortress(time_frame=time_frame)
+    results = screener.screen_dynamic_volatility_fortress(time_frame=data.time_frame)
 
     current_app.logger.info(f"Fortress Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
@@ -237,41 +211,35 @@ def screen_options_only():
 
 @screener_bp.route('/screen/isa', methods=['GET'])
 @handle_screener_errors
+@validate_schema(IsaScreenRequest, source='args')
 def screen_isa():
-    region = request.args.get('region', 'us')
-    time_frame = request.args.get('time_frame', '1d')
-    current_app.logger.info(f"ISA Screen request: region={region}, time_frame={time_frame}")
+    data: IsaScreenRequest = g.validated_data
+    current_app.logger.info(f"ISA Screen request: region={data.region}, time_frame={data.time_frame}")
 
     # Position Sizing Param (Default £76k)
-    account_size = DEFAULT_ACCOUNT_SIZE
-    acc_size_str = request.args.get("account_size", "").strip()
-    if acc_size_str:
-        try:
-            account_size = float(acc_size_str)
-        except ValueError:
-            pass
+    account_size = data.account_size if data.account_size is not None else DEFAULT_ACCOUNT_SIZE
 
-    cache_key = ("isa", region, time_frame, account_size)
+    cache_key = ("isa", data.region, data.time_frame, account_size)
     cached = get_cached_screener_result(cache_key)
     if cached:
         current_app.logger.info("Serving cached ISA screen result")
         return jsonify({"results": cached})
 
     # For ISA, if region is 'us', we prefer the broader S&P 500 list
-    if region == 'us':
+    if data.region == 'us':
         tickers = resolve_region_tickers('sp500')
     else:
-        tickers = resolve_region_tickers(region)
+        tickers = resolve_region_tickers(data.region)
 
     # Correct Cache Name logic to use Shared Cache for US/SP500
-    cache_name = f"market_scan_{region}"
-    if region in ['us', 'united_states', 'sp500']:
+    cache_name = f"market_scan_{data.region}"
+    if data.region in ['us', 'united_states', 'sp500']:
         cache_name = "market_scan_v1"
-    elif region == 'uk':
+    elif data.region == 'uk':
         cache_name = "market_scan_uk"
-    elif region == 'india':
+    elif data.region == 'india':
         cache_name = "market_scan_india"
-    elif region == 'uk_euro':
+    elif data.region == 'uk_euro':
             cache_name = "market_scan_europe"
 
     results = []
@@ -328,37 +296,38 @@ def screen_isa():
 
 @screener_bp.route("/screen/bull_put", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_bull_put():
-    region = request.args.get("region", "us")
-    time_frame = request.args.get("time_frame", "1d")
-    current_app.logger.info(f"Bull Put Screen request: region={region}, time_frame={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Bull Put Screen request: region={data.region}, time_frame={data.time_frame}")
 
-    cache_key = ("bull_put", region, time_frame)
+    cache_key = ("bull_put", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=True)
+    ticker_list = resolve_region_tickers(data.region, check_trend=True)
 
-    results = screener.screen_bull_put_spreads(ticker_list=ticker_list, time_frame=time_frame)
+    results = screener.screen_bull_put_spreads(ticker_list=ticker_list, time_frame=data.time_frame)
     current_app.logger.info(f"Bull Put Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/vertical_put", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_vertical_put():
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"Vertical Put Screen request: region={region}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Vertical Put Screen request: region={data.region}")
 
     # Cache key
-    cache_key = ("vertical_put_v2", region)
+    cache_key = ("vertical_put_v2", data.region)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
     # Call the new logic
-    results = screener.screen_vertical_put_spreads(region=region)
+    results = screener.screen_vertical_put_spreads(region=data.region)
 
     current_app.logger.info(f"Vertical Put Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
@@ -366,136 +335,136 @@ def screen_vertical_put():
 
 @screener_bp.route("/screen/darvas", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_darvas():
-    time_frame = request.args.get("time_frame", "1d")
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"Darvas Screen request: region={region}, tf={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Darvas Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("darvas", region, time_frame)
+    cache_key = ("darvas", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=True)
+    ticker_list = resolve_region_tickers(data.region, check_trend=True)
 
-    results = screener.screen_darvas_box(ticker_list=ticker_list, time_frame=time_frame)
+    results = screener.screen_darvas_box(ticker_list=ticker_list, time_frame=data.time_frame)
     current_app.logger.info(f"Darvas Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/ema", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_ema():
-    time_frame = request.args.get("time_frame", "1d")
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"EMA Screen request: region={region}, tf={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"EMA Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("ema", region, time_frame)
+    cache_key = ("ema", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=True)
+    ticker_list = resolve_region_tickers(data.region, check_trend=True)
 
-    results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=time_frame)
+    results = screener.screen_5_13_setups(ticker_list=ticker_list, time_frame=data.time_frame)
     current_app.logger.info(f"EMA Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/mms", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_mms():
-    time_frame = request.args.get("time_frame", "1h")
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"MMS Screen request: region={region}, tf={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"MMS Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("mms", region, time_frame)
+    cache_key = ("mms", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
     # Use only_watch=True for SP500 to avoid heavy load on intraday screens
-    ticker_list = resolve_region_tickers(region, check_trend=False, only_watch=True)
+    ticker_list = resolve_region_tickers(data.region, check_trend=False, only_watch=True)
 
-    results = screener.screen_mms_ote_setups(ticker_list=ticker_list, time_frame=time_frame)
+    results = screener.screen_mms_ote_setups(ticker_list=ticker_list, time_frame=data.time_frame)
     current_app.logger.info(f"MMS Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/liquidity_grabs", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_liquidity_grabs():
-    time_frame = request.args.get("time_frame", "1h")
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"Liquidity Grab Screen request: region={region}, tf={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Liquidity Grab Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("liquidity_grabs", region, time_frame)
+    cache_key = ("liquidity_grabs", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
     # Use only_watch=True for SP500 to avoid heavy load on intraday screens
-    ticker_list = resolve_region_tickers(region, check_trend=False, only_watch=True)
+    ticker_list = resolve_region_tickers(data.region, check_trend=False, only_watch=True)
 
-    results = screener.screen_liquidity_grabs(ticker_list=ticker_list, time_frame=time_frame, region=region)
+    results = screener.screen_liquidity_grabs(ticker_list=ticker_list, time_frame=data.time_frame, region=data.region)
     current_app.logger.info(f"Liquidity Grab Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/squeeze", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_squeeze():
-    time_frame = request.args.get("time_frame", "1d")
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"Squeeze Screen request: region={region}, tf={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Squeeze Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("squeeze", region, time_frame)
+    cache_key = ("squeeze", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=False)
+    ticker_list = resolve_region_tickers(data.region, check_trend=False)
 
-    results = screener.screen_bollinger_squeeze(ticker_list=ticker_list, time_frame=time_frame, region=region)
+    results = screener.screen_bollinger_squeeze(ticker_list=ticker_list, time_frame=data.time_frame, region=data.region)
     current_app.logger.info(f"Squeeze Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/hybrid", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_hybrid():
-    time_frame = request.args.get("time_frame", "1d")
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"Hybrid Screen request: region={region}, tf={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Hybrid Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("hybrid", region, time_frame)
+    cache_key = ("hybrid", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=False)
+    ticker_list = resolve_region_tickers(data.region, check_trend=False)
 
-    results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=time_frame, region=region)
+    results = screener.screen_hybrid_strategy(ticker_list=ticker_list, time_frame=data.time_frame, region=data.region)
     current_app.logger.info(f"Hybrid Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route('/screen/master', methods=['GET'])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_master():
-    region = request.args.get('region', 'us')
-    time_frame = request.args.get('time_frame', '1d')
-    current_app.logger.info(f"Master Fortress Screen request: region={region}, time_frame={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Master Fortress Screen request: region={data.region}, time_frame={data.time_frame}")
 
     # Check Cache first (populated by Headless Scanner)
-    cache_key = ("master", region, time_frame)
+    cache_key = ("master", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         current_app.logger.info("Serving cached Master Screen result")
         return jsonify(cached)
 
     # The adapter handles the list logic internally based on region
-    results = screen_master_convergence(region=region, time_frame=time_frame)
+    results = screen_master_convergence(region=data.region, time_frame=data.time_frame)
 
     # Cache result
     cache_screener_result(cache_key, results)
@@ -517,66 +486,66 @@ def screen_quant():
 
 @screener_bp.route("/screen/fourier", methods=["GET"])
 @handle_screener_errors
+@validate_schema(FourierScreenRequest, source='args')
 def screen_fourier():
-    query = request.args.get("ticker", "").strip()
-    if query:
-        current_app.logger.info(f"Fourier Single request: {query}")
-        ticker = screener.resolve_ticker(query)
+    data: FourierScreenRequest = g.validated_data
+    if data.ticker:
+        current_app.logger.info(f"Fourier Single request: {data.ticker}")
+        ticker = screener.resolve_ticker(data.ticker)
         if not ticker:
-            ticker = query.upper()
+            ticker = data.ticker.upper()
 
         results = screener.screen_fourier_cycles(ticker_list=[ticker], time_frame="1d")
         if not results:
                 return jsonify({"error": f"No cycle data found for {ticker}"}), 404
         return jsonify(results[0])
 
-    time_frame = request.args.get("time_frame", "1d")
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"Fourier Screen request: region={region}, tf={time_frame}")
+    current_app.logger.info(f"Fourier Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("fourier", region, time_frame)
+    cache_key = ("fourier", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=False)
+    ticker_list = resolve_region_tickers(data.region, check_trend=False)
 
-    results = screener.screen_fourier_cycles(ticker_list=ticker_list, time_frame=time_frame)
+    results = screener.screen_fourier_cycles(ticker_list=ticker_list, time_frame=data.time_frame)
     current_app.logger.info(f"Fourier Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/rsi_divergence", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_rsi_divergence():
-    region = request.args.get("region", "us")
-    time_frame = request.args.get("time_frame", "1d")
-    current_app.logger.info(f"RSI Divergence Screen request: region={region}, tf={time_frame}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"RSI Divergence Screen request: region={data.region}, tf={data.time_frame}")
 
-    cache_key = ("rsi_divergence", region, time_frame)
+    cache_key = ("rsi_divergence", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=False)
+    ticker_list = resolve_region_tickers(data.region, check_trend=False)
 
-    results = screener.screen_rsi_divergence(ticker_list=ticker_list, time_frame=time_frame, region=region)
+    results = screener.screen_rsi_divergence(ticker_list=ticker_list, time_frame=data.time_frame, region=data.region)
     current_app.logger.info(f"RSI Divergence Screen completed. Results: {len(results)}")
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
 @screener_bp.route("/screen/universal", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_universal():
-    region = request.args.get("region", "us")
-    current_app.logger.info(f"Universal Screen request: region={region}")
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Universal Screen request: region={data.region}")
 
-    cache_key = ("universal", region)
+    cache_key = ("universal", data.region)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    ticker_list = resolve_region_tickers(region, check_trend=False)
+    ticker_list = resolve_region_tickers(data.region, check_trend=False)
 
     results = screener.screen_universal_dashboard(ticker_list=ticker_list)
     current_app.logger.info(f"Universal Screen completed.")
@@ -585,16 +554,16 @@ def screen_universal():
 
 @screener_bp.route("/screen/quantum", methods=["GET"])
 @handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
 def screen_quantum():
-    region = request.args.get("region", "us")
-    time_frame = request.args.get("time_frame", "1d")
-    current_app.logger.info(f"Quantum Screen request: region={region}, time_frame={time_frame}")
-    cache_key = ("quantum", region, time_frame)
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Quantum Screen request: region={data.region}, time_frame={data.time_frame}")
+    cache_key = ("quantum", data.region, data.time_frame)
     cached = get_cached_screener_result(cache_key)
     if cached:
         return jsonify(cached)
 
-    results = screener.screen_quantum_setups(region=region, time_frame=time_frame)
+    results = screener.screen_quantum_setups(region=data.region, time_frame=data.time_frame)
 
     api_results = [
         {
@@ -624,41 +593,23 @@ def screen_quantum():
 
 @screener_bp.route("/screen/check", methods=["GET"])
 @handle_screener_errors
+@validate_schema(CheckStockRequest, source='args')
 def check_unified_stock():
-    ticker_query = request.args.get("ticker", "").strip()
-    strategy = request.args.get("strategy", "isa").lower()
-    time_frame = request.args.get("time_frame", "1d")
-    entry_price_str = request.args.get("entry_price", "").strip()
-    entry_date_str = request.args.get("entry_date", "").strip()
-
+    data: CheckStockRequest = g.validated_data
     # Position Sizing Param (Default £76k)
-    account_size = DEFAULT_ACCOUNT_SIZE
-    acc_size_str = request.args.get("account_size", "").strip()
-    if acc_size_str:
-        try:
-            account_size = float(acc_size_str)
-        except ValueError:
-            pass
+    account_size = data.account_size if data.account_size is not None else DEFAULT_ACCOUNT_SIZE
 
-    current_app.logger.info(f"Check Stock: {ticker_query}, Strategy: {strategy}")
+    current_app.logger.info(f"Check Stock: {data.ticker}, Strategy: {data.strategy}")
 
-    if not ticker_query:
-        return jsonify({"error": "No ticker provided"}), 400
-
-    ticker = resolve_ticker(ticker_query)
+    ticker = resolve_ticker(data.ticker)
     if not ticker:
-        ticker = ticker_query.upper()
+        ticker = data.ticker.upper()
 
-    entry_price = None
-    if entry_price_str:
-        try:
-            entry_price = float(entry_price_str)
-        except ValueError:
-            pass  # Ignore invalid float format
+    entry_price = data.entry_price
 
-    if entry_price is None and entry_date_str:
+    if entry_price is None and data.entry_date:
             try:
-                dt = datetime.strptime(entry_date_str, "%Y-%m-%d")
+                dt = datetime.strptime(data.entry_date, "%Y-%m-%d")
                 hist = yf.download(ticker, start=dt, end=dt + timedelta(days=5), progress=False, auto_adjust=True)
                 if not hist.empty:
                     try:
@@ -679,12 +630,12 @@ def check_unified_stock():
                 pass
 
     try:
-        result = handle_check_stock(ticker, strategy, time_frame, account_size, entry_price)
+        result = handle_check_stock(ticker, data.strategy, data.time_frame, account_size, entry_price)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
     if not result:
-        current_app.logger.info(f"No results for {ticker} in strategy {strategy}")
-        return jsonify({"error": f"No data returned for {ticker} with strategy {strategy}."}), 404
+        current_app.logger.info(f"No results for {ticker} in strategy {data.strategy}")
+        return jsonify({"error": f"No data returned for {ticker} with strategy {data.strategy}."}), 404
 
     return jsonify(result)

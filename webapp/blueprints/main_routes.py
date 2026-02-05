@@ -5,6 +5,8 @@ import json
 from option_auditor.main_analyzer import refresh_dashboard_data
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import send_email_notification
+from webapp.validation import validate_schema
+from webapp.schemas import FeedbackRequest
 
 main_bp = Blueprint('main', __name__)
 
@@ -14,30 +16,26 @@ def get_db():
     return g.storage_provider
 
 @main_bp.route("/feedback", methods=["POST"])
+@validate_schema(FeedbackRequest, source='form')
 def feedback():
-    message = request.form.get("message", "").strip()
-    name = request.form.get("name", "").strip() or None
-    email = request.form.get("email", "").strip() or None
+    data: FeedbackRequest = g.validated_data
     username = session.get("username", "Anonymous")
 
-    if message:
-        storage = get_db()
-        try:
-            storage.save_feedback(username, message, name=name, email=email)
+    storage = get_db()
+    try:
+        storage.save_feedback(username, data.message, name=data.name, email=data.email)
 
-            # --- NEW CODE: Send Email ---
-            email_body = f"User: {username}\nName: {name or 'N/A'}\nEmail: {email or 'N/A'}\n\nMessage:\n{message}"
-            # Run in background to avoid blocking response
-            threading.Thread(target=send_email_notification, args=(f"New Feedback from {username}", email_body)).start()
-            # ---------------------------
+        # --- NEW CODE: Send Email ---
+        email_body = f"User: {username}\nName: {data.name or 'N/A'}\nEmail: {data.email or 'N/A'}\n\nMessage:\n{data.message}"
+        # Run in background to avoid blocking response
+        threading.Thread(target=send_email_notification, args=(f"New Feedback from {username}", email_body)).start()
+        # ---------------------------
 
-            current_app.logger.info(f"Feedback received from {username}")
-            return jsonify({"success": True, "message": "Feedback submitted"})
-        except Exception as e:
-            current_app.logger.error(f"Feedback error: {e}")
-            return jsonify({"error": "Failed to submit feedback"}), 500
-    else:
-        return jsonify({"error": "Message cannot be empty"}), 400
+        current_app.logger.info(f"Feedback received from {username}")
+        return jsonify({"success": True, "message": "Feedback submitted"})
+    except Exception as e:
+        current_app.logger.error(f"Feedback error: {e}")
+        return jsonify({"error": "Failed to submit feedback"}), 500
 
 @main_bp.route("/dashboard")
 def dashboard():
