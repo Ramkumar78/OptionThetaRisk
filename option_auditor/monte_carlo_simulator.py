@@ -26,40 +26,37 @@ class MonteCarloSimulator:
         # Convert to decimal returns for calculation (e.g., 0.05)
         returns_decimal = np.array(self.returns_pct) / 100.0
 
-        final_equities = []
-        max_drawdowns = []
-        ruin_count = 0
-
-        # Run Simulations
-        # Vectorized approach might be complex with path dependence (drawdown),
-        # so we'll use a loop for now, optimizing where possible.
-
-        # We can pre-generate all random indices at once
+        # Pre-generate all random indices at once
         # Shape: (simulations, n_trades)
         rng = np.random.default_rng()
         random_indices = rng.integers(0, n_trades, size=(simulations, n_trades))
 
         # Select returns: (simulations, n_trades)
+        # This creates a copy
         sim_returns = returns_decimal[random_indices]
 
         # Calculate Equity Curves
-        # Start with 1.0 (relative), then multiply by (1 + r)
-        # cumulative product along axis 1
-        equity_curves = np.cumprod(1 + sim_returns, axis=1) * self.initial_capital
+        # Start with initial_capital, then multiply by (1 + r)
+        # Pre-allocate full array to avoid copy during hstack
+        # Shape: (simulations, n_trades + 1)
+        equity_curves = np.empty((simulations, n_trades + 1), dtype=np.float64)
+        equity_curves[:, 0] = self.initial_capital
 
-        # Prepend initial capital to each curve for correct drawdown calc
-        # shape becomes (simulations, n_trades + 1)
-        start_caps = np.full((simulations, 1), self.initial_capital)
-        equity_curves = np.hstack((start_caps, equity_curves))
+        # Calculate cumulative returns
+        # sim_returns becomes (1 + r)
+        np.add(sim_returns, 1.0, out=sim_returns)
 
-        # Final Equities
-        final_equities = equity_curves[:, -1]
+        # Calculate cumulative product into the allocated buffer (columns 1 to end)
+        np.cumprod(sim_returns, axis=1, out=equity_curves[:, 1:])
 
-        # Calculate Percentiles of Equity Curves
+        # Scale by initial capital (in-place)
+        np.multiply(equity_curves[:, 1:], self.initial_capital, out=equity_curves[:, 1:])
+
+        # Calculate Percentiles of Equity Curves ONCE
         # Axis 0 is simulations, Axis 1 is steps
         percentiles = [5, 25, 50, 75, 95]
+        # shape: (5, n_trades + 1)
         equity_quantiles = np.percentile(equity_curves, percentiles, axis=0)
-        curve_percentiles = np.percentile(equity_curves, percentiles, axis=0)
 
         # Sample Curves
         # If simulations > 5, take 5 random. Else take all.
@@ -70,72 +67,67 @@ class MonteCarloSimulator:
         # Max Drawdown Calculation
         # Running Max
         running_max = np.maximum.accumulate(equity_curves, axis=1)
-        # Drawdown at each point
-        drawdowns = (equity_curves - running_max) / running_max
+        # Drawdown at each point: (equity - peak) / peak = (equity/peak) - 1
+        drawdowns = (equity_curves / running_max) - 1.0
+
         # Max Drawdown for each simulation (min value since drawdowns are negative or 0)
         max_dds = np.min(drawdowns, axis=1) # e.g., -0.20 for 20% DD
 
-        # Risk of Ruin (Equity < 0 or DD > 50%? Usually Ruin is losing everything or hitting a hard stop)
-        # Let's define Ruin as hitting < 50% of starting capital (severe) or 0
-        # Common def: Ruin is blowing up account. Let's say < 0.
-        # But in pure compounding, it never hits < 0 unless return is <= -100%.
-        # If returns are simple PnL added, it can go < 0. Backtester uses simple compounding logic?
-        # UnifiedBacktester: self.equity -= (shares * price); self.equity += proceeds.
-        # It buys shares. If price goes to 0, you lose 100% of trade.
-        # So return is -1. 1 + (-1) = 0. Equity becomes 0.
-
-        # Let's define Ruin as > 50% Drawdown
+        # Risk of Ruin (> 50% Drawdown)
         ruin_mask = max_dds < -0.50
-        ruin_count = np.sum(ruin_mask)
+        prob_ruin = (np.sum(ruin_mask) / simulations) * 100.0
 
-        prob_ruin = (ruin_count / simulations) * 100.0
+        # Stats from Percentiles (last column corresponds to final equity distribution)
+        # 0: p5, 1: p25, 2: p50 (median), 3: p75, 4: p95
+        pct5_final = equity_quantiles[0, -1]
+        median_final = equity_quantiles[2, -1]
+        pct95_final = equity_quantiles[4, -1]
 
-        # Stats
-        median_return = np.median(final_equities)
-        pct95_return = np.percentile(final_equities, 95)
-        pct5_return = np.percentile(final_equities, 5) # Worst 5% case
+        # Median Drawdown & Worst Case Drawdown
+        median_dd = np.median(max_dds) * 100
+        pct95_dd = np.percentile(max_dds, 5) * 100
 
-        median_dd = np.median(max_dds) * 100 # Convert back to %
-        pct95_dd = np.percentile(max_dds, 5) * 100 # 5th percentile is the "95% confidence worst case" (negative number)
-        # e.g. if median is -10%, 5th percentile might be -30%.
-
-        # Expected Return (CAGR-like? No just total return over the period)
-        avg_final_equity = np.mean(final_equities)
+        # Expected Return (Average) - Mean is separate from percentiles
+        avg_final_equity = np.mean(equity_curves[:, -1])
         avg_return_pct = ((avg_final_equity - self.initial_capital) / self.initial_capital) * 100
 
-        # Calculate Equity Curve Percentiles (Cone)
-        # shape: (5, n_trades + 1)
-        percentiles = [5, 25, 50, 75, 95]
-        equity_quantiles = np.percentile(equity_curves, percentiles, axis=0)
+        worst_case_return = ((pct5_final - self.initial_capital)/self.initial_capital)*100
+        best_case_return = ((pct95_final - self.initial_capital)/self.initial_capital)*100
+
+        # Extract percentile lists once
+        p05_list = np.round(equity_quantiles[0], 2).tolist()
+        p25_list = np.round(equity_quantiles[1], 2).tolist()
+        p50_list = np.round(equity_quantiles[2], 2).tolist()
+        p75_list = np.round(equity_quantiles[3], 2).tolist()
+        p95_list = np.round(equity_quantiles[4], 2).tolist()
 
         curves_data = {
-            "p05": np.round(equity_quantiles[0], 2).tolist(),
-            "p25": np.round(equity_quantiles[1], 2).tolist(),
-            "p50": np.round(equity_quantiles[2], 2).tolist(),
-            "p75": np.round(equity_quantiles[3], 2).tolist(),
-            "p95": np.round(equity_quantiles[4], 2).tolist(),
+            "p05": p05_list,
+            "p25": p25_list,
+            "p50": p50_list,
+            "p75": p75_list,
+            "p95": p95_list,
         }
 
         return {
             "simulations": simulations,
             "initial_capital": self.initial_capital,
             "prob_ruin_50pct": round(prob_ruin, 2), # % chance of 50% drawdown
-            "median_final_equity": round(median_return, 2),
+            "median_final_equity": round(median_final, 2),
             "avg_return_pct": round(avg_return_pct, 2),
-            "worst_case_return": round(((pct5_return - self.initial_capital)/self.initial_capital)*100, 2),
-            "best_case_return": round(((pct95_return - self.initial_capital)/self.initial_capital)*100, 2),
+            "worst_case_return": round(worst_case_return, 2),
+            "best_case_return": round(best_case_return, 2),
             "median_drawdown": round(median_dd, 2),
             "worst_case_drawdown": round(pct95_dd, 2), # 95% Confidence Level Max Drawdown
             "equity_curve_percentiles": {
-                "p5": curve_percentiles[0].tolist(),
-                "p25": curve_percentiles[1].tolist(),
-                "p50": curve_percentiles[2].tolist(),
-                "p75": curve_percentiles[3].tolist(),
-                "p95": curve_percentiles[4].tolist(),
+                "p5": p05_list,
+                "p25": p25_list,
+                "p50": p50_list,
+                "p75": p75_list,
+                "p95": p95_list,
             },
             "sample_equity_curves": sample_curves.tolist(),
             "equity_curves": curves_data,
-            "sample_equity_curves": sample_curves.tolist(),
             "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >50% drawdown."
         }
 
