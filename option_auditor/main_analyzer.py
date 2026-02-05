@@ -167,6 +167,46 @@ def _format_legs(strat) -> str:
     # Simple alpha sort is good enough for V1 "390P, 400P"
     return "/".join(sorted(list(items)))
 
+def _build_risk_map(open_positions: List[Dict]) -> List[Dict]:
+    risk_map = []
+    for row in open_positions:
+        pnl_proxy = 0.0
+        try:
+            qty = row.get("qty_open", 0)
+            cp = row.get("current_price")
+            contract = row.get("contract", "")
+
+            if cp and contract and " " in contract:
+                 parts = contract.split(" ")
+                 right = parts[0]
+                 strike = float(parts[1])
+
+                 moneyness = 0.0
+                 if right == 'C':
+                     moneyness = (cp - strike) / strike
+                 elif right == 'P':
+                     moneyness = (strike - cp) / strike
+
+                 if qty > 0:
+                     pnl_proxy = moneyness * 100
+                 else:
+                     pnl_proxy = -moneyness * 100
+        except:
+            pass
+
+        size = 0.0
+        if row.get("avg_price") and row.get("qty_open"):
+             size = abs(row["qty_open"]) * 100 * row["avg_price"]
+
+        risk_map.append({
+             "symbol": row.get("symbol"),
+             "dte": row.get("dte", 0),
+             "pnl_pct": round(pnl_proxy, 2),
+             "size": round(size, 2),
+             "risk_alert": row.get("risk_alert")
+        })
+    return risk_map
+
 def refresh_dashboard_data(saved_data: Dict) -> Dict:
     """
     Refreshes the 'open_positions' in the saved analysis result with live prices.
@@ -325,44 +365,7 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
     data["discipline_details"] = d_details
 
     # Risk Map Generation
-    risk_map = []
-    for row in open_positions:
-        pnl_proxy = 0.0
-        try:
-            qty = row.get("qty_open", 0)
-            cp = row.get("current_price")
-            contract = row.get("contract", "")
-
-            if cp and contract and " " in contract:
-                 parts = contract.split(" ")
-                 right = parts[0]
-                 strike = float(parts[1])
-
-                 moneyness = 0.0
-                 if right == 'C':
-                     moneyness = (cp - strike) / strike
-                 elif right == 'P':
-                     moneyness = (strike - cp) / strike
-
-                 if qty > 0:
-                     pnl_proxy = moneyness * 100
-                 else:
-                     pnl_proxy = -moneyness * 100
-        except:
-            pass
-
-        size = 0.0
-        if row.get("avg_price") and row.get("qty_open"):
-             size = abs(row["qty_open"]) * 100 * row["avg_price"]
-
-        risk_map.append({
-             "symbol": row.get("symbol"),
-             "dte": row.get("dte", 0),
-             "pnl_pct": round(pnl_proxy, 2),
-             "size": round(size, 2),
-             "risk_alert": row.get("risk_alert")
-        })
-    data["risk_map"] = risk_map
+    data["risk_map"] = _build_risk_map(open_positions)
 
     return data
 
@@ -824,44 +827,7 @@ def analyze_csv(csv_path: Optional[str] = None,
 
     # --- NEW: Calculate Discipline Score & Risk Map ---
     d_score, d_details = calculate_discipline_score(strategies, open_rows)
-
-    risk_map = []
-    for row in open_rows:
-        pnl_proxy = 0.0
-        try:
-            qty = row.get("qty_open", 0)
-            cp = row.get("current_price")
-            contract = row.get("contract", "")
-
-            if cp and contract and " " in contract:
-                 parts = contract.split(" ")
-                 right = parts[0]
-                 strike = float(parts[1])
-
-                 moneyness = 0.0
-                 if right == 'C':
-                     moneyness = (cp - strike) / strike
-                 elif right == 'P':
-                     moneyness = (strike - cp) / strike
-
-                 if qty > 0:
-                     pnl_proxy = moneyness * 100
-                 else:
-                     pnl_proxy = -moneyness * 100
-        except:
-            pass
-
-        size = 0.0
-        if row.get("avg_price") and row.get("qty_open"):
-             size = abs(row["qty_open"]) * 100 * row["avg_price"]
-
-        risk_map.append({
-             "symbol": row.get("symbol"),
-             "dte": row.get("dte", 0),
-             "pnl_pct": round(pnl_proxy, 2),
-             "size": round(size, 2),
-             "risk_alert": row.get("risk_alert")
-        })
+    risk_map = _build_risk_map(open_rows)
 
     return {
         "discipline_score": d_score,
