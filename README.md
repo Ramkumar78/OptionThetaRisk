@@ -2,6 +2,7 @@
 
 **Automated Risk Auditing, ISA Screening, and Strategy Backtesting.**
 
+[![Build & Security Check](https://github.com/Ramkumar78/OptionThetaRisk/actions/workflows/ci.yml/badge.svg)](https://github.com/Ramkumar78/OptionThetaRisk/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://trade-auditor.onrender.com/)
