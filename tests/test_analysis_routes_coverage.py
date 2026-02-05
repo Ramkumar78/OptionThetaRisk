@@ -81,7 +81,7 @@ def test_market_data_structure_mismatch(mock_fetch, client):
 
     resp = client.post("/analyze/market-data", json={"ticker": "AAPL"})
     assert resp.status_code == 500
-    assert "not found in data structure" in resp.get_json()["error"]
+    assert "structure mismatch" in resp.get_json()["error"]
 
 # --- Greeks Tests ---
 

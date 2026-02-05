@@ -70,16 +70,3 @@ def handle_screener_errors(f):
             current_app.logger.exception(f"Screener Error in {f.__name__}: {e}")
             return jsonify({"error": str(e)}), 500
     return wrapper
-
-def handle_api_error(f):
-    """
-    Decorator to handle exceptions in API routes.
-    """
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except Exception as e:
-            current_app.logger.exception(f"API Error in {f.__name__}: {e}")
-            return jsonify({"error": str(e)}), 500
-    return wrapper
