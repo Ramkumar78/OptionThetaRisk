@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
-from option_auditor.main_analyzer import analyze_csv, _detect_broker
-from option_auditor.parsers import TastytradeParser, TastytradeFillsParser
+from option_auditor.main_analyzer import analyze_csv
+from option_auditor.parsers import detect_broker, TastytradeParser, TastytradeFillsParser
 import option_auditor.main_analyzer as aud
 import io
 from datetime import datetime
@@ -12,15 +12,15 @@ def make_tasty_df(rows):
 
 def test_detect_broker():
     df = make_tasty_df([{"Underlying Symbol": "SPY"}])
-    assert _detect_broker(df) == "tasty"
+    assert detect_broker(df) == "tasty"
 
     df = make_tasty_df([{"Description": "FOO", "Symbol": "BAR"}])
-    assert _detect_broker(df) == "tasty"
+    assert detect_broker(df) == "tasty"
 
     df = make_tasty_df([{"Other": "Data"}])
-    assert _detect_broker(df) is None
+    assert detect_broker(df) is None
 
-@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+@patch('option_auditor.main_analyzer.fetch_live_prices', return_value={})
 def test_basic_analysis(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 1.0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Call"},
@@ -56,7 +56,7 @@ def test_no_options_trades():
     res = analyze_csv(csv_buffer)
     assert "error" in res
 
-@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+@patch('option_auditor.main_analyzer.fetch_live_prices', return_value={})
 def test_verdict_logic(mock_fetch):
     # Case 1: Green Flag (need 10+ trades, all wins or mostly wins)
     rows1 = [
@@ -133,7 +133,7 @@ def test_verdict_logic(mock_fetch):
     res2 = analyze_csv(csv_buffer, style="income")
     assert "Red Flag: Negative Income" in res2['verdict']
 
-@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+@patch('option_auditor.main_analyzer.fetch_live_prices', return_value={})
 def test_build_strategies_same_day_different_strategies(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-02-21", "Strike Price": 400, "Option Type": "Call"},
@@ -159,7 +159,7 @@ def test_build_strategies_empty_df():
 def test_sym_desc_unknown_symbol():
     assert aud._sym_desc("UNKNOWN") == "Options on UNKNOWN"
 
-@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+@patch('option_auditor.main_analyzer.fetch_live_prices', return_value={})
 def test_buying_power_calculation(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Buy to Open", "Price": 1.0, "Commissions and Fees": 0.0, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
@@ -174,7 +174,7 @@ def test_buying_power_calculation(mock_fetch):
     res_zero = analyze_csv(csv_buffer, net_liquidity_now=0, buying_power_available_now=0)
     assert res_zero["buying_power_utilized_percent"] is None
 
-@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+@patch('option_auditor.main_analyzer.fetch_live_prices', return_value={})
 def test_rolling_trade_detection(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "SPY", "Quantity": 1, "Action": "Sell to Open", "Price": 1.0, "Commissions and Fees": 0, "Expiration Date": "2025-01-10", "Strike Price": 400, "Option Type": "Put"},
@@ -207,7 +207,7 @@ def test_group_contracts_with_open_empty_df():
     assert len(closed) == 0
     assert len(open) == 0
 
-@patch('option_auditor.main_analyzer._fetch_live_prices', return_value={})
+@patch('option_auditor.main_analyzer.fetch_live_prices', return_value={})
 def test_no_closed_trades(mock_fetch):
     df = make_tasty_df([
         {"Time": "2025-01-01 10:00", "Underlying Symbol": "MSFT", "Quantity": 1, "Action": "Buy to Open", "Price": 1.00, "Commissions and Fees": 0.10, "Expiration Date": "2025-02-21", "Strike Price": 500, "Option Type": "Put"},
@@ -221,7 +221,7 @@ def test_no_closed_trades(mock_fetch):
 
 # --- Migrated from test_main_analyzer_coverage.py ---
 
-@patch('option_auditor.main_analyzer._fetch_live_prices')
+@patch('option_auditor.main_analyzer.fetch_live_prices')
 def test_refresh_dashboard_data_redefined(mock_fetch_prices):
     saved_data = {
         "summary": {"total_pnl": 100},
@@ -249,7 +249,7 @@ def test_refresh_dashboard_data_redefined(mock_fetch_prices):
     assert pos["current_price"] == 155.0
 
 
-@patch('option_auditor.main_analyzer._fetch_live_prices')
+@patch('option_auditor.main_analyzer.fetch_live_prices')
 def test_refresh_dashboard_data_risk(mock_fetch_prices):
     saved_data = {
         "summary": {"total_pnl": 100},

@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from option_auditor.main_analyzer import _check_itm_risk
+from option_auditor.risk_analyzer import check_itm_risk
 from option_auditor.models import TradeGroup, Leg
 
 # Mock prices
@@ -29,7 +29,7 @@ def test_bull_put_spread_risk_not_flagged():
 
     open_groups = [g1, g2]
 
-    risky, amount, details = _check_itm_risk(open_groups, PRICES)
+    risky, amount, details = check_itm_risk(open_groups, PRICES)
 
     # Assert
     assert not risky, f"Bull Put Spread at 95 (Short 100P, Long 90P) should NOT be flagged as risky. Details: {details}"
@@ -56,7 +56,7 @@ def test_bull_put_spread_deep_itm_is_risky():
 
     open_groups = [g1, g2]
 
-    risky, amount, details = _check_itm_risk(open_groups, prices_deep_itm)
+    risky, amount, details = check_itm_risk(open_groups, prices_deep_itm)
 
     # Assert
     assert risky, "Bull Put Spread deep ITM (Short 100P, Long 90P at 80) SHOULD be flagged as risky."
@@ -75,7 +75,7 @@ def test_short_put_unhedged_is_risky():
     g1 = TradeGroup(contract_id="XYZ:::P100", symbol="XYZ", expiry=None, strike=100.0, right='P')
     g1.add_leg(Leg(ts=ts, qty=-1, price=0, fees=0, proceeds=0))
 
-    risky, amount, details = _check_itm_risk([g1], prices)
+    risky, amount, details = check_itm_risk([g1], prices)
     assert risky
     assert amount == 600.0
 
@@ -98,6 +98,6 @@ def test_covered_call_handling():
     g2 = TradeGroup(contract_id="XYZ:::STOCK", symbol="XYZ", expiry=None, strike=None, right=None)
     g2.add_leg(Leg(ts=ts, qty=100, price=0, fees=0, proceeds=0))
 
-    risky, amount, details = _check_itm_risk([g1, g2], prices)
+    risky, amount, details = check_itm_risk([g1, g2], prices)
 
     assert not risky, "Covered Call should NOT be risky if stock is accounted for."

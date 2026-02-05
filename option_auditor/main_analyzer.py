@@ -13,6 +13,11 @@ from collections import defaultdict
 import copy
 import logging
 
+from option_auditor.common.price_utils import normalize_ticker, fetch_live_prices
+from option_auditor.risk_analyzer import check_itm_risk, calculate_discipline_score
+from option_auditor.parsers import detect_broker
+from option_auditor.monte_carlo_simulator import run_simple_monte_carlo
+
 logger = logging.getLogger(__name__)
 
 def _calculate_drawdown(strategies: List[Any]) -> float:
@@ -106,20 +111,6 @@ def _calculate_portfolio_curve(strategies: List[Any]) -> List[Dict]:
 
     return data_points
 
-def _detect_broker(df: pd.DataFrame) -> Optional[str]:
-    cols = {c.strip(): True for c in df.columns}
-    if "Underlying Symbol" in cols:
-        return "tasty"
-    if "Description" in cols and "Symbol" in cols:
-        return "tasty"
-    # IBKR Detection
-    if "ClientAccountID" in cols or "IBCommission" in cols:
-        return "ibkr"
-    # Generic IBKR Flex match
-    if "Comm/Fee" in cols and "T. Price" in cols:
-        return "ibkr"
-    return None
-
 def _group_contracts_with_open(legs_df: pd.DataFrame) -> Tuple[List[TradeGroup], List[TradeGroup]]:
     contract_map: Dict[str, List[TradeGroup]] = {}
     closed_groups: List[TradeGroup] = []
@@ -160,180 +151,6 @@ def _sym_desc(sym: str) -> str:
         return f"Options on {human}"
     return f"Options on {key}"
 
-def _normalize_ticker(broker_symbol: str) -> str:
-    """Maps broker symbols to yfinance tickers."""
-    if not isinstance(broker_symbol, str):
-        return str(broker_symbol)
-    s = broker_symbol.upper().strip()
-
-    # Map common Indices
-    index_map = {
-        "SPX": "^SPX", "VIX": "^VIX", "DJX": "^DJI", "NDX": "^NDX", "RUT": "^RUT"
-    }
-    if s in index_map:
-        return index_map[s]
-
-    # Map Futures (Tastytrade uses /ES, Yahoo uses ES=F)
-    if s.startswith("/"):
-        return f"{s[1:]}=F"
-
-    # Map Classes (BRK/B -> BRK-B)
-    if "/" in s:
-        return s.replace("/", "-")
-
-    return s
-
-def _fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
-    """
-    Fetches live prices for a list of symbols using yfinance.
-    Returns a dictionary mapping symbol -> current_price.
-    Optimized to use batch downloading to prevent timeouts.
-    """
-    if not symbols:
-        return {}
-
-    # Filter out empty or non-string symbols
-    valid_symbols = [s for s in symbols if isinstance(s, str) and s]
-    if not valid_symbols:
-        return {}
-
-    # Deduplicate
-    unique_symbols = list(set(valid_symbols))
-    price_map = {}
-
-    try:
-        # Batch download "Last Price" (Close) for all tickers
-        # period="1d" gives us the most recent day's data
-        # group_by='ticker' ensures we can handle multiple tickers cleanly
-        # threads=True for parallel fetching
-        # auto_adjust=True to suppress warnings and get adjusted close
-        # timeout=20 to ensure we don't hang forever
-
-        # Note: yf.download returns a MultiIndex DataFrame if multiple tickers are passed
-        # Columns: (Price, Ticker) or (Ticker, Price) if group_by='ticker'
-
-        # If only 1 symbol, it returns a simple DataFrame
-        # We handle both cases.
-
-        if len(unique_symbols) == 1:
-            sym = unique_symbols[0]
-            df = yf.download(sym, period="1d", progress=False, auto_adjust=True)
-            if not df.empty:
-                # Handle potential MultiIndex return from yfinance even for single ticker
-                close_val = df["Close"].iloc[-1]
-                if isinstance(close_val, pd.Series):
-                    price = float(close_val.iloc[0])
-                else:
-                    price = float(close_val)
-                price_map[sym] = price
-        else:
-            # Batch
-            tickers_str = " ".join(unique_symbols)
-            df = yf.download(tickers_str, period="1d", group_by='ticker', threads=True, progress=False, auto_adjust=True)
-
-            for sym in unique_symbols:
-                try:
-                    # Check if symbol is in columns
-                    if sym in df.columns.levels[0]:
-                        sym_df = df[sym]
-                        # Drop NaNs to find valid data
-                        sym_df = sym_df.dropna(how='all')
-                        if not sym_df.empty:
-                            # Get last close
-                            close_val = sym_df["Close"].iloc[-1]
-                            if isinstance(close_val, pd.Series):
-                                price = float(close_val.iloc[0])
-                            else:
-                                price = float(close_val)
-                            price_map[sym] = price
-                except Exception as e:
-                    logger.debug(f"Failed to extract batch price for {sym}: {e}")
-
-    except Exception as e:
-        logger.warning(f"Batch price fetch failed: {e}")
-        # Fallback to individual fetch if batch explodes (unlikely but safe)
-        pass
-
-    # Fallback for missing symbols (e.g. if batch failed for specific ones or delisted)
-    # We only try individual fetch for symbols NOT found in batch
-    missing = [s for s in unique_symbols if s not in price_map]
-
-    # Limit fallback attempts to avoid timeout if there are many missing
-    # e.g. max 5 individual retries
-    if missing:
-        for sym in missing[:5]:
-            try:
-                t = yf.Ticker(sym)
-                # Try fast_info
-                if hasattr(t, "fast_info"):
-                    val = t.fast_info.get("last_price")
-                    if val is not None and not pd.isna(val):
-                        price_map[sym] = float(val)
-                        continue
-
-                # Try history as last resort
-                hist = t.history(period="1d")
-                if not hist.empty:
-                    price_map[sym] = float(hist["Close"].iloc[-1])
-            except Exception as e:
-                logger.debug(f"Fallback price fetch failed for {sym}: {e}")
-
-    return price_map
-
-def _check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> Tuple[bool, float, List[str]]:
-    """
-    Checks Net Intrinsic Risk per symbol to handle Spreads and Covered Calls correctly.
-    Returns (is_risky_flag, total_itm_amount, list_of_risk_descriptions).
-    """
-    risky = False
-    total_net_exposure = 0.0
-    details = []
-
-    # 1. Group positions by Symbol
-    by_symbol = defaultdict(list)
-    for g in open_groups:
-        if g.symbol in prices:
-            by_symbol[g.symbol].append(g)
-
-    # 2. Analyze Net Risk per Symbol
-    for symbol, groups in by_symbol.items():
-        current_price = prices[symbol]
-        net_intrinsic_val = 0.0
-
-        # Calculate the Net Liquidation Value of options if expired NOW
-        for g in groups:
-            qty = g.qty_net
-
-            # Stock (Treat as asset/liability at full market value)
-            # Retained to ensure Covered Calls are handled correctly despite not being in the user snippet
-            if not g.strike or g.right not in ['C', 'P']:
-                net_intrinsic_val += current_price * qty
-                continue
-
-            if g.strike and g.right:
-                intrinsic = 0.0
-                if g.right == 'C': # Call
-                    # Value = Max(0, Price - Strike)
-                    val = max(0.0, current_price - g.strike)
-                    intrinsic = val * qty * 100
-                elif g.right == 'P': # Put
-                    # Value = Max(0, Strike - Price)
-                    val = max(0.0, g.strike - current_price)
-                    intrinsic = val * qty * 100
-
-                # Add to net total (Longs add value, Shorts subtract value)
-                net_intrinsic_val += intrinsic
-
-        # 3. Verdict on this Symbol
-        # If the Net Intrinsic Value is significantly negative (e.g. < -$500),
-        # it means the Short legs are ITM and NOT fully covered by Long legs.
-        if net_intrinsic_val < -500:
-            risky = True
-            total_net_exposure += abs(net_intrinsic_val)
-            details.append(f"{symbol}: Net ITM Exposure -${abs(net_intrinsic_val):,.0f} (Unhedged)")
-
-    return risky, total_net_exposure, details
-
 def _format_legs(strat) -> str:
     """Extracts a concise string of strikes involved in the strategy."""
     # Collect unique contract descriptions (e.g. "400P", "150C")
@@ -350,108 +167,6 @@ def _format_legs(strat) -> str:
     # Simple alpha sort is good enough for V1 "390P, 400P"
     return "/".join(sorted(list(items)))
 
-def _run_monte_carlo_simulation(strategies: List[Any], start_equity: float, num_sims: int = 1000, forecast_trades: int = 50) -> Dict:
-    """
-    Runs a Monte Carlo simulation to project future portfolio performance.
-    Returns: Probability of Ruin, Median Outcome, and 5th Percentile (Worst Case).
-    """
-    if not strategies or len(strategies) < 10:
-        return {"error": "Need at least 10 trades for Monte Carlo"}
-
-    # 1. Extract Trade Statistics
-    # We use the actual PnL distribution, not just averages, to capture "fat tails" (outliers)
-    pnls = [s.net_pnl for s in strategies]
-
-    # 2. Run Simulations (Vectorized with NumPy for speed)
-    # We simulate 'forecast_trades' into the future, 'num_sims' times.
-    # We randomly sample from your HISTORICAL PnL list.
-    # This assumes your future performance distribution matches your past.
-
-    # Shape: (num_sims, forecast_trades)
-    simulated_trades = np.random.choice(pnls, size=(num_sims, forecast_trades), replace=True)
-
-    # Cumulative Sum to get Equity Curve
-    # Axis 1 = across the trades in a single simulation
-    sim_curves = np.cumsum(simulated_trades, axis=1) + start_equity
-
-    # 3. Calculate Metrics
-
-    # Ending Equity for all simulations
-    ending_equities = sim_curves[:, -1]
-
-    # Risk of Ruin (Probability that equity drops below 50% of start at ANY point)
-    # Check if ANY point in the curve < start_equity * 0.5
-    ruin_threshold = start_equity * 0.5
-    min_equities = np.min(sim_curves, axis=1)
-    ruin_count = np.sum(min_equities < ruin_threshold)
-    risk_of_ruin_pct = (ruin_count / num_sims) * 100.0
-
-    # Percentiles
-    median_outcome = np.percentile(ending_equities, 50)
-    worst_case_outcome = np.percentile(ending_equities, 5) # 5th percentile (95% confidence you won't do worse)
-    best_case_outcome = np.percentile(ending_equities, 95)
-
-    return {
-        "simulations": num_sims,
-        "forecast_trades": forecast_trades,
-        "risk_of_ruin_50pct": round(float(risk_of_ruin_pct), 1),
-        "median_equity": round(float(median_outcome), 2),
-        "worst_case_equity": round(float(worst_case_outcome), 2),
-        "best_case_equity": round(float(best_case_outcome), 2),
-        "expected_profit": round(float(median_outcome - start_equity), 2)
-    }
-
-def _calculate_discipline_score(strategies: List[Any], open_positions: List[Dict]) -> Tuple[int, List[str]]:
-    """
-    Calculates a 'Trader Discipline Score' (0-100) based on behavioral metrics.
-    """
-    score = 100
-    details = []
-
-    # 1. Strategy Analysis (History)
-    # Penalize Revenge Trading
-    revenge_count = sum(1 for s in strategies if getattr(s, "is_revenge", False))
-    if revenge_count > 0:
-        penalty = revenge_count * 10
-        score -= penalty
-        details.append(f"Revenge Trading: -{penalty} pts ({revenge_count} instances)")
-
-    # Reward Early Loss Cutting
-    # Definition: Loss trade closed faster than average win/loss hold time?
-    # Simple proxy: Loss < average hold time * 0.5
-    avg_hold = 0.0
-    if strategies:
-        avg_hold = np.mean([s.hold_days() for s in strategies])
-
-    early_cuts = 0
-    for s in strategies:
-        if s.net_pnl < 0 and s.hold_days() < (avg_hold * 0.5):
-            early_cuts += 1
-
-    if early_cuts > 0:
-        bonus = min(20, early_cuts * 2) # Cap bonus
-        score += bonus
-        details.append(f"Cutting Losses Early: +{bonus} pts")
-
-    # 2. Open Position Analysis (Risk Management)
-    # Penalize Gamma Risk (holding < 3 DTE)
-    gamma_risks = 0
-    for p in open_positions:
-        dte = p.get("dte")
-        # Ensure DTE is valid number
-        if dte is not None and isinstance(dte, (int, float)) and dte <= 3:
-            gamma_risks += 1
-
-    if gamma_risks > 0:
-        penalty = gamma_risks * 5
-        score -= penalty
-        details.append(f"Gamma Risk (Held < 3 DTE): -{penalty} pts")
-
-    # Clamp Score
-    score = max(0, min(100, score))
-
-    return score, details
-
 def refresh_dashboard_data(saved_data: Dict) -> Dict:
     """
     Refreshes the 'open_positions' in the saved analysis result with live prices.
@@ -467,8 +182,8 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
     symbols = list({p["symbol"] for p in open_positions if p.get("symbol")})
 
     # 2. Fetch Live Prices
-    norm_map = {s: _normalize_ticker(s) for s in symbols}
-    live_prices = _fetch_live_prices(list(norm_map.values()))
+    norm_map = {s: normalize_ticker(s) for s in symbols}
+    live_prices = fetch_live_prices(list(norm_map.values()))
 
     # Map back to raw symbol
     current_prices = {}
@@ -605,7 +320,7 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
 
     strat_proxies = [StrategyProxy(s) for s in data.get("strategy_groups", [])]
 
-    d_score, d_details = _calculate_discipline_score(strat_proxies, open_positions)
+    d_score, d_details = calculate_discipline_score(strat_proxies, open_positions)
     data["discipline_score"] = d_score
     data["discipline_details"] = d_details
 
@@ -676,7 +391,7 @@ def analyze_csv(csv_path: Optional[str] = None,
             return {"error": f"Failed to read CSV: {str(e)}"}
 
         if broker == "auto" or broker is None:
-            chosen_broker = _detect_broker(df) or "tasty"
+            chosen_broker = detect_broker(df) or "tasty"
         else:
             # Respect explicit choice if provided
             chosen_broker = broker
@@ -782,10 +497,10 @@ def analyze_csv(csv_path: Optional[str] = None,
             raw_symbols = list({g.symbol for g in open_groups if g.symbol})
 
             # 2. Create a map of Raw -> Normalized
-            sym_map = {raw: _normalize_ticker(raw) for raw in raw_symbols}
+            sym_map = {raw: normalize_ticker(raw) for raw in raw_symbols}
 
             # 3. Fetch prices using NORMALIZED symbols
-            fetched_prices = _fetch_live_prices(list(sym_map.values()))
+            fetched_prices = fetch_live_prices(list(sym_map.values()))
 
             # 4. Map back to raw symbols for the risk check logic
             for raw, norm in sym_map.items():
@@ -794,7 +509,7 @@ def analyze_csv(csv_path: Optional[str] = None,
                 else:
                     missing_data_warning.append(raw) # Track failures
 
-            itm_risk_flag, itm_risk_amount, itm_risk_details = _check_itm_risk(open_groups, live_prices)
+            itm_risk_flag, itm_risk_amount, itm_risk_details = check_itm_risk(open_groups, live_prices)
 
         except Exception as e:
             # Log error if needed
@@ -863,7 +578,7 @@ def analyze_csv(csv_path: Optional[str] = None,
     sim_start_equity = net_liquidity_now if net_liquidity_now else (account_size_start if account_size_start else 10000.0)
 
     if len(strategies) >= 10:
-        monte_carlo_results = _run_monte_carlo_simulation(
+        monte_carlo_results = run_simple_monte_carlo(
             strategies,
             start_equity=sim_start_equity,
             num_sims=1000,
@@ -1108,7 +823,7 @@ def analyze_csv(csv_path: Optional[str] = None,
         excel_buffer.seek(0)
 
     # --- NEW: Calculate Discipline Score & Risk Map ---
-    d_score, d_details = _calculate_discipline_score(strategies, open_rows)
+    d_score, d_details = calculate_discipline_score(strategies, open_rows)
 
     risk_map = []
     for row in open_rows:
