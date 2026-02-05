@@ -87,6 +87,13 @@ def test_strategy_market_volatility_check():
 
     assert strategy.check_market_volatility(df_high_vol) == "TRIPPED: HIGH VOLATILITY"
 
+    # Case 3: Custom Multiplier
+    # Use multiplier 2.0. Mean is ~1.81. Threshold 3.62. Current 10. Should trip.
+    assert strategy.check_market_volatility(df_high_vol, volatility_multiplier=2.0) == "TRIPPED: HIGH VOLATILITY"
+
+    # Use multiplier 10.0. Mean ~1.81. Threshold 18.1. Current 10. Should NOT trip.
+    assert strategy.check_market_volatility(df_high_vol, volatility_multiplier=10.0) is None
+
 def test_breaker_status_endpoint():
     """Test that the app exposes breaker status."""
     from webapp.app import app
