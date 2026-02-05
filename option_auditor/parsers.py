@@ -411,3 +411,18 @@ class IBKRParser(TransactionParser):
         out = out[is_valid_opt | is_valid_stock].copy()
 
         return out
+
+def detect_broker(df: pd.DataFrame) -> Optional[str]:
+    """Detects which broker format the DataFrame corresponds to."""
+    cols = {c.strip(): True for c in df.columns}
+    if "Underlying Symbol" in cols:
+        return "tasty"
+    if "Description" in cols and "Symbol" in cols:
+        return "tasty"
+    # IBKR Detection
+    if "ClientAccountID" in cols or "IBCommission" in cols:
+        return "ibkr"
+    # Generic IBKR Flex match
+    if "Comm/Fee" in cols and "T. Price" in cols:
+        return "ibkr"
+    return None

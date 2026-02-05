@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+from typing import List, Dict, Any
 
 logger = logging.getLogger("MonteCarloSimulator")
 
@@ -137,3 +138,54 @@ class MonteCarloSimulator:
             "sample_equity_curves": sample_curves.tolist(),
             "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >50% drawdown."
         }
+
+def run_simple_monte_carlo(strategies: List[Any], start_equity: float, num_sims: int = 1000, forecast_trades: int = 50) -> Dict:
+    """
+    Runs a Monte Carlo simulation to project future portfolio performance.
+    Returns: Probability of Ruin, Median Outcome, and 5th Percentile (Worst Case).
+    """
+    if not strategies or len(strategies) < 10:
+        return {"error": "Need at least 10 trades for Monte Carlo"}
+
+    # 1. Extract Trade Statistics
+    # We use the actual PnL distribution, not just averages, to capture "fat tails" (outliers)
+    pnls = [s.net_pnl for s in strategies]
+
+    # 2. Run Simulations (Vectorized with NumPy for speed)
+    # We simulate 'forecast_trades' into the future, 'num_sims' times.
+    # We randomly sample from your HISTORICAL PnL list.
+    # This assumes your future performance distribution matches your past.
+
+    # Shape: (num_sims, forecast_trades)
+    simulated_trades = np.random.choice(pnls, size=(num_sims, forecast_trades), replace=True)
+
+    # Cumulative Sum to get Equity Curve
+    # Axis 1 = across the trades in a single simulation
+    sim_curves = np.cumsum(simulated_trades, axis=1) + start_equity
+
+    # 3. Calculate Metrics
+
+    # Ending Equity for all simulations
+    ending_equities = sim_curves[:, -1]
+
+    # Risk of Ruin (Probability that equity drops below 50% of start at ANY point)
+    # Check if ANY point in the curve < start_equity * 0.5
+    ruin_threshold = start_equity * 0.5
+    min_equities = np.min(sim_curves, axis=1)
+    ruin_count = np.sum(min_equities < ruin_threshold)
+    risk_of_ruin_pct = (ruin_count / num_sims) * 100.0
+
+    # Percentiles
+    median_outcome = np.percentile(ending_equities, 50)
+    worst_case_outcome = np.percentile(ending_equities, 5) # 5th percentile (95% confidence you won't do worse)
+    best_case_outcome = np.percentile(ending_equities, 95)
+
+    return {
+        "simulations": num_sims,
+        "forecast_trades": forecast_trades,
+        "risk_of_ruin_50pct": round(float(risk_of_ruin_pct), 1),
+        "median_equity": round(float(median_outcome), 2),
+        "worst_case_equity": round(float(worst_case_outcome), 2),
+        "best_case_equity": round(float(best_case_outcome), 2),
+        "expected_profit": round(float(median_outcome - start_equity), 2)
+    }
