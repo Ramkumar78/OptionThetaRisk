@@ -18,6 +18,8 @@ from webapp.schemas import (
     PortfolioPositionsRequest, ScenarioRequest, CorrelationRequest,
     BacktestRequest, MonteCarloRequest, MarketDataRequest
 )
+from webapp.utils import _allowed_filename, handle_api_error
+from option_auditor.common.serialization import serialize_ohlc_data
 
 analysis_bp = Blueprint('analysis', __name__)
 
@@ -31,26 +33,32 @@ def get_db():
 def analyze_portfolio_route():
     try:
         positions = g.validated_data.positions
+@handle_api_error
+def analyze_portfolio_route():
+    data = request.json
+    positions = data.get("positions", [])
 
-        report = portfolio_risk.analyze_portfolio_risk(positions)
-        return jsonify(report)
+    if not positions:
+        return jsonify({"error": "No positions provided"}), 400
 
-    except Exception as e:
-        current_app.logger.exception(f"Portfolio Analysis Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    report = portfolio_risk.analyze_portfolio_risk(positions)
+    return jsonify(report)
 
 @analysis_bp.route("/analyze/portfolio/greeks", methods=["POST"])
 @validate_schema(PortfolioPositionsRequest)
 def analyze_portfolio_greeks_route():
     try:
         positions = g.validated_data.positions
+@handle_api_error
+def analyze_portfolio_greeks_route():
+    data = request.json
+    positions = data.get("positions", [])
 
-        report = portfolio_risk.analyze_portfolio_greeks(positions)
-        return jsonify(report)
+    if not positions:
+        return jsonify({"error": "No positions provided"}), 400
 
-    except Exception as e:
-        current_app.logger.exception(f"Portfolio Greeks Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    report = portfolio_risk.analyze_portfolio_greeks(positions)
+    return jsonify(report)
 
 @analysis_bp.route("/analyze/scenario", methods=["POST"])
 @validate_schema(ScenarioRequest)
@@ -58,13 +66,17 @@ def analyze_scenario_route():
     try:
         positions = g.validated_data.positions
         scenario = g.validated_data.scenario
+@handle_api_error
+def analyze_scenario_route():
+    data = request.json
+    positions = data.get("positions", [])
+    scenario = data.get("scenario", {})
 
-        report = portfolio_risk.analyze_scenario(positions, scenario)
-        return jsonify(report)
+    if not positions:
+        return jsonify({"error": "No positions provided"}), 400
 
-    except Exception as e:
-        current_app.logger.exception(f"Scenario Analysis Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    report = portfolio_risk.analyze_scenario(positions, scenario)
+    return jsonify(report)
 
 @analysis_bp.route("/analyze/correlation", methods=["POST"])
 @validate_schema(CorrelationRequest)
@@ -72,58 +84,75 @@ def analyze_correlation_route():
     try:
         tickers = g.validated_data.tickers
         period = g.validated_data.period
+@handle_api_error
+def analyze_correlation_route():
+    data = request.json
+    tickers = data.get("tickers", [])
 
-        result = calculate_correlation_matrix(tickers, period=period)
+    if isinstance(tickers, str):
+        tickers = [t.strip() for t in tickers.split(',')]
 
-        if "error" in result:
-             return jsonify(result), 400
+    period = data.get("period", "1y")
 
-        return jsonify(result)
+    result = calculate_correlation_matrix(tickers, period=period)
 
-    except Exception as e:
-        current_app.logger.exception(f"Correlation Analysis Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    if "error" in result:
+            return jsonify(result), 400
+
+    return jsonify(result)
 
 @analysis_bp.route("/analyze/backtest", methods=["POST"])
 @validate_schema(BacktestRequest)
+@handle_api_error
 def analyze_backtest_route():
+    data = request.json
+    ticker = data.get("ticker")
+    strategy = data.get("strategy", "master")
     try:
         ticker = g.validated_data.ticker
         strategy = g.validated_data.strategy
         initial_capital = g.validated_data.initial_capital
+        initial_capital = float(data.get("initial_capital", 10000.0))
+    except ValueError:
+        return jsonify({"error": "Initial Capital must be a number"}), 400
 
-        backtester = UnifiedBacktester(ticker, strategy_type=strategy, initial_capital=initial_capital)
-        result = backtester.run()
+    if not ticker:
+        return jsonify({"error": "Ticker required"}), 400
 
-        if "error" in result:
-             return jsonify(result), 400
+    backtester = UnifiedBacktester(ticker, strategy_type=strategy, initial_capital=initial_capital)
+    result = backtester.run()
 
-        return jsonify(result)
+    if "error" in result:
+            return jsonify(result), 400
 
-    except Exception as e:
-        current_app.logger.exception(f"Backtest Analysis Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    return jsonify(result)
 
 @analysis_bp.route("/analyze/monte-carlo", methods=["POST"])
 @validate_schema(MonteCarloRequest)
+@handle_api_error
 def analyze_monte_carlo_route():
+    data = request.json
+    ticker = data.get("ticker")
+    strategy = data.get("strategy", "turtle")
     try:
         ticker = g.validated_data.ticker
         strategy = g.validated_data.strategy
         simulations = g.validated_data.simulations
+        simulations = int(data.get("simulations", 10000))
+    except ValueError:
+        return jsonify({"error": "Simulations must be an integer"}), 400
 
-        backtester = UnifiedBacktester(ticker, strategy_type=strategy)
-        # We can call run_monte_carlo directly, it will run the backtest if needed.
-        result = backtester.run_monte_carlo(simulations=simulations)
+    if not ticker:
+        return jsonify({"error": "Ticker required"}), 400
 
-        if "error" in result:
-             return jsonify(result), 400
+    backtester = UnifiedBacktester(ticker, strategy_type=strategy)
+    # We can call run_monte_carlo directly, it will run the backtest if needed.
+    result = backtester.run_monte_carlo(simulations=simulations)
 
-        return jsonify(result)
+    if "error" in result:
+            return jsonify(result), 400
 
-    except Exception as e:
-        current_app.logger.exception(f"Monte Carlo Analysis Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    return jsonify(result)
 
 @analysis_bp.route("/analyze/market-data", methods=["POST"])
 @validate_schema(MarketDataRequest)
@@ -178,27 +207,26 @@ def analyze_market_data_route():
                     except (ValueError, TypeError):
                         return val
                 return None
+@handle_api_error
+def analyze_market_data_route():
+    data = request.json
+    ticker = data.get("ticker")
+    period = data.get("period", "1y")
 
-            entry = {
-                "time": index.strftime('%Y-%m-%d'),
-                "open": get_val(row, 'Open'),
-                "high": get_val(row, 'High'),
-                "low": get_val(row, 'Low'),
-                "close": get_val(row, 'Close'),
-                "volume": get_val(row, 'Volume')
-            }
+    if not ticker:
+        return jsonify({"error": "Ticker required"}), 400
 
-            # Filter incomplete rows
-            if all(v is not None for v in [entry['open'], entry['high'], entry['low'], entry['close']]):
-                chart_data.append(entry)
+    # Fetch data
+    df = fetch_batch_data_safe([ticker], period=period)
 
-        return jsonify(chart_data)
+    if df.empty:
+            return jsonify({"error": "No data found"}), 404
 
-    except Exception as e:
-        current_app.logger.exception(f"Market Data Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    chart_data = serialize_ohlc_data(df, ticker)
+    return jsonify(chart_data)
 
 @analysis_bp.route("/analyze", methods=["POST"])
+@handle_api_error
 def analyze():
     current_app.logger.info("Portfolio Audit Request received")
     file = request.files.get("csv")
@@ -265,48 +293,43 @@ def analyze():
 
     final_global_fees = fee_per_trade if manual_data else csv_fee_per_trade
 
-    try:
-        res = analyze_csv(
-            csv_path=csv_path,
-            broker=broker,
-            account_size_start=account_size_start,
-            net_liquidity_now=net_liquidity_now,
-            buying_power_available_now=buying_power_available_now,
-            report_format="all",
-            start_date=start_date,
-            end_date=end_date,
-            manual_data=manual_data,
-            global_fees=final_global_fees,
-            style=style
-        )
+    res = analyze_csv(
+        csv_path=csv_path,
+        broker=broker,
+        account_size_start=account_size_start,
+        net_liquidity_now=net_liquidity_now,
+        buying_power_available_now=buying_power_available_now,
+        report_format="all",
+        start_date=start_date,
+        end_date=end_date,
+        manual_data=manual_data,
+        global_fees=final_global_fees,
+        style=style
+    )
 
-        storage = get_db()
+    storage = get_db()
 
-        if res.get("excel_report"):
-            storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
+    if res.get("excel_report"):
+        storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
 
-        username = session.get('username')
-        if username and "error" not in res:
-            to_save = res.copy()
-            if "excel_report" in to_save:
-                del to_save["excel_report"]
+    username = session.get('username')
+    if username and "error" not in res:
+        to_save = res.copy()
+        if "excel_report" in to_save:
+            del to_save["excel_report"]
 
-            to_save["saved_at"] = datetime.now().isoformat()
-            to_save["token"] = token
-            to_save["style"] = style
+        to_save["saved_at"] = datetime.now().isoformat()
+        to_save["token"] = token
+        to_save["style"] = style
 
-            storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
+        storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
 
-        if "excel_report" in res:
-            del res["excel_report"]
+    if "excel_report" in res:
+        del res["excel_report"]
 
-        res["token"] = token
-        current_app.logger.info("Portfolio Audit completed successfully.")
-        return jsonify(res)
-
-    except Exception as exc:
-        current_app.logger.exception(f"Audit failed: {exc}")
-        return jsonify({"error": str(exc)}), 500
+    res["token"] = token
+    current_app.logger.info("Portfolio Audit completed successfully.")
+    return jsonify(res)
 
 @analysis_bp.route("/download/<token>/<filename>")
 def download(token: str, filename: str):
