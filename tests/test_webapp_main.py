@@ -1,15 +1,6 @@
 import pytest
 import asyncio
-import nest_asyncio
 from unittest.mock import patch, MagicMock
-
-# Apply nest_asyncio to allow nested event loops (fixes "Runner.run() cannot be called from a running event loop" in CI)
-# IMPORTANT: We apply it globally but also ensure it's applied to the current loop in fixtures if needed.
-nest_asyncio.apply()
-
-@pytest.fixture(autouse=True)
-def apply_nest_asyncio_fixture():
-    nest_asyncio.apply()
 
 # Attempt to import. If dependencies are missing (FastAPI), this will fail,
 # but we know they are present in requirements.txt
