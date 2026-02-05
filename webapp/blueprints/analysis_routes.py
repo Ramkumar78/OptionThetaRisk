@@ -13,6 +13,11 @@ from option_auditor.unified_backtester import UnifiedBacktester
 from option_auditor.common.screener_utils import fetch_batch_data_safe
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import _allowed_filename
+from webapp.validation import validate_schema
+from webapp.schemas import (
+    PortfolioPositionsRequest, ScenarioRequest, CorrelationRequest,
+    BacktestRequest, MonteCarloRequest, MarketDataRequest
+)
 
 analysis_bp = Blueprint('analysis', __name__)
 
@@ -22,13 +27,10 @@ def get_db():
     return g.storage_provider
 
 @analysis_bp.route("/analyze/portfolio", methods=["POST"])
+@validate_schema(PortfolioPositionsRequest)
 def analyze_portfolio_route():
     try:
-        data = request.json
-        positions = data.get("positions", [])
-
-        if not positions:
-            return jsonify({"error": "No positions provided"}), 400
+        positions = g.validated_data.positions
 
         report = portfolio_risk.analyze_portfolio_risk(positions)
         return jsonify(report)
@@ -38,13 +40,10 @@ def analyze_portfolio_route():
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze/portfolio/greeks", methods=["POST"])
+@validate_schema(PortfolioPositionsRequest)
 def analyze_portfolio_greeks_route():
     try:
-        data = request.json
-        positions = data.get("positions", [])
-
-        if not positions:
-            return jsonify({"error": "No positions provided"}), 400
+        positions = g.validated_data.positions
 
         report = portfolio_risk.analyze_portfolio_greeks(positions)
         return jsonify(report)
@@ -54,14 +53,11 @@ def analyze_portfolio_greeks_route():
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze/scenario", methods=["POST"])
+@validate_schema(ScenarioRequest)
 def analyze_scenario_route():
     try:
-        data = request.json
-        positions = data.get("positions", [])
-        scenario = data.get("scenario", {})
-
-        if not positions:
-            return jsonify({"error": "No positions provided"}), 400
+        positions = g.validated_data.positions
+        scenario = g.validated_data.scenario
 
         report = portfolio_risk.analyze_scenario(positions, scenario)
         return jsonify(report)
@@ -71,15 +67,11 @@ def analyze_scenario_route():
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze/correlation", methods=["POST"])
+@validate_schema(CorrelationRequest)
 def analyze_correlation_route():
     try:
-        data = request.json
-        tickers = data.get("tickers", [])
-
-        if isinstance(tickers, str):
-            tickers = [t.strip() for t in tickers.split(',')]
-
-        period = data.get("period", "1y")
+        tickers = g.validated_data.tickers
+        period = g.validated_data.period
 
         result = calculate_correlation_matrix(tickers, period=period)
 
@@ -93,18 +85,12 @@ def analyze_correlation_route():
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze/backtest", methods=["POST"])
+@validate_schema(BacktestRequest)
 def analyze_backtest_route():
     try:
-        data = request.json
-        ticker = data.get("ticker")
-        strategy = data.get("strategy", "master")
-        try:
-            initial_capital = float(data.get("initial_capital", 10000.0))
-        except ValueError:
-            return jsonify({"error": "Initial Capital must be a number"}), 400
-
-        if not ticker:
-            return jsonify({"error": "Ticker required"}), 400
+        ticker = g.validated_data.ticker
+        strategy = g.validated_data.strategy
+        initial_capital = g.validated_data.initial_capital
 
         backtester = UnifiedBacktester(ticker, strategy_type=strategy, initial_capital=initial_capital)
         result = backtester.run()
@@ -119,18 +105,12 @@ def analyze_backtest_route():
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze/monte-carlo", methods=["POST"])
+@validate_schema(MonteCarloRequest)
 def analyze_monte_carlo_route():
     try:
-        data = request.json
-        ticker = data.get("ticker")
-        strategy = data.get("strategy", "turtle")
-        try:
-            simulations = int(data.get("simulations", 10000))
-        except ValueError:
-            return jsonify({"error": "Simulations must be an integer"}), 400
-
-        if not ticker:
-            return jsonify({"error": "Ticker required"}), 400
+        ticker = g.validated_data.ticker
+        strategy = g.validated_data.strategy
+        simulations = g.validated_data.simulations
 
         backtester = UnifiedBacktester(ticker, strategy_type=strategy)
         # We can call run_monte_carlo directly, it will run the backtest if needed.
@@ -146,14 +126,11 @@ def analyze_monte_carlo_route():
         return jsonify({"error": str(e)}), 500
 
 @analysis_bp.route("/analyze/market-data", methods=["POST"])
+@validate_schema(MarketDataRequest)
 def analyze_market_data_route():
     try:
-        data = request.json
-        ticker = data.get("ticker")
-        period = data.get("period", "1y")
-
-        if not ticker:
-            return jsonify({"error": "Ticker required"}), 400
+        ticker = g.validated_data.ticker
+        period = g.validated_data.period
 
         # Fetch data
         df = fetch_batch_data_safe([ticker], period=period)

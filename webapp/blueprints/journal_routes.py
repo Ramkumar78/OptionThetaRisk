@@ -4,6 +4,8 @@ import time
 from datetime import datetime
 from option_auditor import journal_analyzer
 from webapp.storage import get_storage_provider as _get_storage_provider
+from webapp.validation import validate_schema
+from webapp.schemas import JournalImportRequest
 
 journal_bp = Blueprint('journal', __name__)
 
@@ -55,11 +57,10 @@ def journal_analyze_batch():
     return jsonify(result)
 
 @journal_bp.route("/journal/import", methods=["POST"])
+@validate_schema(JournalImportRequest)
 def journal_import_trades():
     username = session.get('username')
-    data = request.json
-    if not data or not isinstance(data, list):
-        return jsonify({"error": "Invalid data format. Expected list of trades."}), 400
+    data = g.validated_data.root
 
     storage = get_db()
     journal_entries = []
