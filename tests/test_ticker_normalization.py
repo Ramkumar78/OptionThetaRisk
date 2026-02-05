@@ -1,5 +1,6 @@
 import pandas as pd
-from option_auditor.main_analyzer import analyze_csv, _normalize_ticker
+from option_auditor.main_analyzer import analyze_csv
+from option_auditor.common.price_utils import normalize_ticker
 from option_auditor.models import TradeGroup, Leg
 import unittest
 from unittest.mock import patch, MagicMock
@@ -8,28 +9,28 @@ from datetime import datetime
 class TestTickerNormalizationAndDataWarning(unittest.TestCase):
     def test_normalize_ticker(self):
         # Test common indices
-        self.assertEqual(_normalize_ticker("SPX"), "^SPX")
-        self.assertEqual(_normalize_ticker("VIX"), "^VIX")
-        self.assertEqual(_normalize_ticker("DJX"), "^DJI")
-        self.assertEqual(_normalize_ticker("NDX"), "^NDX")
-        self.assertEqual(_normalize_ticker("RUT"), "^RUT")
+        self.assertEqual(normalize_ticker("SPX"), "^SPX")
+        self.assertEqual(normalize_ticker("VIX"), "^VIX")
+        self.assertEqual(normalize_ticker("DJX"), "^DJI")
+        self.assertEqual(normalize_ticker("NDX"), "^NDX")
+        self.assertEqual(normalize_ticker("RUT"), "^RUT")
 
         # Test futures
-        self.assertEqual(_normalize_ticker("/ES"), "ES=F")
-        self.assertEqual(_normalize_ticker("/CL"), "CL=F")
+        self.assertEqual(normalize_ticker("/ES"), "ES=F")
+        self.assertEqual(normalize_ticker("/CL"), "CL=F")
 
         # Test class shares
-        self.assertEqual(_normalize_ticker("BRK/B"), "BRK-B")
+        self.assertEqual(normalize_ticker("BRK/B"), "BRK-B")
 
         # Test standard
-        self.assertEqual(_normalize_ticker("AAPL"), "AAPL")
-        self.assertEqual(_normalize_ticker("spy"), "SPY")
+        self.assertEqual(normalize_ticker("AAPL"), "AAPL")
+        self.assertEqual(normalize_ticker("spy"), "SPY")
 
     def test_missing_data_warning(self):
         # Setup: Open position on UNKNOWN symbol
         # We expect yfinance to return no data for this.
 
-        with patch('option_auditor.main_analyzer._fetch_live_prices') as mock_fetch:
+        with patch('option_auditor.main_analyzer.fetch_live_prices') as mock_fetch:
             mock_fetch.return_value = {} # Return empty map, simulating failure
 
             with patch('option_auditor.main_analyzer._group_contracts_with_open') as mock_group:
@@ -69,9 +70,9 @@ class TestTickerNormalizationAndDataWarning(unittest.TestCase):
 
     def test_ticker_normalization_flow(self):
         # Setup: Open position on SPX (needs mapping to ^SPX)
-        # Mock _fetch_live_prices to expect ^SPX and return a price
+        # Mock fetch_live_prices to expect ^SPX and return a price
 
-        with patch('option_auditor.main_analyzer._fetch_live_prices') as mock_fetch:
+        with patch('option_auditor.main_analyzer.fetch_live_prices') as mock_fetch:
             # The mock should receive ['^SPX']
             mock_fetch.return_value = {'^SPX': 4500.0}
 
@@ -111,5 +112,5 @@ class TestTickerNormalizationAndDataWarning(unittest.TestCase):
                     # It should fall through to "Insufficient Data" because we have 0 closed strategies.
                     self.assertTrue("Insufficient Data" in result['verdict'])
 
-                    # Verify _fetch_live_prices was called with correct normalized symbol
+                    # Verify fetch_live_prices was called with correct normalized symbol
                     mock_fetch.assert_called_with(['^SPX'])
