@@ -39,7 +39,8 @@ def test_scenario_endpoint_validation(client):
     }
     response = client.post('/analyze/scenario', json=payload)
     assert response.status_code == 400
-    assert "No positions provided" in response.get_json()["error"]
+    assert "Validation Error" in response.get_json()["error"]
+    assert any(d["field"] == "positions" and d["type"] == "missing" for d in response.get_json()["details"])
 
 @patch('webapp.blueprints.analysis_routes.portfolio_risk.analyze_scenario')
 def test_scenario_endpoint_error_handling(mock_analyze, client):

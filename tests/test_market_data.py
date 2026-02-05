@@ -39,7 +39,8 @@ def test_analyze_market_data_success(client):
 def test_analyze_market_data_missing_ticker(client):
     response = client.post('/analyze/market-data', json={})
     assert response.status_code == 400
-    assert "Ticker required" in response.get_json()['error']
+    assert "Validation Error" in response.get_json()['error']
+    assert any(d["field"] == "ticker" and d["type"] == "missing" for d in response.get_json()['details'])
 
 def test_analyze_market_data_empty(client):
     with patch('webapp.blueprints.analysis_routes.fetch_batch_data_safe', return_value=pd.DataFrame()):

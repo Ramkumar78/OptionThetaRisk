@@ -109,7 +109,10 @@ def test_greeks_error(mock_greeks, client):
 def test_monte_carlo_missing_ticker(mock_ub, client):
     resp = client.post("/analyze/monte-carlo", json={"simulations": 100})
     assert resp.status_code == 400
-    assert "Ticker required" in resp.get_json()["error"]
+    # New validation error format
+    assert "Validation Error" in resp.get_json()["error"]
+    details = resp.get_json()["details"]
+    assert any(d["field"] == "ticker" and d["type"] == "missing" for d in details)
 
 @patch('webapp.blueprints.analysis_routes.UnifiedBacktester')
 def test_monte_carlo_backend_error(mock_ub, client):

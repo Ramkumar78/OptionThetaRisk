@@ -140,8 +140,6 @@ class MonteCarloSimulator:
             },
             "sample_equity_curves": sample_curves.tolist(),
             "equity_curves": curves_data,
-            "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >50% drawdown."
-            "sample_equity_curves": sample_curves.tolist(),
             "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >{int(ruin_threshold_pct * 100)}% drawdown."
         }
 
