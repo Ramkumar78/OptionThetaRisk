@@ -8,7 +8,7 @@
 | option\_auditor/backtesting\_strategies.py          |      393 |       79 |     80% |16, 21, 26, 31, 41, 197, 223, 235-237, 240-242, 245, 248-251, 256-258, 261-263, 266, 269-272, 307-309, 312-315, 318, 321-324, 329-331, 334-336, 339, 342-345, 350-352, 355-356, 359, 362-365, 390, 401, 421-422, 435-436, 471-476, 501, 503, 507, 509, 511, 520 |
 | option\_auditor/cli.py                              |       57 |        4 |     93% |71-73, 101 |
 | option\_auditor/common/constants.py                 |       23 |        2 |     91% |   444-445 |
-| option\_auditor/common/data\_utils.py               |      184 |       37 |     80% |25-26, 49-52, 78-82, 89-90, 94-98, 102-103, 107-108, 119-120, 158, 189, 204-206, 218, 221-222, 239-240, 249-250, 302-303 |
+| option\_auditor/common/data\_utils.py               |      184 |       35 |     81% |25-26, 49-52, 78-82, 89-90, 94-98, 102-103, 107-108, 119-120, 158, 189, 204-206, 218, 221-222, 239-240, 249-250 |
 | option\_auditor/common/file\_utils.py               |       28 |        0 |    100% |           |
 | option\_auditor/common/price\_utils.py              |       69 |       14 |     80% |11, 38, 43, 90, 94-100, 116-117, 122-124 |
 | option\_auditor/common/resilience.py                |       10 |        0 |    100% |           |
@@ -20,9 +20,9 @@
 | option\_auditor/journal\_analyzer.py                |       88 |        7 |     92% |30, 113-114, 120, 158-162 |
 | option\_auditor/main\_analyzer.py                   |      495 |       42 |     92% |102-103, 219, 242, 250-251, 292, 302-303, 307-308, 324, 330-331, 393-394, 410, 435-436, 444-453, 484, 517-520, 598-599, 603-605, 617-618, 702, 772 |
 | option\_auditor/models.py                           |       75 |        2 |     97% |    76, 91 |
-| option\_auditor/monte\_carlo\_simulator.py          |       64 |        2 |     97% |   20, 148 |
+| option\_auditor/monte\_carlo\_simulator.py          |       67 |        2 |     97% |   20, 152 |
 | option\_auditor/parsers.py                          |      283 |       64 |     77% |15, 24-26, 30-44, 132-133, 160, 162-163, 180-214, 321-323, 335-336, 345, 378, 427 |
-| option\_auditor/portfolio\_risk.py                  |      274 |       52 |     81% |68-71, 81-83, 87, 94, 123-131, 186, 202, 234, 259-264, 269, 271, 288, 299-302, 319, 336-338, 380-382, 396, 417-420, 423, 425, 436, 444-447, 479-480, 514-516 |
+| option\_auditor/portfolio\_risk.py                  |      274 |       51 |     81% |68-71, 81-83, 87, 94, 123-131, 202, 234, 259-264, 269, 271, 288, 299-302, 319, 336-338, 380-382, 396, 417-420, 423, 425, 436, 444-447, 479-480, 514-516 |
 | option\_auditor/risk\_analyzer.py                   |       67 |        0 |    100% |           |
 | option\_auditor/risk\_intelligence.py               |       44 |        4 |     91% |     50-57 |
 | option\_auditor/screener.py                         |       54 |        3 |     94% |   138-140 |
@@ -33,7 +33,7 @@
 | option\_auditor/strategies/bull\_put.py             |      114 |        9 |     92% |53, 95-96, 131, 140, 222-224, 234-235 |
 | option\_auditor/strategies/darvas.py                |       90 |       13 |     86% |42, 103, 106-107, 119-123, 126, 160-162 |
 | option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 144, 179-182 |
-| option\_auditor/strategies/fortress.py              |       78 |       14 |     82% |16-18, 31, 53, 81-82, 94-95, 100-101, 135-137 |
+| option\_auditor/strategies/fortress.py              |       78 |       19 |     76% |16-18, 31, 45-48, 53, 59-60, 81-82, 94-95, 100-101, 135-137 |
 | option\_auditor/strategies/fourier.py               |       57 |        2 |     96% |   112-113 |
 | option\_auditor/strategies/grandmaster\_screener.py |       64 |        7 |     89% |52-58, 117 |
 | option\_auditor/strategies/hybrid.py                |      279 |       64 |     77% |29-30, 37-38, 49-52, 55-76, 146-147, 164-166, 182-184, 230, 263, 278, 289-291, 302-307, 313, 315, 317, 319, 325-328, 333, 336-337, 347, 355-357, 374-375, 393-394, 426-428 |
@@ -49,7 +49,7 @@
 | option\_auditor/strategies/rsi\_divergence.py       |       75 |        3 |     96% |99, 126-127 |
 | option\_auditor/strategies/squeeze.py               |       40 |        2 |     95% |     86-87 |
 | option\_auditor/strategies/turtle.py                |       76 |        6 |     92% |58-59, 62, 137-139 |
-| option\_auditor/strategies/utils.py                 |        1 |        0 |    100% |           |
+| option\_auditor/strategies/utils.py                 |        1 |        1 |      0% |         1 |
 | option\_auditor/strategies/vertical\_spreads.py     |      140 |       28 |     80% |26, 32-37, 40-41, 47-48, 60, 70, 86-87, 119-124, 133-135, 158-159, 179, 192, 259-261 |
 | option\_auditor/strategy.py                         |      256 |       33 |     87% |16, 35, 148-155, 204, 207-245, 279, 306 |
 | option\_auditor/uk\_stock\_data.py                  |       16 |        2 |     88% |     30-31 |
@@ -59,18 +59,19 @@
 | webapp/\_\_init\_\_.py                              |        0 |        0 |    100% |           |
 | webapp/app.py                                       |       75 |       14 |     81% |37-38, 73-76, 99-100, 104-105, 120-126 |
 | webapp/blueprints/\_\_init\_\_.py                   |        0 |        0 |    100% |           |
-| webapp/blueprints/analysis\_routes.py               |      186 |       22 |     88% |28-35, 69, 162-164, 171-172, 186, 194-202 |
-| webapp/blueprints/journal\_routes.py                |       79 |       17 |     78% |27, 37-39, 62, 71-79, 104-106 |
-| webapp/blueprints/main\_routes.py                   |       60 |        9 |     85% |36-38, 46, 60-62, 76, 81 |
-| webapp/blueprints/screener\_routes.py               |      487 |       64 |     87% |57-58, 63-64, 74-75, 125-126, 133-134, 138, 179, 228-229, 249-252, 257-258, 264, 270-275, 282-283, 289, 296-299, 311, 317-320, 339, 358, 377, 396, 415, 435, 455, 474, 494-495, 526, 540, 559, 577, 595, 638-641, 650, 656-657, 668, 674-679 |
+| webapp/blueprints/analysis\_routes.py               |      161 |       18 |     89% |34-36, 126-128, 135-136, 150, 158-166 |
+| webapp/blueprints/journal\_routes.py                |       79 |       15 |     81% |38-40, 71-79, 104-106 |
+| webapp/blueprints/main\_routes.py                   |       59 |        9 |     85% |36-38, 44, 58-60, 74, 79 |
+| webapp/blueprints/screener\_routes.py               |      444 |       46 |     90% |62-63, 110, 151, 202-203, 225-226, 232, 238-243, 250-251, 257, 264-267, 279, 285-288, 307, 327, 346, 365, 384, 404, 424, 443, 463-464, 496, 508, 527, 546, 564, 606, 619, 625-630 |
 | webapp/cache.py                                     |       28 |        1 |     96% |        34 |
-| webapp/main.py                                      |       20 |        2 |     90% |     34-35 |
+| webapp/schemas.py                                   |       63 |        1 |     98% |        20 |
 | webapp/services/\_\_init\_\_.py                     |        0 |        0 |    100% |           |
 | webapp/services/check\_service.py                   |       77 |       16 |     79% |54, 64, 72, 77-80, 87-94, 99-102 |
 | webapp/services/scheduler\_service.py               |       38 |        0 |    100% |           |
 | webapp/storage.py                                   |      393 |       30 |     92% |68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 117, 270, 347-348, 388, 423-424, 443-446, 463, 480-481, 492, 504-505, 524 |
 | webapp/utils.py                                     |       59 |        7 |     88% |32-33, 58-59, 69-71 |
-| **TOTAL**                                           | **6963** |  **961** | **86%** |           |
+| webapp/validation.py                                |       35 |        4 |     89% | 22, 49-51 |
+| **TOTAL**                                           | **6975** |  **943** | **86%** |           |
 
 
 ## Setup coverage badge
