@@ -69,7 +69,7 @@ const Layout: React.FC<LayoutProps> = () => {
               <div className="p-1.5 bg-primary-600 rounded-lg shadow-lg shadow-primary-500/30 group-hover:scale-105 transition-transform">
                  <img id="nav-logo-img" src="/static/img/logo.png" className="h-6 w-6 brightness-0 invert" alt="Logo" />
               </div>
-              <span className="self-center text-xl font-bold tracking-tight text-gray-900 dark:text-white">Trade<span className="text-primary-600 dark:text-primary-400">Auditor</span></span>
+              <span className="self-center text-xl font-bold tracking-tight text-gray-900 dark:text-white">Trade<span className="text-primary-600 dark:text-primary-400">Guardian</span></span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -165,7 +165,7 @@ const Layout: React.FC<LayoutProps> = () => {
 
       <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 mt-auto">
         <div className="w-full mx-auto max-w-screen-xl p-6 md:flex md:items-center md:justify-between">
-          <span className="text-sm text-gray-500 sm:text-center dark:text-gray-400">© 2025 <Link to="/" className="hover:underline">Trade Auditor</Link>.</span>
+          <span className="text-sm text-gray-500 sm:text-center dark:text-gray-400">© 2025 <Link to="/" className="hover:underline">TradeGuardian</Link>.</span>
           <ul className="flex flex-wrap items-center mt-3 text-sm font-medium text-gray-500 dark:text-gray-400 sm:mt-0 space-x-4 md:space-x-6">
             <li><a href="https://github.com/Ramkumar78/OptionThetaRisk" target="_blank" rel="noopener noreferrer" className="hover:text-primary-600 transition-colors">GitHub</a></li>
             <li>

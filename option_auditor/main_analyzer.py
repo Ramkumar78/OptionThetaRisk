@@ -401,6 +401,57 @@ def _run_monte_carlo_simulation(strategies: List[Any], start_equity: float, num_
         "expected_profit": round(float(median_outcome - start_equity), 2)
     }
 
+def _calculate_discipline_score(strategies: List[Any], open_positions: List[Dict]) -> Tuple[int, List[str]]:
+    """
+    Calculates a 'Trader Discipline Score' (0-100) based on behavioral metrics.
+    """
+    score = 100
+    details = []
+
+    # 1. Strategy Analysis (History)
+    # Penalize Revenge Trading
+    revenge_count = sum(1 for s in strategies if getattr(s, "is_revenge", False))
+    if revenge_count > 0:
+        penalty = revenge_count * 10
+        score -= penalty
+        details.append(f"Revenge Trading: -{penalty} pts ({revenge_count} instances)")
+
+    # Reward Early Loss Cutting
+    # Definition: Loss trade closed faster than average win/loss hold time?
+    # Simple proxy: Loss < average hold time * 0.5
+    avg_hold = 0.0
+    if strategies:
+        avg_hold = np.mean([s.hold_days() for s in strategies])
+
+    early_cuts = 0
+    for s in strategies:
+        if s.net_pnl < 0 and s.hold_days() < (avg_hold * 0.5):
+            early_cuts += 1
+
+    if early_cuts > 0:
+        bonus = min(20, early_cuts * 2) # Cap bonus
+        score += bonus
+        details.append(f"Cutting Losses Early: +{bonus} pts")
+
+    # 2. Open Position Analysis (Risk Management)
+    # Penalize Gamma Risk (holding < 3 DTE)
+    gamma_risks = 0
+    for p in open_positions:
+        dte = p.get("dte")
+        # Ensure DTE is valid number
+        if dte is not None and isinstance(dte, (int, float)) and dte <= 3:
+            gamma_risks += 1
+
+    if gamma_risks > 0:
+        penalty = gamma_risks * 5
+        score -= penalty
+        details.append(f"Gamma Risk (Held < 3 DTE): -{penalty} pts")
+
+    # Clamp Score
+    score = max(0, min(100, score))
+
+    return score, details
+
 def refresh_dashboard_data(saved_data: Dict) -> Dict:
     """
     Refreshes the 'open_positions' in the saved analysis result with live prices.
@@ -529,6 +580,74 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
         data["verdict"] = "Red Flag: High Open Risk"
         data["verdict_color"] = "red"
         data["verdict_details"] = f"Warning: {len(itm_risk_details)} positions are deep ITM. Total Intrinsic Exposure: -${total_risk_amt:,.2f}."
+
+    # --- NEW: Calculate Discipline Score & Risk Map ---
+    # We need strategies for discipline score. They are in saved_data["strategy_groups"] (serialized)
+    # But we need strategy objects or at least the dicts to check revenge/hold.
+    # saved_data["strategy_groups"] is list of dicts. _calculate_discipline_score expects objects?
+    # No, let's adapt _calculate_discipline_score to handle dicts or make a new version.
+    # Actually, let's just use the serialized data since we don't have objects in refresh.
+
+    # Check if we can adapt _calculate_discipline_score.
+    # It accesses: s.is_revenge, s.net_pnl, s.hold_days().
+    # The dict has: "is_revenge", "pnl" (net), "hold_days".
+    # So we can wrap them in a simple class or modify the function.
+
+    # I'll modify _calculate_discipline_score to handle dicts duck-typing style.
+
+    class StrategyProxy:
+        def __init__(self, d):
+            self.is_revenge = d.get("is_revenge", False)
+            self.net_pnl = d.get("pnl", 0.0)
+            self._hold_days = d.get("hold_days", 0.0)
+        def hold_days(self):
+            return self._hold_days
+
+    strat_proxies = [StrategyProxy(s) for s in data.get("strategy_groups", [])]
+
+    d_score, d_details = _calculate_discipline_score(strat_proxies, open_positions)
+    data["discipline_score"] = d_score
+    data["discipline_details"] = d_details
+
+    # Risk Map Generation
+    risk_map = []
+    for row in open_positions:
+        pnl_proxy = 0.0
+        try:
+            qty = row.get("qty_open", 0)
+            cp = row.get("current_price")
+            contract = row.get("contract", "")
+
+            if cp and contract and " " in contract:
+                 parts = contract.split(" ")
+                 right = parts[0]
+                 strike = float(parts[1])
+
+                 moneyness = 0.0
+                 if right == 'C':
+                     moneyness = (cp - strike) / strike
+                 elif right == 'P':
+                     moneyness = (strike - cp) / strike
+
+                 if qty > 0:
+                     pnl_proxy = moneyness * 100
+                 else:
+                     pnl_proxy = -moneyness * 100
+        except:
+            pass
+
+        size = 0.0
+        if row.get("avg_price") and row.get("qty_open"):
+             size = abs(row["qty_open"]) * 100 * row["avg_price"]
+
+        risk_map.append({
+             "symbol": row.get("symbol"),
+             "dte": row.get("dte", 0),
+             "pnl_pct": round(pnl_proxy, 2),
+             "size": round(size, 2),
+             "risk_alert": row.get("risk_alert")
+        })
+    data["risk_map"] = risk_map
 
     return data
 
@@ -988,7 +1107,51 @@ def analyze_csv(csv_path: Optional[str] = None,
             pd.DataFrame(leakage_metrics["stale_capital"]).to_excel(writer, sheet_name="Stale Capital", index=False)
         excel_buffer.seek(0)
 
+    # --- NEW: Calculate Discipline Score & Risk Map ---
+    d_score, d_details = _calculate_discipline_score(strategies, open_rows)
+
+    risk_map = []
+    for row in open_rows:
+        pnl_proxy = 0.0
+        try:
+            qty = row.get("qty_open", 0)
+            cp = row.get("current_price")
+            contract = row.get("contract", "")
+
+            if cp and contract and " " in contract:
+                 parts = contract.split(" ")
+                 right = parts[0]
+                 strike = float(parts[1])
+
+                 moneyness = 0.0
+                 if right == 'C':
+                     moneyness = (cp - strike) / strike
+                 elif right == 'P':
+                     moneyness = (strike - cp) / strike
+
+                 if qty > 0:
+                     pnl_proxy = moneyness * 100
+                 else:
+                     pnl_proxy = -moneyness * 100
+        except:
+            pass
+
+        size = 0.0
+        if row.get("avg_price") and row.get("qty_open"):
+             size = abs(row["qty_open"]) * 100 * row["avg_price"]
+
+        risk_map.append({
+             "symbol": row.get("symbol"),
+             "dte": row.get("dte", 0),
+             "pnl_pct": round(pnl_proxy, 2),
+             "size": round(size, 2),
+             "risk_alert": row.get("risk_alert")
+        })
+
     return {
+        "discipline_score": d_score,
+        "discipline_details": d_details,
+        "risk_map": risk_map,
         "metrics": {
             "num_trades": len(contract_groups), "win_rate": win_rate_contracts,
             "total_pnl": total_strategy_pnl_net,

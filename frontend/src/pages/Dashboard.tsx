@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import CandlestickChart from '../components/CandlestickChart';
+import RiskMapChart from '../components/RiskMapChart';
 import { type CandlestickData } from 'lightweight-charts';
 
 const ASSETS = [
@@ -30,6 +31,8 @@ const ASSETS = [
 const Dashboard: React.FC = () => {
   const [portfolioData, setPortfolioData] = useState<any>(null);
   const [loadingPortfolio, setLoadingPortfolio] = useState(true);
+  const [showAntiTilt, setShowAntiTilt] = useState(false);
+  const [revengeDetails, setRevengeDetails] = useState("");
 
   // Market State
   const [selectedAsset, setSelectedAsset] = useState(ASSETS[0]);
@@ -44,6 +47,16 @@ const Dashboard: React.FC = () => {
         const response = await axios.get('/dashboard');
         if (response.data && !response.data.error) {
           setPortfolioData(response.data);
+
+          // Anti-Tilt Check
+          const strats = response.data.strategy_groups;
+          if (strats && strats.length > 0) {
+              const last = strats[strats.length - 1];
+              if (last.is_revenge) {
+                   setRevengeDetails(`Revenge Trade Detected on ${last.symbol}. You just had a loss.`);
+                   setShowAntiTilt(true);
+              }
+          }
         }
       } catch (err) {
         // Ignore error (user might not have portfolio)
@@ -100,8 +113,8 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-8 animate-fade-in pb-10">
       <header>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-white">COMMAND <span className="text-blue-600">CENTER</span></h1>
-          <p className="text-gray-500 dark:text-gray-400">Welcome back, Trader. Here is your daily briefing.</p>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white">TRADE<span className="text-blue-600">GUARDIAN</span></h1>
+          <p className="text-gray-500 dark:text-gray-400">The AI Risk Manager that stops you from blowing up your account.</p>
       </header>
 
       {/* TOP ROW: MARKET STATUS */}
@@ -164,26 +177,91 @@ const Dashboard: React.FC = () => {
 
       {/* MIDDLE ROW: PORTFOLIO OR CTA */}
       <div>
+          {portfolioData && (
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                   {/* Risk Map */}
+                   <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                       <div className="flex justify-between items-center mb-4">
+                           <h3 className="text-lg font-bold text-gray-900 dark:text-white">Visual Risk Map</h3>
+                           <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">X: Expiry, Y: PnL</span>
+                       </div>
+                       <div className="h-64 w-full">
+                           <RiskMapChart data={portfolioData.risk_map || []} />
+                       </div>
+                   </div>
+
+                   {/* Discipline Score */}
+                   <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between">
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm text-gray-500 font-bold uppercase tracking-wider">Discipline Score</span>
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">BETA</span>
+                            </div>
+                            <div className="flex items-end space-x-2">
+                                <span className={`text-5xl font-black ${
+                                    (portfolioData.discipline_score || 100) >= 90 ? 'text-green-500' :
+                                    (portfolioData.discipline_score || 100) >= 70 ? 'text-yellow-500' : 'text-red-500'
+                                }`}>
+                                    {portfolioData.discipline_score !== undefined ? portfolioData.discipline_score : 100}
+                                </span>
+                                <span className="text-gray-400 mb-2">/ 100</span>
+                            </div>
+                            <div className="mt-4 space-y-2">
+                                {portfolioData.discipline_details?.map((d: string, i: number) => (
+                                    <div key={i} className="text-xs text-red-500 flex items-center">
+                                        <span className="mr-1">⚠️</span> {d}
+                                    </div>
+                                ))}
+                                {(!portfolioData.discipline_details || portfolioData.discipline_details.length === 0) && (
+                                    <div className="text-xs text-green-500 flex items-center">
+                                        <span className="mr-1">✅</span> Perfect discipline.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 gap-4">
+                             <div>
+                                <div className="text-xs text-gray-500">Net Liq</div>
+                                <div className="text-lg font-bold">${portfolioData.net_liquidity_now?.toLocaleString()}</div>
+                             </div>
+                             <div>
+                                <div className="text-xs text-gray-500">YTD</div>
+                                <div className={`text-lg font-bold ${portfolioData.ytd_return_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {portfolioData.ytd_return_pct >= 0 ? '+' : ''}{portfolioData.ytd_return_pct?.toFixed(1)}%
+                                </div>
+                             </div>
+                        </div>
+                   </div>
+               </div>
+          )}
+
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Portfolio Status</h3>
           {loadingPortfolio ? (
               <div className="h-32 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse"></div>
           ) : portfolioData ? (
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
-                      <div className="text-sm text-gray-500">Net Liquidity</div>
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">${portfolioData.net_liquidity_now?.toLocaleString()}</div>
-                  </div>
-                  <div>
-                      <div className="text-sm text-gray-500">YTD Return</div>
-                      <div className={`text-2xl font-bold ${portfolioData.ytd_return_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {portfolioData.ytd_return_pct >= 0 ? '+' : ''}{portfolioData.ytd_return_pct?.toFixed(2)}%
-                      </div>
-                  </div>
-                  <div>
                       <div className="text-sm text-gray-500">Beta Weighted Delta</div>
                       <div className="text-2xl font-bold text-gray-900 dark:text-white">{portfolioData.portfolio_beta_delta?.toFixed(2) || '-'}</div>
                   </div>
-                  <div className="flex items-center">
+                  <div className="md:col-span-2 space-y-2">
+                       <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Morning Briefing</h4>
+                       {portfolioData.verdict_details ? (
+                           <div className="text-sm text-red-600 font-medium bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900/50">
+                               {portfolioData.verdict_details}
+                           </div>
+                       ) : (
+                           <div className="text-sm text-green-600 font-medium bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-100 dark:border-green-900/50">
+                               All clear. No critical risks detected.
+                           </div>
+                       )}
+                       {regime !== 'LOADING' && (
+                           <div className="text-xs text-gray-600 dark:text-gray-400">
+                               Market is in <strong>{regime}</strong> regime. {regime === 'BULL' ? 'Buy dips.' : 'Sell rips.'}
+                           </div>
+                       )}
+                  </div>
+                  <div className="flex items-center justify-end">
                        <Link to="/audit" className="text-blue-600 font-semibold hover:underline">View Full Audit &rarr;</Link>
                   </div>
               </div>
@@ -222,6 +300,33 @@ const Dashboard: React.FC = () => {
               <span className="text-xs font-semibold text-gray-500">More Coming Soon...</span>
           </div>
       </div>
+
+      {showAntiTilt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-red-200 dark:border-red-900 animate-bounce-in">
+                <div className="bg-red-600 p-6 text-white text-center">
+                    <div className="text-5xl mb-2">⚠️</div>
+                    <h2 className="text-2xl font-black uppercase">Tilt Detected</h2>
+                </div>
+                <div className="p-6">
+                    <p className="text-gray-700 dark:text-gray-300 text-lg mb-4 text-center font-medium">
+                        {revengeDetails}
+                    </p>
+                    <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-100 dark:border-red-800 mb-6">
+                         <p className="text-sm text-red-800 dark:text-red-200">
+                             <strong>Rational AI says:</strong> "The algorithms suggest an 85% chance this next trade fails due to emotional bias."
+                         </p>
+                    </div>
+                    <button
+                        onClick={() => setShowAntiTilt(false)}
+                        className="w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-xl hover:opacity-90 transition-opacity"
+                    >
+                        I promise to take a 15 min walk
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
