@@ -15,7 +15,7 @@ class MonteCarloSimulator:
         # Extract percentage returns (e.g., 5.0 for 5%)
         self.returns_pct = [t.get('return_pct', 0.0) for t in trades if t.get('return_pct') is not None]
 
-    def run(self, simulations: int = 10000):
+    def run(self, simulations: int = 10000, ruin_threshold_pct: float = 0.50):
         if not self.returns_pct:
             return {"error": "No trade returns to simulate."}
 
@@ -84,8 +84,8 @@ class MonteCarloSimulator:
         # It buys shares. If price goes to 0, you lose 100% of trade.
         # So return is -1. 1 + (-1) = 0. Equity becomes 0.
 
-        # Let's define Ruin as > 50% Drawdown
-        ruin_mask = max_dds < -0.50
+        # Let's define Ruin as > ruin_threshold_pct Drawdown
+        ruin_mask = max_dds < -ruin_threshold_pct
         ruin_count = np.sum(ruin_mask)
 
         prob_ruin = (ruin_count / simulations) * 100.0
@@ -136,10 +136,10 @@ class MonteCarloSimulator:
             "sample_equity_curves": sample_curves.tolist(),
             "equity_curves": curves_data,
             "sample_equity_curves": sample_curves.tolist(),
-            "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >50% drawdown."
+            "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >{int(ruin_threshold_pct * 100)}% drawdown."
         }
 
-def run_simple_monte_carlo(strategies: List[Any], start_equity: float, num_sims: int = 1000, forecast_trades: int = 50) -> Dict:
+def run_simple_monte_carlo(strategies: List[Any], start_equity: float, num_sims: int = 1000, forecast_trades: int = 50, ruin_threshold_pct: float = 0.50) -> Dict:
     """
     Runs a Monte Carlo simulation to project future portfolio performance.
     Returns: Probability of Ruin, Median Outcome, and 5th Percentile (Worst Case).
@@ -169,8 +169,8 @@ def run_simple_monte_carlo(strategies: List[Any], start_equity: float, num_sims:
     ending_equities = sim_curves[:, -1]
 
     # Risk of Ruin (Probability that equity drops below 50% of start at ANY point)
-    # Check if ANY point in the curve < start_equity * 0.5
-    ruin_threshold = start_equity * 0.5
+    # Check if ANY point in the curve < start_equity * (1 - ruin_threshold_pct)
+    ruin_threshold = start_equity * (1 - ruin_threshold_pct)
     min_equities = np.min(sim_curves, axis=1)
     ruin_count = np.sum(min_equities < ruin_threshold)
     risk_of_ruin_pct = (ruin_count / num_sims) * 100.0
