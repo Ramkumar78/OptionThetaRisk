@@ -135,4 +135,44 @@ describe('Dashboard Component', () => {
         expect(screen.getByText('No Portfolio Linked')).toBeInTheDocument();
     });
   });
+
+  it('switches asset when clicked', async () => {
+    // 1. Initial Load (SPY)
+    mockFetch.mockResolvedValueOnce({
+        json: async () => ([{ close: 400 }])
+    });
+
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>
+    );
+
+    // Verify SPY selected by default
+    const spyBtn = screen.getByText('S&P 500');
+    expect(spyBtn.className).toContain('bg-blue-600');
+
+    // 2. Click Gold
+    const goldBtn = screen.getByText('Gold');
+
+    // Mock fetch for Gold
+    mockFetch.mockResolvedValueOnce({
+        json: async () => ([{ close: 2000 }])
+    });
+
+    act(() => {
+        goldBtn.click();
+    });
+
+    // Verify Gold is now active
+    expect(goldBtn.className).toContain('bg-blue-600');
+    expect(spyBtn.className).not.toContain('bg-blue-600');
+
+    // Verify fetch call
+    await waitFor(() => {
+        expect(mockFetch).toHaveBeenLastCalledWith('/analyze/market-data', expect.objectContaining({
+            body: expect.stringContaining('GC=F')
+        }));
+    });
+  });
 });
