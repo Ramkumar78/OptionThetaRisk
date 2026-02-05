@@ -137,3 +137,7 @@ venv.bak/
 dmypy.json
 webapp/static/react_build/
 cache_data/
+
+.mutmut-cache
+mutants/
+html/

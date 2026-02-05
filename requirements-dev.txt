@@ -9,3 +9,4 @@ pip-audit
 pyarrow
 playwright
 pytest-playwright
+mutmut

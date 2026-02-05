@@ -189,9 +189,17 @@ def analyze_market_data_route():
 
             # Helper to get value case-insensitively
             def get_val(r, key):
-                if key in r: return r[key]
-                if key.lower() in r: return r[key.lower()]
-                if key.capitalize() in r: return r[key.capitalize()]
+                val = None
+                if key in r: val = r[key]
+                elif key.lower() in r: val = r[key.lower()]
+                elif key.capitalize() in r: val = r[key.capitalize()]
+
+                # Convert numpy types to native python types
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (ValueError, TypeError):
+                        return val
                 return None
 
             entry = {
