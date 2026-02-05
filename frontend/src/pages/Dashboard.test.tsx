@@ -175,4 +175,33 @@ describe('Dashboard Component', () => {
         }));
     });
   });
+
+  it('handles Nifty 50 selection correctly', async () => {
+    mockFetch.mockResolvedValueOnce({
+        json: async () => ([{ close: 18000 }])
+    });
+
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>
+    );
+
+    const niftyBtn = screen.getByText('Nifty 50');
+
+    // Mock fetch for Nifty
+    mockFetch.mockResolvedValueOnce({
+        json: async () => ([{ close: 18500 }])
+    });
+
+    act(() => {
+        niftyBtn.click();
+    });
+
+    await waitFor(() => {
+        expect(mockFetch).toHaveBeenLastCalledWith('/analyze/market-data', expect.objectContaining({
+            body: expect.stringContaining('^NSEI')
+        }));
+    });
+  });
 });
