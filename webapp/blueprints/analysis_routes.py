@@ -12,13 +12,12 @@ from option_auditor.risk_intelligence import calculate_correlation_matrix
 from option_auditor.unified_backtester import UnifiedBacktester
 from option_auditor.common.screener_utils import fetch_batch_data_safe
 from webapp.storage import get_storage_provider as _get_storage_provider
-from webapp.utils import _allowed_filename
+from webapp.utils import _allowed_filename, handle_api_error
 from webapp.validation import validate_schema
 from webapp.schemas import (
     PortfolioPositionsRequest, ScenarioRequest, CorrelationRequest,
     BacktestRequest, MonteCarloRequest, MarketDataRequest
 )
-from webapp.utils import _allowed_filename, handle_api_error
 from option_auditor.common.serialization import serialize_ohlc_data
 
 analysis_bp = Blueprint('analysis', __name__)
@@ -30,74 +29,40 @@ def get_db():
 
 @analysis_bp.route("/analyze/portfolio", methods=["POST"])
 @validate_schema(PortfolioPositionsRequest)
-def analyze_portfolio_route():
-    try:
-        positions = g.validated_data.positions
 @handle_api_error
 def analyze_portfolio_route():
-    data = request.json
-    positions = data.get("positions", [])
-
-    if not positions:
-        return jsonify({"error": "No positions provided"}), 400
-
+    positions = g.validated_data.positions
     report = portfolio_risk.analyze_portfolio_risk(positions)
     return jsonify(report)
 
 @analysis_bp.route("/analyze/portfolio/greeks", methods=["POST"])
 @validate_schema(PortfolioPositionsRequest)
-def analyze_portfolio_greeks_route():
-    try:
-        positions = g.validated_data.positions
 @handle_api_error
 def analyze_portfolio_greeks_route():
-    data = request.json
-    positions = data.get("positions", [])
-
-    if not positions:
-        return jsonify({"error": "No positions provided"}), 400
-
+    positions = g.validated_data.positions
     report = portfolio_risk.analyze_portfolio_greeks(positions)
     return jsonify(report)
 
 @analysis_bp.route("/analyze/scenario", methods=["POST"])
 @validate_schema(ScenarioRequest)
-def analyze_scenario_route():
-    try:
-        positions = g.validated_data.positions
-        scenario = g.validated_data.scenario
 @handle_api_error
 def analyze_scenario_route():
-    data = request.json
-    positions = data.get("positions", [])
-    scenario = data.get("scenario", {})
-
-    if not positions:
-        return jsonify({"error": "No positions provided"}), 400
-
+    positions = g.validated_data.positions
+    scenario = g.validated_data.scenario
     report = portfolio_risk.analyze_scenario(positions, scenario)
     return jsonify(report)
 
 @analysis_bp.route("/analyze/correlation", methods=["POST"])
 @validate_schema(CorrelationRequest)
-def analyze_correlation_route():
-    try:
-        tickers = g.validated_data.tickers
-        period = g.validated_data.period
 @handle_api_error
 def analyze_correlation_route():
-    data = request.json
-    tickers = data.get("tickers", [])
-
-    if isinstance(tickers, str):
-        tickers = [t.strip() for t in tickers.split(',')]
-
-    period = data.get("period", "1y")
+    tickers = g.validated_data.tickers
+    period = g.validated_data.period
 
     result = calculate_correlation_matrix(tickers, period=period)
 
     if "error" in result:
-            return jsonify(result), 400
+        return jsonify(result), 400
 
     return jsonify(result)
 
@@ -105,25 +70,15 @@ def analyze_correlation_route():
 @validate_schema(BacktestRequest)
 @handle_api_error
 def analyze_backtest_route():
-    data = request.json
-    ticker = data.get("ticker")
-    strategy = data.get("strategy", "master")
-    try:
-        ticker = g.validated_data.ticker
-        strategy = g.validated_data.strategy
-        initial_capital = g.validated_data.initial_capital
-        initial_capital = float(data.get("initial_capital", 10000.0))
-    except ValueError:
-        return jsonify({"error": "Initial Capital must be a number"}), 400
-
-    if not ticker:
-        return jsonify({"error": "Ticker required"}), 400
+    ticker = g.validated_data.ticker
+    strategy = g.validated_data.strategy
+    initial_capital = g.validated_data.initial_capital
 
     backtester = UnifiedBacktester(ticker, strategy_type=strategy, initial_capital=initial_capital)
     result = backtester.run()
 
     if "error" in result:
-            return jsonify(result), 400
+        return jsonify(result), 400
 
     return jsonify(result)
 
@@ -131,96 +86,30 @@ def analyze_backtest_route():
 @validate_schema(MonteCarloRequest)
 @handle_api_error
 def analyze_monte_carlo_route():
-    data = request.json
-    ticker = data.get("ticker")
-    strategy = data.get("strategy", "turtle")
-    try:
-        ticker = g.validated_data.ticker
-        strategy = g.validated_data.strategy
-        simulations = g.validated_data.simulations
-        simulations = int(data.get("simulations", 10000))
-    except ValueError:
-        return jsonify({"error": "Simulations must be an integer"}), 400
-
-    if not ticker:
-        return jsonify({"error": "Ticker required"}), 400
+    ticker = g.validated_data.ticker
+    strategy = g.validated_data.strategy
+    simulations = g.validated_data.simulations
 
     backtester = UnifiedBacktester(ticker, strategy_type=strategy)
-    # We can call run_monte_carlo directly, it will run the backtest if needed.
     result = backtester.run_monte_carlo(simulations=simulations)
 
     if "error" in result:
-            return jsonify(result), 400
+        return jsonify(result), 400
 
     return jsonify(result)
 
 @analysis_bp.route("/analyze/market-data", methods=["POST"])
 @validate_schema(MarketDataRequest)
-def analyze_market_data_route():
-    try:
-        ticker = g.validated_data.ticker
-        period = g.validated_data.period
-
-        # Fetch data
-        df = fetch_batch_data_safe([ticker], period=period)
-
-        if df.empty:
-             return jsonify({"error": "No data found"}), 404
-
-        # Handle MultiIndex if present (fetch_batch_data_safe returns MultiIndex for list input)
-        # But we passed a list of 1.
-        # Check structure
-        if isinstance(df.columns, pd.MultiIndex):
-             # Access the ticker level
-             if ticker in df.columns.levels[0]:
-                 df = df[ticker]
-             else:
-                 # Try uppercase
-                 ticker_upper = ticker.upper()
-                 if ticker_upper in df.columns.levels[0]:
-                     df = df[ticker_upper]
-                 else:
-                     return jsonify({"error": "Ticker data structure mismatch"}), 500
-
-        # Clean NaN
-        df = df.dropna()
-
-        # Prepare for Lightweight Charts
-        # Expected format: { time: '2019-04-11', open: 80.01, high: 96.63, low: 76.6, close: 88.80 }
-        chart_data = []
-        for index, row in df.iterrows():
-            # Ensure we have required columns
-            # fetch_batch_data_safe usually returns Capitalized columns (Open, High, Low, Close, Volume)
-            # or lowercase depending on yfinance version. Let's normalize.
-
-            # Helper to get value case-insensitively
-            def get_val(r, key):
-                val = None
-                if key in r: val = r[key]
-                elif key.lower() in r: val = r[key.lower()]
-                elif key.capitalize() in r: val = r[key.capitalize()]
-
-                # Convert numpy types to native python types
-                if val is not None:
-                    try:
-                        return float(val)
-                    except (ValueError, TypeError):
-                        return val
-                return None
 @handle_api_error
 def analyze_market_data_route():
-    data = request.json
-    ticker = data.get("ticker")
-    period = data.get("period", "1y")
-
-    if not ticker:
-        return jsonify({"error": "Ticker required"}), 400
+    ticker = g.validated_data.ticker
+    period = g.validated_data.period
 
     # Fetch data
     df = fetch_batch_data_safe([ticker], period=period)
 
     if df.empty:
-            return jsonify({"error": "No data found"}), 404
+        return jsonify({"error": "No data found"}), 404
 
     chart_data = serialize_ohlc_data(df, ticker)
     return jsonify(chart_data)
