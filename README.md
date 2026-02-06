@@ -21,13 +21,13 @@
 | option\_auditor/config.py                           |        9 |        0 |    100% |           |
 | option\_auditor/india\_stock\_data.py               |       16 |        2 |     88% |     19-20 |
 | option\_auditor/journal\_analyzer.py                |       88 |        7 |     92% |30, 113-114, 120, 158-162 |
-| option\_auditor/main\_analyzer.py                   |      495 |       42 |     92% |102-103, 219, 242, 250-251, 292, 302-303, 307-308, 324, 330-331, 393-394, 410, 435-436, 444-453, 484, 517-520, 598-599, 603-605, 617-618, 702, 772 |
+| option\_auditor/main\_analyzer.py                   |      505 |       45 |     91% |104-105, 221, 244, 252-253, 294, 304-305, 309-310, 326, 332-333, 391-393, 418-419, 435, 460-461, 469-478, 509, 542-545, 623-624, 628-630, 642-643, 727, 797 |
 | option\_auditor/models.py                           |       75 |        2 |     97% |    76, 91 |
 | option\_auditor/monte\_carlo\_simulator.py          |       68 |        2 |     97% |   21, 153 |
 | option\_auditor/parsers.py                          |      283 |       64 |     77% |15, 24-26, 30-44, 132-133, 160, 162-163, 180-214, 321-323, 335-336, 345, 378, 427 |
 | option\_auditor/portfolio\_risk.py                  |      274 |       52 |     81% |68-71, 81-83, 87, 94, 123-131, 186, 202, 234, 259-264, 269, 271, 288, 299-302, 319, 336-338, 380-382, 396, 417-420, 423, 425, 436, 444-447, 479-480, 514-516 |
 | option\_auditor/risk\_analyzer.py                   |       67 |        0 |    100% |           |
-| option\_auditor/risk\_intelligence.py               |       44 |        4 |     91% |     50-57 |
+| option\_auditor/risk\_intelligence.py               |       97 |        9 |     91% |50-57, 138-143, 162 |
 | option\_auditor/screener.py                         |       54 |        3 |     94% |   138-140 |
 | option\_auditor/sp500\_data.py                      |       34 |        5 |     85% |31-32, 50-53 |
 | option\_auditor/strategies/\_\_init\_\_.py          |        6 |        0 |    100% |           |
@@ -38,7 +38,7 @@
 | option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 144, 179-182 |
 | option\_auditor/strategies/fortress.py              |       78 |       19 |     76% |16-18, 31, 45-48, 53, 59-60, 81-82, 94-95, 100-101, 135-137 |
 | option\_auditor/strategies/fourier.py               |       57 |        2 |     96% |   112-113 |
-| option\_auditor/strategies/grandmaster\_screener.py |       64 |        7 |     89% |52-58, 117 |
+| option\_auditor/strategies/grandmaster\_screener.py |       64 |        8 |     88% |52-58, 117, 142 |
 | option\_auditor/strategies/hybrid.py                |      279 |       64 |     77% |29-30, 37-38, 49-52, 55-76, 146-147, 164-166, 182-184, 230, 263, 278, 289-291, 302-307, 313, 315, 317, 319, 325-328, 333, 336-337, 347, 355-357, 374-375, 393-394, 426-428 |
 | option\_auditor/strategies/isa.py                   |      100 |        9 |     91% |61, 73-77, 142, 147, 186-188 |
 | option\_auditor/strategies/liquidity.py             |       90 |        6 |     93% |38, 75-77, 174-175 |
@@ -75,7 +75,7 @@
 | webapp/storage.py                                   |      393 |       30 |     92% |68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 117, 270, 347-348, 388, 423-424, 443-446, 463, 480-481, 492, 504-505, 524 |
 | webapp/utils.py                                     |       59 |        7 |     88% |32-33, 58-59, 69-71 |
 | webapp/validation.py                                |       35 |        4 |     89% | 22, 49-51 |
-| **TOTAL**                                           | **7133** |  **954** | **87%** |           |
+| **TOTAL**                                           | **7196** |  **963** | **87%** |           |
 
 
 ## Setup coverage badge
