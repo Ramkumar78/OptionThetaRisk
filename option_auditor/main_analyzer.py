@@ -403,7 +403,9 @@ def analyze_csv(csv_path: Optional[str] = None,
                 start_date: Optional[str] = None, end_date: Optional[str] = None,
                 manual_data: Optional[List[Dict[str, Any]]] = None,
                 global_fees: Optional[float] = None,
-                style: str = "income") -> Dict:
+                style: str = "income",
+                max_fee_drag: Optional[float] = None,
+                stop_loss_limit: Optional[float] = None) -> Dict:
     
     # 1. Load Data
     df = pd.DataFrame()
@@ -518,6 +520,7 @@ def analyze_csv(csv_path: Optional[str] = None,
     itm_risk_details = []
     itm_risk_amount = 0.0
     missing_data_warning = []  # NEW: Track missing symbols
+    data_integrity_failure = False
 
     if open_groups:
         try:
@@ -536,6 +539,9 @@ def analyze_csv(csv_path: Optional[str] = None,
                     live_prices[raw] = fetched_prices[norm]
                 else:
                     missing_data_warning.append(raw) # Track failures
+
+            if raw_symbols and len(missing_data_warning) / len(raw_symbols) > 0.20:
+                data_integrity_failure = True
 
             itm_risk_flag, itm_risk_amount, itm_risk_details = check_itm_risk(open_groups, live_prices)
 
@@ -558,10 +564,14 @@ def analyze_csv(csv_path: Optional[str] = None,
         "efficiency_ratio": efficiency_ratio
     }
 
+    broker_alert = None
     if total_strategy_pnl_gross > 0:
         fee_drag = (total_strategy_fees / total_strategy_pnl_gross) * 100
         leakage_metrics["fee_drag"] = round(fee_drag, 2)
-        if fee_drag > 10.0:
+        if max_fee_drag is not None and fee_drag > max_fee_drag:
+            leakage_metrics["fee_drag_verdict"] = "Broker Alert: Fee Drag Exceeds Limit"
+            broker_alert = "Fee Drag Exceeds User Limit"
+        elif fee_drag > 10.0:
             leakage_metrics["fee_drag_verdict"] = "High Drag! Stop trading 1-wide spreads."
     else:
         leakage_metrics["fee_drag"] = 0.0
@@ -649,7 +659,12 @@ def analyze_csv(csv_path: Optional[str] = None,
     # OVERRIDE: ITM Risk Detection
     # If high risk is detected in open positions, it supersedes all other verdicts.
     verdict_details = None
-    if itm_risk_flag:
+
+    if data_integrity_failure:
+        verdict = "Red Flag: Data Integrity Failure"
+        verdict_color = "red"
+        verdict_details = "Critical: >20% of symbols failed to fetch live prices."
+    elif itm_risk_flag:
         verdict = "Red Flag: High Open Risk"
         verdict_color = "red"
         verdict_details = f"Warning: {len(itm_risk_details)} positions are deep ITM. Total Intrinsic Exposure: -${itm_risk_amount:,.2f}."
@@ -854,7 +869,7 @@ def analyze_csv(csv_path: Optional[str] = None,
     d_score, d_details = calculate_discipline_score(strategies, open_rows)
     risk_map = _build_risk_map(open_rows)
 
-    return {
+    response = {
         "discipline_score": d_score,
         "discipline_details": d_details,
         "risk_map": risk_map,
@@ -891,3 +906,8 @@ def analyze_csv(csv_path: Optional[str] = None,
         "monte_carlo": monte_carlo_results,
         "excel_report": excel_buffer
     }
+
+    if broker_alert:
+        response["broker_alert"] = broker_alert
+
+    return response
