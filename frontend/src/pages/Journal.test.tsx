@@ -7,11 +7,16 @@ import React from 'react';
 
 vi.mock('axios');
 
-// Mock Chart.js components to avoid canvas errors in JSDOM
-// Capture props to verify data passed to the chart
+// Mock AreaChart
+vi.mock('../components/AreaChart', () => ({
+  default: (props: any) => <div data-testid="area-chart" data-props={JSON.stringify(props)}>Area Chart</div>
+}));
+
+// Mock Chart.js components (still needed if referenced, but AreaChart is main one)
 vi.mock('react-chartjs-2', () => ({
   Line: (props: any) => <div data-testid="line-chart" data-props={JSON.stringify(props)}>Line Chart</div>
 }));
+
 
 describe('Journal Component', () => {
   const mockEntries = [
@@ -134,14 +139,16 @@ describe('Journal Component', () => {
 
         // Check for chart
         expect(screen.getByText('Equity Curve (Cumulative PnL)')).toBeInTheDocument();
-        const chart = screen.getByTestId('line-chart');
+        const chart = screen.getByTestId('area-chart');
         expect(chart).toBeInTheDocument();
 
         // Check props passed to chart
         const props = JSON.parse(chart.getAttribute('data-props') || '{}');
-        expect(props.data.labels).toEqual(["2023-10-01", "2023-10-02"]);
-        expect(props.data.datasets[0].data).toEqual([100, 50]);
-        expect(props.data.datasets[0].label).toBe('Cumulative PnL');
+        // AreaChart expects data in format { time: string, value: number }[]
+        expect(props.data).toEqual([
+            { time: "2023-10-01", value: 100 },
+            { time: "2023-10-02", value: 50 }
+        ]);
     });
   });
 
@@ -178,7 +185,7 @@ describe('Journal Component', () => {
 
           // Chart header and component should NOT be present
           expect(screen.queryByText('Equity Curve (Cumulative PnL)')).not.toBeInTheDocument();
-          expect(screen.queryByTestId('line-chart')).not.toBeInTheDocument();
+          expect(screen.queryByTestId('area-chart')).not.toBeInTheDocument();
       });
   });
 });
