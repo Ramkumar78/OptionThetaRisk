@@ -419,30 +419,30 @@ const PortfolioRisk: React.FC = () => {
                         <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                             <tr>
                                 <th className="px-4 py-3">Ticker</th>
-                                <th className="px-4 py-3">Type</th>
-                                <th className="px-4 py-3">Strike</th>
-                                <th className="px-4 py-3">Expiry</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Type</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Strike</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Expiry</th>
                                 <th className="px-4 py-3">Price (S)</th>
-                                <th className="px-4 py-3">IV %</th>
-                                <th className="px-4 py-3">Delta</th>
-                                <th className="px-4 py-3">Gamma</th>
-                                <th className="px-4 py-3">Theta</th>
-                                <th className="px-4 py-3">Vega</th>
+                                <th className="px-4 py-3 hidden md:table-cell">IV %</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Delta</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Gamma</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Theta</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Vega</th>
                             </tr>
                         </thead>
                         <tbody>
                             {greeksReport.positions.map((pos, i) => (
                                 <tr key={i} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                                     <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">{pos.ticker}</td>
-                                    <td className="px-4 py-3 uppercase">{pos.type}</td>
-                                    <td className="px-4 py-3">{pos.strike}</td>
-                                    <td className="px-4 py-3">{pos.expiry}</td>
+                                    <td className="px-4 py-3 uppercase hidden md:table-cell">{pos.type}</td>
+                                    <td className="px-4 py-3 hidden md:table-cell">{pos.strike}</td>
+                                    <td className="px-4 py-3 hidden md:table-cell">{pos.expiry}</td>
                                     <td className="px-4 py-3">{pos.error ? <span className="text-red-500">Err</span> : pos.S}</td>
-                                    <td className="px-4 py-3">{pos.IV}</td>
-                                    <td className={clsx("px-4 py-3", pos.delta > 0 ? "text-green-600" : "text-red-600")}>{pos.delta}</td>
-                                    <td className="px-4 py-3">{pos.gamma}</td>
-                                    <td className="px-4 py-3 text-red-600">{pos.theta}</td>
-                                    <td className="px-4 py-3">{pos.vega}</td>
+                                    <td className="px-4 py-3 hidden md:table-cell">{pos.IV}</td>
+                                    <td className={clsx("px-4 py-3 hidden md:table-cell", pos.delta > 0 ? "text-green-600" : "text-red-600")}>{pos.delta}</td>
+                                    <td className="px-4 py-3 hidden md:table-cell">{pos.gamma}</td>
+                                    <td className="px-4 py-3 text-red-600 hidden md:table-cell">{pos.theta}</td>
+                                    <td className="px-4 py-3 hidden md:table-cell">{pos.vega}</td>
                                 </tr>
                             ))}
                         </tbody>
