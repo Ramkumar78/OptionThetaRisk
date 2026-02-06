@@ -7,6 +7,7 @@ import AreaChart from '../components/AreaChart';
 import DrawdownChart from '../components/DrawdownChart';
 import HealthScoreGauge from '../components/ui/HealthScoreGauge';
 import Tooltip from '../components/ui/Tooltip';
+import TradingMoodWidget from '../components/TradingMoodWidget';
 import { type CandlestickData } from 'lightweight-charts';
 import { METRIC_EXPLANATIONS } from '../utils/explanations';
 
@@ -206,44 +207,49 @@ const Dashboard: React.FC = () => {
                </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
-              <div>
-                  <div className="flex justify-between items-start mb-4">
-                      <div>
-                          <Tooltip content={METRIC_EXPLANATIONS.discipline_score}>
-                              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Mindset Meter</h2>
-                          </Tooltip>
-                          <p className="text-xs text-gray-500">Psychological State</p>
+          <div className="flex flex-col gap-4 md:gap-6">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
+                  <div>
+                      <div className="flex justify-between items-start mb-4">
+                          <div>
+                              <Tooltip content={METRIC_EXPLANATIONS.discipline_score}>
+                                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Mindset Meter</h2>
+                              </Tooltip>
+                              <p className="text-xs text-gray-500">Psychological State</p>
+                          </div>
+                          <div className="w-8 h-8 bg-primary-50 dark:bg-primary-900/20 text-primary-600 rounded flex items-center justify-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/><path d="M12 4v16"/></svg>
+                          </div>
                       </div>
-                      <div className="w-8 h-8 bg-primary-50 dark:bg-primary-900/20 text-primary-600 rounded flex items-center justify-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/><path d="M12 4v16"/></svg>
+
+                      <div className="mb-4">
+                          <HealthScoreGauge score={portfolioData?.discipline_score || 100} />
+                      </div>
+
+                      {affirmation && (
+                          <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-100 dark:border-yellow-900/50">
+                              <p className="text-xs font-serif italic text-yellow-800 dark:text-yellow-200">
+                                  "{affirmation}"
+                              </p>
+                          </div>
+                      )}
+
+                      <div className="space-y-2 mb-6">
+                            {portfolioData?.discipline_details?.map((d: string, i: number) => (
+                                <div key={i} className="text-xs text-red-600 flex items-start">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 mt-0.5 flex-shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    {d}
+                                </div>
+                            ))}
                       </div>
                   </div>
-
-                  <div className="mb-4">
-                      <HealthScoreGauge score={portfolioData?.discipline_score || 100} />
-                  </div>
-
-                  {affirmation && (
-                      <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-100 dark:border-yellow-900/50">
-                          <p className="text-xs font-serif italic text-yellow-800 dark:text-yellow-200">
-                              "{affirmation}"
-                          </p>
-                      </div>
-                  )}
-
-                  <div className="space-y-2 mb-6">
-                        {portfolioData?.discipline_details?.map((d: string, i: number) => (
-                            <div key={i} className="text-xs text-red-600 flex items-start">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 mt-0.5 flex-shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                                {d}
-                            </div>
-                        ))}
-                  </div>
+                  <Link to="/screener" className="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2 rounded text-center transition-colors text-xs">
+                      Launch Market Scanner
+                  </Link>
               </div>
-              <Link to="/screener" className="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2 rounded text-center transition-colors text-xs">
-                  Launch Market Scanner
-              </Link>
+              <div className="h-64">
+                  <TradingMoodWidget />
+              </div>
           </div>
       </div>
 

@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, type ChartData } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import clsx from 'clsx';
+import UITooltip from '../components/ui/Tooltip';
+import { METRIC_EXPLANATIONS } from '../utils/explanations';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -424,10 +426,18 @@ const PortfolioRisk: React.FC = () => {
                                 <th className="px-4 py-3 hidden md:table-cell">Expiry</th>
                                 <th className="px-4 py-3">Price (S)</th>
                                 <th className="px-4 py-3 hidden md:table-cell">IV %</th>
-                                <th className="px-4 py-3 hidden md:table-cell">Delta</th>
-                                <th className="px-4 py-3 hidden md:table-cell">Gamma</th>
-                                <th className="px-4 py-3 hidden md:table-cell">Theta</th>
-                                <th className="px-4 py-3 hidden md:table-cell">Vega</th>
+                                <th className="px-4 py-3 hidden md:table-cell">
+                                    <UITooltip content={METRIC_EXPLANATIONS.delta}>Delta</UITooltip>
+                                </th>
+                                <th className="px-4 py-3 hidden md:table-cell">
+                                    <UITooltip content={METRIC_EXPLANATIONS.gamma}>Gamma</UITooltip>
+                                </th>
+                                <th className="px-4 py-3 hidden md:table-cell">
+                                    <UITooltip content={METRIC_EXPLANATIONS.theta}>Theta</UITooltip>
+                                </th>
+                                <th className="px-4 py-3 hidden md:table-cell">
+                                    <UITooltip content={METRIC_EXPLANATIONS.vega}>Vega</UITooltip>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>

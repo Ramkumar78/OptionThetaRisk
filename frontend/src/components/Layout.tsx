@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import FeedbackModal from './FeedbackModal';
+import QuickActionsSidebar from './QuickActionsSidebar';
 import { MindsetChecklist } from './MindsetChecklist';
 import axios from 'axios';
 
@@ -192,6 +193,7 @@ const Layout: React.FC<LayoutProps> = () => {
       </footer>
 
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      <QuickActionsSidebar />
       <MindsetChecklist
         isOpen={showChecklist}
         onClose={() => setShowChecklist(false)}
