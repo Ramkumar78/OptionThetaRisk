@@ -4,6 +4,13 @@ import os
 # Configuration for Verdicts
 VERDICT_MIN_TRADES = int(os.environ.get("VERDICT_MIN_TRADES", 10))
 
+# Backtesting Configuration
+BACKTEST_DAYS = 1825  # 5 Years
+BACKTEST_INITIAL_CAPITAL = 10000.0
+VOLATILITY_MULTIPLIER = 5.0
+BACKTEST_BENCHMARK_SYMBOLS = ["SPY", "^VIX"]
+RUIN_THRESHOLD_PCT = 0.50
+
 SYMBOL_DESCRIPTIONS: Dict[str, str] = {
     # Broad market ETFs and indices
     "SPY": "S&P 500 ETF", "QQQ": "Nasdaq-100 ETF", "DIA": "Dow Jones Industrial Average ETF",

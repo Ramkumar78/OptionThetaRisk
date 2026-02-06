@@ -6,7 +6,8 @@ from option_auditor.unified_backtester import UnifiedBacktester
 
 @pytest.fixture
 def mock_yf_download():
-    with patch("option_auditor.unified_backtester.yf.download") as mock:
+    # Patch yf.download in the new BacktestDataLoader location
+    with patch("option_auditor.backtest_data_loader.yf.download") as mock:
         yield mock
 
 def create_mock_df():
