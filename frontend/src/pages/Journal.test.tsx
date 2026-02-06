@@ -213,4 +213,35 @@ describe('Journal Component', () => {
           expect(screen.queryByTestId('area-chart')).not.toBeInTheDocument();
       });
   });
+
+  it('renders calendar heatmap with trades', async () => {
+    (axios.get as any).mockResolvedValue({ data: mockEntries });
+
+    render(
+      <BrowserRouter>
+        <Journal />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+        expect(screen.getByText('Trading Consistency')).toBeInTheDocument();
+        // Legend should be present
+        expect(screen.getByText('Less')).toBeInTheDocument();
+        expect(screen.getByText('More')).toBeInTheDocument();
+    });
+  });
+
+  it('renders calendar heatmap gracefully with no trades', async () => {
+    (axios.get as any).mockResolvedValue({ data: [] });
+
+    render(
+      <BrowserRouter>
+        <Journal />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+        expect(screen.getByText('Trading Consistency')).toBeInTheDocument();
+    });
+  });
 });

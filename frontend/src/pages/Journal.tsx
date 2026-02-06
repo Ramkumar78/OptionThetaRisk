@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { DailyDebriefModal } from '../components/DailyDebriefModal';
 import { MindsetChecklist } from '../components/MindsetChecklist';
 import AreaChart from '../components/AreaChart';
+import { CalendarHeatmap } from '../components/CalendarHeatmap';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -152,7 +153,10 @@ const Journal: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="space-y-8">
+      <CalendarHeatmap entries={entries} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       {/* Input Form */}
       <div className="lg:col-span-1">
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 sticky top-24">
@@ -409,6 +413,7 @@ const Journal: React.FC = () => {
         onConfirm={handleConfirmedSubmit}
         actionName="Log Trade"
       />
+      </div>
     </div>
   );
 };
