@@ -17,6 +17,16 @@ vi.mock('../components/RiskMapChart', () => ({
   default: () => <div data-testid="risk-map-chart">Risk Map Loaded</div>
 }));
 
+// Mock AreaChart
+vi.mock('../components/AreaChart', () => ({
+  default: () => <div data-testid="area-chart">Equity Curve Loaded</div>
+}));
+
+// Mock DrawdownChart
+vi.mock('../components/DrawdownChart', () => ({
+  default: () => <div data-testid="drawdown-chart">Drawdown Chart Loaded</div>
+}));
+
 // Mock global fetch
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -55,7 +65,8 @@ describe('Dashboard Component', () => {
         net_liquidity_now: 123456,
         ytd_return_pct: 15.5,
         portfolio_beta_delta: 50.2,
-        discipline_score: 95
+        discipline_score: 95,
+        portfolio_curve: [{ x: '2023-01-01', y: 100 }]
     };
 
     (axios.get as any).mockResolvedValue({ data: mockData });
@@ -71,6 +82,11 @@ describe('Dashboard Component', () => {
     }, { timeout: 3000 });
 
     expect(screen.getByText((content) => content.includes('123,456'))).toBeInTheDocument();
+
+    // Check for new charts
+    expect(screen.getByText('Performance Analysis')).toBeInTheDocument();
+    expect(screen.getByTestId('area-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('drawdown-chart')).toBeInTheDocument();
   });
 
   it('renders market regime after fetch', async () => {

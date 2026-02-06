@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import CandlestickChart from '../components/CandlestickChart';
 import RiskMapChart from '../components/RiskMapChart';
+import AreaChart from '../components/AreaChart';
+import DrawdownChart from '../components/DrawdownChart';
 import { type CandlestickData } from 'lightweight-charts';
 
 const ASSETS = [
@@ -185,6 +187,7 @@ const Dashboard: React.FC = () => {
       {/* MIDDLE ROW: PORTFOLIO OR CTA */}
       <div>
           {portfolioData && (
+               <>
                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                    {/* Risk Map */}
                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -242,6 +245,41 @@ const Dashboard: React.FC = () => {
                         </div>
                    </div>
                </div>
+
+               {/* Performance Analysis */}
+               <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 mb-8">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Performance Analysis</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <h4 className="text-xs text-gray-500 uppercase font-bold">Equity Curve</h4>
+                            </div>
+                            <div className="h-64">
+                                 {portfolioData.portfolio_curve && (
+                                     <AreaChart
+                                         data={portfolioData.portfolio_curve.map((p: any) => ({
+                                             time: p.x,
+                                             value: (portfolioData.account_size_start || 0) + p.y
+                                         }))}
+                                         color="#2563eb"
+                                     />
+                                 )}
+                            </div>
+                        </div>
+                        <div>
+                             <div className="flex justify-between items-center mb-2">
+                                <h4 className="text-xs text-gray-500 uppercase font-bold">Drawdown</h4>
+                             </div>
+                             <div className="h-64">
+                                  <DrawdownChart
+                                      data={portfolioData.portfolio_curve || []}
+                                      initialCapital={portfolioData.account_size_start || 0}
+                                  />
+                             </div>
+                        </div>
+                    </div>
+               </div>
+               </>
           )}
 
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Portfolio Status</h3>
