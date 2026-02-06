@@ -14,7 +14,9 @@ import copy
 import logging
 
 from option_auditor.common.price_utils import normalize_ticker, fetch_live_prices
+from option_auditor.common.data_utils import fetch_batch_data_safe, prepare_data_for_ticker
 from option_auditor.risk_analyzer import check_itm_risk, calculate_discipline_score
+from option_auditor.risk_intelligence import get_market_regime
 from option_auditor.parsers import detect_broker
 from option_auditor.monte_carlo_simulator import run_simple_monte_carlo
 
@@ -366,6 +368,29 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
 
     # Risk Map Generation
     data["risk_map"] = _build_risk_map(open_positions)
+
+    # --- NEW: Market Regime ---
+    try:
+        # Fetch SP500 data (2 years)
+        # Using fetch_batch_data_safe to handle retries and safety
+        sp500_batch = fetch_batch_data_safe(["^GSPC"], period="2y", interval="1d")
+
+        # Prepare single ticker DF
+        sp500_df = prepare_data_for_ticker(
+            "^GSPC",
+            sp500_batch,
+            time_frame="1d",
+            period="2y",
+            yf_interval="1d",
+            resample_rule=None,
+            is_intraday=False
+        )
+
+        regime = get_market_regime(sp500_df)
+        data["market_regime"] = regime
+    except Exception as e:
+        logger.error(f"Failed to determine market regime: {e}")
+        data["market_regime"] = "Unknown (Error)"
 
     return data
 
