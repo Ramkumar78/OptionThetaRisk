@@ -36,6 +36,10 @@ class BacktestReporter:
         avg_days_held = round(sum(sell_trades) / len(sell_trades)) if sell_trades else 0
         total_days_held = sum(sell_trades)
 
+        # Max Drawdown
+        equity_values = [item['strategy_equity'] for item in equity_curve]
+        max_drawdown_pct = self._calculate_max_drawdown(equity_values)
+
         structured_trades = []
         current_trade = {}
 
@@ -74,11 +78,29 @@ class BacktestReporter:
             "total_days_held": total_days_held,
             "trades": len(trade_log) // 2,
             "win_rate": self._calculate_win_rate(trade_log),
+            "max_drawdown_pct": max_drawdown_pct,
             "final_equity": round(final_equity, 2),
             "log": trade_log,
             "trade_list": structured_trades,
             "equity_curve": equity_curve
         }
+
+    def _calculate_max_drawdown(self, equity_values: List[float]) -> float:
+        if not equity_values:
+            return 0.0
+
+        peak = equity_values[0]
+        max_drawdown = 0.0
+
+        for value in equity_values:
+            if value > peak:
+                peak = value
+
+            drawdown = (peak - value) / peak
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+
+        return round(max_drawdown * 100, 2)
 
     def _calculate_win_rate(self, trade_log: List[Dict[str, Any]]) -> str:
         wins = 0; losses = 0; entry = 0
