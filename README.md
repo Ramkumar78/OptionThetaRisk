@@ -51,6 +51,17 @@ docker-compose up --build
 ```
 Access the dashboard at http://localhost:5000.
 
+### 🐣 New User?
+Visit the **Documentation** page in the app for an interactive "Getting Started" guide.
+You can also generate sample data to test the system immediately:
+
+1. **Download Sample CSV**: Available on the Docs page to test the "Audit" feature.
+2. **Populate Database**: Run the sample data script to fill the Journal with realistic trades:
+   ```bash
+   # Run inside the web container or locally
+   python scripts/generate_sample_data.py --username <your_username>
+   ```
+
 ## 📈 Roadmap & Contributions
 We are currently working on integrating real-time LSE data for deeper UK market penetration.
 

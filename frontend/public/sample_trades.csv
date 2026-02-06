@@ -1,0 +1,7 @@
+Time,Underlying Symbol,Quantity,Action,Price,Commissions and Fees,Expiration Date,Strike Price,Option Type
+2023-10-01 10:00,AAPL,1,Buy to Open,150.00,1.00,,,
+2023-10-05 14:00,AAPL,1,Sell to Close,155.00,1.00,,,
+2023-10-10 11:00,SPY,1,Buy to Open,5.00,1.00,2023-11-17,450,Call
+2023-10-20 15:30,SPY,1,Sell to Close,6.50,1.00,2023-11-17,450,Call
+2023-11-01 09:30,TSLA,1,Buy to Open,10.00,1.00,2023-12-15,250,Put
+2023-11-05 10:00,TSLA,1,Sell to Close,8.00,1.00,2023-12-15,250,Put
