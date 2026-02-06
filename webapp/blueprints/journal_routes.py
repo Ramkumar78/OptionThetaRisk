@@ -1,6 +1,8 @@
-from flask import Blueprint, request, jsonify, session, current_app, g
+from flask import Blueprint, request, jsonify, session, current_app, g, send_file
 import uuid
 import time
+import io
+import pandas as pd
 from datetime import datetime
 from option_auditor import journal_analyzer
 from webapp.storage import get_storage_provider as _get_storage_provider
@@ -54,6 +56,29 @@ def journal_analyze_batch():
     entries = storage.get_journal_entries(username)
     result = journal_analyzer.analyze_journal(entries)
     return jsonify(result)
+
+@journal_bp.route("/api/journal/export", methods=["GET"])
+def journal_export_csv():
+    username = session.get('username')
+    storage = get_db()
+    entries = storage.get_journal_entries(username)
+
+    if not entries:
+         # Return empty CSV with common headers if possible, or just empty
+         df = pd.DataFrame(columns=["entry_date", "entry_time", "symbol", "strategy", "sentiment", "pnl", "notes"])
+    else:
+         df = pd.DataFrame(entries)
+
+    csv_buffer = io.BytesIO()
+    df.to_csv(csv_buffer, index=False, encoding='utf-8')
+    csv_buffer.seek(0)
+
+    return send_file(
+        csv_buffer,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='journal_export.csv'
+    )
 
 @journal_bp.route("/journal/import", methods=["POST"])
 @validate_schema(JournalImportRequest)

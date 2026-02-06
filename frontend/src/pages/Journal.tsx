@@ -271,14 +271,23 @@ const Journal: React.FC = () => {
       <div className="lg:col-span-2 space-y-6">
          <div className="flex justify-between items-center bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-800">
              <h2 id="journal-list-title" className="text-lg font-bold text-gray-900 dark:text-white">Your Journal</h2>
-             <button
-               id="journal-analyze-btn"
-               onClick={handleAnalyze}
-               className="text-sm px-4 py-2 bg-primary-50 text-primary-700 rounded hover:bg-primary-100 font-medium dark:bg-primary-900/30 dark:text-primary-300 transition-colors flex items-center"
-             >
-               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></svg>
-               Analyze Habits
-             </button>
+             <div className="flex space-x-2">
+                 <button
+                   onClick={() => window.location.href = '/api/journal/export'}
+                   className="text-sm px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-medium dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 transition-colors flex items-center"
+                 >
+                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                   Download CSV
+                 </button>
+                 <button
+                   id="journal-analyze-btn"
+                   onClick={handleAnalyze}
+                   className="text-sm px-4 py-2 bg-primary-50 text-primary-700 rounded hover:bg-primary-100 font-medium dark:bg-primary-900/30 dark:text-primary-300 transition-colors flex items-center"
+                 >
+                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></svg>
+                   Analyze Habits
+                 </button>
+             </div>
          </div>
 
          {analysis && (
