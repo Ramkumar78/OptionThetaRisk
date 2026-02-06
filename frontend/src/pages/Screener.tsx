@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 import TradingViewChart from '../components/TradingViewChart';
+import UITooltip from '../components/ui/Tooltip';
+import { METRIC_EXPLANATIONS } from '../utils/explanations';
 
 // 1. STRATEGY DEFINITIONS (Reduced for brevity in thought, but full list kept in implementation)
 const STRATEGIES: Record<string, {
@@ -712,6 +714,11 @@ const Screener: React.FC = () => {
                                             {/* NEW COLUMN: ATR */}
                                             <th onClick={() => handleSort('ATR')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">ATR <SortIcon colKey="ATR" /></th>
 
+                                            {/* NEW COLUMN: RS */}
+                                            <th onClick={() => handleSort('RS_Rating')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">
+                                                <UITooltip content={METRIC_EXPLANATIONS.rs}>RS <SortIcon colKey="RS_Rating" /></UITooltip>
+                                            </th>
+
                                             {/* NEW COLUMN: BREAKOUT */}
                                             <th onClick={() => handleSort('Breakout')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout <SortIcon colKey="Breakout" /></th>
 
@@ -852,6 +859,11 @@ const Screener: React.FC = () => {
                                                     {/* ATR DATA */}
                                                     <td className="px-6 py-3 text-right font-mono text-xs text-gray-500">
                                                         {atrVal ? atrVal.toFixed(2) : '-'}
+                                                    </td>
+
+                                                    {/* RS RATING */}
+                                                    <td className="px-6 py-3 text-right font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
+                                                        {r.RS_Rating || r.rs_rating || '-'}
                                                     </td>
 
                                                     {/* BREAKOUT DATE */}
