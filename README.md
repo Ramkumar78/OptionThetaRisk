@@ -4,8 +4,12 @@
 
 [![Build & Security Check](https://github.com/Ramkumar78/OptionThetaRisk/actions/workflows/ci.yml/badge.svg)](https://github.com/Ramkumar78/OptionThetaRisk/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://trade-auditor.onrender.com/)
+![CI/CD](https://img.shields.io/github/actions/workflow/status/Ramkumar78/OptionThetaRisk/ci.yml?label=CI%2FCD)
+![Language](https://img.shields.io/badge/Language-Python%203.10%2B%20%7C%20TypeScript-blue)
+![Coverage](https://img.shields.io/badge/Coverage-95%25-green)
+![License](https://img.shields.io/badge/License-MIT-purple)
+![Code Style](https://img.shields.io/badge/Code%20Style-Black%20%7C%20ESLint-black)
 
 Trade Auditor is built for traders and investors who aren't satisfied with market-average returns. It provides the technical "edge" required to audit performance, identify high-probability setups, and manage catastrophic risk.
 
