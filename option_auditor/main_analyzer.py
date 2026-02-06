@@ -357,6 +357,10 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
             self.is_revenge = d.get("is_revenge", False)
             self.net_pnl = d.get("pnl", 0.0)
             self._hold_days = d.get("hold_days", 0.0)
+            self.strategy_name = d.get("strategy", "Unclassified")
+            self.exit_ts = pd.to_datetime(d.get("exit_ts")) if d.get("exit_ts") else None
+            self.entry_ts = pd.to_datetime(d.get("entry_ts")) if d.get("entry_ts") else None
+
         def hold_days(self):
             return self._hold_days
 
@@ -682,6 +686,8 @@ def analyze_csv(csv_path: Optional[str] = None,
             "symbol": s.symbol,
             "expiry": s.expiry.date().isoformat() if s.expiry and not pd.isna(s.expiry) else "",
             "strategy": s.strategy_name,
+            "entry_ts": s.entry_ts.isoformat() if s.entry_ts else None,
+            "exit_ts": s.exit_ts.isoformat() if s.exit_ts else None,
             "legs_desc": legs_desc,
             "pnl": s.net_pnl,
             "gross_pnl": s.pnl,

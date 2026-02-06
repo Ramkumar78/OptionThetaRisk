@@ -92,6 +92,50 @@ def calculate_discipline_score(strategies: List[Any], open_positions: List[Dict]
         score += bonus
         details.append(f"Cutting Losses Early: +{bonus} pts")
 
+    # Penalize Tilt (Rapid losses)
+    losses = [s for s in strategies if s.net_pnl < 0 and getattr(s, 'exit_ts', None)]
+    losses.sort(key=lambda x: x.exit_ts)
+
+    tilt_events = 0
+    for i in range(len(losses)):
+        current = losses[i]
+        window_start = current.exit_ts - pd.Timedelta(hours=24)
+
+        count = 0
+        for j in range(i, -1, -1):
+            if losses[j].exit_ts < window_start:
+                break
+            count += 1
+
+        if count > 3:
+            tilt_events += 1
+
+    if tilt_events > 0:
+        p = tilt_events * 5
+        score -= p
+        details.append(f"Tilt Detected (>3 losses in 24h): -{p} pts")
+
+    # Reward Patience (Holding Winners)
+    strategy_hold_avgs = defaultdict(list)
+    for s in strategies:
+        name = getattr(s, 'strategy_name', "Unclassified")
+        strategy_hold_avgs[name].append(s.hold_days())
+
+    avg_map = {k: np.mean(v) for k, v in strategy_hold_avgs.items()}
+
+    patience_count = 0
+    for s in strategies:
+        name = getattr(s, 'strategy_name', "Unclassified")
+        if s.net_pnl > 0:
+            avg = avg_map.get(name, 0)
+            if avg > 0 and s.hold_days() > avg:
+                patience_count += 1
+
+    if patience_count > 0:
+        b = min(20, patience_count * 2)
+        score += b
+        details.append(f"Patience Bonus (Holding Winners): +{b} pts")
+
     # 2. Open Position Analysis (Risk Management)
     # Penalize Gamma Risk (holding < 3 DTE)
     gamma_risks = 0
