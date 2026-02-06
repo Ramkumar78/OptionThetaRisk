@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import clsx from 'clsx';
 import { DailyDebriefModal } from '../components/DailyDebriefModal';
-import { Line } from 'react-chartjs-2';
+import AreaChart from '../components/AreaChart';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -307,34 +307,12 @@ const Journal: React.FC = () => {
                         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-100 dark:border-gray-700">
                              <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase mb-3">Equity Curve (Cumulative PnL)</h4>
                              <div className="h-64 w-full">
-                                <Line
-                                    data={{
-                                        labels: analysis.equity_curve.map(p => p.date),
-                                        datasets: [{
-                                            label: 'Cumulative PnL',
-                                            data: analysis.equity_curve.map(p => p.cumulative_pnl),
-                                            borderColor: '#4f46e5', // indigo-600
-                                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                                            fill: true,
-                                            tension: 0.1
-                                        }]
-                                    }}
-                                    options={{
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        scales: {
-                                            x: { display: false },
-                                            y: { grid: { color: 'rgba(0,0,0,0.05)' } }
-                                        },
-                                        plugins: {
-                                            legend: { display: false },
-                                            tooltip: {
-                                                callbacks: {
-                                                    label: (ctx) => `PnL: $${Number(ctx.raw).toFixed(2)}`
-                                                }
-                                            }
-                                        }
-                                    }}
+                                <AreaChart
+                                    data={analysis.equity_curve.map((p: any) => ({
+                                        time: p.date,
+                                        value: p.cumulative_pnl
+                                    }))}
+                                    color="#4f46e5"
                                 />
                              </div>
                         </div>

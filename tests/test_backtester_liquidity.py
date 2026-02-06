@@ -49,8 +49,12 @@ def test_backtester_liquidity_grab_bullish():
     df.iloc[70, df.columns.get_loc('High')] = 105.0
     df.iloc[70, df.columns.get_loc('Close')] = 105.0
 
-    with patch.object(UnifiedBacktester, 'fetch_data', return_value=df):
-        with patch.object(UnifiedBacktester, 'calculate_indicators', return_value=df):
+    # Patch BacktestEngine.calculate_indicators instead of UnifiedBacktester.calculate_indicators
+    # because the engine now owns the logic and is called directly.
+    with patch("option_auditor.backtest_engine.BacktestEngine.calculate_indicators", return_value=df):
+        # We also need to patch the loader fetch_data, OR the backtester's delegate fetch_data.
+        # Patching backtester's fetch_data works because run() calls self.fetch_data()
+        with patch.object(UnifiedBacktester, 'fetch_data', return_value=df):
             bt = UnifiedBacktester("TEST", strategy_type="liquidity_grab")
             result = bt.run()
 
@@ -111,8 +115,8 @@ def test_backtester_rsi_bullish_div():
     df.iloc[90, df.columns.get_loc('High')] = 110.0
     df.iloc[90, df.columns.get_loc('Close')] = 110.0
 
-    with patch.object(UnifiedBacktester, 'fetch_data', return_value=df):
-        with patch.object(UnifiedBacktester, 'calculate_indicators', return_value=df):
+    with patch("option_auditor.backtest_engine.BacktestEngine.calculate_indicators", return_value=df):
+        with patch.object(UnifiedBacktester, 'fetch_data', return_value=df):
             bt = UnifiedBacktester("TEST", strategy_type="rsi")
             result = bt.run()
 

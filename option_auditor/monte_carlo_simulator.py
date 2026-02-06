@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 from typing import List, Dict, Any
+from option_auditor.config import RUIN_THRESHOLD_PCT
 
 logger = logging.getLogger("MonteCarloSimulator")
 
@@ -15,7 +16,7 @@ class MonteCarloSimulator:
         # Extract percentage returns (e.g., 5.0 for 5%)
         self.returns_pct = [t.get('return_pct', 0.0) for t in trades if t.get('return_pct') is not None]
 
-    def run(self, simulations: int = 10000, ruin_threshold_pct: float = 0.50):
+    def run(self, simulations: int = 10000, ruin_threshold_pct: float = RUIN_THRESHOLD_PCT):
         if not self.returns_pct:
             return {"error": "No trade returns to simulate."}
 
@@ -143,7 +144,7 @@ class MonteCarloSimulator:
             "message": f"Ran {simulations} simulations. {round(prob_ruin, 2)}% risk of >{int(ruin_threshold_pct * 100)}% drawdown."
         }
 
-def run_simple_monte_carlo(strategies: List[Any], start_equity: float, num_sims: int = 1000, forecast_trades: int = 50, ruin_threshold_pct: float = 0.50) -> Dict:
+def run_simple_monte_carlo(strategies: List[Any], start_equity: float, num_sims: int = 1000, forecast_trades: int = 50, ruin_threshold_pct: float = RUIN_THRESHOLD_PCT) -> Dict:
     """
     Runs a Monte Carlo simulation to project future portfolio performance.
     Returns: Probability of Ruin, Median Outcome, and 5th Percentile (Worst Case).
