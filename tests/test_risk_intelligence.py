@@ -117,10 +117,15 @@ def _create_base_df(length=250):
         'Low': [99.0] * length
     }, index=dates)
 
+@patch('option_auditor.risk_intelligence.yf.download')
 @patch('option_auditor.risk_intelligence._calculate_atr')
 @patch('option_auditor.risk_intelligence._calculate_rsi')
-def test_market_regime_stormy(mock_rsi, mock_atr):
+def test_market_regime_stormy(mock_rsi, mock_atr, mock_yf):
     df = _create_base_df()
+
+    # Mock VIX (Safe Default)
+    vix_df = pd.DataFrame({'Close': [14.0]}, index=[pd.Timestamp.now()])
+    mock_yf.return_value = vix_df
 
     # ATR Spike at the end
     # History: 1.0, Current: 10.0
@@ -130,12 +135,19 @@ def test_market_regime_stormy(mock_rsi, mock_atr):
     mock_rsi.return_value = pd.Series([50.0] * len(df), index=df.index)
 
     result = get_market_regime(df)
-    assert result == "Stormy (High Risk)"
+    assert result["regime"] == "Stormy (High Risk)"
+    assert result["market_climate"] == "Quiet" # VIX 14
+    assert result["vix"] == 14.0
 
+@patch('option_auditor.risk_intelligence.yf.download')
 @patch('option_auditor.risk_intelligence._calculate_atr')
 @patch('option_auditor.risk_intelligence._calculate_rsi')
-def test_market_regime_bearish(mock_rsi, mock_atr):
+def test_market_regime_bearish(mock_rsi, mock_atr, mock_yf):
     df = _create_base_df()
+
+    # Mock VIX (Turbulent)
+    vix_df = pd.DataFrame({'Close': [20.0]}, index=[pd.Timestamp.now()])
+    mock_yf.return_value = vix_df
 
     # Normal ATR
     mock_atr.return_value = pd.Series([1.0] * len(df), index=df.index)
@@ -147,12 +159,19 @@ def test_market_regime_bearish(mock_rsi, mock_atr):
     df.iloc[-1, df.columns.get_loc('Close')] = 90.0
 
     result = get_market_regime(df)
-    assert result == "Bearish (Caution)"
+    assert result["regime"] == "Bearish (Caution)"
+    assert result["market_climate"] == "Turbulent"
+    assert result["vix"] == 20.0
 
+@patch('option_auditor.risk_intelligence.yf.download')
 @patch('option_auditor.risk_intelligence._calculate_atr')
 @patch('option_auditor.risk_intelligence._calculate_rsi')
-def test_market_regime_bullish(mock_rsi, mock_atr):
+def test_market_regime_bullish(mock_rsi, mock_atr, mock_yf):
     df = _create_base_df()
+
+    # Mock VIX (Panic)
+    vix_df = pd.DataFrame({'Close': [30.0]}, index=[pd.Timestamp.now()])
+    mock_yf.return_value = vix_df
 
     # Normal ATR
     mock_atr.return_value = pd.Series([1.0] * len(df), index=df.index)
@@ -162,15 +181,20 @@ def test_market_regime_bullish(mock_rsi, mock_atr):
 
     # Price > SMA 200
     df.iloc[-1, df.columns.get_loc('Close')] = 110.0
-    # SMA will still be roughly 100 (avg of 249*100 + 110 approx 100)
 
     result = get_market_regime(df)
-    assert result == "Bullish (Safe)"
+    assert result["regime"] == "Bullish (Safe)"
+    assert result["market_climate"] == "Panic"
+    assert result["vix"] == 30.0
 
+@patch('option_auditor.risk_intelligence.yf.download')
 @patch('option_auditor.risk_intelligence._calculate_atr')
 @patch('option_auditor.risk_intelligence._calculate_rsi')
-def test_market_regime_neutral(mock_rsi, mock_atr):
+def test_market_regime_neutral(mock_rsi, mock_atr, mock_yf):
     df = _create_base_df()
+
+    # Mock VIX (Empty/Error)
+    mock_yf.return_value = pd.DataFrame()
 
     # Normal ATR
     mock_atr.return_value = pd.Series([1.0] * len(df), index=df.index)
@@ -182,18 +206,26 @@ def test_market_regime_neutral(mock_rsi, mock_atr):
     df.iloc[-1, df.columns.get_loc('Close')] = 110.0
 
     result = get_market_regime(df)
-    assert result == "Neutral (Sideways)"
+    assert result["regime"] == "Neutral (Sideways)"
+    assert result["market_climate"] == "Unknown"
+    assert result["vix"] is None
 
-def test_market_regime_insufficient_data():
+@patch('option_auditor.risk_intelligence.yf.download')
+def test_market_regime_insufficient_data(mock_yf):
+    mock_yf.return_value = pd.DataFrame({'Close': [15.0]})
     df = _create_base_df(length=50) # Too short
     result = get_market_regime(df)
-    assert "Insufficient History" in result
+    assert "Insufficient History" in result["regime"]
 
-def test_market_regime_missing_columns():
+@patch('option_auditor.risk_intelligence.yf.download')
+def test_market_regime_missing_columns(mock_yf):
+    mock_yf.return_value = pd.DataFrame({'Close': [15.0]})
     df = pd.DataFrame({'Close': [100]*250})
     result = get_market_regime(df)
-    assert "Missing Columns" in result
+    assert "Missing Columns" in result["regime"]
 
-def test_market_regime_empty():
+@patch('option_auditor.risk_intelligence.yf.download')
+def test_market_regime_empty(mock_yf):
+    mock_yf.return_value = pd.DataFrame({'Close': [15.0]})
     result = get_market_regime(pd.DataFrame())
-    assert "No Data" in result
+    assert "No Data" in result["regime"]

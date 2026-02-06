@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
+import yfinance as yf
 from option_auditor.common.screener_utils import fetch_batch_data_safe, resolve_ticker
 
 logger = logging.getLogger(__name__)
@@ -120,16 +121,60 @@ def _calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     atr = tr.rolling(window=period, min_periods=period).mean()
     return atr
 
-def get_market_regime(sp500_data: pd.DataFrame) -> str:
+def get_market_regime(sp500_data: pd.DataFrame) -> dict:
     """
-    Determines market regime based on SP500 data.
-    Logic:
-    1. If ATR (Volatility) is in the top 90th percentile: 'Stormy (High Risk)'
-    2. If Price < 200 SMA: 'Bearish (Caution)'
-    3. If Price > 200 SMA and RSI > 50: 'Bullish (Safe)'
+    Determines market regime based on SP500 data and VIX.
+
+    Returns:
+        dict: {
+            "regime": str,         # e.g., 'Stormy (High Risk)', 'Bullish (Safe)'
+            "market_climate": str, # e.g., 'Quiet', 'Turbulent', 'Panic'
+            "vix": float or None   # e.g., 18.5
+        }
     """
+    result = {
+        "regime": "Unknown (No Data)",
+        "market_climate": "Unknown",
+        "vix": None
+    }
+
+    # --- 1. Fetch VIX for Market Climate ---
+    try:
+        vix_df = yf.download("^VIX", period="5d", progress=False, auto_adjust=True)
+        if not vix_df.empty:
+             # Handle MultiIndex if present
+            if isinstance(vix_df.columns, pd.MultiIndex):
+                # Try to find Close col
+                try:
+                    # If columns are (Price, Ticker) or (Ticker, Price)
+                    # auto_adjust=True returns 'Close' usually.
+                    # Flatten or select
+                    vix_series = vix_df['Close']
+                    if isinstance(vix_series, pd.DataFrame):
+                        vix_series = vix_series.iloc[:, 0] # Take first col if multiple (should be one ticker)
+                except Exception:
+                     vix_series = vix_df.iloc[:, 0] # Fallback
+            else:
+                 vix_series = vix_df['Close']
+
+            current_vix = float(vix_series.iloc[-1])
+            result["vix"] = current_vix
+
+            if current_vix < 15:
+                result["market_climate"] = "Quiet"
+            elif 15 <= current_vix < 25:
+                result["market_climate"] = "Turbulent"
+            else:
+                result["market_climate"] = "Panic"
+        else:
+             logger.warning("VIX data empty.")
+    except Exception as e:
+        logger.warning(f"Failed to fetch VIX: {e}")
+
+
+    # --- 2. Determine Regime from SP500 Data ---
     if sp500_data is None or sp500_data.empty:
-        return "Unknown (No Data)"
+        return result
 
     df = sp500_data.copy()
 
@@ -144,42 +189,50 @@ def get_market_regime(sp500_data: pd.DataFrame) -> str:
 
     required_cols = ['High', 'Low', 'Close']
     if not all(col in df.columns for col in required_cols):
-         return "Unknown (Missing Columns)"
+         result["regime"] = "Unknown (Missing Columns)"
+         return result
 
     # Ensure enough data
     if len(df) < 200:
-        return "Unknown (Insufficient History)"
+        result["regime"] = "Unknown (Insufficient History)"
+        return result
 
-    # Calculate Indicators
-    df['SMA200'] = df['Close'].rolling(window=200).mean()
-    df['RSI'] = _calculate_rsi(df['Close'])
-    df['ATR'] = _calculate_atr(df)
+    try:
+        # Calculate Indicators
+        df['SMA200'] = df['Close'].rolling(window=200).mean()
+        df['RSI'] = _calculate_rsi(df['Close'])
+        df['ATR'] = _calculate_atr(df)
 
-    # Get last values
-    last_row = df.iloc[-1]
+        # Get last values
+        last_row = df.iloc[-1]
 
-    if pd.isna(last_row['SMA200']) or pd.isna(last_row['RSI']) or pd.isna(last_row['ATR']):
-        return "Unknown (NaN Indicators)"
+        if pd.isna(last_row['SMA200']) or pd.isna(last_row['RSI']) or pd.isna(last_row['ATR']):
+            result["regime"] = "Unknown (NaN Indicators)"
+            return result
 
-    current_atr = last_row['ATR']
-    current_close = last_row['Close']
-    current_sma = last_row['SMA200']
-    current_rsi = last_row['RSI']
+        current_atr = last_row['ATR']
+        current_close = last_row['Close']
+        current_sma = last_row['SMA200']
+        current_rsi = last_row['RSI']
 
-    # ATR Percentile Logic
-    atr_history = df['ATR'].dropna()
-    # Percentile rank of current_atr within atr_history
-    # Using strict inequality to match "top 90th"
-    percentile = (atr_history < current_atr).mean() * 100
+        # ATR Percentile Logic
+        atr_history = df['ATR'].dropna()
+        # Percentile rank of current_atr within atr_history
+        # Using strict inequality to match "top 90th"
+        percentile = (atr_history < current_atr).mean() * 100
 
-    # Logic
-    if percentile >= 90:
-        return "Stormy (High Risk)"
+        # Logic
+        if percentile >= 90:
+            result["regime"] = "Stormy (High Risk)"
+        elif current_close < current_sma:
+            result["regime"] = "Bearish (Caution)"
+        elif current_close > current_sma and current_rsi > 50:
+            result["regime"] = "Bullish (Safe)"
+        else:
+            result["regime"] = "Neutral (Sideways)"
 
-    if current_close < current_sma:
-        return "Bearish (Caution)"
+    except Exception as e:
+        logger.error(f"Error determining market regime: {e}")
+        result["regime"] = "Unknown (Error)"
 
-    if current_close > current_sma and current_rsi > 50:
-        return "Bullish (Safe)"
-
-    return "Neutral (Sideways)"
+    return result
