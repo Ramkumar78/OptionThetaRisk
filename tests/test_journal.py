@@ -46,3 +46,36 @@ def test_journal_routes_no_auth(client):
     # Verify Empty
     resp_get_after = client.get("/journal")
     assert len(resp_get_after.get_json()) == 0
+
+def test_journal_entry_with_emotions_and_notes(client):
+    """Test adding and retrieving a journal entry with emotions and notes."""
+    entry_data = {
+        "entry_date": "2025-01-02",
+        "entry_time": "11:00",
+        "symbol": "QQQ",
+        "strategy": "Long Call",
+        "pnl": 100.0,
+        "notes": "Feeling good about this trade.",
+        "emotions": ["Disciplined", "Confident"]
+    }
+
+    # Add Entry
+    resp_add = client.post("/journal/add", json=entry_data)
+    assert resp_add.status_code == 200
+    data_add = resp_add.get_json()
+    assert data_add["success"] is True
+
+    # Retrieve Entries
+    resp_get = client.get("/journal")
+    assert resp_get.status_code == 200
+    entries = resp_get.get_json()
+
+    # Find the entry
+    target = next((e for e in entries if e["symbol"] == "QQQ"), None)
+    assert target is not None
+    assert target["notes"] == "Feeling good about this trade."
+    assert set(target["emotions"]) == {"Disciplined", "Confident"}
+
+    # Cleanup
+    entry_id = target["id"]
+    client.delete(f"/journal/delete/{entry_id}")

@@ -1,11 +1,17 @@
-import { Given, Then } from '@cucumber/cucumber';
+import { Given, When, Then } from '@cucumber/cucumber';
 import { actorCalled, Wait } from '@serenity-js/core';
-import { Navigate, PageElement, By, Text, isVisible } from '@serenity-js/web';
+import { Navigate, PageElement, By, Text, isVisible, Click } from '@serenity-js/web';
 import { Ensure, includes } from '@serenity-js/assertions';
 
 Given('the user is on the TradeGuardian home page', async () => {
     await actorCalled('Alice').attemptsTo(
         Navigate.to('/')
+    );
+});
+
+When('they navigate to the Dashboard page', async () => {
+    await actorCalled('Alice').attemptsTo(
+        Click.on(PageElement.located(By.id('nav-link-dashboard')).describedAs('Dashboard link'))
     );
 });
 

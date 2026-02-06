@@ -39,6 +39,7 @@ interface JournalEntry {
   notes: string;
   tags?: string;
   pnl?: number;
+  emotions?: string[];
 }
 
 interface AnalysisResult {
@@ -67,6 +68,7 @@ const Journal: React.FC = () => {
   const [sentiment, setSentiment] = useState('Neutral');
   const [notes, setNotes] = useState('');
   const [pnl, setPnl] = useState('');
+  const [emotions, setEmotions] = useState<string[]>([]);
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
   const [entryTime, setEntryTime] = useState(new Date().toTimeString().split(' ')[0].slice(0, 5));
 
@@ -98,6 +100,7 @@ const Journal: React.FC = () => {
         strategy,
         sentiment,
         notes,
+        emotions,
         pnl: pnl ? parseFloat(pnl) : 0,
         entry_date: entryDate,
         entry_time: entryTime
@@ -107,6 +110,7 @@ const Journal: React.FC = () => {
       setStrategy('');
       setNotes('');
       setPnl('');
+      setEmotions([]);
       fetchEntries();
     } catch (error) {
       console.error("Failed to add entry", error);
@@ -256,6 +260,29 @@ const Journal: React.FC = () => {
                 ></textarea>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Emotions</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Planned', 'Impulsive', 'Revenge', 'Disciplined'].map((emotion) => (
+                    <label key={emotion} className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700 hover:border-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={emotions.includes(emotion)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEmotions([...emotions, emotion]);
+                          } else {
+                            setEmotions(emotions.filter(em => em !== emotion));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span>{emotion}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <button
                 id="journal-submit-btn"
                 type="submit"
@@ -397,6 +424,11 @@ const Journal: React.FC = () => {
                              entry.sentiment === 'Bearish' ? "bg-red-50 text-red-700 border border-red-100" :
                              "bg-gray-50 text-gray-600 border border-gray-100"
                            )}>{entry.sentiment}</span>
+                           {entry.emotions && entry.emotions.map((emotion, i) => (
+                                <span key={i} className="text-xs px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50">
+                                    {emotion}
+                                </span>
+                           ))}
                         </div>
                         <div className="text-right">
                             <div className="text-xs text-gray-400 font-mono">

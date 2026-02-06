@@ -1,3 +1,4 @@
+import os
 import pytest
 from unittest.mock import patch
 from webapp.app import create_app
@@ -11,6 +12,7 @@ def prevent_background_scheduler():
 @pytest.fixture
 def app():
     """Create and configure a new app instance for each test."""
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
     app = create_app(testing=True)
     app.config.update({
         "TESTING": True,
@@ -18,6 +20,8 @@ def app():
         "DATABASE_URL": "sqlite:///:memory:",
     })
     yield app
+    if "DATABASE_URL" in os.environ:
+        del os.environ["DATABASE_URL"]
 
 @pytest.fixture
 def client(app):

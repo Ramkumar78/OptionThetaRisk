@@ -119,6 +119,8 @@ class JournalEntryRequest(BaseModel):
     symbol: Optional[str] = None
     strategy: Optional[str] = None
     pnl: Optional[float] = None
+    notes: Optional[str] = None
+    emotions: Optional[List[str]] = None
     # We can use extra='allow' to accept other fields
 
     model_config = ConfigDict(extra='allow')

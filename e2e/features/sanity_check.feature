@@ -7,4 +7,5 @@ Feature: Sanity Check
     Given the user is on the TradeGuardian home page
     When they navigate to the Backtester page
     And they enter symbol "SPY"
+    And they complete the mindset check
     Then they should see the Result graph
