@@ -178,3 +178,41 @@ def test_equity_curve_single_entry():
     curve = result["equity_curve"]
     assert len(curve) == 1
     assert curve[0]['cumulative_pnl'] == 100.0
+
+def test_analyze_journal_overtrading_alert():
+    """Test detection of over-trading (300% increase in volume vs 30-day average)."""
+    # Create 30 days of consistent low volume (1 trade per day)
+    entries = []
+    # Previous 30 days: 2023-01-01 to 2023-01-30
+    for i in range(1, 31):
+        day = f"{i:02d}"
+        entries.append({"strategy": "A", "pnl": 10, "entry_date": f"2023-01-{day}", "entry_time": "10:00"})
+
+    # 31st day: High volume (5 trades)
+    # Average of prev 30 is 1.0. 300% increase means >= 4.0. 5 >= 4.
+    for _ in range(5):
+        entries.append({"strategy": "A", "pnl": 10, "entry_date": "2023-01-31", "entry_time": "10:00"})
+
+    result = analyze_journal(entries)
+
+    assert result["psychology_alert"] is not None
+    assert "Over-trading Detected" in result["psychology_alert"]
+    assert "Volume (5)" in result["psychology_alert"]
+    assert "average (1.0)" in result["psychology_alert"]
+
+def test_analyze_journal_no_overtrading_alert():
+    """Test that normal volume increase does not trigger alert."""
+    entries = []
+    # Previous 30 days: 1 trade per day
+    for i in range(1, 31):
+        day = f"{i:02d}"
+        entries.append({"strategy": "A", "pnl": 10, "entry_date": f"2023-01-{day}", "entry_time": "10:00"})
+
+    # 31st day: Moderate volume (3 trades)
+    # Average 1.0. 3 trades is 200% increase (3x). Alert threshold is 4x (300% increase).
+    for _ in range(3):
+        entries.append({"strategy": "A", "pnl": 10, "entry_date": "2023-01-31", "entry_time": "10:00"})
+
+    result = analyze_journal(entries)
+
+    assert result["psychology_alert"] is None
