@@ -3,6 +3,7 @@ import pandas as pd
 import pandas_ta as ta
 import logging
 from option_auditor.common.constants import VIX_GREEN_THRESHOLD, VIX_YELLOW_THRESHOLD
+from option_auditor.strategies.rsi_reversal import RsiReversalStrategy
 
 logger = logging.getLogger("BacktestStrategies")
 
@@ -515,6 +516,8 @@ def get_strategy(strategy_type: str) -> AbstractBacktestStrategy:
         return LiquidityGrabBacktestStrategy(s)
     if s in ['rsi', 'rsi_divergence']:
         return RsiBacktestStrategy(s)
+    if s == 'rsi_reversal':
+        return RsiReversalStrategy(s)
 
     # Default to Market if unknown?
     return MarketBacktestStrategy(s)
