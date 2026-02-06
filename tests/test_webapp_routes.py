@@ -108,9 +108,12 @@ def test_feedback_route(client, mock_storage):
     assert res.status_code == 400
 
 def test_dashboard_route_no_session(client):
-    res = client.get('/dashboard')
-    assert res.status_code == 200
-    assert "No portfolio found" in res.json['error']
+    # Ensure CI mode is OFF so we don't auto-seed data
+    with patch.dict('os.environ', {'CI': 'false'}):
+        res = client.get('/dashboard')
+        assert res.status_code == 200
+        # Should behave as a new user with no portfolio
+        assert "No portfolio found" in res.json['error']
 
 def test_dashboard_route_with_data(client, mock_storage):
     # Mock portfolio data

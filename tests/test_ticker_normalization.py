@@ -64,9 +64,10 @@ class TestTickerNormalizationAndDataWarning(unittest.TestCase):
 
                     result = analyze_csv(manual_data=manual_data)
 
-                    self.assertEqual(result['verdict'], "Amber: Data Unavailable")
-                    self.assertEqual(result['verdict_color'], "yellow")
-                    self.assertIn("Could not fetch live prices for: UNKNOWN", result.get('verdict_details', ''))
+                    # Updated expectation: >20% missing triggers "Red Flag: Data Integrity Failure"
+                    self.assertEqual(result['verdict'], "Red Flag: Data Integrity Failure")
+                    self.assertEqual(result['verdict_color'], "red")
+                    self.assertIn("Critical: >20% of symbols failed to fetch live prices", result.get('verdict_details', ''))
 
     def test_ticker_normalization_flow(self):
         # Setup: Open position on SPX (needs mapping to ^SPX)
