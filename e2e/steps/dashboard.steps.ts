@@ -35,3 +35,12 @@ Then('they should see the {string} display', async (text: string) => {
         Ensure.that(Text.of(elementWithText), includes(text))
     );
 });
+
+Then('they should see the Mindset Gauge', async () => {
+    const gauge = PageElement.located(By.css('[data-testid="mindset-gauge"]'))
+        .describedAs('Mindset Gauge');
+
+    await actorCalled('Alice').attemptsTo(
+        Wait.until(gauge, isVisible())
+    );
+});
