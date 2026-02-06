@@ -100,3 +100,36 @@ class StressTestResult:
     portfolio_value_change: float
     portfolio_value_change_pct: float
     details: List[str] = field(default_factory=list)
+
+def calculate_regulatory_fees(symbol: str, price: float, qty: float, action: str = 'BUY', asset_class: str = 'stock') -> float:
+    """
+    Calculates regulatory fees (Stamp Duty, STT) based on the market.
+
+    :param symbol: Ticker symbol (e.g. REL.L, INF.NS)
+    :param price: Price per share
+    :param qty: Quantity traded
+    :param action: 'BUY', 'SELL', etc.
+    :param asset_class: 'stock', 'option', etc.
+    :return: Calculated tax/fee amount.
+    """
+    fees = 0.0
+    val = abs(price * qty)
+    symbol = symbol.upper()
+    action = action.upper()
+
+    # India STT (0.1% on Equity Delivery)
+    # Applied on both Buy and Sell for Delivery.
+    if symbol.endswith('.NS') or symbol.endswith('.BO'):
+        if asset_class.lower() == 'stock':
+            fees += val * 0.001
+
+    # UK Stamp Duty (0.5% on Buy only)
+    # Applied on LSE stocks (.L)
+    if symbol.endswith('.L'):
+        # Check for Buy action.
+        # Also assume positive qty with unspecified action implies Buy if needed, but here we check action string.
+        is_buy = action.startswith('BUY') or action == 'OPEN' # loose heuristic, caller should pass BUY
+        if is_buy:
+             fees += val * 0.005
+
+    return fees

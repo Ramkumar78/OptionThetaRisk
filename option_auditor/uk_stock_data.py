@@ -1,6 +1,8 @@
 import os
 import logging
+import pandas as pd
 from option_auditor.common.file_utils import load_tickers_from_csv
+from option_auditor.common.data_utils import fetch_exchange_rate
 
 logger = logging.getLogger("UK_Stock_Data")
 
@@ -35,3 +37,52 @@ def get_uk_euro_tickers():
     # We could potentially merge get_uk_tickers() here, but keeping legacy list for now
     # to preserve the Euro component which is not in the CSV.
     return list(set(UK_EURO_TICKERS))
+
+def apply_currency_conversion(df: pd.DataFrame, target_currency: str = 'GBP', source_currency: str = 'GBp') -> pd.DataFrame:
+    """
+    Converts DataFrame OHLCV data to target currency.
+
+    :param df: The DataFrame containing market data.
+    :param target_currency: The desired currency (GBP, USD, EUR, etc).
+    :param source_currency: The source currency.
+                            Defaults to 'GBp' (Pence) which is standard for LSE (.L) tickers.
+                            For Euro tickers, caller should pass 'EUR'.
+    """
+    if df.empty:
+        return df
+
+    # Normalize GBp (pence) to GBP (pounds) first if needed
+    is_pence = (source_currency == 'GBp')
+    normalization_factor = 0.01 if is_pence else 1.0
+    actual_source_iso = 'GBP' if is_pence else source_currency
+
+    # Optimization: If target is GBP and source is GBp, just scale by 0.01
+    # If target is GBp and source is GBp, do nothing.
+    if source_currency == target_currency:
+        return df
+
+    # Fetch rate from Actual Source (e.g. GBP) to Target (e.g. USD)
+    try:
+        exchange_rate = fetch_exchange_rate(actual_source_iso, target_currency)
+    except Exception as e:
+        logger.error(f"Failed to fetch exchange rate: {e}")
+        return df
+
+    # Total multiplier = Normalization * Exchange Rate
+    # e.g. GBp -> USD: 0.01 * (GBP->USD Rate)
+    # e.g. GBp -> GBP: 0.01 * 1.0 = 0.01
+    final_multiplier = normalization_factor * exchange_rate
+
+    if final_multiplier == 1.0:
+        return df
+
+    df_conv = df.copy()
+    cols_to_convert = ['Open', 'High', 'Low', 'Close', 'Adj Close']
+
+    logger.info(f"Converting UK Data from {source_currency} to {target_currency} (Multiplier: {final_multiplier})")
+
+    for col in cols_to_convert:
+        if col in df_conv.columns:
+            df_conv[col] = df_conv[col] * final_multiplier
+
+    return df_conv

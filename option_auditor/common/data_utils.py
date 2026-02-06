@@ -2,7 +2,7 @@ import os
 import csv
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import logging
 import time
 import random
@@ -24,6 +24,18 @@ try:
     yf.set_tz_cache_location(tz_cache_path)
 except Exception as e:
     logger.warning(f"Failed to set yfinance cache location: {e}")
+
+# Hardcoded fallback exchange rates (approximate)
+FALLBACK_RATES = {
+    ("GBP", "USD"): 1.27,
+    ("USD", "GBP"): 1 / 1.27,
+    ("USD", "INR"): 83.50,
+    ("INR", "USD"): 1 / 83.50,
+    ("GBP", "INR"): 106.0,
+    ("INR", "GBP"): 1 / 106.0,
+    ("EUR", "USD"): 1.08,
+    ("USD", "EUR"): 1 / 1.08
+}
 
 def optimize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -301,3 +313,132 @@ def _calculate_trend_breakout_date(df: pd.DataFrame) -> str:
         return "N/A"
     except Exception:
         return "N/A"
+
+def get_market_holidays(exchange: str) -> list[date]:
+    """
+    Returns a list of market holidays for the given exchange.
+    Supports: 'LSE', 'NSE', 'NYSE'.
+    """
+    exchange = exchange.upper()
+
+    # 2024-2025 Basic Holiday List (Approximate)
+    # Ideally should use pandas_market_calendars, but using static list for simplicity/portability.
+
+    holidays = []
+
+    if exchange == 'NYSE':
+        holidays = [
+            date(2024, 1, 1), date(2024, 1, 15), date(2024, 2, 19), date(2024, 3, 29),
+            date(2024, 5, 27), date(2024, 6, 19), date(2024, 7, 4), date(2024, 9, 2),
+            date(2024, 11, 28), date(2024, 12, 25),
+            date(2025, 1, 1), date(2025, 1, 20), date(2025, 2, 17), date(2025, 4, 18),
+            date(2025, 5, 26), date(2025, 6, 19), date(2025, 7, 4), date(2025, 9, 1),
+            date(2025, 11, 27), date(2025, 12, 25)
+        ]
+    elif exchange == 'LSE':
+        holidays = [
+            date(2024, 1, 1), date(2024, 3, 29), date(2024, 4, 1), date(2024, 5, 6),
+            date(2024, 5, 27), date(2024, 8, 26), date(2024, 12, 25), date(2024, 12, 26),
+            date(2025, 1, 1), date(2025, 4, 18), date(2025, 4, 21), date(2025, 5, 5),
+            date(2025, 5, 26), date(2025, 8, 25), date(2025, 12, 25), date(2025, 12, 26)
+        ]
+    elif exchange == 'NSE':
+        # NSE Holidays are plentiful, adding major ones
+        holidays = [
+            date(2024, 1, 22), date(2024, 1, 26), date(2024, 3, 8), date(2024, 3, 25),
+            date(2024, 3, 29), date(2024, 4, 11), date(2024, 4, 17), date(2024, 5, 1),
+            date(2024, 6, 17), date(2024, 7, 17), date(2024, 8, 15), date(2024, 10, 2),
+            date(2024, 11, 1), date(2024, 11, 15), date(2024, 12, 25),
+            date(2025, 1, 26), date(2025, 2, 26), date(2025, 3, 14), date(2025, 3, 31),
+            date(2025, 4, 10), date(2025, 4, 14), date(2025, 4, 18), date(2025, 5, 1),
+            date(2025, 8, 15), date(2025, 8, 27), date(2025, 10, 2), date(2025, 10, 21),
+            date(2025, 12, 25)
+        ]
+
+    return holidays
+
+def get_currency_symbol(ticker: str) -> str:
+    """
+    Identifies the currency for a given ticker symbol.
+    Logic:
+      - .L -> GBP (Great British Pound)
+      - .NS / .BO -> INR (Indian Rupee)
+      - .AS, .DE, .PA, .MC, .MI, .HE -> EUR (Euro)
+      - Default -> USD (US Dollar)
+    """
+    if not ticker:
+        return "USD"
+
+    ticker = ticker.upper()
+    if ticker.endswith('.L'):
+        return "GBP"
+    if ticker.endswith('.NS') or ticker.endswith('.BO'):
+        return "INR"
+    if any(ticker.endswith(s) for s in ['.AS', '.DE', '.PA', '.MC', '.MI', '.HE']):
+        return "EUR"
+
+    return "USD"
+
+def fetch_exchange_rate(from_curr: str, to_curr: str) -> float:
+    """
+    Fetches the exchange rate between two currencies.
+    Uses yfinance for live rates (e.g. GBPUSD=X) with fallback to hardcoded constants.
+    """
+    from_curr = from_curr.upper()
+    to_curr = to_curr.upper()
+
+    if from_curr == to_curr:
+        return 1.0
+
+    pair = (from_curr, to_curr)
+
+    # Try fetching live rate
+    ticker_map = {
+        ("GBP", "USD"): "GBPUSD=X",
+        ("EUR", "USD"): "EURUSD=X",
+        ("INR", "USD"): "INR=X", # This is usually USDINR=X (USD to INR), so INR to USD is 1/USDINR
+        ("USD", "INR"): "USDINR=X", # This returns how many INR per 1 USD
+        ("USD", "GBP"): "GBP=X" # Usually implies inverse? yfinance logic varies.
+    }
+
+    # Direct yfinance lookup for standard pairs
+    # Note: Yahoo Finance tickers are usually XXXYYY=X for "How many YYY per 1 XXX"
+    yf_ticker = f"{from_curr}{to_curr}=X"
+
+    try:
+        # Check specific known mappings if generic construction fails or is ambiguous
+        if from_curr == "USD" and to_curr == "INR":
+            yf_ticker = "INR=X" # Wait, INR=X is usually USD/INR rate? Let's check standard.
+            # Actually USDINR=X is standard.
+            yf_ticker = "USDINR=X"
+
+        data = yf.Ticker(yf_ticker)
+        hist = data.history(period="1d")
+        if not hist.empty:
+            rate = hist['Close'].iloc[-1]
+            logger.info(f"Fetched live rate for {from_curr}/{to_curr}: {rate}")
+            return float(rate)
+    except Exception as e:
+        logger.debug(f"Live exchange rate fetch failed for {yf_ticker}: {e}")
+
+    # Fallback
+    if pair in FALLBACK_RATES:
+        logger.info(f"Using fallback rate for {from_curr}/{to_curr}: {FALLBACK_RATES[pair]}")
+        return FALLBACK_RATES[pair]
+
+    # Inverse fallback
+    inverse_pair = (to_curr, from_curr)
+    if inverse_pair in FALLBACK_RATES:
+        rate = 1.0 / FALLBACK_RATES[inverse_pair]
+        logger.info(f"Using inverse fallback rate for {from_curr}/{to_curr}: {rate}")
+        return rate
+
+    logger.warning(f"No exchange rate found for {from_curr} -> {to_curr}. Assuming 1.0")
+    return 1.0
+
+def convert_currency(amount: float, from_curr: str, to_curr: str) -> float:
+    """
+    Converts an amount from one currency to another.
+    """
+    rate = fetch_exchange_rate(from_curr, to_curr)
+    return amount * rate
