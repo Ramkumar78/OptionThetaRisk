@@ -18,19 +18,26 @@ def test_add_indicators(strategy):
     assert 'rsi' in df_result.columns
 
 def test_should_buy_signal(strategy):
-    # RSI: ... 29, 31 ...
+    # Code Logic: Buy if Close < LowerBB AND RSI < 30
+
+    # Create a DataFrame with necessary columns
     df = pd.DataFrame({
-        'rsi': [50, 25, 29, 31, 50]
+        'Close':      [100, 90, 100, 90, 100],
+        'BBL_20_2.0': [95,  95, 95,  95, 95], # Lower BB
+        'rsi':        [40,  25, 25,  35, 40]
     })
 
-    # Index 2: 29 (prev=25). No cross above 30.
+    # Index 0: Close(100) > BB(95), RSI(40) > 30. -> False
+    assert strategy.should_buy(0, df, {}) == False
+
+    # Index 1: Close(90) < BB(95) AND RSI(25) < 30. -> True (Dip Buy)
+    assert strategy.should_buy(1, df, {}) == True
+
+    # Index 2: Close(100) > BB(95) but RSI(25) < 30. -> False (Price too high)
     assert strategy.should_buy(2, df, {}) == False
 
-    # Index 3: 31 (prev=29). Cross above 30.
-    assert strategy.should_buy(3, df, {}) == True
-
-    # Index 4: 50 (prev=31). Already above.
-    assert strategy.should_buy(4, df, {}) == False
+    # Index 3: Close(90) < BB(95) but RSI(35) > 30. -> False (RSI too high)
+    assert strategy.should_buy(3, df, {}) == False
 
 def test_should_sell_signal(strategy):
     # RSI: ... 71, 69 ...
@@ -65,7 +72,8 @@ def test_analyze(strategy):
     df = pd.DataFrame({
         'Close': prices,
         'High': prices,
-        'Low': prices
+        'Low': prices,
+        'Volume': [1000] * 30
     }, index=dates)
 
     result = strategy.analyze(df)
