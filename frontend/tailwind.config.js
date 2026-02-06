@@ -5,7 +5,6 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
     "../webapp/templates/**/*.html",
   ],
-  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
