@@ -92,3 +92,11 @@ class StrategyGroup:
     def record_segment(self):
         """Records the current state as a segment (e.g. before rolling)."""
         pass
+
+@dataclass
+class StressTestResult:
+    scenario_name: str
+    market_move_pct: float
+    portfolio_value_change: float
+    portfolio_value_change_pct: float
+    details: List[str] = field(default_factory=list)
