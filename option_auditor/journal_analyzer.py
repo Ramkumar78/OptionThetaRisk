@@ -124,6 +124,31 @@ def analyze_journal(entries: list[dict]) -> dict:
     if total_trades < 10:
         suggestions.append("Keep logging! Need more trades (aim for 50) for reliable patterns.")
 
+    # Over-trading Detection
+    psychology_alert = None
+    try:
+        # Group by date to get daily volume
+        # Ensure entry_date is treated as string for grouping
+        # df has 'entry_date' filled at the top
+        daily_counts = df.groupby('entry_date').size().sort_index()
+
+        if len(daily_counts) >= 2:
+            # Check the most recent day against the previous 30 days
+            last_day_vol = daily_counts.iloc[-1]
+            # Get previous up to 30 days
+            # If we have less than 31 days total, we take all previous
+            start_idx = max(0, len(daily_counts) - 31)
+            prev_window = daily_counts.iloc[start_idx:-1]
+
+            if len(prev_window) > 0:
+                avg_vol = prev_window.mean()
+
+                # 300% increase means (Current - Avg) / Avg >= 3.0 => Current >= 4.0 * Avg
+                if avg_vol > 0 and last_day_vol >= (avg_vol * 4.0):
+                    psychology_alert = f"Over-trading Detected: Volume ({last_day_vol}) is >300% of 30-day average ({avg_vol:.1f})."
+    except Exception as e:
+        print(f"Psychology Alert Error: {e}")
+
     # Equity Curve Calculation
     equity_curve = []
     try:
@@ -172,5 +197,6 @@ def analyze_journal(entries: list[dict]) -> dict:
         "suggestions": suggestions,
         "patterns": pattern_stats.to_dict(orient='records'),
         "time_analysis": time_stats.to_dict(orient='records'),
-        "equity_curve": equity_curve
+        "equity_curve": equity_curve,
+        "psychology_alert": psychology_alert
     }
