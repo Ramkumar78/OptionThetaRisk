@@ -95,6 +95,7 @@ export const MindsetChecklist: React.FC<MindsetChecklistProps> = ({ isOpen, onCo
                 Cancel
              </button>
              <button
+                id="mindset-confirm-btn"
                 onClick={onConfirm}
                 disabled={!isValid}
                 className={`px-6 py-2 rounded-lg font-bold shadow-sm transition-all ${isValid ? 'bg-blue-600 hover:bg-blue-700 text-white transform hover:scale-105' : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'}`}

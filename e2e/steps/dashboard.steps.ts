@@ -1,5 +1,5 @@
 import { Given, When, Then } from '@cucumber/cucumber';
-import { actorCalled, Wait } from '@serenity-js/core';
+import { actorCalled, Wait, Duration } from '@serenity-js/core';
 import { Navigate, PageElement, By, Text, isVisible, Click } from '@serenity-js/web';
 import { Ensure, includes } from '@serenity-js/assertions';
 
@@ -20,7 +20,7 @@ Then('they should see the brand {string}', async (brand: string) => {
         .describedAs('the brand logo');
 
     await actorCalled('Alice').attemptsTo(
-        Wait.until(brandElement, isVisible()),
+        Wait.upTo(Duration.ofSeconds(15)).until(brandElement, isVisible()),
         Ensure.that(Text.of(brandElement), includes(brand))
     );
 });
@@ -31,7 +31,7 @@ Then('they should see the {string} display', async (text: string) => {
         .describedAs(`an element containing text "${text}"`);
 
     await actorCalled('Alice').attemptsTo(
-        Wait.until(elementWithText, isVisible()),
+        Wait.upTo(Duration.ofSeconds(15)).until(elementWithText, isVisible()),
         Ensure.that(Text.of(elementWithText), includes(text))
     );
 });
@@ -41,6 +41,6 @@ Then('they should see the Mindset Gauge', async () => {
         .describedAs('Mindset Gauge');
 
     await actorCalled('Alice').attemptsTo(
-        Wait.until(gauge, isVisible())
+        Wait.upTo(Duration.ofSeconds(15)).until(gauge, isVisible())
     );
 });

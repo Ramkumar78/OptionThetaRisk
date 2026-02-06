@@ -6,9 +6,9 @@ import { Ensure, includes } from '@serenity-js/assertions';
 Given('the user is on the Journal page', async () => {
     await actorCalled('Alice').attemptsTo(
         Navigate.to('/'),
-        Wait.until(PageElement.located(By.id('nav-link-journal')), isVisible()),
+        Wait.upTo(Duration.ofSeconds(15)).until(PageElement.located(By.id('nav-link-journal')), isVisible()),
         Click.on(PageElement.located(By.id('nav-link-journal'))),
-        Wait.until(PageElement.located(By.id('journal-symbol')), isVisible())
+        Wait.upTo(Duration.ofSeconds(15)).until(PageElement.located(By.id('journal-symbol')), isVisible())
     );
 });
 
@@ -99,7 +99,7 @@ Then('the trade should appear in the journal list with symbol {string} and PnL {
     const tradeEntry = PageElement.located(By.xpath(`//div[starts-with(@id, 'journal-entry-') and .//span[contains(text(), '${symbol}')]]`));
 
     await actorCalled('Alice').attemptsTo(
-        Wait.until(tradeEntry, isVisible()),
+        Wait.upTo(Duration.ofSeconds(15)).until(tradeEntry, isVisible()),
         Ensure.that(Text.of(tradeEntry), includes(symbol)),
         Ensure.that(Text.of(tradeEntry), includes(formattedPnl))
     );

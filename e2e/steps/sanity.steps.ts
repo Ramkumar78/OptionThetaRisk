@@ -20,7 +20,7 @@ When('they complete the mindset check', async () => {
     const q1No = PageElement.located(By.xpath("(//label[span[text()='No']])[1]")).describedAs('Q1 No');
     const q2Yes = PageElement.located(By.xpath("(//label[span[text()='Yes']])[2]")).describedAs('Q2 Yes');
     const q3Yes = PageElement.located(By.xpath("(//label[span[text()='Yes']])[3]")).describedAs('Q3 Yes');
-    const confirmBtn = PageElement.located(By.xpath("//button[contains(text(), 'Run Backtest')]")).describedAs('Confirm Mindset');
+    const confirmBtn = PageElement.located(By.id('mindset-confirm-btn')).describedAs('Confirm Mindset');
 
     await actorCalled('Alice').attemptsTo(
         Wait.until(q1No, isVisible()),

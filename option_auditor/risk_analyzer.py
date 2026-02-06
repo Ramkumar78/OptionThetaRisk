@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Tuple, Any
 from collections import defaultdict
-from .models import TradeGroup
+from .models import TradeGroup, StressTestResult
+from option_auditor.strategies.math_utils import calculate_option_price
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,96 @@ def check_itm_risk(open_groups: List[TradeGroup], prices: Dict[str, float]) -> T
             details.append(f"{symbol}: Net ITM Exposure -${abs(net_intrinsic_val):,.0f} (Unhedged)")
 
     return risky, total_net_exposure, details
+
+def calculate_black_swan_impact(open_groups: List[TradeGroup], prices: Dict[str, float]) -> List[StressTestResult]:
+    """
+    Calculates portfolio PnL impact under Black Swan scenarios (+/- 5%, 10%, 20%).
+    Uses Theoretical Black-Scholes pricing with constant volatility assumption.
+    """
+    results = []
+    scenarios = [
+        ("Market -20%", -0.20),
+        ("Market -10%", -0.10),
+        ("Market -5%", -0.05),
+        ("Market +5%", 0.05),
+        ("Market +10%", 0.10),
+        ("Market +20%", 0.20)
+    ]
+
+    now = pd.Timestamp.now()
+    # Default Assumptions if data missing
+    risk_free_rate = 0.045
+    default_vol = 0.40
+
+    for name, move_pct in scenarios:
+        total_current_val = 0.0
+        total_new_val = 0.0
+
+        # We need to calculate portfolio value at current prices vs new prices
+        # Iterate all groups
+        for g in open_groups:
+            symbol = g.symbol
+            if symbol not in prices:
+                continue
+
+            S_curr = prices[symbol]
+            S_new = S_curr * (1 + move_pct)
+            qty = g.qty_net
+
+            # Check if Option or Stock
+            is_option = g.strike is not None and g.right in ['C', 'P']
+
+            if not is_option:
+                # Stock Logic
+                val_curr = qty * S_curr
+                val_new = qty * S_new
+                total_current_val += val_curr
+                total_new_val += val_new
+            else:
+                # Option Logic
+                K = g.strike
+                otype = g.right
+                expiry = g.expiry
+
+                # Calculate T (Time to Expiry)
+                T = 0.0
+                if expiry:
+                    try:
+                        # ensure expiry is timestamp
+                        exp_ts = pd.to_datetime(expiry)
+                        # Time to expiry in years
+                        # If expired, T=0
+                        diff = (exp_ts - now).total_seconds()
+                        if diff > 0:
+                            T = diff / (365.0 * 24 * 3600)
+                    except Exception:
+                        T = 0.0
+
+                # Map 'C' -> 'call', 'P' -> 'put'
+                otype_param = 'call' if otype == 'C' else 'put' if otype == 'P' else 'call'
+
+                # Calculate Option Prices
+                price_curr = calculate_option_price(S_curr, K, T, risk_free_rate, default_vol, otype_param)
+                price_new = calculate_option_price(S_new, K, T, risk_free_rate, default_vol, otype_param) # Constant Vol assumption
+
+                val_curr = price_curr * 100 * qty
+                val_new = price_new * 100 * qty
+
+                total_current_val += val_curr
+                total_new_val += val_new
+
+        pnl = total_new_val - total_current_val
+        pnl_pct = (pnl / abs(total_current_val)) * 100 if total_current_val != 0 else 0.0
+
+        results.append(StressTestResult(
+            scenario_name=name,
+            market_move_pct=move_pct * 100,
+            portfolio_value_change=pnl,
+            portfolio_value_change_pct=pnl_pct,
+            details=[]
+        ))
+
+    return results
 
 def calculate_discipline_score(strategies: List[Any], open_positions: List[Dict]) -> Tuple[int, List[str]]:
     """
