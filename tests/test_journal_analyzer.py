@@ -1,5 +1,9 @@
 import pytest
+import os
+from datetime import datetime
 from option_auditor.journal_analyzer import analyze_journal
+from option_auditor.models import TradeGroup, Leg
+from option_auditor.main_analyzer import analyze_csv
 
 def test_analyze_journal_empty():
     """Test that analyzing an empty journal returns zeroed stats."""
@@ -216,3 +220,95 @@ def test_analyze_journal_no_overtrading_alert():
     result = analyze_journal(entries)
 
     assert result["psychology_alert"] is None
+
+def test_fee_erosion_trigger():
+    """Test detection of fee erosion (>15% of gross profit)."""
+    # Gross Profit = Net + Fees.
+    # We want Fees / Gross > 0.15
+    # Let Gross = 100. Fees = 16. Net = 84. Ratio = 16/100 = 0.16.
+    entries = [
+        {"strategy": "A", "pnl": 84.0, "fees": 16.0, "entry_date": "2023-01-01"},
+    ]
+    result = analyze_journal(entries)
+    suggestions = " ".join(result["suggestions"])
+    assert "Fee Erosion Warning" in suggestions
+    assert "16.0% of your Gross Profit" in suggestions
+
+def test_fee_erosion_no_trigger():
+    """Test fee erosion is not triggered when fees are low."""
+    # Gross = 100. Fees = 10. Net = 90. Ratio = 0.10.
+    entries = [
+        {"strategy": "A", "pnl": 90.0, "fees": 10.0, "entry_date": "2023-01-01"},
+    ]
+    result = analyze_journal(entries)
+    suggestions = " ".join(result["suggestions"])
+    assert "Fee Erosion Warning" not in suggestions
+
+def test_red_day_analysis():
+    """Test detection of Red Day (Monday losses)."""
+    # 2023-10-02 is a Monday. 2023-10-03 is Tuesday.
+    entries = [
+        {"strategy": "A", "pnl": -100.0, "entry_date": "2023-10-02"}, # Monday
+        {"strategy": "A", "pnl": 50.0, "entry_date": "2023-10-03"}, # Tuesday
+    ]
+    result = analyze_journal(entries)
+    suggestions = " ".join(result["suggestions"])
+    assert "Red Day Analysis" in suggestions
+    assert "lose most on Mondays" in suggestions
+
+def test_red_day_analysis_no_trigger():
+    """Test Red Day is not triggered if Monday is profitable."""
+    entries = [
+        {"strategy": "A", "pnl": 100.0, "entry_date": "2023-10-02"}, # Monday
+        {"strategy": "A", "pnl": -50.0, "entry_date": "2023-10-03"}, # Tuesday
+    ]
+    result = analyze_journal(entries)
+    suggestions = " ".join(result["suggestions"])
+    assert "Red Day Analysis" not in suggestions
+
+def test_trade_group_overtrading():
+    """Test the is_overtraded field and check method in TradeGroup."""
+    tg = TradeGroup(contract_id="test", symbol="TEST", expiry=None, strike=None, right=None)
+    assert tg.is_overtraded is False
+
+    # Add legs
+    leg = Leg(ts=datetime.now(), qty=1, price=1, fees=0, proceeds=0)
+
+    for _ in range(11):
+        tg.legs.append(leg)
+
+    tg.check_overtrading(max_legs=10)
+    assert tg.is_overtraded is True
+
+def test_journal_analyzer_with_csv():
+    """Test integration: Parse CSV and feed to journal analyzer."""
+    here = os.path.dirname(__file__)
+    full_path = os.path.join(here, "data", "tasty_fills_full.csv")
+
+    # Parse
+    # Use global_fees to inject fees if needed, but for now test without fees or check red day
+    analysis = analyze_csv(csv_path=full_path, broker="tasty", global_fees=1.0)
+
+    # Convert strategy_groups to entries
+    # strategy_groups has 'pnl' (Net), 'entry_ts', 'strategy'
+    # entry_ts is ISO string. analyze_journal needs 'entry_date' (YYYY-MM-DD).
+
+    entries = []
+    for strat in analysis.get("strategy_groups", []):
+        # entry_ts is ISO string
+        dt_str = strat["entry_ts"]
+        d = dt_str.split("T")[0] if dt_str else "2023-01-01"
+        t = dt_str.split("T")[1][:5] if dt_str and "T" in dt_str else "00:00"
+
+        entries.append({
+            "strategy": strat["strategy"],
+            "pnl": strat["pnl"],
+            "fees": strat["fees"],
+            "entry_date": d,
+            "entry_time": t
+        })
+
+    result = analyze_journal(entries)
+
+    assert result["total_trades"] > 0
+    assert isinstance(result["suggestions"], list)

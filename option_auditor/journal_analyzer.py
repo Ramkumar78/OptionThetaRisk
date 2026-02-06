@@ -79,6 +79,26 @@ def analyze_journal(entries: list[dict]) -> dict:
     ).reset_index()
     time_stats['win_rate'] = time_stats['win_rate'] * 100
 
+    # Red Day Analysis (Day of Week)
+    df['entry_dt_obj'] = pd.to_datetime(df['entry_date'], errors='coerce')
+    df['day_of_week'] = df['entry_dt_obj'].dt.day_name()
+    day_stats = df.groupby('day_of_week')['pnl'].sum()
+
+    # Fee Erosion Calculation
+    total_fees = 0.0
+    if 'fees' in df.columns:
+        total_fees = pd.to_numeric(df['fees'], errors='coerce').fillna(0.0).sum()
+
+    # Calculate Total Gross PnL
+    # If 'gross_pnl' provided (from CSV analyzer), use it. Else derive from Net PnL + Fees
+    if 'gross_pnl' in df.columns:
+        total_gross_pnl = pd.to_numeric(df['gross_pnl'], errors='coerce').fillna(0.0).sum()
+    elif 'fees' in df.columns:
+        # Assuming df['pnl'] is Net PnL, Gross = Net + Fees
+        total_gross_pnl = df['pnl'].sum() + total_fees
+    else:
+        total_gross_pnl = df['pnl'].sum()
+
     # Identify Best/Worst
     best_pattern = "None"
     worst_pattern = "None"
@@ -120,6 +140,18 @@ def analyze_journal(entries: list[dict]) -> dict:
                  suggestions.append(f"Avoid trading during <b>{row['time_bucket']}</b>. Win rate is only {row['win_rate']:.1f}%.")
              if row['win_rate'] > 70:
                  suggestions.append(f"Increase size during <b>{row['time_bucket']}</b>. You are seeing the market well here.")
+
+    # Red Day Suggestion
+    if 'Monday' in day_stats and day_stats['Monday'] < 0:
+        # Check if Monday is the worst day
+        if day_stats['Monday'] == day_stats.min():
+            suggestions.append("<b>Red Day Analysis:</b> You lose most on Mondays. Consider reducing size or taking the day off.")
+
+    # Fee Erosion Suggestion
+    if total_gross_pnl > 0 and total_fees > 0:
+        fee_ratio = total_fees / total_gross_pnl
+        if fee_ratio > 0.15:
+            suggestions.append(f"<b>Fee Erosion Warning:</b> You paid ${total_fees:.0f} in fees, which is {fee_ratio*100:.1f}% of your Gross Profit. Aim for <10%.")
 
     if total_trades < 10:
         suggestions.append("Keep logging! Need more trades (aim for 50) for reliable patterns.")
