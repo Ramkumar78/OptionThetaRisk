@@ -16,6 +16,21 @@ When('they enter symbol {string}', async (symbol: string) => {
     );
 });
 
+When('they complete the mindset check', async () => {
+    const q1No = PageElement.located(By.xpath("(//label[span[text()='No']])[1]")).describedAs('Q1 No');
+    const q2Yes = PageElement.located(By.xpath("(//label[span[text()='Yes']])[2]")).describedAs('Q2 Yes');
+    const q3Yes = PageElement.located(By.xpath("(//label[span[text()='Yes']])[3]")).describedAs('Q3 Yes');
+    const confirmBtn = PageElement.located(By.xpath("//button[contains(text(), 'Run Backtest')]")).describedAs('Confirm Mindset');
+
+    await actorCalled('Alice').attemptsTo(
+        Wait.until(q1No, isVisible()),
+        Click.on(q1No),
+        Click.on(q2Yes),
+        Click.on(q3Yes),
+        Click.on(confirmBtn)
+    );
+});
+
 Then('they should see the Result graph', async () => {
     // Wait for result to appear. It might take some time as backtest runs.
     // The "Equity Curve" header appears when result is present.

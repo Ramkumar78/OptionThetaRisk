@@ -5,5 +5,6 @@ Feature: Dashboard
 
   Scenario: User views the Dashboard
     Given the user is on the TradeGuardian home page
+    When they navigate to the Dashboard page
     Then they should see the brand "TRADEGUARDIAN"
-    And they should see the "Net Liq" display
+    And they should see the "Command Center" display
