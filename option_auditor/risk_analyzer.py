@@ -154,3 +154,29 @@ def calculate_discipline_score(strategies: List[Any], open_positions: List[Dict]
     score = max(0, min(100, score))
 
     return score, details
+
+def calculate_kelly_criterion(win_rate: float, profit_factor: float) -> float:
+    """
+    Calculates the Kelly Criterion percentage for position sizing.
+
+    Formula derived from standard Kelly f = p - q/b, where:
+    p = win_rate
+    b = AvgWin/AvgLoss
+    Profit Factor (PF) = (p * AvgWin) / ((1-p) * AvgLoss) => b = PF * (1-p)/p
+
+    Resulting simplified formula: Kelly % = Win Rate * (1 - 1 / Profit Factor)
+
+    Args:
+        win_rate: The probability of winning (0.0 to 1.0).
+        profit_factor: The ratio of Gross Profit / Gross Loss.
+
+    Returns:
+        The optimal fraction of the bankroll to wager (0.0 to 1.0).
+        Returns 0.0 if the Profit Factor is <= 1 or calculation fails.
+    """
+    if profit_factor <= 1.0 or win_rate <= 0.0 or win_rate > 1.0:
+        return 0.0
+
+    kelly_pct = win_rate * (1.0 - 1.0 / profit_factor)
+
+    return max(0.0, kelly_pct)
