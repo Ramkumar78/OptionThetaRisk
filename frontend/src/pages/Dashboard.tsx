@@ -5,8 +5,22 @@ import CandlestickChart from '../components/CandlestickChart';
 import RiskMapChart from '../components/RiskMapChart';
 import AreaChart from '../components/AreaChart';
 import DrawdownChart from '../components/DrawdownChart';
+import MindsetGauge from '../components/MindsetGauge';
 import { type CandlestickData } from 'lightweight-charts';
 import { METRIC_EXPLANATIONS } from '../utils/explanations';
+
+const AFFIRMATIONS = [
+  "Cut your losses, let your winners run.",
+  "The trend is your friend.",
+  "Plan the trade, trade the plan.",
+  "Patience is a virtue in trading.",
+  "Risk comes from not knowing what you are doing.",
+  "Don't catch a falling knife.",
+  "The market is always right.",
+  "Focus on the process, not the outcome.",
+  "Protect your capital at all costs.",
+  "Tomorrow is another trading day."
+];
 
 const ASSETS = [
   { symbol: 'SPY', name: 'S&P 500' },
@@ -36,6 +50,7 @@ const Dashboard: React.FC = () => {
   const [loadingPortfolio, setLoadingPortfolio] = useState(true);
   const [showAntiTilt, setShowAntiTilt] = useState(false);
   const [revengeDetails, setRevengeDetails] = useState("");
+  const [affirmation, setAffirmation] = useState<string | null>(null);
 
   // Market State
   const [selectedAsset, setSelectedAsset] = useState(ASSETS[0]);
@@ -58,6 +73,23 @@ const Dashboard: React.FC = () => {
               if (last.is_revenge) {
                    setRevengeDetails(`Revenge Trade Detected on ${last.symbol}. You just had a loss.`);
                    setShowAntiTilt(true);
+              }
+          }
+
+          // Drawdown / Affirmation Check
+          if (response.data.portfolio_curve && response.data.portfolio_curve.length > 0) {
+              let maxEquity = -Infinity;
+              const initial = response.data.account_size_start || 0;
+              for (const p of response.data.portfolio_curve) {
+                  const equity = initial + p.y;
+                  if (equity > maxEquity) maxEquity = equity;
+              }
+              const currentEquity = initial + response.data.portfolio_curve[response.data.portfolio_curve.length - 1].y;
+
+              if (maxEquity > 0 && currentEquity < maxEquity) {
+                   setAffirmation(AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]);
+              } else {
+                   setAffirmation(null);
               }
           }
         }
@@ -173,14 +205,39 @@ const Dashboard: React.FC = () => {
 
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
               <div>
-                  <div className="w-10 h-10 bg-primary-50 dark:bg-primary-900/20 text-primary-600 rounded flex items-center justify-center mb-4">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                  <div className="flex justify-between items-start mb-4">
+                      <div>
+                          <h2 className="text-lg font-bold text-gray-900 dark:text-white" title={METRIC_EXPLANATIONS.discipline_score}>Mindset Meter</h2>
+                          <p className="text-xs text-gray-500">Psychological State</p>
+                      </div>
+                      <div className="w-8 h-8 bg-primary-50 dark:bg-primary-900/20 text-primary-600 rounded flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/><path d="M12 4v16"/></svg>
+                      </div>
                   </div>
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Market Scanner</h2>
-                  <p className="text-gray-500 text-sm mb-6">Run the "Grandmaster" protocol to identify high-probability setups in the current regime.</p>
+
+                  <div className="mb-4">
+                      <MindsetGauge score={portfolioData?.discipline_score || 100} />
+                  </div>
+
+                  {affirmation && (
+                      <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-100 dark:border-yellow-900/50">
+                          <p className="text-xs font-serif italic text-yellow-800 dark:text-yellow-200">
+                              "{affirmation}"
+                          </p>
+                      </div>
+                  )}
+
+                  <div className="space-y-2 mb-6">
+                        {portfolioData?.discipline_details?.map((d: string, i: number) => (
+                            <div key={i} className="text-xs text-red-600 flex items-start">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 mt-0.5 flex-shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                {d}
+                            </div>
+                        ))}
+                  </div>
               </div>
-              <Link to="/screener" className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2.5 rounded text-center transition-colors text-sm">
-                  Launch Screener
+              <Link to="/screener" className="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium py-2 rounded text-center transition-colors text-xs">
+                  Launch Market Scanner
               </Link>
           </div>
       </div>
@@ -201,45 +258,16 @@ const Dashboard: React.FC = () => {
                        </div>
                    </div>
 
-                   {/* Discipline Score */}
-                   <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider" title={METRIC_EXPLANATIONS.discipline_score}>Discipline Score</span>
-                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] font-bold rounded uppercase">Beta</span>
-                            </div>
-                            <div className="flex items-end space-x-2">
-                                <span className={`text-4xl font-bold ${
-                                    (portfolioData.discipline_score || 100) >= 90 ? 'text-green-600' :
-                                    (portfolioData.discipline_score || 100) >= 70 ? 'text-yellow-600' : 'text-red-600'
-                                }`}>
-                                    {portfolioData.discipline_score !== undefined ? portfolioData.discipline_score : 100}
-                                </span>
-                                <span className="text-gray-400 mb-1.5 text-sm">/ 100</span>
-                            </div>
-                            <div className="mt-4 space-y-2">
-                                {portfolioData.discipline_details?.map((d: string, i: number) => (
-                                    <div key={i} className="text-xs text-red-600 flex items-start">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 mt-0.5 flex-shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                                        {d}
-                                    </div>
-                                ))}
-                                {(!portfolioData.discipline_details || portfolioData.discipline_details.length === 0) && (
-                                    <div className="text-xs text-green-600 flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><polyline points="20 6 9 17 4 12"/></svg>
-                                        Perfect discipline.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 gap-4">
+                   {/* Account Stats */}
+                   <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col justify-center">
+                        <div className="grid grid-cols-1 gap-6">
                              <div>
-                                <div className="text-xs text-gray-500 mb-1" title={METRIC_EXPLANATIONS.net_liq}>Net Liq</div>
-                                <div className="text-base font-bold font-mono">${portfolioData.net_liquidity_now?.toLocaleString()}</div>
+                                <div className="text-sm text-gray-500 mb-1" title={METRIC_EXPLANATIONS.net_liq}>Net Liq</div>
+                                <div className="text-3xl font-bold font-mono">${portfolioData.net_liquidity_now?.toLocaleString()}</div>
                              </div>
                              <div>
-                                <div className="text-xs text-gray-500 mb-1" title={METRIC_EXPLANATIONS.ytd}>YTD</div>
-                                <div className={`text-base font-bold font-mono ${portfolioData.ytd_return_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <div className="text-sm text-gray-500 mb-1" title={METRIC_EXPLANATIONS.ytd}>YTD Return</div>
+                                <div className={`text-3xl font-bold font-mono ${portfolioData.ytd_return_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {portfolioData.ytd_return_pct >= 0 ? '+' : ''}{portfolioData.ytd_return_pct?.toFixed(1)}%
                                 </div>
                              </div>
