@@ -141,3 +141,4 @@ cache_data/
 .mutmut-cache
 mutants/
 html/
+e2e/node_modules/
