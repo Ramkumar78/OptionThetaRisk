@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
-import CandlestickChart from '../components/CandlestickChart';
-import { type CandlestickData } from 'lightweight-charts';
+import TradingViewChart from '../components/TradingViewChart';
 
 // 1. STRATEGY DEFINITIONS
 const STRATEGIES: Record<string, {
@@ -369,31 +368,10 @@ const Screener: React.FC = () => {
     // Chart Modal State
     const [isChartModalOpen, setIsChartModalOpen] = useState(false);
     const [chartTicker, setChartTicker] = useState('');
-    const [chartData, setChartData] = useState<CandlestickData[]>([]);
-    const [chartLoading, setChartLoading] = useState(false);
 
     const openChart = async (ticker: string) => {
         setChartTicker(ticker);
         setIsChartModalOpen(true);
-        setChartLoading(true);
-        setChartData([]); // Reset previous data
-        try {
-            const res = await fetch('/analyze/market-data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ticker })
-            });
-            const data = await res.json();
-            if (data.error) {
-                 console.error(data.error);
-            } else {
-                 setChartData(data);
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setChartLoading(false);
-        }
     };
 
     const handleRunScreener = async () => {
@@ -1031,21 +1009,7 @@ const Screener: React.FC = () => {
                             </button>
                         </div>
                         <div className="p-1 flex-grow overflow-hidden relative min-h-[400px]">
-                            {chartLoading && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-800/50 z-10">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                                </div>
-                            )}
-                            {!chartLoading && chartData.length === 0 && (
-                                <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                                    No data available.
-                                </div>
-                            )}
-                            {chartData.length > 0 && (
-                                <div className="w-full h-full p-2">
-                                     <CandlestickChart data={chartData} />
-                                </div>
-                            )}
+                            <TradingViewChart symbol={chartTicker} theme="light" />
                         </div>
                         <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-b-xl flex justify-end gap-2">
                             <button

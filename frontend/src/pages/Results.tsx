@@ -13,7 +13,8 @@ import {
   TimeScale,
   Filler
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
+import AreaChart from '../components/AreaChart';
 import 'chartjs-adapter-date-fns';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 
@@ -125,18 +126,6 @@ const Results: React.FC<ResultsProps> = ({ directData }) => {
   const currencySymbol = getCurrencySymbol(data.ticker || (data.strategy_groups && data.strategy_groups[0]?.symbol) || '');
 
   // --- CHART CONFIGURATION ---
-  const curveChartData = {
-    datasets: [{
-      label: 'Portfolio Equity',
-      data: data.portfolio_curve || [],
-      borderColor: '#2563eb',
-      backgroundColor: 'rgba(37, 99, 235, 0.1)',
-      fill: true,
-      tension: 0.2,
-      pointRadius: 2,
-    }]
-  };
-
   const incomeChartData = {
     labels: data.monthly_income?.map((m: any) => m.month) || [],
     datasets: [{
@@ -208,7 +197,13 @@ const Results: React.FC<ResultsProps> = ({ directData }) => {
         <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 h-[400px]">
           <h3 className="font-bold text-gray-800 dark:text-white mb-4">Equity Curve</h3>
           <div className="h-[320px] w-full">
-             <Line data={curveChartData} options={{ maintainAspectRatio: false, responsive: true, scales: { x: { type: 'time', time: { unit: 'month' } } } }} />
+             <AreaChart
+                 data={data.portfolio_curve?.map((p: any) => ({
+                     time: p.x,
+                     value: p.y
+                 })) || []}
+                 color="#2563eb"
+             />
           </div>
         </div>
 
