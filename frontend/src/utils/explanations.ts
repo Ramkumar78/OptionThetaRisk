@@ -10,5 +10,10 @@ export const METRIC_EXPLANATIONS = {
   risk_map: "A visualization of your open positions based on Days to Expiration (DTE) and Profit/Loss (PnL).",
   monte_carlo: "Simulate future equity curves using statistical methods to estimate potential outcomes.",
   dte: "Days until the option contract expires.",
-  pnl_pct: "Estimated Profit/Loss percentage for the position."
+  pnl_pct: "Estimated Profit/Loss percentage for the position.",
+  theta: "Time decay. The amount of money you lose per day just by holding the position.",
+  delta: "Directional risk. How much your position value changes for a $1 move in the stock.",
+  gamma: "Acceleration. How fast your Delta changes as the stock price moves.",
+  vega: "Volatility risk. How much you make/lose if Implied Volatility changes by 1%.",
+  rs: "Relative Strength. How this asset is performing compared to a benchmark like SPY."
 };

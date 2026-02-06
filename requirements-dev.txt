@@ -10,3 +10,4 @@ pyarrow
 playwright
 pytest-playwright
 mutmut
+pytest-mock
