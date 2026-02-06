@@ -9,10 +9,15 @@ def empty_to_none(v):
 
 OptionalFloat = Annotated[Optional[float], BeforeValidator(empty_to_none)]
 
+class RiskProfile(BaseModel):
+    max_fee_drag: Optional[float] = Field(None, gt=0)
+    stop_loss_limit: Optional[float] = Field(None, gt=0)
+
 # Analysis Schemas
 class AnalyzeRequest(BaseModel):
     broker: str = Field("auto")
     manual_trades: Optional[List[Dict[str, Any]]] = None
+    risk_profile: Optional[RiskProfile] = None
     account_size_start: OptionalFloat = None
     net_liquidity_now: OptionalFloat = None
     buying_power_available_now: OptionalFloat = None
@@ -22,6 +27,19 @@ class AnalyzeRequest(BaseModel):
     date_mode: str = Field("all")
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+    @field_validator('risk_profile', mode='before')
+    @classmethod
+    def parse_risk_profile(cls, v):
+        if isinstance(v, str):
+            try:
+                if not v.strip():
+                    return None
+                parsed = json.loads(v)
+                return parsed
+            except json.JSONDecodeError:
+                return None
+        return v
 
     @field_validator('manual_trades', mode='before')
     @classmethod

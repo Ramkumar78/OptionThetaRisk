@@ -182,6 +182,10 @@ def analyze():
 
     final_global_fees = fee_per_trade if manual_data else csv_fee_per_trade
 
+    risk_profile = data.risk_profile
+    max_fee_drag = risk_profile.max_fee_drag if risk_profile else None
+    stop_loss_limit = risk_profile.stop_loss_limit if risk_profile else None
+
     res = analyze_csv(
         csv_path=csv_path,
         broker=broker,
@@ -193,7 +197,9 @@ def analyze():
         end_date=end_date,
         manual_data=manual_data,
         global_fees=final_global_fees,
-        style=style
+        style=style,
+        max_fee_drag=max_fee_drag,
+        stop_loss_limit=stop_loss_limit
     )
 
     storage = get_db()

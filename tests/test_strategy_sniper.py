@@ -121,8 +121,10 @@ class TestSniperStrategy(unittest.TestCase):
 
         mock_download.return_value = data
 
-        bt = UnifiedBacktester("AAPL", strategy_type="mystrategy")
-        result = bt.run()
+        # Disable mock data mode to ensure we use the mocked yfinance data
+        with patch.dict('os.environ', {'CI': 'false', 'USE_MOCK_DATA': 'false'}):
+            bt = UnifiedBacktester("AAPL", strategy_type="mystrategy")
+            result = bt.run()
 
         if 'error' in result:
              self.fail(f"Backtest returned error: {result['error']}")

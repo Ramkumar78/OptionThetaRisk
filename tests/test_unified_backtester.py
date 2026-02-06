@@ -177,8 +177,10 @@ def test_fetch_data_success(mock_yf_download):
 def test_fetch_data_failure(mock_yf_download):
     mock_yf_download.side_effect = Exception("API Error")
 
-    bt = UnifiedBacktester("TEST")
-    df = bt.fetch_data()
+    # Disable mock data mode to ensure we hit the mocked yfinance that raises exception
+    with patch.dict('os.environ', {'CI': 'false', 'USE_MOCK_DATA': 'false'}):
+        bt = UnifiedBacktester("TEST")
+        df = bt.fetch_data()
 
     assert df is None
 
@@ -249,8 +251,10 @@ def test_run_isa_strategy(mock_yf_download):
 def test_run_no_data(mock_yf_download):
     mock_yf_download.return_value = pd.DataFrame() # Empty
 
-    bt = UnifiedBacktester("TEST")
-    result = bt.run()
+    # Disable mock data mode to ensure we hit the mocked yfinance that returns empty DF
+    with patch.dict('os.environ', {'CI': 'false', 'USE_MOCK_DATA': 'false'}):
+        bt = UnifiedBacktester("TEST")
+        result = bt.run()
 
     assert "error" in result
     assert result["error"] == "No data found"
@@ -425,8 +429,10 @@ def test_edge_case_regime_red(mock_yf_download):
 
     mock_yf_download.return_value = df
 
-    bt = UnifiedBacktester("TEST", strategy_type="grandmaster")
-    result = bt.run()
+    # Disable mock data mode to ensure we use the high-VIX mock_df
+    with patch.dict('os.environ', {'CI': 'false', 'USE_MOCK_DATA': 'false'}):
+        bt = UnifiedBacktester("TEST", strategy_type="grandmaster")
+        result = bt.run()
 
     assert "error" not in result
     # Grandmaster is long only, so should be 0 trades in RED regime
