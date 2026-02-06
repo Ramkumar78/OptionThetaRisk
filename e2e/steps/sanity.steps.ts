@@ -12,7 +12,7 @@ When('they navigate to the Backtester page', async () => {
 When('they enter symbol {string}', async (symbol: string) => {
     await actorCalled('Alice').attemptsTo(
         Enter.theValue(symbol).into(PageElement.located(By.id('ticker-input')).describedAs('Ticker input')),
-        Click.on(PageElement.located(By.css('button[type="submit"]')).describedAs('Run Backtest button'))
+        Click.on(PageElement.located(By.xpath("//button[contains(text(), 'Run Backtest')]")).describedAs('Run Backtest button'))
     );
 });
 

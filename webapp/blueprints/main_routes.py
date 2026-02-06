@@ -55,7 +55,7 @@ def dashboard():
                 "buying_power": 50000.0,
                 "positions": [{"symbol": "SPY", "qty": 100, "mark": 400.0, "value": 40000.0}],
                 "greeks": {"delta": 50.0, "theta": -10.0, "gamma": 0.1, "vega": 100.0},
-                "risk_map": {},
+                "risk_map": [],
                 "regime": "NEUTRAL"
             }
             storage.save_portfolio(username, json.dumps(mock_data).encode())

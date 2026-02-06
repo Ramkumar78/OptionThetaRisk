@@ -53,9 +53,12 @@ describe('Dashboard Component', () => {
 
   it('renders loading state initially', async () => {
     let resolvePromise: any;
-    (axios.get as any).mockImplementation(() => new Promise((resolve) => {
-        resolvePromise = resolve;
-    }));
+    (axios.get as any).mockImplementation((url: string) => {
+        if (url === '/dashboard') {
+             return new Promise((resolve) => { resolvePromise = resolve; });
+        }
+        return Promise.resolve({ data: [] });
+    });
 
     render(
       <BrowserRouter>
@@ -79,7 +82,11 @@ describe('Dashboard Component', () => {
         portfolio_curve: [{ x: '2023-01-01', y: 100 }]
     };
 
-    (axios.get as any).mockResolvedValue({ data: mockData });
+    (axios.get as any).mockImplementation((url: string) => {
+        if (url === '/dashboard') return Promise.resolve({ data: mockData });
+        if (url === '/journal') return Promise.resolve({ data: [] }); // Mock journal for widget
+        return Promise.resolve({ data: {} });
+    });
 
     render(
       <BrowserRouter>
@@ -108,7 +115,10 @@ describe('Dashboard Component', () => {
         json: async () => marketData
     });
 
-    (axios.get as any).mockResolvedValue({ data: {} });
+    (axios.get as any).mockImplementation((url: string) => {
+         if (url === '/journal') return Promise.resolve({ data: [] });
+         return Promise.resolve({ data: {} });
+    });
 
     render(
       <BrowserRouter>
@@ -130,8 +140,9 @@ describe('Dashboard Component', () => {
   });
 
   it('shows no portfolio linked if no data', async () => {
-    (axios.get as any).mockResolvedValue({
-        data: null
+    (axios.get as any).mockImplementation((url: string) => {
+         if (url === '/journal') return Promise.resolve({ data: [] });
+         return Promise.resolve({ data: null });
     });
 
     render(
@@ -148,7 +159,10 @@ describe('Dashboard Component', () => {
         json: async () => ([{ close: 400 }])
     });
 
-    (axios.get as any).mockResolvedValue({ data: {} });
+    (axios.get as any).mockImplementation((url: string) => {
+        if (url === '/journal') return Promise.resolve({ data: [] });
+        return Promise.resolve({ data: {} });
+   });
 
     render(
       <BrowserRouter>
@@ -181,7 +195,10 @@ describe('Dashboard Component', () => {
         json: async () => ([{ close: 18000 }])
     });
 
-    (axios.get as any).mockResolvedValue({ data: {} });
+    (axios.get as any).mockImplementation((url: string) => {
+        if (url === '/journal') return Promise.resolve({ data: [] });
+        return Promise.resolve({ data: {} });
+   });
 
     render(
       <BrowserRouter>

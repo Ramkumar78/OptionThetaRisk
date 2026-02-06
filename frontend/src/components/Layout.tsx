@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import FeedbackModal from './FeedbackModal';
 import { MindsetChecklist } from './MindsetChecklist';
+import { QuickActionsSidebar } from './QuickActionsSidebar';
 import axios from 'axios';
 
 interface LayoutProps {
@@ -17,6 +18,7 @@ const Layout: React.FC<LayoutProps> = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [isQuickTradeOpen, setIsQuickTradeOpen] = useState(false);
   const location = useLocation();
 
   const saveMindsetNote = async (note: string) => {
@@ -91,6 +93,13 @@ const Layout: React.FC<LayoutProps> = () => {
 
           <div className="flex md:order-2 space-x-3 items-center">
               <button
+                  onClick={() => setIsQuickTradeOpen(true)}
+                  className="hidden md:flex items-center px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors shadow-sm mr-2"
+              >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Quick Trade
+              </button>
+              <button
                   onClick={() => setShowChecklist(true)}
                   className="hidden md:flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors mr-2"
               >
@@ -149,6 +158,17 @@ const Layout: React.FC<LayoutProps> = () => {
               <li>
                   <button
                       onClick={() => {
+                          setIsQuickTradeOpen(true);
+                          setIsMobileMenuOpen(false);
+                      }}
+                      className="block w-full text-left py-2 px-3 rounded hover:bg-gray-100 md:hover:bg-transparent md:hover:text-primary-700 md:p-0 md:dark:hover:text-primary-500 dark:hover:bg-gray-700 dark:text-white md:dark:hover:bg-transparent dark:border-gray-700 text-gray-900"
+                  >
+                      Quick Trade
+                  </button>
+              </li>
+              <li>
+                  <button
+                      onClick={() => {
                           setShowChecklist(true);
                           setIsMobileMenuOpen(false);
                       }}
@@ -201,6 +221,7 @@ const Layout: React.FC<LayoutProps> = () => {
         }}
         actionName="Complete Check"
       />
+      <QuickActionsSidebar isOpen={isQuickTradeOpen} onClose={() => setIsQuickTradeOpen(false)} />
     </div>
   );
 };

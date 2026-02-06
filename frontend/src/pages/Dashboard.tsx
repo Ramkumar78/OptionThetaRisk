@@ -7,6 +7,7 @@ import AreaChart from '../components/AreaChart';
 import DrawdownChart from '../components/DrawdownChart';
 import HealthScoreGauge from '../components/ui/HealthScoreGauge';
 import Tooltip from '../components/ui/Tooltip';
+import { TradingMoodWidget } from '../components/TradingMoodWidget';
 import { type CandlestickData } from 'lightweight-charts';
 import { METRIC_EXPLANATIONS } from '../utils/explanations';
 
@@ -320,6 +321,9 @@ const Dashboard: React.FC = () => {
                                       initialCapital={portfolioData.account_size_start || 0}
                                   />
                              </div>
+                        </div>
+                        <div className="lg:col-span-2">
+                            <TradingMoodWidget />
                         </div>
                     </div>
                </div>

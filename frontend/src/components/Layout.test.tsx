@@ -42,15 +42,6 @@ describe('Layout Component', () => {
       </BrowserRouter>
     );
 
-    const themeButton = screen.getByRole('button', { name: '' }); // The button has an SVG, but no text label. We might need to target by ID or other means.
-    // However, looking at the code:
-    // <button id="theme-toggle" ...>
-    // We can use querySelector or getByRole if we are careful.
-    // There are multiple buttons.
-
-    // Let's use the ID which is more reliable here as the button doesn't have text.
-    // But testing-library encourages roles.
-
     // We can select by ID in the test.
     const button = document.querySelector('#theme-toggle');
     expect(button).toBeInTheDocument();
