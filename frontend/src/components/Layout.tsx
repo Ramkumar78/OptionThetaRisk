@@ -69,7 +69,7 @@ const Layout: React.FC<LayoutProps> = () => {
               <div className="flex items-center justify-center">
                  <img id="nav-logo-img" src="/static/img/logo.png" className="h-6 w-6 brightness-0 invert dark:invert-0" alt="Logo" />
               </div>
-              <span className="self-center text-lg font-bold tracking-tight text-gray-900 dark:text-white">Trade<span className="text-primary-600 dark:text-primary-500">Guardian</span></span>
+              <span className="self-center text-lg font-bold tracking-tight uppercase text-gray-900 dark:text-white">Trade<span className="text-primary-600 dark:text-primary-500">Guardian</span></span>
           </Link>
 
           {/* Desktop Navigation */}

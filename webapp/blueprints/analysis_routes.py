@@ -17,7 +17,7 @@ from option_auditor.common.serialization import serialize_ohlc_data
 from webapp.validation import validate_schema
 from webapp.schemas import (
     PortfolioAnalysisRequest, ScenarioAnalysisRequest, CorrelationRequest,
-    BacktestRequest, MonteCarloRequest, MarketDataRequest
+    BacktestRequest, MonteCarloRequest, MarketDataRequest, AnalyzeRequest
 )
 
 analysis_bp = Blueprint('analysis', __name__)
@@ -107,41 +107,22 @@ def analyze_market_data_route():
 
 @analysis_bp.route("/analyze", methods=["POST"])
 @handle_api_error
+@validate_schema(AnalyzeRequest, source='form')
 def analyze():
     current_app.logger.info("Portfolio Audit Request received")
+
+    data: AnalyzeRequest = g.validated_data
+
     file = request.files.get("csv")
-    broker = request.form.get("broker", "auto")
+    broker = data.broker
+    manual_data = data.manual_trades
 
-    manual_data_json = request.form.get("manual_trades")
-    manual_data = None
-    if manual_data_json:
-        try:
-            manual_data = json.loads(manual_data_json)
-            if manual_data and isinstance(manual_data, list):
-                manual_data = [
-                    row for row in manual_data
-                    if row.get("date") and row.get("symbol") and row.get("action")
-                ]
-                if not manual_data:
-                    manual_data = None
-        except json.JSONDecodeError:
-            pass
-
-    def _to_float(name: str) -> Optional[float]:
-        val = request.form.get(name, "").strip()
-        if val:
-            try:
-                return float(val)
-            except ValueError:
-                return None
-        return None
-
-    account_size_start = _to_float("account_size_start")
-    net_liquidity_now = _to_float("net_liquidity_now")
-    buying_power_available_now = _to_float("buying_power_available_now")
-    style = request.form.get("style", "income")
-    fee_per_trade = _to_float("fee_per_trade")
-    csv_fee_per_trade = _to_float("csv_fee_per_trade")
+    account_size_start = data.account_size_start
+    net_liquidity_now = data.net_liquidity_now
+    buying_power_available_now = data.buying_power_available_now
+    style = data.style
+    fee_per_trade = data.fee_per_trade
+    csv_fee_per_trade = data.csv_fee_per_trade
 
     if (not file or file.filename == "") and not manual_data:
         return jsonify({"error": "No input data provided"}), 400
@@ -149,9 +130,9 @@ def analyze():
     if file and file.filename != "" and not _allowed_filename(file.filename):
             return jsonify({"error": "Invalid file type"}), 400
 
-    date_mode = request.form.get("date_mode", "all")
-    start_date = request.form.get("start_date", "").strip() or None
-    end_date = request.form.get("end_date", "").strip() or None
+    date_mode = data.date_mode
+    start_date = data.start_date
+    end_date = data.end_date
 
     now = datetime.now()
     if date_mode in {"7d", "14d", "1m", "6m", "1y", "2y", "ytd"}:

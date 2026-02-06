@@ -231,3 +231,39 @@ def test_cleanup_job(mock_storage):
         except InterruptedError:
             pass
     mock_storage.cleanup_old_reports.assert_called()
+
+def test_analyze_route_validation_error(client):
+    # Test invalid form data
+    res = client.post('/analyze', data={
+        'account_size_start': 'invalid_float',
+        'manual_trades': 'not_json'
+    })
+
+    assert res.status_code == 400
+    json_data = res.get_json()
+    assert json_data['error'] == "Validation Error"
+    assert "details" in json_data
+
+    found_field = False
+    for err in json_data['details']:
+        if err['field'] == 'account_size_start':
+            found_field = True
+            break
+    assert found_field
+
+def test_analyze_route_manual_invalid_types(client):
+    # Test valid JSON but invalid types (list of strings/ints instead of dicts)
+    manual_data = json.dumps(["string", 123, {"incomplete": "dict"}])
+    # Should not crash, just filter out or return None.
+
+    with patch('webapp.blueprints.analysis_routes.analyze_csv') as mock_analyze:
+        mock_analyze.return_value = {"results": "success"}
+
+        res = client.post('/analyze', data={
+            'manual_trades': manual_data
+        })
+
+        # Should be 400 "No input data provided" because all rows were invalid/filtered out,
+        # so manual_data became None, and no CSV was provided.
+        assert res.status_code == 400
+        assert res.json['error'] == "No input data provided"

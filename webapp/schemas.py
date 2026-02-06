@@ -1,7 +1,54 @@
-from pydantic import BaseModel, Field, field_validator, RootModel, ConfigDict
-from typing import List, Dict, Optional, Any, Union
+from pydantic import BaseModel, Field, field_validator, RootModel, ConfigDict, BeforeValidator
+from typing import List, Dict, Optional, Any, Union, Annotated
+import json
+
+def empty_to_none(v):
+    if v == "":
+        return None
+    return v
+
+OptionalFloat = Annotated[Optional[float], BeforeValidator(empty_to_none)]
 
 # Analysis Schemas
+class AnalyzeRequest(BaseModel):
+    broker: str = Field("auto")
+    manual_trades: Optional[List[Dict[str, Any]]] = None
+    account_size_start: OptionalFloat = None
+    net_liquidity_now: OptionalFloat = None
+    buying_power_available_now: OptionalFloat = None
+    style: str = Field("income")
+    fee_per_trade: OptionalFloat = None
+    csv_fee_per_trade: OptionalFloat = None
+    date_mode: str = Field("all")
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+    @field_validator('manual_trades', mode='before')
+    @classmethod
+    def parse_manual_trades(cls, v):
+        if isinstance(v, str):
+            try:
+                if not v.strip():
+                    return None
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                     filtered = [
+                        row for row in parsed
+                        if isinstance(row, dict) and row.get("date") and row.get("symbol") and row.get("action")
+                     ]
+                     return filtered if filtered else None
+                return None
+            except json.JSONDecodeError:
+                return None
+        return v
+
+    @field_validator('start_date', 'end_date', mode='before')
+    @classmethod
+    def empty_str_date(cls, v):
+        if v == "":
+            return None
+        return v
+
 class PortfolioAnalysisRequest(BaseModel):
     positions: List[Dict[str, Any]] = Field(..., min_length=1, description="List of positions to analyze")
 
