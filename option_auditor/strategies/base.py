@@ -14,11 +14,14 @@ class BaseStrategy(ABC):
         """
         pass
 
-    def check_market_volatility(self, df: pd.DataFrame, volatility_multiplier: float = 5.0) -> str | None:
+    def check_market_volatility(self, df: pd.DataFrame, volatility_multiplier: float = None) -> str | None:
         """
         Financial Breaker: If 1-day ATR is 5x the norm, trip 'AVOID' state.
         This acts as a 'Risk Management Circuit Breaker'.
         """
+        if volatility_multiplier is None:
+            from option_auditor.config import VOLATILITY_MULTIPLIER
+            volatility_multiplier = VOLATILITY_MULTIPLIER
         if df is None or df.empty or 'ATR' not in df.columns:
             return None
 

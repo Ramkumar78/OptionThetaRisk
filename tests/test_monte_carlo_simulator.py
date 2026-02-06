@@ -68,7 +68,7 @@ def test_unified_backtester_monte_carlo_integration(mock_run):
 
     # Mock run() to populate self.trade_log and return a dummy result
     def side_effect_run():
-        backtester.trade_log = mock_trade_log
+        backtester.last_trade_log = mock_trade_log
         return {"trades": 20, "trade_list": []}
 
     mock_run.side_effect = side_effect_run
@@ -88,7 +88,7 @@ def test_unified_backtester_monte_carlo_integration(mock_run):
 def test_unified_backtester_monte_carlo_no_trades(mock_run):
     # Mock run() to return empty log
     def side_effect_run():
-        backtester.trade_log = []
+        backtester.last_trade_log = []
         return {"trades": 0, "error": "No data found"} # Or just empty result
 
     mock_run.side_effect = side_effect_run

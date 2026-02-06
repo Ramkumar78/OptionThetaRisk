@@ -69,7 +69,7 @@ class TestSniperStrategy(unittest.TestCase):
         results = screener.screen_my_strategy(ticker_list=['AAPL'])
         self.assertEqual(len(results), 0)
 
-    @patch('option_auditor.unified_backtester.yf.download')
+    @patch('option_auditor.backtest_data_loader.yf.download')
     def test_backtest_my_strategy(self, mock_download):
         # Setup mock data for backtester
         # Create a DF with enough history ending TODAY
