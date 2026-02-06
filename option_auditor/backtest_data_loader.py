@@ -2,11 +2,16 @@ import yfinance as yf
 import pandas as pd
 import logging
 from typing import Optional
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from option_auditor.config import BACKTEST_BENCHMARK_SYMBOLS
 
 logger = logging.getLogger("BacktestDataLoader")
 
 class BacktestDataLoader:
+    @retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=1, min=1, max=10), retry=retry_if_exception_type(Exception), reraise=True)
+    def _download_with_retry(self, symbols, period="10y"):
+        return yf.download(symbols, period=period, auto_adjust=True, progress=False)
+
     def fetch_data(self, ticker: str) -> Optional[pd.DataFrame]:
         try:
             ticker = ticker.upper()
@@ -15,7 +20,7 @@ class BacktestDataLoader:
             # Remove duplicates if any
             symbols = list(set(symbols))
 
-            data = yf.download(symbols, period="10y", auto_adjust=True, progress=False)
+            data = self._download_with_retry(symbols, period="10y")
 
             if isinstance(data.columns, pd.MultiIndex):
                 try:
