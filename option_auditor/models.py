@@ -29,6 +29,7 @@ class TradeGroup:
     notes: str = ""
     emotions: List[str] = field(default_factory=list)
     emotional_state: Optional[str] = None
+    is_overtraded: bool = False
 
     def add_leg(self, leg: Leg):
         self.legs.append(leg)
@@ -47,6 +48,11 @@ class TradeGroup:
     @property
     def net_pnl(self) -> float:
         return self.pnl - self.fees
+
+    def check_overtrading(self, max_legs: int = 10):
+        """Checks if the trade group has excessive adjustments."""
+        if len(self.legs) > max_legs:
+            self.is_overtraded = True
 
 @dataclass
 class StrategyGroup:
