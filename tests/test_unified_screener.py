@@ -158,3 +158,35 @@ def test_screen_universal_dashboard_empty():
 
         res = screen_universal_dashboard(ticker_list=["AAPL"])
         assert res["results"] == []
+
+def test_analyze_ticker_hardened_mean_reversion():
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=200)
+
+    # Needs to pass liquidity check (Volume * Price > threshold)
+    # Price 100, Vol 1M -> 100M turnover (Passes)
+
+    df = pd.DataFrame({
+        'Close': [100.0] * 200,
+        'High': [102.0] * 200,
+        'Low': [98.0] * 200,
+        'Volume': [1000000] * 200
+    }, index=dates)
+
+    # We need to mock RsiReversalStrategy inside analyze_ticker_hardened
+    # Or better, mock the strategy instance returned by RsiReversalStrategy() constructor
+
+    with patch("option_auditor.unified_screener.RsiReversalStrategy") as MockStrategy:
+        instance = MockStrategy.return_value
+        # Mock analyze return
+        instance.analyze.return_value = {
+            "signal": "BUY",
+            "rsi": 25.0,
+            "conviction": "High Conviction"
+        }
+
+        result = analyze_ticker_hardened("AAPL", df, regime="GREEN", mode="MEAN_REVERSION")
+
+        assert result is not None
+        assert "MEAN REVERSION" in result["master_verdict"]
+        assert "🔥" in result["master_verdict"]
+        assert result["master_color"] == "purple"

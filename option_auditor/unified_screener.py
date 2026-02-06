@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 # Import Strategy Logic
 from option_auditor.strategies.isa import IsaStrategy
+from option_auditor.strategies.rsi_reversal import RsiReversalStrategy
 # from option_auditor.strategies.bull_put import screen_bull_put_spreads # Use simplified logic for speed if needed
 from option_auditor.common.constants import TICKER_NAMES, SECTOR_COMPONENTS
 from option_auditor.common.data_utils import _calculate_trend_breakout_date, fetch_batch_data_safe
@@ -173,6 +174,31 @@ def analyze_ticker_hardened(ticker, df, regime, mode="ISA"):
                     "breakout_date": _calculate_trend_breakout_date(df)
                  }
 
+        elif mode == "MEAN_REVERSION":
+            # Use RsiReversalStrategy
+            strategy = RsiReversalStrategy()
+            # Analyze requires df with indicators, strategy adds them
+            res_mr = strategy.analyze(df)
+
+            if res_mr and res_mr['signal'] == "BUY":
+                verdict = "🔄 MEAN REVERSION"
+                if res_mr.get('conviction') == "High Conviction":
+                    verdict += " 🔥" # High Conviction
+
+                result = {
+                    "ticker": ticker,
+                    "company_name": TICKER_NAMES.get(ticker, ticker),
+                    "price": curr_price,
+                    "master_verdict": verdict,
+                    "action": "BUY (Reversal)",
+                    "stop_loss": curr_price * 0.95, # 5% stop or use strategy logic
+                    "vol_scan": f"{res_mr.get('conviction', 'Normal')}",
+                    "rsi": round(res_mr['rsi'], 0),
+                    "quality_score": round(quality_score, 2),
+                    "master_color": "purple",
+                    "breakout_date": _calculate_trend_breakout_date(df)
+                }
+
         return result
 
     except Exception as e:
@@ -232,6 +258,10 @@ def screen_universal_dashboard(ticker_list: list = None, time_frame: str = "1d")
             if not ticker.endswith(".L"):
                 res_opt = analyze_ticker_hardened(ticker, df, regime_status, mode="OPTIONS")
                 if res_opt: return res_opt
+
+            # Check Mean Reversion
+            res_mr = analyze_ticker_hardened(ticker, df, regime_status, mode="MEAN_REVERSION")
+            if res_mr: return res_mr
 
             return None
 
