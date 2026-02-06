@@ -14,6 +14,12 @@ class BaseStrategy(ABC):
         """
         pass
 
+    def get_retail_explanation(self) -> str:
+        """
+        Returns a retail-friendly explanation of the strategy.
+        """
+        return "No explanation available."
+
     def check_market_volatility(self, df: pd.DataFrame, volatility_multiplier: float = None) -> str | None:
         """
         Financial Breaker: If 1-day ATR is 5x the norm, trip 'AVOID' state.

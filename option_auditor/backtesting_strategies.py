@@ -31,6 +31,10 @@ class AbstractBacktestStrategy(ABC):
         """Calculate initial stop loss and target price."""
         pass
 
+    def get_retail_explanation(self) -> str:
+        """Returns a retail-friendly explanation of the strategy."""
+        return "No explanation available."
+
     def _get_regime(self, row):
         spy_price = row.get('Spy', 0)
         spy_sma = row.get('spy_sma200', 0)
@@ -90,6 +94,9 @@ class GrandmasterBacktestStrategy(AbstractBacktestStrategy):
 
 
 class TurtleBacktestStrategy(AbstractBacktestStrategy):
+    def get_retail_explanation(self) -> str:
+        return "Trend Following Strategy: Buying breakouts of 20-day highs. Profiting from strong trends."
+
     def add_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         df['high_20'] = df['High'].rolling(20).max().shift(1)
         df['low_10'] = df['Low'].rolling(10).min().shift(1)
@@ -253,6 +260,9 @@ class MmsOteBacktestStrategy(AbstractBacktestStrategy):
 
 
 class BullPutBacktestStrategy(AbstractBacktestStrategy):
+    def get_retail_explanation(self) -> str:
+        return "Bullish Strategy: You want the stock to stay ABOVE your short strike. You profit from time decay (Theta)."
+
     def add_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         df['sma50'] = df['Close'].rolling(50).mean()
         df['rsi'] = ta.rsi(df['Close'], length=14)

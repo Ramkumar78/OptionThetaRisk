@@ -88,3 +88,11 @@ def test_screen_bull_put_no_options(mock_ticker, mock_market_data):
 
     results = screen_bull_put_spreads(ticker_list=["NOOPT"], check_mode=False)
     assert len(results) == 0
+
+def test_bull_put_backtest_explanation():
+    from option_auditor.backtesting_strategies import BullPutBacktestStrategy
+    strategy = BullPutBacktestStrategy("bull_put")
+    explanation = strategy.get_retail_explanation()
+    assert explanation is not None
+    assert "Bullish Strategy" in explanation
+    assert "ABOVE" in explanation
