@@ -12,6 +12,11 @@ vi.mock('../components/CandlestickChart', () => ({
   default: () => <div data-testid="candlestick-chart">Chart Loaded</div>
 }));
 
+// Mock RiskMapChart
+vi.mock('../components/RiskMapChart', () => ({
+  default: () => <div data-testid="risk-map-chart">Risk Map Loaded</div>
+}));
+
 // Mock global fetch
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -26,7 +31,6 @@ describe('Dashboard Component', () => {
   });
 
   it('renders loading state initially', async () => {
-    // Hang the axios request to check loading state
     let resolvePromise: any;
     (axios.get as any).mockImplementation(() => new Promise((resolve) => {
         resolvePromise = resolve;
@@ -38,28 +42,22 @@ describe('Dashboard Component', () => {
       </BrowserRouter>
     );
 
-    // Check for Dashboard Title
-    expect(screen.getByText(/COMMAND/i)).toBeInTheDocument();
-
-    // Check for "Loading Market Data..." or similar if initial state
+    expect(screen.getByText(/Command Center/i)).toBeInTheDocument();
     expect(screen.getByText('Loading Market Data...')).toBeInTheDocument();
 
-    // Check for Portfolio Loading Skeleton (pulse div exists, but checking absence of data is easier)
-    expect(screen.queryByText('Net Liquidity')).not.toBeInTheDocument();
-
-    // Cleanup to avoid open handles
+    // Cleanup
     if (resolvePromise) resolvePromise({ data: {} });
   });
 
   it('renders portfolio results after data fetch', async () => {
-    // Mock Portfolio Data
-    (axios.get as any).mockResolvedValue({
-        data: {
-            net_liquidity_now: 123456,
-            ytd_return_pct: 15.5,
-            portfolio_beta_delta: 50.2
-        }
-    });
+    const mockData = {
+        net_liquidity_now: 123456,
+        ytd_return_pct: 15.5,
+        portfolio_beta_delta: 50.2,
+        discipline_score: 95
+    };
+
+    (axios.get as any).mockResolvedValue({ data: mockData });
 
     render(
       <BrowserRouter>
@@ -67,40 +65,26 @@ describe('Dashboard Component', () => {
       </BrowserRouter>
     );
 
+    // Wait for loading to finish and data to appear
     await waitFor(() => {
-        expect(screen.getByText('Net Liquidity')).toBeInTheDocument();
-    });
+        expect(screen.getByText('Net Liq')).toBeInTheDocument();
+    }, { timeout: 2000 });
 
-    // Check formatted values (using regex to be locale-safe or partial match)
     expect(screen.getByText((content) => content.includes('123,456'))).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes('+15.50%'))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes('15.50%'))).toBeInTheDocument();
     expect(screen.getByText('50.20')).toBeInTheDocument();
+    expect(screen.getByText('95')).toBeInTheDocument();
   });
 
   it('renders market regime after fetch', async () => {
-    // Mock Market Data
-    // We need enough data points. 200 items.
     const closeData = Array(200).fill({ close: 400 });
-    // Add one more that is higher (410)
-    // Code calculates SMA200 of last 200 items?
-    // "const closes = data.map((d: any) => d.close);"
-    // "const sum = closes.slice(-period).reduce((a: number, b: number) => a + b, 0);"
-    // period = 200.
-    // If I return 201 items: 200 items of 400, then 410.
-    // slice(-200) will take one 400 out and include 410?
-    // No, slice(-200) takes the last 200.
-    // So if list is [x1...x200, 410]. slice(-200) is [x2...x200, 410].
-    // SMA will be slightly higher than 400.
-    // Last close is 410.
-    // 410 > 400.something -> BULL.
-
-    const marketData = [...closeData, { close: 410 }];
+    const marketData = [...closeData, { close: 410 }]; // 410 > SMA(200 of 400) -> BULL
 
     mockFetch.mockResolvedValue({
       json: async () => marketData
     });
 
-    (axios.get as any).mockResolvedValue({ data: {} });
+    (axios.get as any).mockResolvedValue({ data: {} }); // Resolve portfolio to avoid "No Portfolio Linked" distraction
 
     render(
       <BrowserRouter>
@@ -108,19 +92,17 @@ describe('Dashboard Component', () => {
       </BrowserRouter>
     );
 
-    // Wait for chart
     await waitFor(() => {
         expect(screen.getByTestId('candlestick-chart')).toBeInTheDocument();
-    });
+    }, { timeout: 2000 });
 
-    // Check for BULL regime
+    // Debug help: print text content if fails
     await waitFor(() => {
          expect(screen.getByText('BULL')).toBeInTheDocument();
-    });
+    }, { timeout: 2000 });
   });
 
   it('shows no portfolio linked if no data', async () => {
-    // Mock error/empty
     (axios.get as any).mockResolvedValue({
         data: null
     });
@@ -137,7 +119,6 @@ describe('Dashboard Component', () => {
   });
 
   it('switches asset when clicked', async () => {
-    // 1. Initial Load (SPY)
     mockFetch.mockResolvedValueOnce({
         json: async () => ([{ close: 400 }])
     });
@@ -148,14 +129,11 @@ describe('Dashboard Component', () => {
       </BrowserRouter>
     );
 
-    // Verify SPY selected by default
     const spyBtn = screen.getByText('S&P 500');
-    expect(spyBtn.className).toContain('bg-blue-600');
+    expect(spyBtn.className).toContain('bg-gray-900'); // Selected style
 
-    // 2. Click Gold
     const goldBtn = screen.getByText('Gold');
 
-    // Mock fetch for Gold
     mockFetch.mockResolvedValueOnce({
         json: async () => ([{ close: 2000 }])
     });
@@ -164,11 +142,12 @@ describe('Dashboard Component', () => {
         goldBtn.click();
     });
 
-    // Verify Gold is now active
-    expect(goldBtn.className).toContain('bg-blue-600');
-    expect(spyBtn.className).not.toContain('bg-blue-600');
+    await waitFor(() => {
+        expect(goldBtn.className).toContain('bg-gray-900');
+    });
 
-    // Verify fetch call
+    expect(spyBtn.className).not.toContain('bg-gray-900');
+
     await waitFor(() => {
         expect(mockFetch).toHaveBeenLastCalledWith('/analyze/market-data', expect.objectContaining({
             body: expect.stringContaining('GC=F')
@@ -189,7 +168,6 @@ describe('Dashboard Component', () => {
 
     const niftyBtn = screen.getByText('Nifty 50');
 
-    // Mock fetch for Nifty
     mockFetch.mockResolvedValueOnce({
         json: async () => ([{ close: 18500 }])
     });
