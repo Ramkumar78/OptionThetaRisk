@@ -28,6 +28,7 @@ class TradeGroup:
     exit_ts: Optional[pd.Timestamp] = None
     notes: str = ""
     emotions: List[str] = field(default_factory=list)
+    emotional_state: Optional[str] = None
 
     def add_leg(self, leg: Leg):
         self.legs.append(leg)
