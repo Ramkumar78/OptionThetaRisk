@@ -16,6 +16,7 @@ from webapp.blueprints.screener_routes import screener_bp
 from webapp.blueprints.journal_routes import journal_bp
 from webapp.blueprints.analysis_routes import analysis_bp
 from webapp.blueprints.main_routes import main_bp
+from webapp.blueprints.safety_routes import safety_bp
 from webapp.services.scheduler_service import start_scheduler
 
 # Load environment variables from .env file
@@ -80,6 +81,7 @@ def create_app(testing: bool = False) -> Flask:
     app.register_blueprint(journal_bp)
     app.register_blueprint(analysis_bp)
     app.register_blueprint(main_bp)
+    app.register_blueprint(safety_bp)
 
     @app.after_request
     def add_security_headers(response):
