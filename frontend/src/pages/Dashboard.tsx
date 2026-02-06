@@ -6,6 +6,7 @@ import RiskMapChart from '../components/RiskMapChart';
 import AreaChart from '../components/AreaChart';
 import DrawdownChart from '../components/DrawdownChart';
 import { type CandlestickData } from 'lightweight-charts';
+import { METRIC_EXPLANATIONS } from '../utils/explanations';
 
 const ASSETS = [
   { symbol: 'SPY', name: 'S&P 500' },
@@ -145,7 +146,7 @@ const Dashboard: React.FC = () => {
                    <div className="flex justify-between items-center">
                        <div>
                            <div className="flex items-center gap-2">
-                               <h2 className="text-base font-bold text-gray-900 dark:text-white">{selectedAsset.symbol} Regime</h2>
+                               <h2 className="text-base font-bold text-gray-900 dark:text-white" title={METRIC_EXPLANATIONS.regime}>{selectedAsset.symbol} Regime</h2>
                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
                                    regime === 'BULL' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
                                    regime === 'BEAR' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600'
@@ -192,7 +193,7 @@ const Dashboard: React.FC = () => {
                    {/* Risk Map */}
                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                        <div className="flex justify-between items-center mb-4">
-                           <h3 className="text-base font-bold text-gray-900 dark:text-white">Visual Risk Map</h3>
+                           <h3 className="text-base font-bold text-gray-900 dark:text-white" title={METRIC_EXPLANATIONS.risk_map}>Visual Risk Map</h3>
                            <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">X: Expiry, Y: PnL</span>
                        </div>
                        <div className="h-64 w-full">
@@ -204,7 +205,7 @@ const Dashboard: React.FC = () => {
                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
                         <div>
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Discipline Score</span>
+                                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider" title={METRIC_EXPLANATIONS.discipline_score}>Discipline Score</span>
                                 <span className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] font-bold rounded uppercase">Beta</span>
                             </div>
                             <div className="flex items-end space-x-2">
@@ -233,11 +234,11 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700 grid grid-cols-2 gap-4">
                              <div>
-                                <div className="text-xs text-gray-500 mb-1">Net Liq</div>
+                                <div className="text-xs text-gray-500 mb-1" title={METRIC_EXPLANATIONS.net_liq}>Net Liq</div>
                                 <div className="text-base font-bold font-mono">${portfolioData.net_liquidity_now?.toLocaleString()}</div>
                              </div>
                              <div>
-                                <div className="text-xs text-gray-500 mb-1">YTD</div>
+                                <div className="text-xs text-gray-500 mb-1" title={METRIC_EXPLANATIONS.ytd}>YTD</div>
                                 <div className={`text-base font-bold font-mono ${portfolioData.ytd_return_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {portfolioData.ytd_return_pct >= 0 ? '+' : ''}{portfolioData.ytd_return_pct?.toFixed(1)}%
                                 </div>
@@ -252,7 +253,7 @@ const Dashboard: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
                             <div className="flex justify-between items-center mb-2">
-                                <h4 className="text-xs text-gray-500 uppercase font-bold">Equity Curve</h4>
+                                <h4 className="text-xs text-gray-500 uppercase font-bold" title={METRIC_EXPLANATIONS.equity_curve}>Equity Curve</h4>
                             </div>
                             <div className="h-64">
                                  {portfolioData.portfolio_curve && (
@@ -268,7 +269,7 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div>
                              <div className="flex justify-between items-center mb-2">
-                                <h4 className="text-xs text-gray-500 uppercase font-bold">Drawdown</h4>
+                                <h4 className="text-xs text-gray-500 uppercase font-bold" title={METRIC_EXPLANATIONS.drawdown}>Drawdown</h4>
                              </div>
                              <div className="h-64">
                                   <DrawdownChart
@@ -288,11 +289,11 @@ const Dashboard: React.FC = () => {
           ) : portfolioData ? (
               <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
-                      <div className="text-xs text-gray-500 uppercase font-bold mb-1">Beta Weighted Delta</div>
+                      <div className="text-xs text-gray-500 uppercase font-bold mb-1" title={METRIC_EXPLANATIONS.beta_weighted_delta}>Beta Weighted Delta</div>
                       <div className="text-2xl font-bold text-gray-900 dark:text-white font-mono">{portfolioData.portfolio_beta_delta?.toFixed(2) || '-'}</div>
                   </div>
                   <div className="md:col-span-2 space-y-2">
-                       <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Morning Briefing</h4>
+                       <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide" title={METRIC_EXPLANATIONS.morning_briefing}>Morning Briefing</h4>
                        {portfolioData.verdict_details ? (
                            <div className="text-sm text-red-600 font-medium bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900/50">
                                {portfolioData.verdict_details}
@@ -330,7 +331,7 @@ const Dashboard: React.FC = () => {
 
       {/* BOTTOM ROW: TOOLS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Link to="/monte-carlo" className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors group">
+          <Link to="/monte-carlo" title={METRIC_EXPLANATIONS.monte_carlo} className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors group">
               <div className="text-primary-600 dark:text-primary-400 mb-3 group-hover:scale-110 transition-transform origin-left">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="8.5" r="1.5"/><circle cx="8.5" cy="15.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/></svg>
               </div>

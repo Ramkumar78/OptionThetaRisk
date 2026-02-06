@@ -8,6 +8,7 @@ import {
   Title
 } from 'chart.js';
 import { Bubble } from 'react-chartjs-2';
+import { METRIC_EXPLANATIONS } from '../utils/explanations';
 
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend, Title);
 
@@ -69,6 +70,9 @@ const RiskMapChart: React.FC<RiskMapProps> = ({ data }) => {
           label: (context: any) => {
              const d = data[context.dataIndex];
              return `${d.symbol}: DTE ${d.dte}, PnL ${d.pnl_pct}% ${d.risk_alert ? '⚠️ ' + d.risk_alert : ''}`;
+          },
+          afterBody: () => {
+             return [METRIC_EXPLANATIONS.dte, METRIC_EXPLANATIONS.pnl_pct];
           }
         }
       },
