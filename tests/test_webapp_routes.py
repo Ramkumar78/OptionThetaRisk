@@ -185,6 +185,27 @@ def test_journal_routes(client, mock_storage):
         res = client.post('/journal/analyze')
         assert res.status_code == 200
 
+def test_journal_export_route(client, mock_storage):
+    # Mock entries
+    mock_entries = [
+        {"entry_date": "2023-01-01", "symbol": "AAPL", "pnl": 100},
+        {"entry_date": "2023-01-02", "symbol": "GOOG", "pnl": -50}
+    ]
+    mock_storage.get_journal_entries.return_value = mock_entries
+
+    res = client.get('/api/journal/export')
+    assert res.status_code == 200
+    assert 'text/csv' in res.headers['Content-Type']
+    assert res.headers['Content-Disposition'] == 'attachment; filename=journal_export.csv'
+
+    csv_content = res.data.decode('utf-8')
+    assert "entry_date" in csv_content
+    assert "symbol" in csv_content
+    assert "pnl" in csv_content
+    assert "AAPL" in csv_content
+    assert "GOOG" in csv_content
+    assert "100" in csv_content
+
 def test_analyze_route_manual(client, mock_storage):
     manual_data = json.dumps([{"date": "2023-01-01", "symbol": "AAPL", "action": "BUY", "quantity": 10, "price": 150}])
     # Patch where it is imported in blueprint
