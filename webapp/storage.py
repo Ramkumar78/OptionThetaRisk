@@ -60,6 +60,7 @@ class JournalEntry(Base):
     pnl = Column(Float)
     sentiment = Column(String)
     notes = Column(Text)
+    emotions = Column(Text)
     created_at = Column(Float, default=time.time)
 
 class StorageProvider(ABC):
@@ -156,6 +157,10 @@ class DatabaseStorage(StorageProvider):
                     if 'sentiment' not in columns:
                         logger.info("Migrating: Adding sentiment to journal_entries")
                         conn.execute(text('ALTER TABLE journal_entries ADD COLUMN sentiment VARCHAR'))
+
+                    if 'emotions' not in columns:
+                        logger.info("Migrating: Adding emotions to journal_entries")
+                        conn.execute(text('ALTER TABLE journal_entries ADD COLUMN emotions TEXT'))
                     conn.commit()
         except Exception as e:
             logger.error(f"Migration check failed: {e}")
@@ -250,6 +255,9 @@ class DatabaseStorage(StorageProvider):
             valid_keys = {c.name for c in JournalEntry.__table__.columns}
             sanitized_entry = {k: v for k, v in entry.items() if k in valid_keys}
 
+            if 'emotions' in sanitized_entry and isinstance(sanitized_entry['emotions'], list):
+                sanitized_entry['emotions'] = json.dumps(sanitized_entry['emotions'])
+
             db_entry = session.query(JournalEntry).filter_by(id=entry['id']).first()
             if db_entry:
                 for k, v in sanitized_entry.items():
@@ -287,6 +295,9 @@ class DatabaseStorage(StorageProvider):
             for entry in entries:
                 sanitized_entry = {k: v for k, v in entry.items() if k in valid_keys}
 
+                if 'emotions' in sanitized_entry and isinstance(sanitized_entry['emotions'], list):
+                    sanitized_entry['emotions'] = json.dumps(sanitized_entry['emotions'])
+
                 if entry['id'] in existing_map:
                     # Update
                     db_entry = existing_map[entry['id']]
@@ -308,7 +319,19 @@ class DatabaseStorage(StorageProvider):
         session = self.Session()
         try:
             entries = session.query(JournalEntry).filter_by(username=username).all()
-            return [{c.name: getattr(e, c.name) for c in JournalEntry.__table__.columns} for e in entries]
+            result = []
+            columns = JournalEntry.__table__.columns
+            for e in entries:
+                row = {c.name: getattr(e, c.name) for c in columns}
+                if row.get('emotions'):
+                    try:
+                        row['emotions'] = json.loads(row['emotions'])
+                    except (json.JSONDecodeError, TypeError):
+                         row['emotions'] = []
+                else:
+                     row['emotions'] = []
+                result.append(row)
+            return result
         finally:
             session.close()
 

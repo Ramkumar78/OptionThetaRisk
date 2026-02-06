@@ -26,6 +26,8 @@ class TradeGroup:
     qty_net: float = 0.0
     entry_ts: Optional[pd.Timestamp] = None
     exit_ts: Optional[pd.Timestamp] = None
+    notes: str = ""
+    emotions: List[str] = field(default_factory=list)
 
     def add_leg(self, leg: Leg):
         self.legs.append(leg)
