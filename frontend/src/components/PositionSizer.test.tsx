@@ -73,4 +73,37 @@ describe('PositionSizer', () => {
     // Position Value = 50 * 10 = 500. 500 < 2000. No warning.
     expect(screen.queryByText(/Concentration Risk/i)).not.toBeInTheDocument();
   });
+
+  it('renders fixed/kelly toggle when strategyMetrics are provided', () => {
+    const strategyMetrics = { win_rate: 0.5, profit_factor: 2.0 };
+    render(<PositionSizer strategyMetrics={strategyMetrics} />);
+    expect(screen.getByText('Fixed')).toBeInTheDocument();
+    expect(screen.getByText('Kelly')).toBeInTheDocument();
+  });
+
+  it('calculates Kelly risk percentage correctly', () => {
+    // Win Rate 50%, PF 2.0 -> Kelly 25%
+    const strategyMetrics = { win_rate: 0.5, profit_factor: 2.0 };
+    render(<PositionSizer strategyMetrics={strategyMetrics} />);
+
+    // Switch to Kelly
+    fireEvent.click(screen.getByText('Kelly'));
+
+    // Check risk percentage input
+    const riskInput = screen.getByLabelText(/Risk Per Trade/i);
+    expect(riskInput).toHaveValue(25);
+    expect(riskInput).toBeDisabled();
+  });
+
+  it('calculates Kelly risk as 0 if calculation is negative', () => {
+    // Win Rate 50%, PF 0.5 (Loss) -> Kelly Negative -> 0
+    const strategyMetrics = { win_rate: 0.5, profit_factor: 0.5 };
+    render(<PositionSizer strategyMetrics={strategyMetrics} />);
+
+    // Switch to Kelly
+    fireEvent.click(screen.getByText('Kelly'));
+
+    const riskInput = screen.getByLabelText(/Risk Per Trade/i);
+    expect(riskInput).toHaveValue(0);
+  });
 });

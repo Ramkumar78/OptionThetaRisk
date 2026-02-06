@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from 'react';
 
-const PositionSizer: React.FC = () => {
+interface PositionSizerProps {
+  strategyMetrics?: {
+    win_rate: number;
+    profit_factor: number;
+  };
+}
+
+const PositionSizer: React.FC<PositionSizerProps> = ({ strategyMetrics }) => {
   const [accountSize, setAccountSize] = useState<number>(10000);
   const [riskPercentage, setRiskPercentage] = useState<number>(1);
   const [stopLossAmount, setStopLossAmount] = useState<number | ''>('');
   const [entryPrice, setEntryPrice] = useState<number | ''>('');
   const [maxShares, setMaxShares] = useState<number>(0);
   const [showWarning, setShowWarning] = useState<boolean>(false);
+  const [mode, setMode] = useState<'fixed' | 'kelly'>('fixed');
+
+  useEffect(() => {
+    if (mode === 'kelly' && strategyMetrics) {
+        // Kelly % = Win Rate * (1 - 1 / Profit Factor)
+        const { win_rate, profit_factor } = strategyMetrics;
+        if (profit_factor > 1 && win_rate > 0) {
+            const kelly = win_rate * (1 - 1 / profit_factor);
+            setRiskPercentage(parseFloat((kelly * 100).toFixed(2))); // Convert to %
+        } else {
+            setRiskPercentage(0);
+        }
+    }
+  }, [mode, strategyMetrics]);
 
   useEffect(() => {
     if (stopLossAmount && typeof stopLossAmount === 'number' && stopLossAmount > 0) {
@@ -30,7 +51,25 @@ const PositionSizer: React.FC = () => {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 max-w-md w-full">
-      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Position Sizer</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Position Sizer</h3>
+        {strategyMetrics && (
+             <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 text-xs font-medium">
+                 <button
+                     onClick={() => setMode('fixed')}
+                     className={`px-3 py-1.5 rounded-md transition-all ${mode === 'fixed' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                 >
+                     Fixed
+                 </button>
+                 <button
+                     onClick={() => setMode('kelly')}
+                     className={`px-3 py-1.5 rounded-md transition-all ${mode === 'kelly' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                 >
+                     Kelly
+                 </button>
+             </div>
+        )}
+      </div>
 
       <div className="space-y-4">
         <div>
@@ -48,15 +87,21 @@ const PositionSizer: React.FC = () => {
 
         <div>
           <label htmlFor="risk-percentage" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-            Risk Per Trade %
+            Risk Per Trade % {mode === 'kelly' && <span className="text-primary-600 dark:text-primary-400 text-xs ml-2">(Kelly Criterion)</span>}
           </label>
           <input
             type="number"
             id="risk-percentage"
             value={riskPercentage}
+            disabled={mode === 'kelly'}
             onChange={(e) => setRiskPercentage(Number(e.target.value))}
-            className="w-full p-2.5 text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+            className={`w-full p-2.5 text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white ${mode === 'kelly' ? 'opacity-60 cursor-not-allowed' : ''}`}
           />
+          {mode === 'kelly' && strategyMetrics && (
+              <p className="text-xs text-gray-500 mt-1">
+                  Based on Win Rate {(strategyMetrics.win_rate * 100).toFixed(1)}% & PF {strategyMetrics.profit_factor.toFixed(2)}
+              </p>
+          )}
         </div>
 
         <div>
