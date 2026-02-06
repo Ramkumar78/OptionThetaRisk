@@ -63,17 +63,17 @@ const Layout: React.FC<LayoutProps> = () => {
 
   return (
     <div className="flex flex-col min-h-screen w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
-      <nav id="navbar-main" className="fixed w-full z-20 top-0 start-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
+      <nav id="navbar-main" className="fixed w-full z-20 top-0 start-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
           <Link to="/" id="nav-logo-link" className="flex items-center space-x-3 rtl:space-x-reverse group">
-              <div className="p-1.5 bg-primary-600 rounded-lg shadow-lg shadow-primary-500/30 group-hover:scale-105 transition-transform">
-                 <img id="nav-logo-img" src="/static/img/logo.png" className="h-6 w-6 brightness-0 invert" alt="Logo" />
+              <div className="flex items-center justify-center">
+                 <img id="nav-logo-img" src="/static/img/logo.png" className="h-6 w-6 brightness-0 invert dark:invert-0" alt="Logo" />
               </div>
-              <span className="self-center text-xl font-bold tracking-tight text-gray-900 dark:text-white">Trade<span className="text-primary-600 dark:text-primary-400">Guardian</span></span>
+              <span className="self-center text-lg font-bold tracking-tight text-gray-900 dark:text-white">Trade<span className="text-primary-600 dark:text-primary-500">Guardian</span></span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-6">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
@@ -81,7 +81,7 @@ const Layout: React.FC<LayoutProps> = () => {
                 id={`nav-link-${link.name.toLowerCase()}`}
                 className={clsx(
                   "text-sm font-medium transition-colors hover:text-primary-600 dark:hover:text-primary-400",
-                  location.pathname === link.path ? "text-primary-600 dark:text-primary-400" : "text-gray-700 dark:text-gray-300"
+                  location.pathname === link.path ? "text-primary-600 dark:text-primary-400" : "text-gray-600 dark:text-gray-400"
                 )}
               >
                 {link.name}
@@ -89,21 +89,26 @@ const Layout: React.FC<LayoutProps> = () => {
             ))}
           </div>
 
-          <div className="flex md:order-2 space-x-3">
+          <div className="flex md:order-2 space-x-3 items-center">
               <button
                   onClick={() => setShowChecklist(true)}
-                  className="hidden md:flex items-center px-3 py-1 bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors mr-2"
+                  className="hidden md:flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors mr-2"
               >
-                  <span className="mr-2">🧠</span> Pre-Flight
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  Pre-Flight
               </button>
 
               <button
                 id="theme-toggle"
                 type="button"
                 onClick={toggleTheme}
-                className="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-full text-sm p-2.5 transition-all"
+                className="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none rounded p-2 transition-all"
               >
-                 {isDark ? '☀️' : '🌙'}
+                 {isDark ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/></svg>
+                 ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                 )}
               </button>
 
               {/* Mobile menu button */}
@@ -112,7 +117,7 @@ const Layout: React.FC<LayoutProps> = () => {
                 type="button"
                 id="mobile-menu-toggle"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="inline-flex items-center p-2 w-10 h-10 justify-center text-sm text-gray-500 rounded-lg md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
+                className="inline-flex items-center p-2 w-10 h-10 justify-center text-sm text-gray-500 rounded md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
                 aria-controls="navbar-sticky"
                 aria-expanded={isMobileMenuOpen}
               >
@@ -125,7 +130,7 @@ const Layout: React.FC<LayoutProps> = () => {
 
           {/* Mobile Menu Dropdown */}
           <div className={clsx("items-center justify-between w-full md:hidden", isMobileMenuOpen ? "block" : "hidden")} id="navbar-sticky">
-            <ul className="flex flex-col p-4 md:p-0 mt-4 font-medium border border-gray-100 rounded-lg bg-gray-50 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 md:bg-white dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
+            <ul className="flex flex-col p-4 md:p-0 mt-4 font-medium border border-gray-100 rounded bg-gray-50 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 md:bg-white dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
               {navLinks.map((link) => (
                 <li key={link.path}>
                    <Link
@@ -149,7 +154,7 @@ const Layout: React.FC<LayoutProps> = () => {
                       }}
                       className="block w-full text-left py-2 px-3 rounded hover:bg-gray-100 md:hover:bg-transparent md:hover:text-primary-700 md:p-0 md:dark:hover:text-primary-500 dark:hover:bg-gray-700 dark:text-white md:dark:hover:bg-transparent dark:border-gray-700 text-gray-900"
                   >
-                      🧠 Pre-Flight
+                      Pre-Flight
                   </button>
               </li>
             </ul>
@@ -157,7 +162,7 @@ const Layout: React.FC<LayoutProps> = () => {
         </div>
       </nav>
 
-      <div className="h-20 md:h-24"></div>
+      <div className="h-20"></div>
 
       <main className="container mx-auto px-4 flex-grow py-6 max-w-7xl animate-fade-in">
          <Outlet />

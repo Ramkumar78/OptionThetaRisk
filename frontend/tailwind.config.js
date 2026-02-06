@@ -3,32 +3,83 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
-    "../webapp/templates/**/*.html", // Keep scanning templates just in case
+    "../webapp/templates/**/*.html",
   ],
   darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
          sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
+      },
+      borderRadius: {
+        'none': '0',
+        'sm': '2px',
+        DEFAULT: '4px',
+        'md': '6px',
+        'lg': '8px',
+        'xl': '8px', // Cap at 8px for professional look
+        '2xl': '8px',
+        '3xl': '8px',
+        'full': '9999px',
       },
       colors: {
-        // Modern Slate Foundation
-        gray: {"50":"#f8fafc","100":"#f1f5f9","200":"#e2e8f0","300":"#cbd5e1","400":"#94a3b8","500":"#64748b","600":"#475569","700":"#334155","800":"#1e293b","900":"#0f172a","950":"#020617"},
-        // Fintech Indigo Primary
-        primary: {"50":"#eef2ff","100":"#e0e7ff","200":"#c7d2fe","300":"#a5b4fc","400":"#818cf8","500":"#6366f1","600":"#4f46e5","700":"#4338ca","800":"#3730a3","900":"#312e81","950":"#1e1b4b"},
-        // Profit Emerald
-        success: {"500": "#10b981", "600": "#059669"},
-        // Loss Rose
-        danger: {"500": "#f43f5e", "600": "#e11d48"}
+        // Strict Slate Palette
+        gray: {
+          50: '#F8FAFC',
+          100: '#F1F5F9',
+          200: '#E2E8F0',
+          300: '#CBD5E1',
+          400: '#94A3B8',
+          500: '#64748B',
+          600: '#475569',
+          700: '#334155',
+          800: '#1E293B',
+          900: '#0F172A',
+          950: '#020617',
+        },
+        // Professional Primary Blue
+        primary: {
+          50: '#EFF6FF',
+          100: '#DBEAFE',
+          200: '#BFDBFE',
+          300: '#93C5FD',
+          400: '#60A5FA',
+          500: '#3B82F6',
+          600: '#2563EB',
+          700: '#1D4ED8',
+          800: '#1E40AF',
+          900: '#1E3A8A',
+          950: '#172554',
+        },
+        // Muted Status Colors
+        success: { 500: '#10B981', 600: '#059669' },
+        danger: { 500: '#EF4444', 600: '#DC2626' },
+        warning: { 500: '#F59E0B', 600: '#D97706' },
+      },
+      boxShadow: {
+        'sm': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        DEFAULT: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
+        'md': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+        // Remove heavy shadows
+        'lg': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+        'xl': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+        '2xl': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
       },
       animation: {
         'fade-in': 'fadeIn 0.4s ease-in-out',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'bounce-in': 'bounceIn 0.5s cubic-bezier(0.8, 0, 1, 1)',
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0', transform: 'translateY(5px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        bounceIn: {
+          '0%': { opacity: '0', transform: 'scale(0.9)' },
+          '50%': { opacity: '1', transform: 'scale(1.02)' },
+          '100%': { transform: 'scale(1)' },
         }
       }
     }

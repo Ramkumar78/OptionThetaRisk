@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatCurrency, getCurrencySymbol } from '../utils/formatting';
 import TradingViewChart from '../components/TradingViewChart';
 
-// 1. STRATEGY DEFINITIONS
+// 1. STRATEGY DEFINITIONS (Reduced for brevity in thought, but full list kept in implementation)
 const STRATEGIES: Record<string, {
     id: string;
     name: string;
@@ -30,6 +30,7 @@ const STRATEGIES: Record<string, {
             }
         ]
     },
+    // ... (Keeping all other strategies intact in logic, just updating UI around them)
     rsiDivergence: {
         id: 'rsiDivergence',
         name: 'RSI Divergence',
@@ -485,15 +486,8 @@ const Screener: React.FC = () => {
                 if (sortConfig.key === 'Pin') {
                      if (aPinned && !bPinned) return sortConfig.direction === 'asc' ? -1 : 1;
                      if (!aPinned && bPinned) return sortConfig.direction === 'asc' ? 1 : -1;
-                     return 0; // If both pinned or both not pinned, maintain stability (or fall through to secondary sort?)
+                     return 0;
                 }
-
-                // Always prioritize Pinned items at the top unless specifically sorting by something else that conflicts?
-                // Ideally, "Pinned" is just another sort key, OR we force pinned to top.
-                // Let's force pinned to top ONLY if no sort is active?
-                // Or better: Let user sort by "Pin" column explicitly to bring them to top.
-                // However, "Watchlist" usually implies they are always visible.
-                // Let's strictly follow the sort key. If user sorts by "Pin", they group.
 
                 let aVal = a[sortConfig.key] || a[sortConfig.key.toLowerCase()];
                 let bVal = b[sortConfig.key] || b[sortConfig.key.toLowerCase()];
@@ -521,7 +515,6 @@ const Screener: React.FC = () => {
                 }
 
                 // Numeric conversion
-                // Use Number() to avoid partial parsing (e.g. "2023-10-25" -> 2023)
                 const aNum = Number(aVal);
                 const bNum = Number(bVal);
 
@@ -550,23 +543,25 @@ const Screener: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-            <header className="mb-8">
-                <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">
-                    MARKET <span className="text-blue-600">SCREENER</span>
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2 text-lg">
-                    Institutional grade scanning for high-probability setups.
-                </p>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 space-y-6">
+            <header className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                        Market Screener
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                        Algorithmic identification of high-probability setups.
+                    </p>
+                </div>
 
-                <div className="mt-4 flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Market Regime:
+                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700">
+                    <span className="text-xs font-semibold text-gray-500 uppercase">
+                        Regime
                     </span>
-                    <span className={`px-4 py-1.5 rounded-full text-sm font-bold shadow-sm transition-all ${
-                        regime.includes('BULL') || regime.includes('GREEN') ? 'bg-green-100 text-green-800 border border-green-200' :
-                        regime.includes('BEAR') || regime.includes('RED') ? 'bg-red-100 text-red-800 border border-red-200' :
-                        'bg-gray-200 text-gray-800 border border-gray-300'
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                        regime.includes('BULL') || regime.includes('GREEN') ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                        regime.includes('BEAR') || regime.includes('RED') ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                        'bg-gray-100 text-gray-600'
                     }`}>
                         {regime}
                     </span>
@@ -574,7 +569,7 @@ const Screener: React.FC = () => {
             </header>
 
             {/* CONTROLS */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8 border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div>
                         <label htmlFor="strategy-select" className="block text-xs font-semibold text-gray-500 uppercase mb-2">Strategy</label>
@@ -582,7 +577,7 @@ const Screener: React.FC = () => {
                             id="strategy-select"
                             value={selectedStrategy}
                             onChange={(e) => setSelectedStrategy(e.target.value)}
-                            className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                            className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all"
                         >
                             {Object.entries(STRATEGIES).map(([key, s]) => (
                                 <option key={key} value={key}>{s.name}</option>
@@ -597,7 +592,7 @@ const Screener: React.FC = () => {
                                 id="region-select"
                                 value={region}
                                 onChange={(e) => setRegion(e.target.value)}
-                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-primary-500 outline-none"
                             >
                                 <option value="us">🇺🇸 United States (S&P 500)</option>
                                 <option value="united_states">🇺🇸 United States (Sectors & Liquid)</option>
@@ -615,7 +610,7 @@ const Screener: React.FC = () => {
                                 id="timeframe-select"
                                 value={timeFrame}
                                 onChange={(e) => setTimeFrame(e.target.value)}
-                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-primary-500 outline-none"
                             >
                                 <option value="1d">Daily (Swing)</option>
                                 <option value="1h">1 Hour (Intraday)</option>
@@ -630,28 +625,28 @@ const Screener: React.FC = () => {
                         <button
                             onClick={handleRunScreener}
                             disabled={loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                            className="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 rounded text-sm shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                         >
-                            {loading ? 'Running...' : 'RUN SCANNER'}
+                            {loading ? 'Processing...' : 'Run Scanner'}
                         </button>
                     </div>
                 </div>
 
-                 <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                    <i className="bi bi-info-circle mr-2"></i>
+                 <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded border border-gray-100 dark:border-gray-700 flex items-start gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                     {STRATEGIES[selectedStrategy].description}
                 </div>
             </div>
 
             {/* ERROR MESSAGE */}
             {error && (
-                <div className="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 p-4 mb-8 rounded-r-lg">
+                <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-8">
                     <div className="flex">
                         <div className="flex-shrink-0">
-                            <i className="bi bi-exclamation-triangle-fill text-red-500"></i>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         </div>
                         <div className="ml-3">
-                            <p className="text-sm text-red-700 dark:text-red-200 font-medium">{error}</p>
+                            <p className="text-sm text-red-700 dark:text-red-300 font-medium">{error}</p>
                         </div>
                     </div>
                 </div>
@@ -659,50 +654,50 @@ const Screener: React.FC = () => {
 
             {/* SEARCH / FILTER INPUT */}
             {results.length > 0 && (
-                <div className="mb-4">
-                    <div className="relative">
+                <div className="flex justify-between items-center mb-4">
+                     <p className="text-xs text-gray-500">
+                        {sortedResults.length} Results
+                    </p>
+                    <div className="relative w-64">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i className="bi bi-search text-gray-400"></i>
+                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         </div>
                         <input
                             type="text"
-                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                            placeholder="Filter results (e.g. 'BUY', 'AAPL', 'Technology')..."
+                            className="block w-full pl-9 pr-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                            placeholder="Filter..."
                             value={filterText}
                             onChange={(e) => setFilterText(e.target.value)}
                         />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 ml-1">
-                        Showing {sortedResults.length} of {results.length} results
-                    </p>
                 </div>
             )}
 
             {/* RESULTS TABLE */}
             {results.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                                    <th onClick={() => handleSort('Pin')} className="cursor-pointer px-2 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center"><i className="bi bi-star-fill text-yellow-500"></i> <SortIcon colKey="Pin" /></th>
-                                    <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker <SortIcon colKey="Ticker" /></th>
-                                    <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price <SortIcon colKey="Price" /></th>
+                                <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                                    <th onClick={() => handleSort('Pin')} className="cursor-pointer px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center w-10">Pin</th>
+                                    <th onClick={() => handleSort('Ticker')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ticker <SortIcon colKey="Ticker" /></th>
+                                    <th onClick={() => handleSort('Price')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Price <SortIcon colKey="Price" /></th>
 
                                     {selectedStrategy === 'liquidityGrab' ? (
                                         <>
-                                            <th onClick={() => handleSort('breakout_level')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Swing Level <SortIcon colKey="breakout_level" /></th>
-                                            <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type <SortIcon colKey="Setup" /></th>
-                                            <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
-                                            <th onClick={() => handleSort('score')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strength <SortIcon colKey="score" /></th>
+                                            <th onClick={() => handleSort('breakout_level')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Swing Level <SortIcon colKey="breakout_level" /></th>
+                                            <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type <SortIcon colKey="Setup" /></th>
+                                            <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
+                                            <th onClick={() => handleSort('score')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strength <SortIcon colKey="score" /></th>
                                         </>
                                     ) : selectedStrategy === 'myStrategy' ? (
                                         <>
-                                            <th onClick={() => handleSort('breakout_level')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout Lvl <SortIcon colKey="breakout_level" /></th>
-                                            <th onClick={() => handleSort('atr_value')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">ATR <SortIcon colKey="atr_value" /></th>
-                                            <th onClick={() => handleSort('stop_loss')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stop <SortIcon colKey="stop_loss" /></th>
-                                            <th onClick={() => handleSort('target')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Target <SortIcon colKey="target" /></th>
-                                            <th onClick={() => handleSort('breakout_date')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trend Age <SortIcon colKey="breakout_date" /></th>
+                                            <th onClick={() => handleSort('breakout_level')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout Lvl <SortIcon colKey="breakout_level" /></th>
+                                            <th onClick={() => handleSort('atr_value')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">ATR <SortIcon colKey="atr_value" /></th>
+                                            <th onClick={() => handleSort('stop_loss')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stop <SortIcon colKey="stop_loss" /></th>
+                                            <th onClick={() => handleSort('target')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Target <SortIcon colKey="target" /></th>
+                                            <th onClick={() => handleSort('breakout_date')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trend Age <SortIcon colKey="breakout_date" /></th>
                                         </>
                                     ) : (selectedStrategy === 'optionsOnly' || selectedStrategy === 'verticalPut') ? (
                                         <>
@@ -715,17 +710,17 @@ const Screener: React.FC = () => {
                                     ) : (
                                         <>
                                             {/* NEW COLUMN: ATR */}
-                                            <th onClick={() => handleSort('ATR')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">ATR <SortIcon colKey="ATR" /></th>
+                                            <th onClick={() => handleSort('ATR')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">ATR <SortIcon colKey="ATR" /></th>
 
                                             {/* NEW COLUMN: BREAKOUT */}
-                                            <th onClick={() => handleSort('Breakout')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout <SortIcon colKey="Breakout" /></th>
+                                            <th onClick={() => handleSort('Breakout')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Breakout <SortIcon colKey="Breakout" /></th>
 
-                                            <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Strategy / Verdict <SortIcon colKey="Setup" /></th>
+                                            <th onClick={() => handleSort('Setup')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Verdict <SortIcon colKey="Setup" /></th>
 
                                             {/* NEW COLUMN: RISK PLAN (Stop/Target) */}
-                                            <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
+                                            <th onClick={() => handleSort('RiskPlan')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Risk Plan <SortIcon colKey="RiskPlan" /></th>
 
-                                            <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action <SortIcon colKey="Action" /></th>
+                                            <th onClick={() => handleSort('Action')} className="cursor-pointer px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action <SortIcon colKey="Action" /></th>
                                         </>
                                     )}
                                 </tr>
@@ -746,38 +741,36 @@ const Screener: React.FC = () => {
                                     const isPinned = pinnedTickers.includes(r.Ticker || r.ticker);
 
                                     return (
-                                        <tr key={i} className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isPinned ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
-                                            <td className="px-2 py-4 text-center">
+                                        <tr key={i} className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isPinned ? 'bg-yellow-50/10' : ''}`}>
+                                            <td className="px-4 py-3 text-center">
                                                 <button onClick={() => togglePin(r.Ticker || r.ticker)} className="focus:outline-none transition-transform active:scale-90 hover:scale-110">
                                                     {isPinned ? (
-                                                        <i className="bi bi-star-fill text-yellow-500 text-lg shadow-sm"></i>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                                                     ) : (
-                                                        <i className="bi bi-star text-gray-300 dark:text-gray-600 text-lg hover:text-yellow-400"></i>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 dark:text-gray-600 hover:text-yellow-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                                                     )}
                                                 </button>
                                             </td>
-                                            <td className="px-6 py-4 font-bold font-mono text-gray-900 dark:text-gray-100 cursor-pointer hover:text-blue-600" onClick={() => openChart(r.Ticker || r.ticker)} title="Click to view Chart">
+                                            <td className="px-6 py-3 font-bold font-mono text-sm text-gray-900 dark:text-gray-100 cursor-pointer hover:text-primary-600" onClick={() => openChart(r.Ticker || r.ticker)} title="Click to view Chart">
                                                 <div className="flex flex-col">
                                                     <span className="flex items-center gap-2">
                                                         {r.Ticker || r.ticker}
-                                                        <i className="bi bi-graph-up-arrow text-xs opacity-50"></i>
                                                     </span>
-                                                    {/* Optional: Show company name in small text below ticker if desired, but request asked for hover */}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-right font-mono text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, currencySymbol)}</td>
+                                            <td className="px-6 py-3 text-right font-mono text-sm text-gray-700 dark:text-gray-300">{formatCurrency(r.Price || r.price, currencySymbol)}</td>
 
                                             {selectedStrategy === 'liquidityGrab' ? (
                                                 <>
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-4 py-3 text-sm">
                                                          <span className="font-mono text-purple-600 font-bold">{item.breakout_level}</span>
                                                     </td>
-                                                    <td className="px-4 py-3">
-                                                         <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${item.verdict && item.verdict.includes('BULL') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                    <td className="px-4 py-3 text-sm">
+                                                         <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${item.verdict && item.verdict.includes('BULL') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                              {item.verdict}
                                                          </span>
                                                     </td>
-                                                    <td className="px-6 py-4 text-right">
+                                                    <td className="px-6 py-3 text-right text-sm">
                                                         <div className="flex flex-col items-end gap-1">
                                                             <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono">
                                                                 T: {targetVal ? formatCurrency(targetVal, currencySymbol) : '-'}
@@ -793,16 +786,16 @@ const Screener: React.FC = () => {
                                                 </>
                                             ) : selectedStrategy === 'myStrategy' ? (
                                                 <>
-                                                    <td className="px-4 py-3">
-                                                         <span className="font-mono text-blue-600">{item.breakout_level}</span>
+                                                    <td className="px-4 py-3 text-sm">
+                                                         <span className="font-mono text-primary-600">{item.breakout_level}</span>
                                                     </td>
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-4 py-3 text-sm font-mono">
                                                          {item.atr_value}
                                                     </td>
-                                                    <td className="px-4 py-3 text-red-600 font-semibold">
+                                                    <td className="px-4 py-3 text-red-600 font-semibold font-mono text-sm">
                                                          {item.stop_loss}
                                                     </td>
-                                                    <td className="px-4 py-3 text-green-600 font-semibold">
+                                                    <td className="px-4 py-3 text-green-600 font-semibold font-mono text-sm">
                                                          {item.target}
                                                     </td>
                                                      <td className="px-4 py-3 text-gray-500 text-sm">
@@ -811,32 +804,32 @@ const Screener: React.FC = () => {
                                                 </>
                                             ) : (selectedStrategy === 'optionsOnly' || selectedStrategy === 'verticalPut') ? (
                                                 <>
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-4 py-3 text-sm">
                                                          {/* The Specific Trade Instruction */}
                                                          <div className="flex flex-col">
                                                              <span className="font-bold text-gray-900 dark:text-gray-100">
                                                                  Short: {item.short_put} P <span className="text-gray-400 text-xs">(~{Math.abs(item.delta || 0.30).toFixed(2)}Δ)</span>
                                                              </span>
-                                                             <span className="text-gray-600 dark:text-gray-400 text-sm">
+                                                             <span className="text-gray-600 dark:text-gray-400 text-xs">
                                                                  Long: {item.long_put} P
                                                              </span>
                                                          </div>
                                                     </td>
-                                                    <td className="px-4 py-3">
-                                                         <div className="text-sm font-semibold text-blue-700 dark:text-blue-400">{item.expiry_date}</div>
+                                                    <td className="px-4 py-3 text-sm">
+                                                         <div className="font-semibold text-primary-700 dark:text-primary-400">{item.expiry_date}</div>
                                                          <div className="text-xs text-gray-500 font-mono">{item.dte} DTE</div>
                                                     </td>
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-4 py-3 text-sm">
                                                          <div className="flex items-center space-x-1">
-                                                             <span className="text-green-600 font-bold">${item.credit}</span>
+                                                             <span className="text-green-600 font-bold font-mono">${item.credit}</span>
                                                              <span className="text-gray-300">|</span>
-                                                             <span className="text-red-600 font-medium">${item.risk}</span>
+                                                             <span className="text-red-600 font-medium font-mono">${item.risk}</span>
                                                          </div>
                                                     </td>
-                                                    <td className="px-4 py-3 font-mono text-lg font-bold text-gray-800 dark:text-gray-200">
+                                                    <td className="px-4 py-3 font-mono text-base font-bold text-gray-800 dark:text-gray-200">
                                                          {item.roc}%
                                                     </td>
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-4 py-3 text-sm">
                                                          {selectedStrategy === 'verticalPut' ? (
                                                              <div className="flex flex-col text-xs">
                                                                 <span className="text-green-600 font-bold">IV: {item.iv_atm}%</span>
@@ -845,11 +838,11 @@ const Screener: React.FC = () => {
                                                          ) : (
                                                              // Existing optionsOnly earnings logic
                                                              item.verdict && item.verdict.includes("EARNINGS") ? (
-                                                                 <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-800 animate-pulse">
+                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">
                                                                      ⚠️ {item.earnings_gap} Days
                                                                  </span>
                                                              ) : (
-                                                                 <span className="text-gray-400 text-sm">Safe ({item.earnings_gap}d)</span>
+                                                                 <span className="text-gray-400 text-xs">Safe ({item.earnings_gap}d)</span>
                                                              )
                                                          )}
                                                     </td>
@@ -857,36 +850,36 @@ const Screener: React.FC = () => {
                                             ) : (
                                                 <>
                                                     {/* ATR DATA */}
-                                                    <td className="px-6 py-4 text-right font-mono text-xs text-gray-500">
+                                                    <td className="px-6 py-3 text-right font-mono text-xs text-gray-500">
                                                         {atrVal ? atrVal.toFixed(2) : '-'}
                                                     </td>
 
                                                     {/* BREAKOUT DATE */}
-                                                    <td className="px-6 py-4 text-xs text-gray-600 dark:text-gray-400">
-                                                        <span className={`px-2 py-1 rounded border ${breakoutDate === 'Consolidating' ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
+                                                    <td className="px-6 py-3 text-xs text-gray-600 dark:text-gray-400">
+                                                        <span className={`px-2 py-0.5 rounded border ${breakoutDate === 'Consolidating' ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
                                                             {breakoutDate}
                                                         </span>
                                                     </td>
 
-                                                    <td className="px-6 py-4">
-                                                        <span className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wide bg-gray-100 text-gray-800">
+                                                    <td className="px-6 py-3">
+                                                        <span className="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide bg-gray-100 text-gray-800 border border-gray-200">
                                                             {verdict}
                                                         </span>
                                                     </td>
 
                                                     {/* RISK PLAN DATA */}
-                                                    <td className="px-6 py-4 text-right">
+                                                    <td className="px-6 py-3 text-right text-sm">
                                                         <div className="flex flex-col items-end gap-1">
-                                                            <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono">
+                                                            <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-mono border border-green-100">
                                                                 T: {targetVal ? formatCurrency(targetVal, currencySymbol) : '-'}
                                                             </span>
-                                                            <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-mono">
+                                                            <span className="text-xs text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-mono border border-red-100">
                                                                 S: {stopVal ? formatCurrency(stopVal, currencySymbol) : '-'}
                                                             </span>
                                                         </div>
                                                     </td>
 
-                                                    <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white">
+                                                    <td className="px-6 py-3 text-xs font-bold text-gray-900 dark:text-white">
                                                         {r.Action || 'VIEW'}
                                                     </td>
                                                 </>
@@ -903,7 +896,7 @@ const Screener: React.FC = () => {
             {/* LEGEND */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                 {STRATEGIES[selectedStrategy].legend.map((l, i) => (
-                    <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-2">{l.title}</h3>
                         <p className="text-sm text-gray-500 mb-4">{l.desc}</p>
                         <ul className="space-y-2">
@@ -918,21 +911,21 @@ const Screener: React.FC = () => {
                 ))}
             </div>
 
-            {/* BACKTEST SECTION - FIXED KEYS FOR GRANDMASTER */}
-            <div className="mt-12 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Strategy Backtest</h2>
+            {/* BACKTEST SECTION */}
+            <div className="mt-12 bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Strategy Backtest</h2>
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
                     <input
                         type="text"
                         placeholder="Enter Ticker (e.g. TSLA)"
                         value={backtestTicker}
                         onChange={(e) => setBacktestTicker(e.target.value.toUpperCase())}
-                        className="flex-1 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white uppercase font-bold"
+                        className="flex-1 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-4 py-2 text-gray-900 dark:text-white uppercase font-bold text-sm"
                     />
                     <select
                         value={backtestStrategy}
                         onChange={(e) => setBacktestStrategy(e.target.value)}
-                        className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
+                        className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-4 py-2 text-gray-900 dark:text-white text-sm"
                     >
                         {Object.entries(STRATEGIES).map(([key, s]) => (
                             <option key={key} value={key}>{s.name}</option>
@@ -941,18 +934,18 @@ const Screener: React.FC = () => {
                     <button
                         onClick={handleBacktest}
                         disabled={btLoading}
-                        className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 py-2 rounded-lg transition-colors disabled:opacity-50"
+                        className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 py-2 rounded text-sm transition-colors disabled:opacity-50"
                     >
                         {btLoading ? 'Testing...' : 'Run Backtest'}
                     </button>
                 </div>
 
                 {backtestResult && (
-                    <div className="bg-gray-50 dark:bg-gray-700/30 p-6 rounded-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-gray-50 dark:bg-gray-700/30 p-6 rounded border border-gray-100 dark:border-gray-700">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                             <div>
                                 <p className="text-xs text-gray-500 uppercase">Strategy Return</p>
-                                <p className={`text-xl font-bold ${(backtestResult.strategy_return || backtestResult.total_return_pct || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <p className={`text-lg font-bold ${(backtestResult.strategy_return || backtestResult.total_return_pct || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {(backtestResult.strategy_return ?? backtestResult.total_return_pct ?? 0).toFixed(2)}%
                                 </p>
                                 <p className="text-xs text-gray-400 mt-1">
@@ -961,7 +954,7 @@ const Screener: React.FC = () => {
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500 uppercase">Buy & Hold Return</p>
-                                <p className={`text-xl font-bold ${(backtestResult.buy_hold_return_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <p className={`text-lg font-bold ${(backtestResult.buy_hold_return_pct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {(backtestResult.buy_hold_return_pct ?? 0).toFixed(2)}%
                                 </p>
                                 <p className="text-xs text-gray-400 mt-1">
@@ -970,13 +963,13 @@ const Screener: React.FC = () => {
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500 uppercase">Win Rate</p>
-                                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">
                                     {String(backtestResult.win_rate ?? backtestResult.win_rate_pct ?? '0').replace('%', '')}%
                                 </p>
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500 uppercase">Trades</p>
-                                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">
                                     {backtestResult.trades ?? backtestResult.total_trades ?? 0}
                                 </p>
                             </div>
@@ -985,7 +978,7 @@ const Screener: React.FC = () => {
                         <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
                             <button
                                 onClick={() => navigate('/results', { state: { results: backtestResult } })}
-                                className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 font-bold bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg transition-colors"
+                                className="inline-flex items-center text-sm text-primary-600 hover:text-primary-800 font-bold bg-primary-50 dark:bg-primary-900/30 px-4 py-2 rounded transition-colors"
                             >
                                 <i className="bi bi-bar-chart-fill mr-2"></i>
                                 View Full Analysis & Equity Curve
@@ -998,10 +991,10 @@ const Screener: React.FC = () => {
             {/* CHART MODAL */}
             {isChartModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
                         <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-700">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                <span className="bg-blue-100 text-blue-800 text-sm font-mono px-2 py-1 rounded">{chartTicker}</span>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="bg-primary-100 text-primary-800 text-xs font-mono px-2 py-1 rounded">{chartTicker}</span>
                                 Market Chart
                             </h3>
                             <button onClick={() => setIsChartModalOpen(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
@@ -1011,7 +1004,7 @@ const Screener: React.FC = () => {
                         <div className="p-1 flex-grow overflow-hidden relative min-h-[400px]">
                             <TradingViewChart symbol={chartTicker} theme="light" />
                         </div>
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-b-xl flex justify-end gap-2">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-b-lg flex justify-end gap-2">
                             <button
                                 onClick={() => {
                                     setIsChartModalOpen(false);
@@ -1019,11 +1012,11 @@ const Screener: React.FC = () => {
                                     // Scroll to backtest
                                     document.querySelector('input[placeholder="Enter Ticker (e.g. TSLA)"]')?.scrollIntoView({ behavior: 'smooth' });
                                 }}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded text-sm font-medium"
                             >
                                 Run Backtest
                             </button>
-                            <button onClick={() => setIsChartModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded-lg text-sm font-medium">
+                            <button onClick={() => setIsChartModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded text-sm font-medium">
                                 Close
                             </button>
                         </div>
