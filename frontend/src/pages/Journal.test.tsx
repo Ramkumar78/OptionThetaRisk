@@ -77,7 +77,7 @@ describe('Journal Component', () => {
     });
   });
 
-  it('submits a new entry', async () => {
+  it('submits a new entry after mindset check', async () => {
     (axios.get as any).mockResolvedValue({ data: [] });
     (axios.post as any).mockResolvedValue({ data: { success: true } });
 
@@ -92,8 +92,32 @@ describe('Journal Component', () => {
     fireEvent.change(screen.getByLabelText(/Strategy/i), { target: { value: 'Call' } });
     fireEvent.change(screen.getByLabelText(/Notes/i), { target: { value: 'Test Note' } });
 
-    // Submit
+    // Submit - this opens the modal
     fireEvent.click(screen.getByText(/Add Entry/i));
+
+    // Verify modal open
+    expect(screen.getByText('Mindset Check')).toBeInTheDocument();
+
+    // Attempt to proceed (disabled)
+    const proceedBtn = screen.getByText('Log Trade');
+    expect(proceedBtn).toBeDisabled();
+
+    // Answer questions
+    // Q1: No
+    const q1No = screen.getAllByText('No')[0];
+    fireEvent.click(q1No);
+
+    // Q2: Yes
+    const q2Yes = screen.getAllByText('Yes')[1];
+    fireEvent.click(q2Yes);
+
+    // Q3: Yes
+    const q3Yes = screen.getAllByText('Yes')[2];
+    fireEvent.click(q3Yes);
+
+    // Proceed
+    expect(proceedBtn).not.toBeDisabled();
+    fireEvent.click(proceedBtn);
 
     await waitFor(() => {
         expect(axios.post).toHaveBeenCalledWith('/journal/add', expect.objectContaining({

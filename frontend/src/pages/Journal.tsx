@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import clsx from 'clsx';
 import { DailyDebriefModal } from '../components/DailyDebriefModal';
+import { MindsetChecklist } from '../components/MindsetChecklist';
 import AreaChart from '../components/AreaChart';
 import {
   Chart as ChartJS,
@@ -57,6 +58,7 @@ const Journal: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [showDebrief, setShowDebrief] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   // Form State
   const [symbol, setSymbol] = useState('');
@@ -82,8 +84,13 @@ const Journal: React.FC = () => {
     fetchEntries();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setShowChecklist(true);
+  };
+
+  const handleConfirmedSubmit = async () => {
+    setShowChecklist(false);
     try {
       await axios.post('/journal/add', {
         symbol: symbol.toUpperCase(),
@@ -396,6 +403,12 @@ const Journal: React.FC = () => {
          </div>
       </div>
       {showDebrief && <DailyDebriefModal onClose={() => setShowDebrief(false)} onSave={handleSaveDebrief} />}
+      <MindsetChecklist
+        isOpen={showChecklist}
+        onClose={() => setShowChecklist(false)}
+        onConfirm={handleConfirmedSubmit}
+        actionName="Log Trade"
+      />
     </div>
   );
 };

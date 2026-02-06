@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import Backtester from './Backtester';
 import { vi } from 'vitest';
 
@@ -17,5 +17,14 @@ describe('Backtester Component', () => {
     expect(screen.getByLabelText(/Strategy/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Initial Capital/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Run Backtest/i })).toBeInTheDocument();
+  });
+
+  it('opens mindset checklist when running backtest', () => {
+    render(<Backtester />);
+
+    const runBtn = screen.getByRole('button', { name: /Run Backtest/i });
+    fireEvent.click(runBtn);
+
+    expect(screen.getByText('Mindset Check')).toBeInTheDocument();
   });
 });
