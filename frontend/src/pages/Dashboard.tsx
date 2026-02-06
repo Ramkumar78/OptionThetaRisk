@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
       </header>
 
       {/* TOP ROW: MARKET STATUS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <div className="md:col-span-2 bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                <div className="flex flex-col space-y-4 mb-4">
                    {/* Asset Selector */}
@@ -189,7 +189,7 @@ const Dashboard: React.FC = () => {
       <div>
           {portfolioData && (
                <>
-               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
                    {/* Risk Map */}
                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                        <div className="flex justify-between items-center mb-4">
@@ -250,7 +250,7 @@ const Dashboard: React.FC = () => {
                {/* Performance Analysis */}
                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 mb-8">
                     <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Performance Analysis</h3>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                         <div>
                             <div className="flex justify-between items-center mb-2">
                                 <h4 className="text-xs text-gray-500 uppercase font-bold" title={METRIC_EXPLANATIONS.equity_curve}>Equity Curve</h4>
@@ -287,7 +287,7 @@ const Dashboard: React.FC = () => {
           {loadingPortfolio ? (
               <div className="h-32 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse"></div>
           ) : portfolioData ? (
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
                   <div>
                       <div className="text-xs text-gray-500 uppercase font-bold mb-1" title={METRIC_EXPLANATIONS.beta_weighted_delta}>Beta Weighted Delta</div>
                       <div className="text-2xl font-bold text-gray-900 dark:text-white font-mono">{portfolioData.portfolio_beta_delta?.toFixed(2) || '-'}</div>
