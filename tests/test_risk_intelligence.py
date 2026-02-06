@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import patch
-from option_auditor.risk_intelligence import calculate_correlation_matrix
+from unittest.mock import patch, MagicMock
+from option_auditor.risk_intelligence import calculate_correlation_matrix, get_market_regime
 
 def create_mock_multiindex_data(tickers, length=50):
     dates = pd.date_range(end=pd.Timestamp.now(), periods=length, freq='D')
@@ -106,3 +106,94 @@ def test_calculate_correlation_no_tickers():
     result = calculate_correlation_matrix(None)
     assert "error" in result
     assert "No tickers" in result["error"]
+
+# --- Market Regime Tests ---
+
+def _create_base_df(length=250):
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=length, freq='D')
+    return pd.DataFrame({
+        'Close': [100.0] * length,
+        'High': [101.0] * length,
+        'Low': [99.0] * length
+    }, index=dates)
+
+@patch('option_auditor.risk_intelligence._calculate_atr')
+@patch('option_auditor.risk_intelligence._calculate_rsi')
+def test_market_regime_stormy(mock_rsi, mock_atr):
+    df = _create_base_df()
+
+    # ATR Spike at the end
+    # History: 1.0, Current: 10.0
+    atr_vals = [1.0] * (len(df)-1) + [10.0]
+    mock_atr.return_value = pd.Series(atr_vals, index=df.index)
+
+    mock_rsi.return_value = pd.Series([50.0] * len(df), index=df.index)
+
+    result = get_market_regime(df)
+    assert result == "Stormy (High Risk)"
+
+@patch('option_auditor.risk_intelligence._calculate_atr')
+@patch('option_auditor.risk_intelligence._calculate_rsi')
+def test_market_regime_bearish(mock_rsi, mock_atr):
+    df = _create_base_df()
+
+    # Normal ATR
+    mock_atr.return_value = pd.Series([1.0] * len(df), index=df.index)
+    mock_rsi.return_value = pd.Series([50.0] * len(df), index=df.index)
+
+    # Price < SMA 200
+    # SMA of [100...] is 100.
+    # Set current close to 90
+    df.iloc[-1, df.columns.get_loc('Close')] = 90.0
+
+    result = get_market_regime(df)
+    assert result == "Bearish (Caution)"
+
+@patch('option_auditor.risk_intelligence._calculate_atr')
+@patch('option_auditor.risk_intelligence._calculate_rsi')
+def test_market_regime_bullish(mock_rsi, mock_atr):
+    df = _create_base_df()
+
+    # Normal ATR
+    mock_atr.return_value = pd.Series([1.0] * len(df), index=df.index)
+
+    # High RSI
+    mock_rsi.return_value = pd.Series([60.0] * len(df), index=df.index)
+
+    # Price > SMA 200
+    df.iloc[-1, df.columns.get_loc('Close')] = 110.0
+    # SMA will still be roughly 100 (avg of 249*100 + 110 approx 100)
+
+    result = get_market_regime(df)
+    assert result == "Bullish (Safe)"
+
+@patch('option_auditor.risk_intelligence._calculate_atr')
+@patch('option_auditor.risk_intelligence._calculate_rsi')
+def test_market_regime_neutral(mock_rsi, mock_atr):
+    df = _create_base_df()
+
+    # Normal ATR
+    mock_atr.return_value = pd.Series([1.0] * len(df), index=df.index)
+
+    # Low RSI
+    mock_rsi.return_value = pd.Series([40.0] * len(df), index=df.index)
+
+    # Price > SMA 200
+    df.iloc[-1, df.columns.get_loc('Close')] = 110.0
+
+    result = get_market_regime(df)
+    assert result == "Neutral (Sideways)"
+
+def test_market_regime_insufficient_data():
+    df = _create_base_df(length=50) # Too short
+    result = get_market_regime(df)
+    assert "Insufficient History" in result
+
+def test_market_regime_missing_columns():
+    df = pd.DataFrame({'Close': [100]*250})
+    result = get_market_regime(df)
+    assert "Missing Columns" in result
+
+def test_market_regime_empty():
+    result = get_market_regime(pd.DataFrame())
+    assert "No Data" in result
