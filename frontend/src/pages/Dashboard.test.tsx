@@ -7,6 +7,16 @@ import { BrowserRouter } from 'react-router-dom';
 // Auto-mock axios
 vi.mock('axios');
 
+// Mock HealthScoreGauge
+vi.mock('../components/ui/HealthScoreGauge', () => ({
+  default: ({ score }: any) => <div data-testid="health-score-gauge">Gauge Score: {score}</div>
+}));
+
+// Mock Tooltip
+vi.mock('../components/ui/Tooltip', () => ({
+  default: ({ content, children }: any) => <div data-testid="tooltip" title={content}>{children}</div>
+}));
+
 // Mock CandlestickChart
 vi.mock('../components/CandlestickChart', () => ({
   default: () => <div data-testid="candlestick-chart">Chart Loaded</div>

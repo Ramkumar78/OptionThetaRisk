@@ -1,14 +1,15 @@
 import React from 'react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+// Register ChartJS components
+ChartJS.register(ArcElement, ChartTooltip, Legend);
 
-interface MindsetGaugeProps {
+interface HealthScoreGaugeProps {
   score: number;
 }
 
-const MindsetGauge: React.FC<MindsetGaugeProps> = ({ score }) => {
+const HealthScoreGauge: React.FC<HealthScoreGaugeProps> = ({ score }) => {
   const getColor = (s: number) => {
     if (s >= 90) return '#16a34a'; // green-600
     if (s >= 70) return '#ca8a04'; // yellow-600
@@ -40,7 +41,7 @@ const MindsetGauge: React.FC<MindsetGaugeProps> = ({ score }) => {
   };
 
   return (
-    <div className="relative w-full h-32 flex justify-center items-end" data-testid="mindset-gauge">
+    <div className="relative w-full h-32 flex justify-center items-end" data-testid="health-score-gauge">
         <div className="w-48 h-full">
             <Doughnut data={data} options={options} />
         </div>
@@ -52,4 +53,4 @@ const MindsetGauge: React.FC<MindsetGaugeProps> = ({ score }) => {
   );
 };
 
-export default MindsetGauge;
+export default HealthScoreGauge;
