@@ -390,11 +390,13 @@ def refresh_dashboard_data(saved_data: Dict) -> Dict:
             is_intraday=False
         )
 
-        regime = get_market_regime(sp500_df)
-        data["market_regime"] = regime
+        regime_data = get_market_regime(sp500_df)
+        data["market_regime"] = regime_data.get("regime", "Unknown")
+        data["market_climate"] = regime_data.get("market_climate", "Unknown")
     except Exception as e:
         logger.error(f"Failed to determine market regime: {e}")
         data["market_regime"] = "Unknown (Error)"
+        data["market_climate"] = "Unknown"
 
     return data
 
