@@ -24,6 +24,8 @@ class BacktestRequest(BaseModel):
     ticker: str = Field(..., min_length=1)
     strategy: str = Field("master")
     initial_capital: float = Field(10000.0, gt=0)
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 class MonteCarloRequest(BaseModel):
     ticker: str = Field(..., min_length=1)

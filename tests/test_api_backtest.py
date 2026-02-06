@@ -40,7 +40,7 @@ def test_analyze_backtest_success(mock_ub_cls, client):
     assert "equity_curve" in data
 
     # Verify Mock Call
-    mock_ub_cls.assert_called_with("AAPL", strategy_type="master", initial_capital=10000.0)
+    mock_ub_cls.assert_called_with("AAPL", strategy_type="master", initial_capital=10000.0, start_date=None, end_date=None)
     mock_instance.run.assert_called_once()
 
 @patch("webapp.blueprints.analysis_routes.UnifiedBacktester")

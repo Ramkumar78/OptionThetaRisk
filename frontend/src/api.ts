@@ -21,12 +21,16 @@ export const runTurtleScreener = async (region: string, timeFrame: string) => {
   return response.data;
 };
 
-export const runBacktest = async (ticker: string, strategy: string, initialCapital: number) => {
-  const response = await api.post('/analyze/backtest', {
+export const runBacktest = async (ticker: string, strategy: string, initialCapital: number, startDate?: string, endDate?: string) => {
+  const payload: any = {
     ticker,
     strategy,
     initial_capital: initialCapital
-  });
+  };
+  if (startDate) payload.start_date = startDate;
+  if (endDate) payload.end_date = endDate;
+
+  const response = await api.post('/analyze/backtest', payload);
   return response.data;
 };
 

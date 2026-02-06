@@ -69,7 +69,13 @@ def analyze_correlation_route():
 @validate_schema(BacktestRequest)
 def analyze_backtest_route():
     data: BacktestRequest = g.validated_data
-    backtester = UnifiedBacktester(data.ticker, strategy_type=data.strategy, initial_capital=data.initial_capital)
+    backtester = UnifiedBacktester(
+        data.ticker,
+        strategy_type=data.strategy,
+        initial_capital=data.initial_capital,
+        start_date=data.start_date,
+        end_date=data.end_date
+    )
     result = backtester.run()
 
     if "error" in result:

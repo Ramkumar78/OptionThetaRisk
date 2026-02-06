@@ -55,6 +55,9 @@ const Backtester: React.FC = () => {
   const [ticker, setTicker] = useState('SPY');
   const [strategy, setStrategy] = useState('master');
   const [initialCapital, setInitialCapital] = useState(10000);
+  const [dateMode, setDateMode] = useState('5y');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
@@ -82,8 +85,31 @@ const Backtester: React.FC = () => {
     setError(null);
     setResult(null);
 
+    let startDate: string | undefined;
+    let endDate: string | undefined;
+
+    if (dateMode === 'custom') {
+        if (!customStartDate) {
+            setError("Please select a start date.");
+            setLoading(false);
+            return;
+        }
+        startDate = customStartDate;
+        endDate = customEndDate || undefined;
+    } else {
+        const now = new Date();
+        endDate = now.toISOString().split('T')[0];
+        const start = new Date();
+        if (dateMode === '1y') start.setFullYear(now.getFullYear() - 1);
+        else if (dateMode === '3y') start.setFullYear(now.getFullYear() - 3);
+        else if (dateMode === '5y') start.setFullYear(now.getFullYear() - 5);
+        else if (dateMode === 'ytd') start.setMonth(0, 1);
+        else if (dateMode === 'max') start.setFullYear(1900);
+        startDate = start.toISOString().split('T')[0];
+    }
+
     try {
-      const data = await runBacktest(ticker, strategy, initialCapital);
+      const data = await runBacktest(ticker, strategy, initialCapital, startDate, endDate);
       if (data.error) {
         setError(data.error);
       } else {
@@ -144,6 +170,53 @@ const Backtester: React.FC = () => {
               min="1000"
               step="1000"
             />
+          </div>
+
+          <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time Period</label>
+                <div className="flex space-x-2 flex-wrap gap-y-2">
+                    {['1y', '3y', '5y', 'ytd', 'max', 'custom'].map(m => (
+                        <button
+                            key={m}
+                            type="button"
+                            onClick={() => setDateMode(m)}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                dateMode === m
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            {m.toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+             </div>
+             {dateMode === 'custom' && (
+                 <div className="flex space-x-4">
+                     <div className="flex-1">
+                        <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                        <input
+                            id="start-date"
+                            type="date"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                            required
+                        />
+                     </div>
+                     <div className="flex-1">
+                        <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                        <input
+                            id="end-date"
+                            type="date"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                        />
+                     </div>
+                 </div>
+             )}
           </div>
 
           <button

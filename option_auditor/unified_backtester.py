@@ -10,10 +10,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("UnifiedBacktester")
 
 class UnifiedBacktester:
-    def __init__(self, ticker, strategy_type="grandmaster", initial_capital=10000.0):
+    def __init__(self, ticker, strategy_type="grandmaster", initial_capital=10000.0, start_date=None, end_date=None):
         self.ticker = ticker.upper()
         self.strategy_type = strategy_type
         self.initial_capital = initial_capital
+        self.start_date = start_date
+        self.end_date = end_date
         self.equity = initial_capital
         self.shares = 0
         self.state = "OUT"
@@ -24,8 +26,19 @@ class UnifiedBacktester:
     def fetch_data(self):
         try:
             # Fetch 10 years to ensure 200 SMA is ready before the 5-year backtest starts
+            # If custom start_date is older than 10 years, fetch max.
+            period = "10y"
+            if self.start_date:
+                try:
+                    s_dt = pd.Timestamp(self.start_date)
+                    limit_10y = pd.Timestamp.now() - pd.Timedelta(days=365*10)
+                    if s_dt < limit_10y:
+                        period = "max"
+                except:
+                    pass
+
             symbols = [self.ticker, "SPY", "^VIX"]
-            data = yf.download(symbols, period="10y", auto_adjust=True, progress=False)
+            data = yf.download(symbols, period=period, auto_adjust=True, progress=False)
 
             if isinstance(data.columns, pd.MultiIndex):
                 try:
@@ -87,23 +100,48 @@ class UnifiedBacktester:
         if df.empty: return {"error": "Not enough history"}
 
         # --- EXACT SIMULATION WINDOW ---
-        # 5 Years (approx 1825 days)
-        target_days = 1825
-        start_date = pd.Timestamp.now() - pd.Timedelta(days=target_days)
+        if self.start_date:
+            start_date = pd.Timestamp(self.start_date)
+            # Ensure start_date matches dataframe timezone awareness
+            if df.index.tz is not None and start_date.tz is None:
+                start_date = start_date.tz_localize(df.index.tz)
+            elif df.index.tz is None and start_date.tz is not None:
+                start_date = start_date.tz_localize(None)
 
-        # Check if we have enough data, fallback to 3 years or 2 years if not
-        if df.index[0] > start_date:
-            start_date_3y = pd.Timestamp.now() - pd.Timedelta(days=1095)
-            if df.index[0] > start_date_3y:
-                 start_date_2y = pd.Timestamp.now() - pd.Timedelta(days=730)
-                 if df.index[0] > start_date_2y:
-                     sim_data = df.copy()
-                 else:
-                     sim_data = df[df.index >= start_date_2y].copy()
-            else:
-                 sim_data = df[df.index >= start_date_3y].copy()
+            sim_data = df[df.index >= start_date].copy()
+            if self.end_date:
+                end_date = pd.Timestamp(self.end_date)
+                if df.index.tz is not None and end_date.tz is None:
+                    end_date = end_date.tz_localize(df.index.tz)
+                elif df.index.tz is None and end_date.tz is not None:
+                    end_date = end_date.tz_localize(None)
+                sim_data = sim_data[sim_data.index <= end_date]
         else:
-             sim_data = df[df.index >= start_date].copy()
+            # 5 Years (approx 1825 days)
+            target_days = 1825
+            start_date = pd.Timestamp.now() - pd.Timedelta(days=target_days)
+            if df.index.tz is not None:
+                start_date = start_date.tz_localize(df.index.tz)
+
+            # Check if we have enough data, fallback to 3 years or 2 years if not
+            if df.index[0] > start_date:
+                start_date_3y = pd.Timestamp.now() - pd.Timedelta(days=1095)
+                if df.index.tz is not None:
+                    start_date_3y = start_date_3y.tz_localize(df.index.tz)
+
+                if df.index[0] > start_date_3y:
+                    start_date_2y = pd.Timestamp.now() - pd.Timedelta(days=730)
+                    if df.index.tz is not None:
+                        start_date_2y = start_date_2y.tz_localize(df.index.tz)
+
+                    if df.index[0] > start_date_2y:
+                        sim_data = df.copy()
+                    else:
+                        sim_data = df[df.index >= start_date_2y].copy()
+                else:
+                    sim_data = df[df.index >= start_date_3y].copy()
+            else:
+                sim_data = df[df.index >= start_date].copy()
 
         if sim_data.empty: return {"error": "Not enough history"}
 
