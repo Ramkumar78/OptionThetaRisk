@@ -192,12 +192,15 @@ const Layout: React.FC<LayoutProps> = () => {
       </footer>
 
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
-      {showChecklist && (
-        <MindsetChecklist
-            onClose={() => setShowChecklist(false)}
-            onSaveToJournal={saveMindsetNote}
-        />
-      )}
+      <MindsetChecklist
+        isOpen={showChecklist}
+        onClose={() => setShowChecklist(false)}
+        onConfirm={() => {
+            saveMindsetNote("Completed Pre-Flight Checklist: All Systems Go.");
+            setShowChecklist(false);
+        }}
+        actionName="Complete Check"
+      />
     </div>
   );
 };

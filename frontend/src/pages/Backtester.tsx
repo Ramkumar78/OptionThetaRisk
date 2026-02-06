@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { runBacktest } from '../api';
+import { MindsetChecklist } from '../components/MindsetChecklist';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -58,6 +59,7 @@ const Backtester: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   const strategies = [
     { value: 'master', label: 'Master Convergence (Trend)' },
@@ -76,8 +78,13 @@ const Backtester: React.FC = () => {
     { value: 'rsi_divergence', label: 'RSI Divergence' },
   ];
 
-  const handleRun = async (e: React.FormEvent) => {
+  const handleRun = (e: React.FormEvent) => {
     e.preventDefault();
+    setShowChecklist(true);
+  };
+
+  const handleConfirmedRun = async () => {
+    setShowChecklist(false);
     setLoading(true);
     setError(null);
     setResult(null);
@@ -286,6 +293,12 @@ const Backtester: React.FC = () => {
           </div>
         </div>
       )}
+      <MindsetChecklist
+        isOpen={showChecklist}
+        onClose={() => setShowChecklist(false)}
+        onConfirm={handleConfirmedRun}
+        actionName="Run Backtest"
+      />
     </div>
   );
 };
