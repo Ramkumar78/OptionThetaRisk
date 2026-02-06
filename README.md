@@ -5,6 +5,9 @@
 | Name                                                |    Stmts |     Miss |   Cover |   Missing |
 |---------------------------------------------------- | -------: | -------: | ------: | --------: |
 | option\_auditor/\_\_init\_\_.py                     |        2 |        0 |    100% |           |
+| option\_auditor/backtest\_data\_loader.py           |       37 |        3 |     92% | 27-29, 36 |
+| option\_auditor/backtest\_engine.py                 |      117 |        3 |     97% |29, 35, 67 |
+| option\_auditor/backtest\_reporter.py               |       49 |        0 |    100% |           |
 | option\_auditor/backtesting\_strategies.py          |      393 |       79 |     80% |16, 21, 26, 31, 41, 197, 223, 235-237, 240-242, 245, 248-251, 256-258, 261-263, 266, 269-272, 307-309, 312-315, 318, 321-324, 329-331, 334-336, 339, 342-345, 350-352, 355-356, 359, 362-365, 390, 401, 421-422, 435-436, 471-476, 501, 503, 507, 509, 511, 520 |
 | option\_auditor/cli.py                              |       57 |        4 |     93% |71-73, 101 |
 | option\_auditor/common/constants.py                 |       23 |        2 |     91% |   444-445 |
@@ -15,21 +18,21 @@
 | option\_auditor/common/screener\_utils.py           |      270 |       50 |     81% |23-24, 44, 53-55, 68, 74, 84, 94-96, 110-112, 114, 120, 161-170, 195-198, 200-203, 217-220, 222-224, 226-228, 253-254, 260-262, 348-349 |
 | option\_auditor/common/serialization.py             |       30 |        5 |     83% |29, 43, 49-51 |
 | option\_auditor/common/signal\_type.py              |        6 |        0 |    100% |           |
-| option\_auditor/config.py                           |        4 |        0 |    100% |           |
+| option\_auditor/config.py                           |        9 |        0 |    100% |           |
 | option\_auditor/india\_stock\_data.py               |       16 |        2 |     88% |     19-20 |
 | option\_auditor/journal\_analyzer.py                |       88 |        7 |     92% |30, 113-114, 120, 158-162 |
 | option\_auditor/main\_analyzer.py                   |      495 |       42 |     92% |102-103, 219, 242, 250-251, 292, 302-303, 307-308, 324, 330-331, 393-394, 410, 435-436, 444-453, 484, 517-520, 598-599, 603-605, 617-618, 702, 772 |
 | option\_auditor/models.py                           |       75 |        2 |     97% |    76, 91 |
-| option\_auditor/monte\_carlo\_simulator.py          |       67 |        2 |     97% |   20, 152 |
+| option\_auditor/monte\_carlo\_simulator.py          |       68 |        2 |     97% |   21, 153 |
 | option\_auditor/parsers.py                          |      283 |       64 |     77% |15, 24-26, 30-44, 132-133, 160, 162-163, 180-214, 321-323, 335-336, 345, 378, 427 |
-| option\_auditor/portfolio\_risk.py                  |      274 |       51 |     81% |68-71, 81-83, 87, 94, 123-131, 202, 234, 259-264, 269, 271, 288, 299-302, 319, 336-338, 380-382, 396, 417-420, 423, 425, 436, 444-447, 479-480, 514-516 |
+| option\_auditor/portfolio\_risk.py                  |      274 |       52 |     81% |68-71, 81-83, 87, 94, 123-131, 186, 202, 234, 259-264, 269, 271, 288, 299-302, 319, 336-338, 380-382, 396, 417-420, 423, 425, 436, 444-447, 479-480, 514-516 |
 | option\_auditor/risk\_analyzer.py                   |       67 |        0 |    100% |           |
 | option\_auditor/risk\_intelligence.py               |       44 |        4 |     91% |     50-57 |
 | option\_auditor/screener.py                         |       54 |        3 |     94% |   138-140 |
 | option\_auditor/sp500\_data.py                      |       34 |        5 |     85% |31-32, 50-53 |
 | option\_auditor/strategies/\_\_init\_\_.py          |        6 |        0 |    100% |           |
 | option\_auditor/strategies/alpha.py                 |      102 |       21 |     79% |45-46, 51-52, 90-91, 151-163, 169, 198-199 |
-| option\_auditor/strategies/base.py                  |       19 |        4 |     79% |15, 23, 32-33 |
+| option\_auditor/strategies/base.py                  |       22 |        4 |     82% |15, 26, 35-36 |
 | option\_auditor/strategies/bull\_put.py             |      114 |        9 |     92% |53, 95-96, 131, 140, 222-224, 234-235 |
 | option\_auditor/strategies/darvas.py                |       90 |       13 |     86% |42, 103, 106-107, 119-123, 126, 160-162 |
 | option\_auditor/strategies/five\_thirteen.py        |       98 |       13 |     87% |79-80, 112-113, 128-131, 144, 179-182 |
@@ -53,7 +56,7 @@
 | option\_auditor/strategies/vertical\_spreads.py     |      140 |       28 |     80% |26, 32-37, 40-41, 47-48, 60, 70, 86-87, 119-124, 133-135, 158-159, 179, 192, 259-261 |
 | option\_auditor/strategy.py                         |      256 |       33 |     87% |16, 35, 148-155, 204, 207-245, 279, 306 |
 | option\_auditor/uk\_stock\_data.py                  |       16 |        2 |     88% |     30-31 |
-| option\_auditor/unified\_backtester.py              |      198 |        7 |     96% |37-39, 46, 74, 106, 361, 378 |
+| option\_auditor/unified\_backtester.py              |       56 |        3 |     95% |44, 67, 85 |
 | option\_auditor/unified\_screener.py                |      125 |       29 |     77% |37, 41-42, 48, 59-63, 78-81, 96-97, 120-123, 178-180, 191-197, 203, 220-223, 238-239 |
 | option\_auditor/us\_stock\_data.py                  |        9 |        0 |    100% |           |
 | webapp/\_\_init\_\_.py                              |        0 |        0 |    100% |           |
@@ -71,7 +74,7 @@
 | webapp/storage.py                                   |      393 |       30 |     92% |68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 117, 270, 347-348, 388, 423-424, 443-446, 463, 480-481, 492, 504-505, 524 |
 | webapp/utils.py                                     |       59 |        7 |     88% |32-33, 58-59, 69-71 |
 | webapp/validation.py                                |       35 |        4 |     89% | 22, 49-51 |
-| **TOTAL**                                           | **6975** |  **945** | **86%** |           |
+| **TOTAL**                                           | **7045** |  **948** | **87%** |           |
 
 
 ## Setup coverage badge
