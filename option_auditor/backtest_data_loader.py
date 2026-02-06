@@ -1,3 +1,5 @@
+import os
+import numpy as np
 import yfinance as yf
 import pandas as pd
 import logging
@@ -12,7 +14,30 @@ class BacktestDataLoader:
     def _download_with_retry(self, symbols, period="10y"):
         return yf.download(symbols, period=period, auto_adjust=True, progress=False)
 
+    def _get_mock_data(self, ticker: str) -> pd.DataFrame:
+        """Generates mock data for CI environments."""
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=252*5, freq='B')
+        np.random.seed(42)
+        returns = np.random.normal(0.0005, 0.01, len(dates))
+        price = 100 * np.cumprod(1 + returns)
+
+        df = pd.DataFrame({
+            'Close': price,
+            'Open': price,
+            'High': price * 1.01,
+            'Low': price * 0.99,
+            'Volume': np.random.randint(1000000, 10000000, len(dates)),
+            'Spy': price,
+            'Vix': np.random.normal(15, 2, len(dates))
+        }, index=dates)
+        return df
+
     def fetch_data(self, ticker: str) -> Optional[pd.DataFrame]:
+        # CI / Mock Check
+        if os.environ.get("CI") == "true" or os.environ.get("USE_MOCK_DATA") == "true":
+            logger.info(f"Using mock data for {ticker} in CI/Mock mode.")
+            return self._get_mock_data(ticker)
+
         try:
             ticker = ticker.upper()
             # Fetch 10 years to ensure 200 SMA is ready before the 5-year backtest starts
