@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { runBacktest } from '../api';
+import React, { useState, useEffect } from 'react';
+import { runBacktest, getStrategies } from '../api';
 import { MindsetChecklist } from '../components/MindsetChecklist';
 import { Line } from 'react-chartjs-2';
 import {
@@ -60,6 +60,17 @@ const Backtester: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [explanations, setExplanations] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getStrategies().then((data: any[]) => {
+       const map: Record<string, string> = {};
+       data.forEach(item => {
+           map[item.value] = item.explanation;
+       });
+       setExplanations(map);
+    }).catch(err => console.error("Failed to fetch strategy explanations", err));
+  }, []);
 
   const strategies = [
     { value: 'master', label: 'Master Convergence (Trend)' },
@@ -138,6 +149,11 @@ const Backtester: React.FC = () => {
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
+            {explanations[strategy] && (
+              <div className="mt-2 p-3 bg-blue-50 text-blue-800 text-sm rounded-md border border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
+                ℹ️ {explanations[strategy]}
+              </div>
+            )}
           </div>
 
           <div>

@@ -10,6 +10,7 @@ from typing import Optional
 from option_auditor import analyze_csv, portfolio_risk
 from option_auditor.risk_intelligence import calculate_correlation_matrix
 from option_auditor.unified_backtester import UnifiedBacktester
+from option_auditor.backtesting_strategies import get_strategy
 from option_auditor.common.screener_utils import fetch_batch_data_safe
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import _allowed_filename, handle_api_error
@@ -104,6 +105,33 @@ def analyze_market_data_route():
 
     chart_data = serialize_ohlc_data(df, data.ticker)
     return jsonify(chart_data)
+
+@analysis_bp.route("/analyze/strategies", methods=["GET"])
+@handle_api_error
+def list_strategies_route():
+    strategy_keys = [
+        'master', 'turtle', 'isa', 'market', 'ema', 'darvas',
+        'mms', 'bull_put', 'hybrid', 'fortress', 'quantum',
+        'alpha101', 'liquidity_grab', 'rsi_divergence'
+    ]
+
+    strategies_info = []
+    for key in strategy_keys:
+        try:
+            strategy_instance = get_strategy(key)
+            explanation = strategy_instance.get_retail_explanation()
+            strategies_info.append({
+                "value": key,
+                "explanation": explanation
+            })
+        except Exception as e:
+            current_app.logger.warning(f"Could not load explanation for strategy {key}: {e}")
+            strategies_info.append({
+                "value": key,
+                "explanation": "No explanation available."
+            })
+
+    return jsonify(strategies_info)
 
 @analysis_bp.route("/analyze", methods=["POST"])
 @handle_api_error

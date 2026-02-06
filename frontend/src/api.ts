@@ -30,6 +30,11 @@ export const runBacktest = async (ticker: string, strategy: string, initialCapit
   return response.data;
 };
 
+export const getStrategies = async () => {
+  const response = await api.get('/analyze/strategies');
+  return response.data;
+};
+
 export const runMonteCarloSimulation = async (ticker: string, strategy: string, simulations: number) => {
   const response = await api.post('/analyze/monte-carlo', {
     ticker,
