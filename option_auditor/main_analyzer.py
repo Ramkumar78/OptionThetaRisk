@@ -19,6 +19,7 @@ from option_auditor.risk_analyzer import check_itm_risk, calculate_discipline_sc
 from option_auditor.risk_intelligence import get_market_regime
 from option_auditor.parsers import detect_broker
 from option_auditor.monte_carlo_simulator import run_simple_monte_carlo
+from option_auditor.analysis_worker import AnalysisWorker
 
 logger = logging.getLogger(__name__)
 
@@ -614,22 +615,6 @@ def analyze_csv(csv_path: Optional[str] = None,
     monthly_income = _calculate_monthly_income(strategies)
     portfolio_curve = _calculate_portfolio_curve(strategies)
 
-    # --- NEW: Monte Carlo Integration ---
-    monte_carlo_results = {}
-
-    # Only run if we have a valid starting account size (from inputs or inference)
-    # Default to $10,000 if not provided, just to show the curve relative to 0
-    sim_start_equity = net_liquidity_now if net_liquidity_now else (account_size_start if account_size_start else 10000.0)
-
-    if len(strategies) >= 10:
-        monte_carlo_results = run_simple_monte_carlo(
-            strategies,
-            start_equity=sim_start_equity,
-            num_sims=1000,
-            forecast_trades=50  # Project next 50 trades
-        )
-    else:
-        monte_carlo_results = {"status": "Insufficient data (need 10+ trades)"}
 
     verdict = "Green Flag"
     verdict_color = "green"
@@ -785,6 +770,8 @@ def analyze_csv(csv_path: Optional[str] = None,
             "current_price": current_mark,
             "expiry": agg["expiry"].date().isoformat() if agg["expiry"] and not pd.isna(agg["expiry"]) else "",
             "contract": f"{agg['right'] or ''} {agg['strike']}",
+            "strike": agg.get("strike"),
+            "right": agg.get("right"),
             "qty_open": qty,
             "avg_price": avg_price,
             "breakeven": breakeven,
@@ -877,6 +864,55 @@ def analyze_csv(csv_path: Optional[str] = None,
     d_score, d_details = calculate_discipline_score(strategies, open_rows)
     risk_map = _build_risk_map(open_rows)
 
+    # --- NEW: Monte Carlo Integration (Async) ---
+    monte_carlo_results = {}
+
+    # Only run if we have a valid starting account size (from inputs or inference)
+    # Default to $10,000 if not provided, just to show the curve relative to 0
+    sim_start_equity = net_liquidity_now if net_liquidity_now else (account_size_start if account_size_start else 10000.0)
+
+    if len(strategies) >= 10:
+        # Create explicit lightweight data for simulation
+        monte_carlo_data = [{"pnl": s.net_pnl} for s in strategies]
+
+        # Offload to worker
+        mc_task_id = AnalysisWorker.instance().submit_monte_carlo(
+            monte_carlo_data,
+            start_equity=sim_start_equity
+        )
+        monte_carlo_results = {
+            "status": "processing",
+            "task_id": mc_task_id,
+            "message": "Simulation started in background."
+        }
+    else:
+        monte_carlo_results = {"status": "Insufficient data (need 10+ trades)"}
+
+    # --- NEW: Black Swan Analysis (Async) ---
+    black_swan_results = {}
+    if open_groups and live_prices:
+        # Create explicit lightweight data from open_groups (TradeGroup objects)
+        black_swan_data = []
+        for g in open_groups:
+             black_swan_data.append({
+                 "symbol": g.symbol,
+                 "qty_net": g.qty_net,
+                 "strike": g.strike,
+                 "right": g.right,
+                 "expiry": g.expiry
+             })
+
+        # Offload to worker
+        bs_task_id = AnalysisWorker.instance().submit_black_swan(
+            black_swan_data,
+            prices=live_prices
+        )
+        black_swan_results = {
+            "status": "processing",
+            "task_id": bs_task_id,
+            "message": "Simulation started in background."
+        }
+
     response = {
         "discipline_score": d_score,
         "discipline_details": d_details,
@@ -912,6 +948,7 @@ def analyze_csv(csv_path: Optional[str] = None,
         "monthly_income": monthly_income,
         "portfolio_curve": portfolio_curve,
         "monte_carlo": monte_carlo_results,
+        "black_swan": black_swan_results,
         "excel_report": excel_buffer
     }
 

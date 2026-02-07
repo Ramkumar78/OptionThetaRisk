@@ -154,7 +154,13 @@ def run_simple_monte_carlo(strategies: List[Any], start_equity: float, num_sims:
 
     # 1. Extract Trade Statistics
     # We use the actual PnL distribution, not just averages, to capture "fat tails" (outliers)
-    pnls = [s.net_pnl for s in strategies]
+    pnls = []
+    for s in strategies:
+        if isinstance(s, dict):
+            # Try specific key first, then fallback to pnl
+            pnls.append(s.get("pnl", 0.0))
+        else:
+            pnls.append(getattr(s, "net_pnl", 0.0))
 
     # 2. Run Simulations (Vectorized with NumPy for speed)
     # We simulate 'forecast_trades' into the future, 'num_sims' times.

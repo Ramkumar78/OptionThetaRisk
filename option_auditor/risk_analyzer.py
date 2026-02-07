@@ -88,16 +88,37 @@ def calculate_black_swan_impact(open_groups: List[TradeGroup], prices: Dict[str,
         # We need to calculate portfolio value at current prices vs new prices
         # Iterate all groups
         for g in open_groups:
-            symbol = g.symbol
+            # Handle both object and dict (if serialized)
+            if isinstance(g, dict):
+                symbol = g.get("symbol")
+                qty = g.get("qty_net", g.get("qty_open", 0.0))
+                strike = g.get("strike")
+                otype = g.get("right")
+                # contract string fallback? 'P 400.0'
+                if not otype and g.get("contract") and " " in g.get("contract", ""):
+                    parts = g["contract"].split(" ")
+                    otype = parts[0]
+                    if not strike:
+                        try:
+                            strike = float(parts[1])
+                        except: pass
+
+                expiry = g.get("expiry")
+            else:
+                symbol = g.symbol
+                qty = g.qty_net
+                strike = g.strike
+                otype = g.right
+                expiry = g.expiry
+
             if symbol not in prices:
                 continue
 
             S_curr = prices[symbol]
             S_new = S_curr * (1 + move_pct)
-            qty = g.qty_net
 
             # Check if Option or Stock
-            is_option = g.strike is not None and g.right in ['C', 'P']
+            is_option = strike is not None and otype in ['C', 'P']
 
             if not is_option:
                 # Stock Logic
@@ -107,9 +128,8 @@ def calculate_black_swan_impact(open_groups: List[TradeGroup], prices: Dict[str,
                 total_new_val += val_new
             else:
                 # Option Logic
-                K = g.strike
-                otype = g.right
-                expiry = g.expiry
+                K = strike
+                # otype is already extracted
 
                 # Calculate T (Time to Expiry)
                 T = 0.0

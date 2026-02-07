@@ -12,6 +12,7 @@ from option_auditor.risk_intelligence import calculate_correlation_matrix
 from option_auditor.unified_backtester import UnifiedBacktester
 from option_auditor.backtesting_strategies import get_strategy
 from option_auditor.common.screener_utils import fetch_batch_data_safe
+from option_auditor.analysis_worker import AnalysisWorker
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import _allowed_filename, handle_api_error
 from option_auditor.common.serialization import serialize_ohlc_data
@@ -90,6 +91,14 @@ def analyze_monte_carlo_route():
     if "error" in result:
             return jsonify(result), 400
 
+    return jsonify(result)
+
+@analysis_bp.route("/analyze/status/<task_id>", methods=["GET"])
+@handle_api_error
+def get_task_status(task_id: str):
+    result = AnalysisWorker.instance().get_result(task_id)
+    if result.get("status") == "not_found":
+        return jsonify(result), 404
     return jsonify(result)
 
 @analysis_bp.route("/analyze/market-data", methods=["POST"])
