@@ -24,6 +24,7 @@ from option_auditor.strategies.quantum import screen_quantum_setups
 from option_auditor.strategies.options_only import screen_options_only_strategy
 from option_auditor.strategies.five_thirteen import FiveThirteenStrategy
 from option_auditor.strategies.darvas import DarvasBoxStrategy
+from option_auditor.strategies.medallion_isa import MedallionIsaStrategy
 from option_auditor.common.screener_utils import (
     ScreeningRunner,
     run_screening_strategy,
@@ -160,4 +161,19 @@ def screen_rsi_divergence(ticker_list: list = None, time_frame: str = "1d", regi
         ticker_list=ticker_list,
         time_frame=time_frame,
         region=region
+    )
+
+def screen_medallion_isa(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
+    """
+    Screens for Medallion ISA (Simons-Lite) Setups.
+    DELEGATES TO: option_auditor/strategies/medallion_isa.py
+    """
+    return run_screening_strategy(
+        MedallionIsaStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region,
+        check_mode=check_mode,
+        sorting_key=lambda x: x.get('score', 0),
+        reverse_sort=True
     )
