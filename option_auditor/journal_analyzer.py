@@ -80,7 +80,7 @@ def analyze_journal(entries: list[dict]) -> dict:
     time_stats['win_rate'] = time_stats['win_rate'] * 100
 
     # Red Day Analysis (Day of Week)
-    df['entry_dt_obj'] = pd.to_datetime(df['entry_date'], errors='coerce')
+    df['entry_dt_obj'] = pd.to_datetime(df['entry_date'], errors='coerce', format='mixed')
     df['day_of_week'] = df['entry_dt_obj'].dt.day_name()
     day_stats = df.groupby('day_of_week')['pnl'].sum()
 
