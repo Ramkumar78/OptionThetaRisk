@@ -30,6 +30,23 @@ const STRATEGIES: Record<string, {
             }
         ]
     },
+    medallionIsa: {
+        id: 'medallionIsa',
+        name: 'Medallion ISA',
+        endpoint: '/screen/medallion_isa',
+        description: 'Quant-lite strategy for Retail ISAs. Finds strong uptrends with mean-reversion entries (RSI < 15, Vol Spike).',
+        params: ['region', 'time_frame'],
+        legend: [
+            {
+                title: 'Medallion Logic',
+                desc: 'Buy the dip in a strong trend.',
+                items: [
+                    { label: '💎 MEDALLION', text: 'Uptrend + Oversold + Vol Spike (High Conviction).' },
+                    { label: '✅ BUY', text: 'Uptrend + Oversold.' }
+                ]
+            }
+        ]
+    },
     // ... (Keeping all other strategies intact in logic, just updating UI around them)
     rsiDivergence: {
         id: 'rsiDivergence',

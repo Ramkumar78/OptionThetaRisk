@@ -533,6 +533,26 @@ def screen_rsi_divergence():
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
+@screener_bp.route("/screen/medallion_isa", methods=["GET"])
+@handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
+def screen_medallion_isa():
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Medallion ISA Screen request: region={data.region}, tf={data.time_frame}")
+
+    cache_key = ("medallion_isa", data.region, data.time_frame)
+    cached = get_cached_screener_result(cache_key)
+    if cached:
+        return jsonify(cached)
+
+    # Resolve tickers
+    ticker_list = resolve_region_tickers(data.region, check_trend=False)
+
+    results = screener.screen_medallion_isa(ticker_list=ticker_list, time_frame=data.time_frame, region=data.region)
+    current_app.logger.info(f"Medallion ISA Screen completed. Results: {len(results)}")
+    cache_screener_result(cache_key, results)
+    return jsonify(results)
+
 @screener_bp.route("/screen/universal", methods=["GET"])
 @handle_screener_errors
 @validate_schema(ScreenerBaseRequest, source='args')
