@@ -23,7 +23,7 @@ export const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({ isOpen
     if (!pendingEntry) return;
 
     try {
-      await axios.post('/journal/add', pendingEntry);
+      await axios.post('/api/journal/add', pendingEntry);
       setPendingEntry(null);
       alert("Trade Logged Successfully! 🚀");
       onClose(); // Close sidebar on success

@@ -54,7 +54,7 @@ describe('Dashboard Component', () => {
   it('renders loading state initially', async () => {
     let resolvePromise: any;
     (axios.get as any).mockImplementation((url: string) => {
-        if (url === '/dashboard') {
+        if (url === '/api/dashboard') {
              return new Promise((resolve) => { resolvePromise = resolve; });
         }
         return Promise.resolve({ data: [] });
@@ -83,8 +83,8 @@ describe('Dashboard Component', () => {
     };
 
     (axios.get as any).mockImplementation((url: string) => {
-        if (url === '/dashboard') return Promise.resolve({ data: mockData });
-        if (url === '/journal') return Promise.resolve({ data: [] }); // Mock journal for widget
+        if (url === '/api/dashboard') return Promise.resolve({ data: mockData });
+        if (url === '/api/journal') return Promise.resolve({ data: [] }); // Mock journal for widget
         return Promise.resolve({ data: {} });
     });
 
@@ -116,7 +116,7 @@ describe('Dashboard Component', () => {
     });
 
     (axios.get as any).mockImplementation((url: string) => {
-         if (url === '/journal') return Promise.resolve({ data: [] });
+         if (url === '/api/journal') return Promise.resolve({ data: [] });
          return Promise.resolve({ data: {} });
     });
 
@@ -141,7 +141,7 @@ describe('Dashboard Component', () => {
 
   it('shows no portfolio linked if no data', async () => {
     (axios.get as any).mockImplementation((url: string) => {
-         if (url === '/journal') return Promise.resolve({ data: [] });
+         if (url === '/api/journal') return Promise.resolve({ data: [] });
          return Promise.resolve({ data: null });
     });
 
@@ -160,7 +160,7 @@ describe('Dashboard Component', () => {
     });
 
     (axios.get as any).mockImplementation((url: string) => {
-        if (url === '/journal') return Promise.resolve({ data: [] });
+        if (url === '/api/journal') return Promise.resolve({ data: [] });
         return Promise.resolve({ data: {} });
    });
 
@@ -196,7 +196,7 @@ describe('Dashboard Component', () => {
     });
 
     (axios.get as any).mockImplementation((url: string) => {
-        if (url === '/journal') return Promise.resolve({ data: [] });
+        if (url === '/api/journal') return Promise.resolve({ data: [] });
         return Promise.resolve({ data: {} });
    });
 

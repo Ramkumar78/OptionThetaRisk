@@ -112,7 +112,7 @@ export const runBullPutScreener = async (region: string) => {
 };
 
 export const importTradesToJournal = async (trades: any[]) => {
-  const response = await api.post('/journal/import', trades);
+  const response = await api.post('/api/journal/import', trades);
   return response.data;
 };
 

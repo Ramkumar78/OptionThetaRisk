@@ -33,7 +33,7 @@ export const TradingMoodWidget: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await axios.get('/journal');
+        const res = await axios.get('/api/journal');
         const entries: JournalEntry[] = res.data;
 
         const emotionPnl: Record<string, number> = {};

@@ -37,7 +37,7 @@ def feedback():
         current_app.logger.error(f"Feedback error: {e}")
         return jsonify({"error": "Failed to submit feedback"}), 500
 
-@main_bp.route("/dashboard")
+@main_bp.route("/api/dashboard")
 def dashboard():
     username = session.get('username')
     if not username:

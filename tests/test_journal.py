@@ -18,14 +18,14 @@ def test_journal_routes_no_auth(client):
         "notes": "Test Note"
     }
 
-    resp_add = client.post("/journal/add", json=new_entry)
+    resp_add = client.post("/api/journal/add", json=new_entry)
     assert resp_add.status_code == 200
     data_add = resp_add.get_json()
     assert data_add["success"] is True
     entry_id = data_add["id"]
 
     # 2. Get Entries
-    resp_get = client.get("/journal")
+    resp_get = client.get("/api/journal")
     assert resp_get.status_code == 200
     entries = resp_get.get_json()
     assert len(entries) == 1
@@ -34,17 +34,17 @@ def test_journal_routes_no_auth(client):
 
     # 3. Analyze
     # Requires at least one entry, which we have.
-    resp_analyze = client.post("/journal/analyze")
+    resp_analyze = client.post("/api/journal/analyze")
     assert resp_analyze.status_code == 200
     report = resp_analyze.get_json()
     assert "win_rate" in report
 
     # 4. Delete Entry
-    resp_del = client.delete(f"/journal/delete/{entry_id}")
+    resp_del = client.delete(f"/api/journal/delete/{entry_id}")
     assert resp_del.status_code == 200
 
     # Verify Empty
-    resp_get_after = client.get("/journal")
+    resp_get_after = client.get("/api/journal")
     assert len(resp_get_after.get_json()) == 0
 
 def test_journal_entry_with_emotions_and_notes(client):
@@ -60,13 +60,13 @@ def test_journal_entry_with_emotions_and_notes(client):
     }
 
     # Add Entry
-    resp_add = client.post("/journal/add", json=entry_data)
+    resp_add = client.post("/api/journal/add", json=entry_data)
     assert resp_add.status_code == 200
     data_add = resp_add.get_json()
     assert data_add["success"] is True
 
     # Retrieve Entries
-    resp_get = client.get("/journal")
+    resp_get = client.get("/api/journal")
     assert resp_get.status_code == 200
     entries = resp_get.get_json()
 
@@ -78,4 +78,4 @@ def test_journal_entry_with_emotions_and_notes(client):
 
     # Cleanup
     entry_id = target["id"]
-    client.delete(f"/journal/delete/{entry_id}")
+    client.delete(f"/api/journal/delete/{entry_id}")

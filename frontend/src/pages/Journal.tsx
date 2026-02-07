@@ -66,7 +66,7 @@ const Journal: React.FC = () => {
 
   const fetchEntries = async () => {
     try {
-      const res = await axios.get('/journal');
+      const res = await axios.get('/api/journal');
       setEntries(res.data);
     } catch (error) {
       console.error("Failed to fetch journal", error);
@@ -89,7 +89,7 @@ const Journal: React.FC = () => {
     if (!pendingEntry) return;
 
     try {
-      await axios.post('/journal/add', pendingEntry);
+      await axios.post('/api/journal/add', pendingEntry);
       setPendingEntry(null);
       fetchEntries();
     } catch (error) {
@@ -100,7 +100,7 @@ const Journal: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure?')) return;
     try {
-      await axios.delete(`/journal/delete/${id}`);
+      await axios.delete(`/api/journal/delete/${id}`);
       fetchEntries();
     } catch (error) {
       console.error("Failed to delete", error);
@@ -109,7 +109,7 @@ const Journal: React.FC = () => {
 
   const handleAnalyze = async () => {
     try {
-      const res = await axios.post('/journal/analyze');
+      const res = await axios.post('/api/journal/analyze');
       setAnalysis(res.data);
     } catch (error) {
       console.error("Failed to analyze", error);
@@ -120,7 +120,7 @@ const Journal: React.FC = () => {
     const combinedNotes = `DAILY DEBRIEF\n\n1. Strategy Execution:\n${q1}\n\n2. Emotional State:\n${q2}\n\n3. Improvement:\n${q3}`;
 
     try {
-        await axios.post('/journal/add', {
+        await axios.post('/api/journal/add', {
             entry_date: new Date().toISOString().split('T')[0],
             entry_time: new Date().toTimeString().split(' ')[0].slice(0, 5),
             symbol: "REVIEW",
