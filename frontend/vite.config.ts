@@ -9,6 +9,7 @@ export default defineConfig({
       '/analyze': 'http://127.0.0.1:5000',
       // Fix: Use regex to match /screen and /screen/* but NOT /screener
       '^/screen($|/)': 'http://127.0.0.1:5000',
+      '/api': 'http://127.0.0.1:5000',
       '/journal': 'http://127.0.0.1:5000',
       '/download': 'http://127.0.0.1:5000',
       '/dashboard': 'http://127.0.0.1:5000',
