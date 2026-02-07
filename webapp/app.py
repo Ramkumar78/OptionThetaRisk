@@ -17,6 +17,7 @@ from webapp.blueprints.journal_routes import journal_bp
 from webapp.blueprints.analysis_routes import analysis_bp
 from webapp.blueprints.main_routes import main_bp
 from webapp.blueprints.safety_routes import safety_bp
+from webapp.blueprints.strategy_routes import strategy_bp
 from webapp.services.scheduler_service import start_scheduler
 
 # Load environment variables from .env file
@@ -70,7 +71,10 @@ def create_app(testing: bool = False) -> Flask:
     # Checking sys.modules is more reliable during import time than env vars
     is_pytest = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
 
-    if not testing and not is_pytest and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
+    # Check if background tasks are disabled (e.g. for CI/E2E)
+    disable_background = os.environ.get("DISABLE_BACKGROUND_TASKS", "false").lower() == "true"
+
+    if not testing and not is_pytest and not disable_background and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
         # Start Headless Scanner
@@ -82,6 +86,7 @@ def create_app(testing: bool = False) -> Flask:
     app.register_blueprint(analysis_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(safety_bp)
+    app.register_blueprint(strategy_bp)
 
     @app.after_request
     def add_security_headers(response):
