@@ -9,7 +9,8 @@ from option_auditor.strategies.math_utils import (
     generate_human_verdict,
     calculate_hilbert_phase,
     calculate_dominant_cycle,
-    calculate_option_price
+    calculate_option_price,
+    calculate_greeks
 )
 
 # Test calculate_hurst
@@ -70,6 +71,30 @@ def test_calculate_hurst_edge_cases():
     assert calculate_hurst(pd.Series([])) is None
     assert calculate_hurst(pd.Series([1]*50)) is None # Too short (<100)
 
+def test_calculate_hurst_zero_std():
+    # Case where returns.std() == 0 (Constant returns)
+    # Use constant prices to ensure returns are exactly 0 and std is exactly 0.
+    # Geometric growth with floats might have tiny variance due to precision.
+    series = pd.Series([100.0] * 150)
+    h = calculate_hurst(series)
+    assert h == 0.5
+
+def test_calculate_hurst_insufficient_data():
+    # Series < 100
+    series = pd.Series(np.random.randn(99))
+    assert calculate_hurst(series) is None
+
+def test_calculate_hurst_small_lag():
+    # actual_max_lag < 5
+    # actual_max_lag = min(max_lag, len(returns)//4)
+    # If len(returns) = 100, returns//4 = 25.
+    # We force small lag by using short series (but >= 100) and small max_lag
+    # If len(returns) = 100, actual_max_lag = min(max_lag, 25).
+    # If we pass max_lag=4.
+    series = pd.Series(np.random.randn(200) + 100)
+    h = calculate_hurst(series, max_lag=4)
+    assert h is None
+
 # Test shannon_entropy
 def test_shannon_entropy_random():
     np.random.seed(42)
@@ -88,6 +113,15 @@ def test_shannon_entropy_constant():
 
 def test_shannon_entropy_short():
     assert shannon_entropy(pd.Series(range(10))) is None
+
+def test_shannon_entropy_max_s_zero():
+    # Test unhandled case where max_S == 0 (num_bins=1 -> log(1)=0)
+    # This requires len(data) < 4 (since num_bins = int(sqrt(len))).
+    # However, the function guards with `if len(data) < 100: return None`.
+    # Therefore, max_S == 0 is unreachable with current logic.
+    # We verify the guard clause behavior instead.
+    series = pd.Series([1, 2, 3])
+    assert shannon_entropy(series) is None
 
 # Test kalman_filter
 def test_kalman_filter_smoothing():
@@ -113,6 +147,12 @@ def test_kalman_filter_preserves_trend():
     # The filter takes some time to converge, so check later part
     assert np.allclose(filtered.iloc[-10:], series.iloc[-10:], rtol=0.05)
 
+def test_kalman_filter_negative_input():
+    # Series with zero or negative values
+    series = pd.Series([100, 90, -5, 100])
+    result = kalman_filter(series)
+    pd.testing.assert_series_equal(result, series)
+
 # Test calculate_momentum_decay
 def test_calculate_momentum_decay():
     # Exponential decay
@@ -128,6 +168,12 @@ def test_calculate_momentum_decay():
 
 def test_calculate_momentum_decay_short():
     assert calculate_momentum_decay(np.array([1])) == 0.0
+
+def test_calculate_momentum_decay_zero_denom():
+    # Denom == 0 case (Constant price series)
+    series = np.array([100.0] * 50)
+    res = calculate_momentum_decay(series)
+    assert res == 999.0
 
 # Test generate_human_verdict
 def test_generate_human_verdict_mean_rev():
@@ -190,6 +236,11 @@ def test_calculate_dominant_cycle():
 def test_calculate_dominant_cycle_short():
     assert calculate_dominant_cycle(range(10)) is None
 
+def test_calculate_dominant_cycle_short_window():
+    # window_size < 64
+    prices = np.random.randn(50) + 100
+    assert calculate_dominant_cycle(prices) is None
+
 # Test calculate_option_price
 def test_calculate_option_price_call():
     # S=100, K=100, T=1yr, r=5%, sigma=20%
@@ -223,3 +274,35 @@ def test_calculate_option_price_expired():
     assert calculate_option_price(90, 100, 0, 0.05, 0.2, "put") == 10.0
     # Expired OTM Put
     assert calculate_option_price(110, 100, 0, 0.05, 0.2, "put") == 0.0
+
+# Test calculate_greeks
+def test_calculate_greeks_comprehensive():
+    # 1. Expired (T <= 0)
+    # Call ITM
+    g = calculate_greeks(S=110, K=100, T=0, r=0.05, sigma=0.2, option_type="call")
+    assert g['delta'] == 1.0
+    assert g['theta'] == 0.0
+
+    # Call OTM
+    g = calculate_greeks(S=90, K=100, T=0, r=0.05, sigma=0.2, option_type="call")
+    assert g['delta'] == 0.0
+
+    # Put ITM
+    g = calculate_greeks(S=90, K=100, T=0, r=0.05, sigma=0.2, option_type="put")
+    assert g['delta'] == -1.0
+
+    # Put OTM
+    g = calculate_greeks(S=110, K=100, T=0, r=0.05, sigma=0.2, option_type="put")
+    assert g['delta'] == 0.0
+
+    # 2. Normal Case
+    # Call
+    g_call = calculate_greeks(S=100, K=100, T=1, r=0.05, sigma=0.2, option_type="call")
+    assert 0.5 < g_call['delta'] < 0.7  # approx 0.63
+    assert g_call['gamma'] > 0
+    assert g_call['vega'] > 0
+
+    # Put
+    g_put = calculate_greeks(S=100, K=100, T=1, r=0.05, sigma=0.2, option_type="put")
+    # Delta(Put) approx -0.36, so check it is between -0.3 and -0.5
+    assert -0.3 > g_put['delta'] > -0.5
