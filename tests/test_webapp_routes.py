@@ -120,11 +120,13 @@ def test_dashboard_route_with_data(client, mock_storage):
     mock_data = json.dumps({"test": "data"}).encode('utf-8')
     mock_storage.get_portfolio.return_value = mock_data
 
-    with patch('webapp.blueprints.main_routes.refresh_dashboard_data') as mock_refresh:
-        mock_refresh.return_value = {"test": "refreshed"}
-        res = client.get('/dashboard')
-        assert res.status_code == 200
-        assert res.json == {"test": "refreshed"}
+    # Ensure CI is 'false' so that refresh_dashboard_data is called
+    with patch.dict('os.environ', {'CI': 'false'}):
+        with patch('webapp.blueprints.main_routes.refresh_dashboard_data') as mock_refresh:
+            mock_refresh.return_value = {"test": "refreshed"}
+            res = client.get('/dashboard')
+            assert res.status_code == 200
+            assert res.json == {"test": "refreshed"}
 
 def test_health_route(client):
     res = client.get('/health')
