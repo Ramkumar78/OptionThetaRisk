@@ -29,6 +29,31 @@ def test_reliability_score_alpha_101():
     # = 75
     assert score == 75
 
+def test_reliability_score_new_strategies():
+    # Quality 200W
+    q_details = STRATEGY_DETAILS["Quality 200W"]
+    q_score = calculate_reliability_score("Quality 200W", q_details)
+    # Base 50 + Stop(10) + Target(10) + Trend(10) = 80
+    assert q_score == 80
+
+    # Vertical Put Spread
+    v_details = STRATEGY_DETAILS["Vertical Put Spread"]
+    v_score = calculate_reliability_score("Vertical Put Spread", v_details)
+    # Base 50 + Stop(10) + Target(10) + Volatility(10) + Trend(10) = 90
+    assert v_score == 90
+
+    # Fortress Master
+    f_details = STRATEGY_DETAILS["Fortress Master"]
+    f_score = calculate_reliability_score("Fortress Master", f_details)
+    # Base 50 + Stop(10) + Target(10) + Volatility(10) + Confluence(10) = 90
+    assert f_score == 90
+
+    # Alpha Sniper
+    a_details = STRATEGY_DETAILS["Alpha Sniper"]
+    a_score = calculate_reliability_score("Alpha Sniper", a_details)
+    # Base 50 + Stop(10) + Target(10) + Trend(10) = 80
+    assert a_score == 80
+
 def test_strategy_details_structure():
     for name, details in STRATEGY_DETAILS.items():
         assert "Philosophy" in details

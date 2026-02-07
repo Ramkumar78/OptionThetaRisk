@@ -223,6 +223,58 @@ STRATEGY_DETAILS = {
         "Mathematical_Core": "Random Sampling",
         "Risk_Management": "Probability distribution",
         "Breakout_Date": "N/A"
+    },
+    "Quality 200W": {
+        "Philosophy": "Deep Value / Quality Trend",
+        "Long_Term_Filter": "200-Week SMA",
+        "Intermediate_Filter": "50-Day SMA",
+        "Core_Entry_Trigger": "Price < 200W SMA & Price > 50D SMA",
+        "Unique_Indicator": "Weekly/Daily Timeframe Blend",
+        "Stop_Loss_Logic": "Close below 200W SMA",
+        "Profit_Target": "Return to Mean (SMA 50)",
+        "Best_Used_For": "Long Term Investing",
+        "Mathematical_Core": "Mean Reversion",
+        "Risk_Management": "Wide Stops / No Leverage",
+        "Breakout_Date": "N/A"
+    },
+    "Vertical Put Spread": {
+        "Philosophy": "Income / Volatility Arbitrage",
+        "Long_Term_Filter": "200 SMA & 50 SMA",
+        "Intermediate_Filter": "IV > HV",
+        "Core_Entry_Trigger": "30 Delta Short Put",
+        "Unique_Indicator": "Implied Volatility Edge",
+        "Stop_Loss_Logic": "2x Credit Received",
+        "Profit_Target": "50% Max Profit",
+        "Best_Used_For": "Neutral/Bullish Markets",
+        "Mathematical_Core": "Black-Scholes Delta",
+        "Risk_Management": "Defined Risk",
+        "Breakout_Date": "N/A"
+    },
+    "Fortress Master": {
+        "Philosophy": "Multi-Strategy Confluence",
+        "Long_Term_Filter": "Market Regime (SPY/VIX)",
+        "Intermediate_Filter": "Relative Strength (RS)",
+        "Core_Entry_Trigger": "Grandmaster Breakout OR Bull Put",
+        "Unique_Indicator": "Regime-Based Switching",
+        "Stop_Loss_Logic": "ATR Trailing",
+        "Profit_Target": "3 ATR",
+        "Best_Used_For": "Portfolio Core",
+        "Mathematical_Core": "Logic Gates / Regimes",
+        "Risk_Management": "Position Sizing",
+        "Breakout_Date": "Yes"
+    },
+    "Alpha Sniper": {
+        "Philosophy": "Trend + Momentum Pulse",
+        "Long_Term_Filter": "200 SMA & 50 SMA",
+        "Intermediate_Filter": "50-Day High",
+        "Core_Entry_Trigger": "Alpha #101 > 0.5 (Intraday Surge)",
+        "Unique_Indicator": "Alpha #101 Formula",
+        "Stop_Loss_Logic": "Low of Signal Day (Tight)",
+        "Profit_Target": "2R (Risk Units)",
+        "Best_Used_For": "Active Swing Trading",
+        "Mathematical_Core": "Price Action Momentum",
+        "Risk_Management": "Tight Stops",
+        "Breakout_Date": "Yes"
     }
 }
 
