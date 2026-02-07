@@ -65,7 +65,11 @@ def dashboard():
 
     try:
         saved_data = json.loads(data_bytes)
-        updated_data = refresh_dashboard_data(saved_data)
+        if os.environ.get("CI") == "true":
+            # Skip live refresh in CI to prevent yfinance timeouts/errors
+            updated_data = saved_data
+        else:
+            updated_data = refresh_dashboard_data(saved_data)
         current_app.logger.info(f"Dashboard data refreshed for {username}")
         return jsonify(updated_data)
     except Exception as e:
