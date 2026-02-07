@@ -16,14 +16,14 @@ def get_db():
         g.storage_provider = _get_storage_provider(current_app)
     return g.storage_provider
 
-@journal_bp.route("/journal", methods=["GET"])
+@journal_bp.route("/api/journal", methods=["GET"])
 def journal_get_entries():
     username = session.get('username')
     storage = get_db()
     entries = storage.get_journal_entries(username)
     return jsonify(entries)
 
-@journal_bp.route("/journal/add", methods=["POST"])
+@journal_bp.route("/api/journal/add", methods=["POST"])
 @validate_schema(JournalEntryRequest)
 def journal_add_entry():
     username = session.get('username')
@@ -41,7 +41,7 @@ def journal_add_entry():
         current_app.logger.error(f"Journal add error: {e}")
         return jsonify({"error": str(e)}), 500
 
-@journal_bp.route("/journal/delete/<entry_id>", methods=["DELETE"])
+@journal_bp.route("/api/journal/delete/<entry_id>", methods=["DELETE"])
 def journal_delete_entry(entry_id):
     username = session.get('username')
     storage = get_db()
@@ -49,7 +49,7 @@ def journal_delete_entry(entry_id):
     current_app.logger.info(f"Journal entry deleted: {entry_id}")
     return jsonify({"success": True})
 
-@journal_bp.route("/journal/analyze", methods=["POST"])
+@journal_bp.route("/api/journal/analyze", methods=["POST"])
 def journal_analyze_batch():
     username = session.get('username')
     storage = get_db()
@@ -80,7 +80,7 @@ def journal_export_csv():
         download_name='journal_export.csv'
     )
 
-@journal_bp.route("/journal/import", methods=["POST"])
+@journal_bp.route("/api/journal/import", methods=["POST"])
 @validate_schema(JournalImportRequest)
 def journal_import_trades():
     username = session.get('username')

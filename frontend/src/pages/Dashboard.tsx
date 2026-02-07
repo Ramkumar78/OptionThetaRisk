@@ -64,7 +64,7 @@ const Dashboard: React.FC = () => {
     // 1. Fetch Portfolio Data
     const fetchPortfolio = async () => {
       try {
-        const response = await axios.get('/dashboard');
+        const response = await axios.get('/api/dashboard');
         if (response.data && !response.data.error) {
           setPortfolioData(response.data);
 

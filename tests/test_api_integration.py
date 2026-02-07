@@ -47,7 +47,7 @@ def test_api_endpoints_return_json(client):
 def test_journal_api_crud(client):
     """Test Journal CRUD API."""
     # List (empty initially)
-    resp = client.get("/journal")
+    resp = client.get("/api/journal")
     assert resp.status_code == 200
     assert resp.json == []
 
@@ -65,31 +65,31 @@ def test_journal_api_crud(client):
         "exit_price": 110.0,
         "qty": 1
     }
-    resp = client.post("/journal/add", json=entry)
+    resp = client.post("/api/journal/add", json=entry)
     assert resp.status_code == 200
     assert resp.json["success"] is True
     entry_id = resp.json["id"]
 
     # List (should have one)
-    resp = client.get("/journal")
+    resp = client.get("/api/journal")
     assert len(resp.json) == 1
     assert resp.json[0]["symbol"] == "AAPL"
 
     # Analyze
     # Mock journal analyzer
     with patch('option_auditor.journal_analyzer.analyze_journal', return_value={"mock_analysis": True}) as mock_analyze:
-        resp = client.post("/journal/analyze")
+        resp = client.post("/api/journal/analyze")
         assert resp.status_code == 200
         assert resp.is_json
         assert resp.json == {"mock_analysis": True}
 
     # Delete
-    resp = client.delete(f"/journal/delete/{entry_id}")
+    resp = client.delete(f"/api/journal/delete/{entry_id}")
     assert resp.status_code == 200
     assert resp.json["success"] is True
 
     # List (empty again)
-    resp = client.get("/journal")
+    resp = client.get("/api/journal")
     assert len(resp.json) == 0
 
 def test_root_serves_react(client):

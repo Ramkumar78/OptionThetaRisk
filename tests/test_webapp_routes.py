@@ -110,7 +110,7 @@ def test_feedback_route(client, mock_storage):
 def test_dashboard_route_no_session(client):
     # Ensure CI mode is OFF so we don't auto-seed data
     with patch.dict('os.environ', {'CI': 'false'}):
-        res = client.get('/dashboard')
+        res = client.get('/api/dashboard')
         assert res.status_code == 200
         # Should behave as a new user with no portfolio
         assert "No portfolio found" in res.json['error']
@@ -122,7 +122,7 @@ def test_dashboard_route_with_data(client, mock_storage):
 
     with patch('webapp.blueprints.main_routes.refresh_dashboard_data') as mock_refresh:
         mock_refresh.return_value = {"test": "refreshed"}
-        res = client.get('/dashboard')
+        res = client.get('/api/dashboard')
         assert res.status_code == 200
         assert res.json == {"test": "refreshed"}
 
@@ -164,18 +164,18 @@ def test_screen_routes_specific(client):
 def test_journal_routes(client, mock_storage):
     # Add
     mock_storage.save_journal_entry.return_value = "123"
-    res = client.post('/journal/add', json={"symbol": "AAPL"})
+    res = client.post('/api/journal/add', json={"symbol": "AAPL"})
     assert res.status_code == 200
     assert res.json['id'] == "123"
 
     # Delete
-    res = client.delete('/journal/delete/123')
+    res = client.delete('/api/journal/delete/123')
     assert res.status_code == 200
     mock_storage.delete_journal_entry.assert_called_with(ANY, "123")
 
     # Import
     mock_storage.save_journal_entries.return_value = 1
-    res = client.post('/journal/import', json=[{"symbol": "AAPL", "pnl": 100}])
+    res = client.post('/api/journal/import', json=[{"symbol": "AAPL", "pnl": 100}])
     assert res.status_code == 200
     assert res.json['count'] == 1
     mock_storage.save_journal_entries.assert_called()
@@ -185,7 +185,7 @@ def test_journal_routes(client, mock_storage):
     # Patch journal_analyzer in blueprint
     with patch('webapp.blueprints.journal_routes.journal_analyzer.analyze_journal') as mock_analyze:
         mock_analyze.return_value = {}
-        res = client.post('/journal/analyze')
+        res = client.post('/api/journal/analyze')
         assert res.status_code == 200
 
 def test_journal_export_route(client, mock_storage):

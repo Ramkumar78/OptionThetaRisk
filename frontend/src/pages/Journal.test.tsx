@@ -120,7 +120,7 @@ describe('Journal Component', () => {
     fireEvent.click(proceedBtn);
 
     await waitFor(() => {
-        expect(axios.post).toHaveBeenCalledWith('/journal/add', expect.objectContaining({
+        expect(axios.post).toHaveBeenCalledWith('/api/journal/add', expect.objectContaining({
             symbol: 'TSLA',
             strategy: 'Call',
             notes: 'Test Note'

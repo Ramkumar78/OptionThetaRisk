@@ -23,7 +23,7 @@ const Layout: React.FC<LayoutProps> = () => {
 
   const saveMindsetNote = async (note: string) => {
     try {
-        await axios.post('/journal/add', {
+        await axios.post('/api/journal/add', {
             entry_date: new Date().toISOString().split('T')[0],
             entry_time: new Date().toTimeString().split(' ')[0].slice(0, 5),
             symbol: "MINDSET", // Special tag
