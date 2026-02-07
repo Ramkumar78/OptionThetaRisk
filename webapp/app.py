@@ -71,7 +71,10 @@ def create_app(testing: bool = False) -> Flask:
     # Checking sys.modules is more reliable during import time than env vars
     is_pytest = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
 
-    if not testing and not is_pytest and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
+    # Check if background tasks are disabled (e.g. for CI/E2E)
+    disable_background = os.environ.get("DISABLE_BACKGROUND_TASKS", "false").lower() == "true"
+
+    if not testing and not is_pytest and not disable_background and (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"):
         t = threading.Thread(target=cleanup_job, args=(app,), daemon=True)
         t.start()
         # Start Headless Scanner
