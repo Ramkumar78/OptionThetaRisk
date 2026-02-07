@@ -161,7 +161,6 @@ describe('Dashboard Component', () => {
 
     (axios.get as any).mockImplementation((url: string) => {
         if (url === '/api/journal') return Promise.resolve({ data: [] });
-        if (url === '/api/journal') return Promise.resolve({ data: [] });
         return Promise.resolve({ data: {} });
    });
 
