@@ -170,12 +170,13 @@ def sanitize(val):
         return None
 
 class ScreeningRunner:
-    def __init__(self, ticker_list: Optional[List[str]] = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False, workers: int = 4):
+    def __init__(self, ticker_list: Optional[List[str]] = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False, workers: int = 4, data_period: str = None):
         self.ticker_list = ticker_list
         self.time_frame = time_frame
         self.region = region
         self.check_mode = check_mode
         self.workers = workers
+        self.custom_period = data_period
 
         # Determine intervals and periods
         self.yf_interval = "1d"
@@ -230,6 +231,9 @@ class ScreeningRunner:
             self.yf_interval = "1d"
             self.period = "2y" # Safe default for most daily strategies (e.g. 200 SMA)
             self.is_intraday = False
+
+        if self.custom_period:
+            self.period = self.custom_period
 
     def _fetch_data(self, tickers: List[str]) -> pd.DataFrame:
         data = None
@@ -410,13 +414,14 @@ def run_screening_strategy(
     check_mode: bool = False,
     sorting_key: Optional[Callable] = None,
     reverse_sort: bool = False,
+    data_period: str = None,
     **strategy_kwargs
 ) -> List[Dict[str, Any]]:
     """
     Generic runner for class-based strategies.
     Instantiates the strategy class for each ticker and runs .analyze().
     """
-    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode)
+    runner = ScreeningRunner(ticker_list=ticker_list, time_frame=time_frame, region=region, check_mode=check_mode, data_period=data_period)
 
     def strategy_wrapper(ticker, df):
         try:

@@ -553,6 +553,24 @@ def screen_medallion_isa():
     cache_screener_result(cache_key, results)
     return jsonify(results)
 
+@screener_bp.route("/api/screener/quality200", methods=["GET"])
+@handle_screener_errors
+@validate_schema(ScreenerBaseRequest, source='args')
+def screen_quality200():
+    data: ScreenerBaseRequest = g.validated_data
+    current_app.logger.info(f"Quality 200W Screen request: region={data.region}, time_frame={data.time_frame}")
+
+    cache_key = ("quality_200w", data.region, data.time_frame)
+    cached = get_cached_screener_result(cache_key)
+    if cached:
+        return jsonify(cached)
+
+    results = screener.screen_quality_200w(region=data.region, time_frame=data.time_frame)
+
+    current_app.logger.info(f"Quality 200W Screen completed. Results: {len(results)}")
+    cache_screener_result(cache_key, results)
+    return jsonify(results)
+
 @screener_bp.route("/screen/universal", methods=["GET"])
 @handle_screener_errors
 @validate_schema(ScreenerBaseRequest, source='args')

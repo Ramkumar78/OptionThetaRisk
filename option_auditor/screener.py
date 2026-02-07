@@ -25,6 +25,7 @@ from option_auditor.strategies.options_only import screen_options_only_strategy
 from option_auditor.strategies.five_thirteen import FiveThirteenStrategy
 from option_auditor.strategies.darvas import DarvasBoxStrategy
 from option_auditor.strategies.medallion_isa import MedallionIsaStrategy
+from option_auditor.strategies.quality_200w import Quality200wStrategy
 from option_auditor.common.screener_utils import (
     ScreeningRunner,
     run_screening_strategy,
@@ -176,4 +177,19 @@ def screen_medallion_isa(ticker_list: list = None, time_frame: str = "1d", regio
         check_mode=check_mode,
         sorting_key=lambda x: x.get('score', 0),
         reverse_sort=True
+    )
+
+def screen_quality_200w(ticker_list: list = None, time_frame: str = "1d", region: str = "us", check_mode: bool = False) -> list:
+    """
+    Screens for Quality 200-Week MA Setups.
+    DELEGATES TO: option_auditor/strategies/quality_200w.py
+    """
+    # Needs at least 5 years of data for 200-week SMA
+    return run_screening_strategy(
+        Quality200wStrategy,
+        ticker_list=ticker_list,
+        time_frame=time_frame,
+        region=region,
+        check_mode=check_mode,
+        data_period="5y"
     )
