@@ -132,10 +132,11 @@ def calculate_regulatory_fees(symbol: str, price: float, qty: float, action: str
     # UK Stamp Duty (0.5% on Buy only)
     # Applied on LSE stocks (.L)
     if symbol.endswith('.L'):
-        # Check for Buy action.
-        # Also assume positive qty with unspecified action implies Buy if needed, but here we check action string.
-        is_buy = action.startswith('BUY') or action == 'OPEN' # loose heuristic, caller should pass BUY
-        if is_buy:
-             fees += val * 0.005
+        if asset_class.lower() == 'stock':
+            # Check for Buy action.
+            # Also assume positive qty with unspecified action implies Buy if needed, but here we check action string.
+            is_buy = action.startswith('BUY') or action == 'OPEN' # loose heuristic, caller should pass BUY
+            if is_buy:
+                fees += val * 0.005
 
     return fees

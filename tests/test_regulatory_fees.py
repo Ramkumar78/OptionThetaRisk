@@ -82,14 +82,6 @@ def test_asset_class_distinction():
     fee_ns_opt = calculate_regulatory_fees("NIFTY.NS", price, qty, action="BUY", asset_class="option")
     assert fee_ns_opt == 0.0
 
-    # UK Option - Current implementation does NOT check asset_class for .L, so it applies fees if action is BUY.
-    # However, if we strictly follow the requirement "distinguishes between stocks and options correctly",
-    # we might expect 0 fees for options. But the code returns fees.
-    # We will test the CURRENT behavior for UK options if we want to document it, or skip it if ambiguous.
-    # Given the requirement specifically mentions "Ensuring no fees are applied to standard US stocks by default",
-    # and "Indian STT logic", maybe the "distinction" requirement is focused on Indian logic.
-    # But let's verify what happens:
+    # UK Option - Should be 0 to ensure fee differentiation (fixed logic).
     fee_l_opt = calculate_regulatory_fees("LLOY.L", price, qty, action="BUY", asset_class="option")
-    # Current code: if symbol.endswith('.L') -> applies 0.5% regardless of asset_class.
-    # So expected is 5.0.
-    assert fee_l_opt == 5.0
+    assert fee_l_opt == 0.0
