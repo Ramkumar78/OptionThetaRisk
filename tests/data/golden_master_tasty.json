@@ -1,0 +1,565 @@
+{
+  "discipline_score": 35,
+  "discipline_details": [
+    "Gamma Risk (Held < 3 DTE): -65 pts"
+  ],
+  "risk_map": [
+    {
+      "symbol": "SPX",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 45.0,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "SPX",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 45.0,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "SPX",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 45.0,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "SPX",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 45.0,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "PFE",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 98.5,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "PFE",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 98.5,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "META",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 70500.0,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "IWM",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 62.5,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "IWM",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 62.5,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "XLE",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 38.0,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "XLE",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 38.0,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "QQQ",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 62.5,
+      "risk_alert": "Expiring Today"
+    },
+    {
+      "symbol": "QQQ",
+      "dte": 0,
+      "pnl_pct": 0.0,
+      "size": 62.5,
+      "risk_alert": "Expiring Today"
+    }
+  ],
+  "metrics": {
+    "num_trades": 0,
+    "win_rate": 0.0,
+    "total_pnl": 70809.0,
+    "total_fees": 0.0,
+    "avg_hold_days": 0.0
+  },
+  "strategy_metrics": {
+    "num_trades": 6,
+    "win_rate": 0.8333333333333334,
+    "total_pnl": 70809.0,
+    "total_gross_pnl": 70809.0,
+    "total_fees": 0.0,
+    "max_drawdown": 197.0,
+    "expectancy": 11801.5
+  },
+  "verdict": "Red Flag: Data Integrity Failure",
+  "verdict_color": "red",
+  "verdict_details": "Critical: >20% of symbols failed to fetch live prices.",
+  "symbols": [
+    {
+      "symbol": "META",
+      "pnl": 70500.0,
+      "win_rate": 1.0,
+      "trades": 1,
+      "description": "Options on Meta Platforms"
+    },
+    {
+      "symbol": "SPX",
+      "pnl": 180.0,
+      "win_rate": 1.0,
+      "trades": 1,
+      "description": "Options on S&P 500 Index"
+    },
+    {
+      "symbol": "IWM",
+      "pnl": 125.0,
+      "win_rate": 1.0,
+      "trades": 1,
+      "description": "Options on Russell 2000 ETF"
+    },
+    {
+      "symbol": "QQQ",
+      "pnl": 125.0,
+      "win_rate": 1.0,
+      "trades": 1,
+      "description": "Options on Nasdaq-100 ETF"
+    },
+    {
+      "symbol": "XLE",
+      "pnl": 76.0,
+      "win_rate": 1.0,
+      "trades": 1,
+      "description": "Options on Energy Select Sector SPDR ETF"
+    },
+    {
+      "symbol": "PFE",
+      "pnl": -197.0,
+      "win_rate": 0.0,
+      "trades": 1,
+      "description": "Options on Pfizer"
+    }
+  ],
+  "strategy_groups": [
+    {
+      "symbol": "SPX",
+      "expiry": "2025-11-13",
+      "strategy": "Iron Condor",
+      "entry_ts": "2025-11-12T20:37:00",
+      "exit_ts": "2025-11-12T20:37:00",
+      "legs_desc": "6815P/6820P/6895C/6900C",
+      "pnl": 180.0,
+      "gross_pnl": 180.0,
+      "fees": 0.0,
+      "hold_days": 0.001,
+      "average_daily_pnl": 180000.0,
+      "is_revenge": false,
+      "description": "Options on S&P 500 Index",
+      "segments": [
+        {
+          "strategy_name": "Iron Condor",
+          "pnl": 180.0,
+          "entry_ts": "2025-11-12T20:37:00",
+          "exit_ts": "2025-11-12T20:37:00"
+        }
+      ]
+    },
+    {
+      "symbol": "PFE",
+      "expiry": "2025-12-26",
+      "strategy": "Bull Call Spread",
+      "entry_ts": "2025-11-12T20:57:00",
+      "exit_ts": "2025-11-12T20:57:00",
+      "legs_desc": "24C/28C",
+      "pnl": -197.0,
+      "gross_pnl": -197.0,
+      "fees": 0.0,
+      "hold_days": 0.001,
+      "average_daily_pnl": -197000.0,
+      "is_revenge": false,
+      "description": "Options on Pfizer",
+      "segments": [
+        {
+          "strategy_name": "Bull Call Spread",
+          "pnl": -197.0,
+          "entry_ts": "2025-11-12T20:57:00",
+          "exit_ts": "2025-11-12T20:57:00"
+        }
+      ]
+    },
+    {
+      "symbol": "META",
+      "expiry": "2025-11-28",
+      "strategy": "Short Put",
+      "entry_ts": "2025-11-18T14:39:00",
+      "exit_ts": "2025-11-18T14:39:00",
+      "legs_desc": "705P",
+      "pnl": 70500.0,
+      "gross_pnl": 70500.0,
+      "fees": 0.0,
+      "hold_days": 0.001,
+      "average_daily_pnl": 70500000.0,
+      "is_revenge": false,
+      "description": "Options on Meta Platforms",
+      "segments": [
+        {
+          "strategy_name": "Short Put",
+          "pnl": 70500.0,
+          "entry_ts": "2025-11-18T14:39:00",
+          "exit_ts": "2025-11-18T14:39:00"
+        }
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "expiry": "2026-01-09",
+      "strategy": "Bull Put Spread",
+      "entry_ts": "2025-11-26T17:22:00",
+      "exit_ts": "2025-11-26T17:22:00",
+      "legs_desc": "235P/240P",
+      "pnl": 125.0,
+      "gross_pnl": 125.0,
+      "fees": 0.0,
+      "hold_days": 0.001,
+      "average_daily_pnl": 125000.0,
+      "is_revenge": false,
+      "description": "Options on Russell 2000 ETF",
+      "segments": [
+        {
+          "strategy_name": "Bull Put Spread",
+          "pnl": 125.0,
+          "entry_ts": "2025-11-26T17:22:00",
+          "exit_ts": "2025-11-26T17:22:00"
+        }
+      ]
+    },
+    {
+      "symbol": "XLE",
+      "expiry": "2026-01-16",
+      "strategy": "Bull Put Spread",
+      "entry_ts": "2025-11-26T17:30:00",
+      "exit_ts": "2025-11-26T17:30:00",
+      "legs_desc": "81P/86P",
+      "pnl": 76.0,
+      "gross_pnl": 76.0,
+      "fees": 0.0,
+      "hold_days": 0.001,
+      "average_daily_pnl": 76000.0,
+      "is_revenge": false,
+      "description": "Options on Energy Select Sector SPDR ETF",
+      "segments": [
+        {
+          "strategy_name": "Bull Put Spread",
+          "pnl": 76.0,
+          "entry_ts": "2025-11-26T17:30:00",
+          "exit_ts": "2025-11-26T17:30:00"
+        }
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "expiry": "2026-01-09",
+      "strategy": "Bull Put Spread",
+      "entry_ts": "2025-11-26T17:53:00",
+      "exit_ts": "2025-11-26T17:53:00",
+      "legs_desc": "595P/600P",
+      "pnl": 125.0,
+      "gross_pnl": 125.0,
+      "fees": 0.0,
+      "hold_days": 0.001,
+      "average_daily_pnl": 125000.0,
+      "is_revenge": false,
+      "description": "Options on Nasdaq-100 ETF",
+      "segments": [
+        {
+          "strategy_name": "Bull Put Spread",
+          "pnl": 125.0,
+          "entry_ts": "2025-11-26T17:53:00",
+          "exit_ts": "2025-11-26T17:53:00"
+        }
+      ]
+    }
+  ],
+  "open_positions": [
+    {
+      "symbol": "SPX",
+      "current_price": "MOCKED",
+      "expiry": "2025-11-13",
+      "contract": "P 6815.0",
+      "strike": 6815.0,
+      "right": "P",
+      "qty_open": 1.0,
+      "avg_price": 0.45,
+      "breakeven": 6814.55,
+      "dte": "MOCKED",
+      "opened": "2025-11-12T20:37:00",
+      "days_open": "MOCKED",
+      "description": "Options on S&P 500 Index",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "SPX",
+      "current_price": "MOCKED",
+      "expiry": "2025-11-13",
+      "contract": "P 6820.0",
+      "strike": 6820.0,
+      "right": "P",
+      "qty_open": -1.0,
+      "avg_price": 0.45,
+      "breakeven": 6819.55,
+      "dte": "MOCKED",
+      "opened": "2025-11-12T20:37:00",
+      "days_open": "MOCKED",
+      "description": "Options on S&P 500 Index",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "SPX",
+      "current_price": "MOCKED",
+      "expiry": "2025-11-13",
+      "contract": "C 6895.0",
+      "strike": 6895.0,
+      "right": "C",
+      "qty_open": -1.0,
+      "avg_price": 0.45,
+      "breakeven": 6895.45,
+      "dte": "MOCKED",
+      "opened": "2025-11-12T20:37:00",
+      "days_open": "MOCKED",
+      "description": "Options on S&P 500 Index",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "SPX",
+      "current_price": "MOCKED",
+      "expiry": "2025-11-13",
+      "contract": "C 6900.0",
+      "strike": 6900.0,
+      "right": "C",
+      "qty_open": 1.0,
+      "avg_price": 0.45,
+      "breakeven": 6900.45,
+      "dte": "MOCKED",
+      "opened": "2025-11-12T20:37:00",
+      "days_open": "MOCKED",
+      "description": "Options on S&P 500 Index",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "PFE",
+      "current_price": "MOCKED",
+      "expiry": "2025-12-26",
+      "contract": "C 24.0",
+      "strike": 24.0,
+      "right": "C",
+      "qty_open": 1.0,
+      "avg_price": 0.985,
+      "breakeven": 24.985,
+      "dte": "MOCKED",
+      "opened": "2025-11-12T20:57:00",
+      "days_open": "MOCKED",
+      "description": "Options on Pfizer",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "PFE",
+      "current_price": "MOCKED",
+      "expiry": "2025-12-26",
+      "contract": "C 28.0",
+      "strike": 28.0,
+      "right": "C",
+      "qty_open": -1.0,
+      "avg_price": 0.985,
+      "breakeven": 28.985,
+      "dte": "MOCKED",
+      "opened": "2025-11-12T20:57:00",
+      "days_open": "MOCKED",
+      "description": "Options on Pfizer",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "META",
+      "current_price": "MOCKED",
+      "expiry": "2025-11-28",
+      "contract": "P 705.0",
+      "strike": 705.0,
+      "right": "P",
+      "qty_open": -1.0,
+      "avg_price": 705.0,
+      "breakeven": 0.0,
+      "dte": "MOCKED",
+      "opened": "2025-11-18T14:39:00",
+      "days_open": "MOCKED",
+      "description": "Options on Meta Platforms",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "IWM",
+      "current_price": "MOCKED",
+      "expiry": "2026-01-09",
+      "contract": "P 240.0",
+      "strike": 240.0,
+      "right": "P",
+      "qty_open": -1.0,
+      "avg_price": 0.625,
+      "breakeven": 239.375,
+      "dte": "MOCKED",
+      "opened": "2025-11-26T17:22:00",
+      "days_open": "MOCKED",
+      "description": "Options on Russell 2000 ETF",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "IWM",
+      "current_price": "MOCKED",
+      "expiry": "2026-01-09",
+      "contract": "P 235.0",
+      "strike": 235.0,
+      "right": "P",
+      "qty_open": 1.0,
+      "avg_price": 0.625,
+      "breakeven": 234.375,
+      "dte": "MOCKED",
+      "opened": "2025-11-26T17:22:00",
+      "days_open": "MOCKED",
+      "description": "Options on Russell 2000 ETF",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "XLE",
+      "current_price": "MOCKED",
+      "expiry": "2026-01-16",
+      "contract": "P 86.0",
+      "strike": 86.0,
+      "right": "P",
+      "qty_open": -1.0,
+      "avg_price": 0.38,
+      "breakeven": 85.62,
+      "dte": "MOCKED",
+      "opened": "2025-11-26T17:30:00",
+      "days_open": "MOCKED",
+      "description": "Options on Energy Select Sector SPDR ETF",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "XLE",
+      "current_price": "MOCKED",
+      "expiry": "2026-01-16",
+      "contract": "P 81.0",
+      "strike": 81.0,
+      "right": "P",
+      "qty_open": 1.0,
+      "avg_price": 0.38,
+      "breakeven": 80.62,
+      "dte": "MOCKED",
+      "opened": "2025-11-26T17:30:00",
+      "days_open": "MOCKED",
+      "description": "Options on Energy Select Sector SPDR ETF",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "QQQ",
+      "current_price": "MOCKED",
+      "expiry": "2026-01-09",
+      "contract": "P 600.0",
+      "strike": 600.0,
+      "right": "P",
+      "qty_open": -1.0,
+      "avg_price": 0.625,
+      "breakeven": 599.375,
+      "dte": "MOCKED",
+      "opened": "2025-11-26T17:53:00",
+      "days_open": "MOCKED",
+      "description": "Options on Nasdaq-100 ETF",
+      "risk_alert": "MOCKED"
+    },
+    {
+      "symbol": "QQQ",
+      "current_price": "MOCKED",
+      "expiry": "2026-01-09",
+      "contract": "P 595.0",
+      "strike": 595.0,
+      "right": "P",
+      "qty_open": 1.0,
+      "avg_price": 0.625,
+      "breakeven": 594.375,
+      "dte": "MOCKED",
+      "opened": "2025-11-26T17:53:00",
+      "days_open": "MOCKED",
+      "description": "Options on Nasdaq-100 ETF",
+      "risk_alert": "MOCKED"
+    }
+  ],
+  "broker": "tasty",
+  "date_window": null,
+  "account_size_start": null,
+  "net_liquidity_now": null,
+  "buying_power_utilized_percent": null,
+  "position_sizing": [],
+  "leakage_report": {
+    "fee_drag": 0.0,
+    "fee_drag_verdict": "OK",
+    "stale_capital": [],
+    "efficiency_ratio": 0
+  },
+  "monthly_income": [
+    {
+      "month": "2025-11",
+      "income": 70809.0
+    }
+  ],
+  "portfolio_curve": [
+    {
+      "x": "2025-11-11T20:37:00",
+      "y": 0.0,
+      "trades": []
+    },
+    {
+      "x": "2025-11-12",
+      "y": -17.0,
+      "trades": [
+        "PFE Bull Call Spread: $-197",
+        "SPX Iron Condor: $180"
+      ]
+    },
+    {
+      "x": "2025-11-18",
+      "y": 70483.0,
+      "trades": [
+        "META Short Put: $70500"
+      ]
+    },
+    {
+      "x": "2025-11-26",
+      "y": 70809.0,
+      "trades": [
+        "IWM Bull Put Spread: $125",
+        "QQQ Bull Put Spread: $125",
+        "XLE Bull Put Spread: $76"
+      ]
+    }
+  ],
+  "monte_carlo": {
+    "status": "Insufficient data (need 10+ trades)"
+  },
+  "black_swan": {}
+}
