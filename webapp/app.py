@@ -19,6 +19,7 @@ from webapp.blueprints.main_routes import main_bp
 from webapp.blueprints.safety_routes import safety_bp
 from webapp.blueprints.strategy_routes import strategy_bp
 from webapp.services.scheduler_service import start_scheduler
+from webapp.middleware import setup_middleware, limiter
 
 # Load environment variables from .env file
 load_dotenv()
@@ -66,6 +67,15 @@ def create_app(testing: bool = False) -> Flask:
 
     # Session config
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90) # Longer session for guest persistence
+
+    # Setup Middleware (Request ID, Compression, Rate Limiting, Health Check)
+    setup_middleware(app)
+
+    # Apply Rate Limits to Critical Blueprints
+    # Note: Flask-Limiter modifies the blueprint object in-place.
+    limiter.limit("10 per minute")(screener_bp)
+    limiter.limit("20 per minute")(journal_bp)
+    limiter.limit("10 per minute")(analysis_bp)
 
     # Check for pytest environment to prevent background threads during tests
     # Checking sys.modules is more reliable during import time than env vars

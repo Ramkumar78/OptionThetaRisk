@@ -131,7 +131,9 @@ def test_dashboard_route_with_data(client, mock_storage):
 def test_health_route(client):
     res = client.get('/health')
     assert res.status_code == 200
-    assert res.data == b"OK"
+    data = res.get_json()
+    assert data["status"] == "healthy"
+    assert "memory" in data
 
 def test_screen_route_params(client):
     # Patch where used: screener_routes

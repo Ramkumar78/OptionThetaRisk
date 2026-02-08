@@ -33,3 +33,7 @@ pydantic>=2.0.0
 tenacity>=8.0.0
 pytest-mock
 pytest-playwright
+Flask-Limiter
+Flask-Compress
+psutil
+hypothesis
