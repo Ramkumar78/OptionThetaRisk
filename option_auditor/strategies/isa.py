@@ -15,12 +15,94 @@ class IsaStrategy(BaseStrategy):
     - Breakout: Price crosses 50-day High (Donchian Channel)
     - Volatility: ATR logic for stops
     """
-    def __init__(self, ticker: str, df: pd.DataFrame, check_mode: bool = False, account_size: float = None, risk_per_trade_pct: float = 0.01):
+    def __init__(self, ticker: str, df: pd.DataFrame, check_mode: bool = False, account_size: float = None, risk_per_trade_pct: float = 0.01, benchmark_df: pd.DataFrame = None):
         self.ticker = ticker
         self.df = df
         self.check_mode = check_mode
         self.account_size = account_size
         self.risk_per_trade_pct = risk_per_trade_pct
+        self.benchmark_df = benchmark_df
+
+    def check_vcp(self) -> bool:
+        """
+        Checks for Volatility Contraction Pattern (VCP).
+        Logic: Volatility (measured by Std Dev of price) should decrease over recent periods.
+        """
+        try:
+            if len(self.df) < 50: return False
+
+            # Check last 3 periods of 10 days
+            # Period 1: Recent 10 days
+            # Period 2: Previous 10-20 days
+            # Period 3: Previous 20-30 days
+
+            p1 = self.df['Close'].iloc[-10:].std()
+            p2 = self.df['Close'].iloc[-20:-10].std()
+            p3 = self.df['Close'].iloc[-30:-20].std()
+
+            # Check for contraction: p3 > p2 > p1
+            # We allow small margin or strict inequality
+            if pd.isna(p1) or pd.isna(p2) or pd.isna(p3): return False
+
+            return (p1 < p2) and (p2 < p3)
+        except Exception:
+            return False
+
+    def check_ema_alignment(self) -> bool:
+        """
+        Checks for Institutional Verdict (EMA Alignment).
+        Logic: Price > EMA 50 > EMA 150 > EMA 200.
+        """
+        if len(self.df) < 200: return False
+        try:
+            ema_50 = ta.ema(self.df['Close'], length=50)
+            ema_150 = ta.ema(self.df['Close'], length=150)
+            ema_200 = ta.ema(self.df['Close'], length=200)
+
+            if ema_50 is None or ema_150 is None or ema_200 is None:
+                return False
+
+            c = float(self.df['Close'].iloc[-1])
+            e50 = float(ema_50.iloc[-1])
+            e150 = float(ema_150.iloc[-1])
+            e200 = float(ema_200.iloc[-1])
+
+            return (c > e50) and (e50 > e150) and (e150 > e200)
+        except Exception:
+            return False
+
+    def calculate_relative_strength(self) -> float:
+        """
+        Calculates Relative Strength vs Benchmark (if provided).
+        Returns percentage outperformance over last 252 days.
+        """
+        if self.benchmark_df is None or self.benchmark_df.empty:
+            return 0.0
+
+        try:
+            period = 252
+            # Use minimal length available if < 252 but > 50
+            min_len = min(len(self.df), len(self.benchmark_df))
+            if min_len < 50: return 0.0
+
+            if min_len < period:
+                period = min_len
+
+            # Use iloc to get start and end prices regardless of index alignment (simplified RS)
+            # Ideally we align by date, but for this mock implementation simple return diff is enough
+
+            stock_end = float(self.df['Close'].iloc[-1])
+            stock_start = float(self.df['Close'].iloc[-period])
+            stock_ret = (stock_end / stock_start) - 1
+
+            bench_end = float(self.benchmark_df['Close'].iloc[-1])
+            bench_start = float(self.benchmark_df['Close'].iloc[-period])
+            bench_ret = (bench_end / bench_start) - 1
+
+            rs = (stock_ret - bench_ret) * 100
+            return rs
+        except Exception:
+            return 0.0
 
     def analyze(self) -> dict:
         try:
@@ -153,6 +235,11 @@ class IsaStrategy(BaseStrategy):
             base_ticker = self.ticker.split('.')[0]
             company_name = TICKER_NAMES.get(self.ticker, TICKER_NAMES.get(base_ticker, self.ticker))
 
+            # --- NEW METRICS ---
+            is_vcp = self.check_vcp()
+            ema_alignment = self.check_ema_alignment()
+            rs_score = self.calculate_relative_strength()
+
             return {
                 "ticker": self.ticker,
                 "company_name": company_name,
@@ -181,7 +268,12 @@ class IsaStrategy(BaseStrategy):
                 "atr": round(current_atr, 2),
                 "52_week_high": round(high_52wk, 2) if high_52wk else None,
                 "52_week_low": round(low_52wk, 2) if low_52wk else None,
-                "sector_change": pct_change_1d
+                "sector_change": pct_change_1d,
+
+                # New Fields
+                "vcp": is_vcp,
+                "ema_alignment": ema_alignment,
+                "rs_rating": round(rs_score, 2)
             }
         except Exception as e:
             # logger.error(f"ISA ticker error: {e}")
