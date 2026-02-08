@@ -85,6 +85,7 @@ class TestIsaLogic:
         """
         Test VCP detection on data with contracting volatility.
         """
+        np.random.seed(42)  # Ensure deterministic behavior
         # Create data with contracting volatility (VCP)
         # Logic checks last 30 days in 10-day chunks.
         dates = pd.date_range(start='2020-01-01', periods=100, freq='B')
@@ -92,7 +93,7 @@ class TestIsaLogic:
         # Indices 0-70: Noise
         p_base = np.random.normal(100, 5.0, 70)
         # Indices 70-80: High Vol (Period 3)
-        p3 = np.random.normal(100, 5.0, 10)
+        p3 = np.random.normal(100, 8.0, 10)  # Increased volatility for clearer distinction
         # Indices 80-90: Med Vol (Period 2)
         p2 = np.random.normal(100, 2.5, 10)
         # Indices 90-100: Low Vol (Period 1)
