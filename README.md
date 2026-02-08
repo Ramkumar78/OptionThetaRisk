@@ -51,7 +51,7 @@
 | option\_auditor/strategies/mms\_ote.py              |       86 |        6 |     93% |119-120, 143-146 |
 | option\_auditor/strategies/monte\_carlo.py          |       29 |        6 |     79% |23-25, 60-62 |
 | option\_auditor/strategies/options\_only.py         |      144 |       23 |     84% |47-48, 92-95, 103-106, 111-112, 127-128, 148, 154-155, 196, 207, 230-232, 244-245 |
-| option\_auditor/strategies/quality\_200w.py         |       70 |       20 |     71% |25, 32, 37, 45, 67, 74, 106-136, 158 |
+| option\_auditor/strategies/quality\_200w.py         |       70 |       21 |     70% |25, 32, 37, 45, 67, 74, 81, 106-136, 158 |
 | option\_auditor/strategies/quantum.py               |       69 |       10 |     86% |27, 58-59, 92-93, 101-102, 126-128 |
 | option\_auditor/strategies/rsi\_divergence.py       |       75 |        3 |     96% |99, 126-127 |
 | option\_auditor/strategies/rsi\_reversal.py         |       60 |        4 |     93% |15, 22, 41, 78 |
@@ -82,7 +82,7 @@
 | webapp/storage.py                                   |      412 |       33 |     92% |69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 118, 278, 299, 329-330, 370-371, 411, 446-447, 466-469, 486, 503-504, 515, 527-528, 547 |
 | webapp/utils.py                                     |       59 |        7 |     88% |32-33, 58-59, 69-71 |
 | webapp/validation.py                                |       35 |        3 |     91% |     49-51 |
-| **TOTAL**                                           | **8143** | **1058** | **87%** |           |
+| **TOTAL**                                           | **8143** | **1059** | **87%** |           |
 
 
 ## Setup coverage badge
