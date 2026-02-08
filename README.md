@@ -7,12 +7,12 @@
 | option\_auditor/\_\_init\_\_.py                     |        2 |        0 |    100% |           |
 | option\_auditor/analysis\_worker.py                 |       90 |       29 |     68% |27-28, 32-40, 51-53, 70-72, 76-78, 103-105, 116-118, 122, 125-127 |
 | option\_auditor/backtest\_data\_loader.py           |       53 |        3 |     94% | 57-59, 66 |
-| option\_auditor/backtest\_engine.py                 |      117 |        0 |    100% |           |
-| option\_auditor/backtest\_reporter.py               |       87 |        1 |     99% |       120 |
+| option\_auditor/backtest\_engine.py                 |      147 |        2 |     99% |     44-46 |
+| option\_auditor/backtest\_reporter.py               |       87 |        0 |    100% |           |
 | option\_auditor/backtesting\_strategies.py          |      402 |       82 |     80% |17, 22, 27, 32, 36, 80, 98, 243-245, 248-250, 253, 256-259, 267-269, 272-274, 277, 280-283, 306, 318-320, 323-326, 329, 332-335, 340-342, 345-347, 350, 353-356, 361-363, 366-367, 370, 373-376, 401, 412, 432-433, 446-447, 482-487, 512, 514, 518, 520, 522, 529-533 |
 | option\_auditor/cli.py                              |       57 |        4 |     93% |71-73, 101 |
 | option\_auditor/common/constants.py                 |       23 |        2 |     91% |   444-445 |
-| option\_auditor/common/data\_utils.py               |      239 |       22 |     91% |25-26, 93-94, 101-102, 109-110, 119-120, 131-132, 201, 216-218, 233-234, 251-252, 261-262 |
+| option\_auditor/common/data\_utils.py               |      239 |       24 |     90% |25-26, 93-94, 101-102, 109-110, 119-120, 131-132, 201, 216-218, 233-234, 251-252, 261-262, 314-315 |
 | option\_auditor/common/file\_utils.py               |       28 |        0 |    100% |           |
 | option\_auditor/common/price\_utils.py              |       69 |       11 |     84% |38, 43, 90, 94-100, 122-124 |
 | option\_auditor/common/resilience.py                |       10 |        0 |    100% |           |
@@ -44,7 +44,7 @@
 | option\_auditor/strategies/hybrid.py                |      279 |       64 |     77% |29-30, 37-38, 49-52, 55-76, 146-147, 164-166, 182-184, 230, 263, 278, 289-291, 302-307, 313, 315, 317, 319, 325-328, 333, 336-337, 347, 355-357, 374-375, 393-394, 426-428 |
 | option\_auditor/strategies/isa.py                   |      148 |       17 |     89% |48-49, 63, 71-72, 89, 104-105, 143, 155-159, 224, 229, 278-280 |
 | option\_auditor/strategies/liquidity.py             |       90 |        6 |     93% |38, 75-77, 174-175 |
-| option\_auditor/strategies/market.py                |      182 |       37 |     80% |38-39, 59, 61, 65-68, 85, 122-123, 153-154, 167-168, 173, 241-247, 250, 258, 297-327 |
+| option\_auditor/strategies/market.py                |      182 |       40 |     78% |38-39, 59, 61, 65-68, 85, 122-123, 153-154, 167-168, 173, 201-203, 241-247, 250, 258, 297-327 |
 | option\_auditor/strategies/master.py                |      150 |       27 |     82% |35, 40-45, 48, 64-66, 101-102, 111, 127, 162-166, 168, 178-180, 189, 213, 241-243 |
 | option\_auditor/strategies/math\_utils.py           |      198 |       19 |     90% |59-60, 84-85, 111, 132-133, 160-161, 190-191, 201-202, 231-232, 361-362, 386-387 |
 | option\_auditor/strategies/medallion\_isa.py        |       63 |        8 |     87% |71-74, 97, 116-118 |
@@ -62,7 +62,7 @@
 | option\_auditor/strategy.py                         |      256 |       33 |     87% |16, 35, 148-155, 204, 207-245, 279, 306 |
 | option\_auditor/strategy\_metadata.py               |       37 |       11 |     70% |323, 325, 330-340 |
 | option\_auditor/uk\_stock\_data.py                  |       41 |        8 |     80% |32-33, 52, 62, 67-69, 77 |
-| option\_auditor/unified\_backtester.py              |       56 |        3 |     95% |44, 67, 85 |
+| option\_auditor/unified\_backtester.py              |       59 |        3 |     95% |48, 76, 94 |
 | option\_auditor/unified\_screener.py                |      136 |       29 |     79% |38, 42-43, 49, 60-64, 79-82, 97-98, 121-124, 204-206, 217-223, 229, 246-249, 268-269 |
 | option\_auditor/us\_stock\_data.py                  |        9 |        0 |    100% |           |
 | webapp/\_\_init\_\_.py                              |        0 |        0 |    100% |           |
@@ -83,7 +83,7 @@
 | webapp/storage.py                                   |      412 |       33 |     92% |69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 118, 278, 299, 329-330, 370-371, 411, 446-447, 466-469, 486, 503-504, 515, 527-528, 547 |
 | webapp/utils.py                                     |       59 |        7 |     88% |32-33, 58-59, 69-71 |
 | webapp/validation.py                                |       35 |        3 |     91% |     49-51 |
-| **TOTAL**                                           | **8214** | **1042** | **87%** |           |
+| **TOTAL**                                           | **8247** | **1048** | **87%** |           |
 
 
 ## Setup coverage badge
