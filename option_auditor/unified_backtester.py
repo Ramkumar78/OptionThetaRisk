@@ -10,14 +10,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("UnifiedBacktester")
 
 class UnifiedBacktester:
-    def __init__(self, ticker, strategy_type="grandmaster", initial_capital=BACKTEST_INITIAL_CAPITAL):
+    def __init__(self, ticker, strategy_type="grandmaster", initial_capital=BACKTEST_INITIAL_CAPITAL,
+                 slippage_type="fixed_pct", slippage_value=0.0, impact_factor=0.0,
+                 margin_interest_rate=0.0, leverage_limit=1.0):
         self.ticker = ticker.upper()
         self.strategy_type = strategy_type
         self.initial_capital = initial_capital
 
         # Components
         self.loader = BacktestDataLoader()
-        self.engine = BacktestEngine(strategy_type, initial_capital)
+        self.engine = BacktestEngine(strategy_type, initial_capital,
+                                     slippage_type, slippage_value, impact_factor,
+                                     margin_interest_rate, leverage_limit)
         self.reporter = BacktestReporter()
 
         # Store last result for Monte Carlo
@@ -31,7 +35,7 @@ class UnifiedBacktester:
         """Delegate indicator calculation to Engine."""
         return self.engine.calculate_indicators(df)
 
-    def run(self):
+    def run(self, monte_carlo=False):
         """Orchestrate the backtest process."""
         df = self.fetch_data()
         if df is None: return {"error": "No data found"}
@@ -53,6 +57,11 @@ class UnifiedBacktester:
             self.strategy_type,
             self.initial_capital
         )
+
+        # Optional: Monte Carlo Wrapper
+        if monte_carlo:
+            mc_results = self.run_monte_carlo()
+            report["monte_carlo"] = mc_results
 
         return report
 

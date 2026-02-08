@@ -9,10 +9,20 @@ from option_auditor.config import BACKTEST_DAYS
 logger = logging.getLogger("BacktestEngine")
 
 class BacktestEngine:
-    def __init__(self, strategy_type: str, initial_capital: float):
+    def __init__(self, strategy_type: str, initial_capital: float,
+                 slippage_type: str = "fixed_pct", slippage_value: float = 0.0,
+                 impact_factor: float = 0.0, margin_interest_rate: float = 0.0,
+                 leverage_limit: float = 1.0):
         self.strategy_type = strategy_type
         self.initial_capital = initial_capital
         self.strategy: AbstractBacktestStrategy = get_strategy(strategy_type)
+
+        # Execution Simulation Parameters
+        self.slippage_type = slippage_type
+        self.slippage_value = slippage_value
+        self.impact_factor = impact_factor
+        self.margin_interest_rate = margin_interest_rate
+        self.leverage_limit = leverage_limit
 
         # State
         self.equity = initial_capital
@@ -20,6 +30,32 @@ class BacktestEngine:
         self.state = "OUT"
         self.entry_date = None
         self.trade_log = []
+
+    def _calculate_execution_price(self, price: float, quantity: int, side: str, atr: float = 0.0) -> float:
+        """
+        Calculates the execution price with slippage and market impact.
+        side: "BUY" or "SELL"
+        """
+        # 1. Base Slippage
+        slippage_per_share = 0.0
+        if self.slippage_type == "fixed_pct":
+            # e.g. 0.001 * 100 = 0.10 per share
+            slippage_per_share = price * self.slippage_value
+        elif self.slippage_type == "atr":
+            # e.g. 0.1 * ATR
+            slippage_per_share = atr * self.slippage_value
+
+        # 2. Market Impact (Linear Model)
+        # Impact penalty per share increases with size
+        # e.g. impact_factor 0.0001 * 1000 shares = 0.10 penalty per share
+        impact_penalty = self.impact_factor * quantity
+
+        total_penalty = slippage_per_share + impact_penalty
+
+        if side == "BUY":
+            return price + total_penalty
+        else:
+            return price - total_penalty
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         # Common indicators needed for context (Regime, etc)
@@ -145,21 +181,42 @@ class BacktestEngine:
             # EXECUTION
             # ==============================
 
+            atr_val = row['atr'] if 'atr' in row else 0.0
+
             if self.state == "OUT" and buy_signal:
-                self.shares = int(self.equity / price)
-                self.equity -= (self.shares * price)
-                self.state = "IN"
-                self.entry_date = date
+                # Calculate Max Shares based on Leverage
+                # e.g. 10000 * 2.0 / 100 = 200 shares
+                max_buying_power = self.equity * self.leverage_limit
 
-                atr = row['atr']
-                stop_loss, target_price = self.strategy.get_initial_stop_target(row, atr)
+                # Estimate shares with raw price first to avoid over-buying due to slippage
+                # (Slippage increases cost, so we buy slightly less if full leverage)
+                est_shares = int(max_buying_power / price)
 
-                self.trade_log.append({
-                    "date": date.strftime('%Y-%m-%d'), "type": "BUY",
-                    "price": round(price, 2), "stop": round(stop_loss, 2),
-                    "target": round(target_price, 2) if target_price > 0 else "Trailing",
-                    "days": "-"
-                })
+                if est_shares > 0:
+                    # Calculate Execution Price
+                    exec_price = self._calculate_execution_price(price, est_shares, "BUY", atr_val)
+
+                    # Ensure we can afford it (re-check with exec_price)
+                    cost = est_shares * exec_price
+                    if cost > max_buying_power:
+                        est_shares = int(max_buying_power / exec_price)
+                        exec_price = self._calculate_execution_price(price, est_shares, "BUY", atr_val) # Recalculate impact for new size
+                        cost = est_shares * exec_price
+
+                    if est_shares > 0:
+                        self.shares = est_shares
+                        self.equity -= cost # Equity drops by full cost (cash balance goes negative if margin)
+                        self.state = "IN"
+                        self.entry_date = date
+
+                        stop_loss, target_price = self.strategy.get_initial_stop_target(row, atr_val)
+
+                        self.trade_log.append({
+                            "date": date.strftime('%Y-%m-%d'), "type": "BUY",
+                            "price": round(exec_price, 2), "stop": round(stop_loss, 2),
+                            "target": round(target_price, 2) if target_price > 0 else "Trailing",
+                            "days": "-"
+                        })
 
             elif self.state == "IN":
                 # Check Hard Stop / Target
@@ -177,7 +234,10 @@ class BacktestEngine:
                         current_stop_reason = "TARGET HIT"
 
                 if sell_signal:
-                    proceeds = self.shares * price
+                    # Calculate Execution Price
+                    exec_price = self._calculate_execution_price(price, self.shares, "SELL", atr_val)
+
+                    proceeds = self.shares * exec_price
                     self.equity += proceeds
                     self.shares = 0
                     self.state = "OUT"
@@ -187,15 +247,27 @@ class BacktestEngine:
 
                     self.trade_log.append({
                         "date": date.strftime('%Y-%m-%d'), "type": "SELL",
-                        "price": round(price, 2), "reason": reason,
+                        "price": round(exec_price, 2), "reason": reason,
                         "equity": round(self.equity, 0),
                         "days": days_held
                     })
 
+            # --- MARGIN INTEREST CALCULATION ---
+            # If self.equity < 0 (wait, self.equity tracks Net Liquidation Value in simple models usually)
+            # But here: self.equity -= cost.
+            # If I have 10k, buy 20k stock (cost 20k). self.equity becomes -10k.
+            # This represents CASH. Net Liq = Cash + Shares * Price = -10k + 20k = +10k. Correct.
+            # So if self.equity (which is effectively Cash Balance here) is negative, we pay interest.
+
+            if self.equity < 0:
+                daily_interest = abs(self.equity) * (self.margin_interest_rate / 365.0)
+                self.equity -= daily_interest # Interest reduces cash (and thus Net Liq)
+
             # --- TRACK EQUITY CURVE DAILY ---
+            # Net Liquidation Value
             current_total_equity = self.equity
             if self.state == "IN":
-                current_total_equity += (self.shares * price)
+                current_total_equity += (self.shares * price) # Mark to Market
 
             bnh_value = bnh_cash_residue + (bnh_shares * price)
 
