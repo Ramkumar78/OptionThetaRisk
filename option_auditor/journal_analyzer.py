@@ -181,6 +181,59 @@ def analyze_journal(entries: list[dict]) -> dict:
     except Exception as e:
         print(f"Psychology Alert Error: {e}")
 
+    # Revenge Trading Detection
+    try:
+        # We need exit_time to detect if a trade was opened shortly after a loss
+        if 'exit_date' in df.columns and 'exit_time' in df.columns:
+            # Prepare sortable datetime columns
+            # We reuse the logic from equity curve below but need it here.
+
+            def parse_dt(d, t):
+                try:
+                    return pd.to_datetime(f"{d} {t}")
+                except:
+                    return None
+
+            df['entry_ts_calc'] = df.apply(lambda r: parse_dt(r.get('entry_date'), r.get('entry_time')), axis=1)
+            df['exit_ts_calc'] = df.apply(lambda r: parse_dt(r.get('exit_date'), r.get('exit_time')), axis=1)
+
+            # Sort by entry time
+            sorted_by_entry = df.sort_values('entry_ts_calc')
+
+            # Group by Symbol to track sequence per asset
+            if 'symbol' in sorted_by_entry.columns:
+                revenge_count = 0
+                grouped = sorted_by_entry.groupby('symbol')
+
+                for sym, group in grouped:
+                    # Iterate through trades for this symbol
+
+                    prev_exit = None
+                    prev_pnl = 0.0
+
+                    for idx, row in group.iterrows():
+                        curr_entry = row['entry_ts_calc']
+
+                        if prev_exit and curr_entry:
+                            # Check gap
+                            diff_mins = (curr_entry - prev_exit).total_seconds() / 60.0
+
+                            # If previous was loss AND gap <= 30 mins
+                            if prev_pnl < 0 and 0 <= diff_mins <= 30:
+                                revenge_count += 1
+
+                        # Update state
+                        # Only update if this trade has a valid exit
+                        if row['exit_ts_calc'] is not pd.NaT and row['exit_ts_calc'] is not None:
+                            prev_exit = row['exit_ts_calc']
+                            prev_pnl = row['pnl']
+
+                if revenge_count > 0:
+                    suggestions.append(f"<b>Revenge Trading Warning:</b> Detected {revenge_count} trades opened within 30 minutes of a loss on the same symbol.")
+
+    except Exception as e:
+        print(f"Revenge Trading Detection Error: {e}")
+
     # Equity Curve Calculation
     equity_curve = []
     try:
