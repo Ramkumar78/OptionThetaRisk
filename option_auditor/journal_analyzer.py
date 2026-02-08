@@ -1,3 +1,5 @@
+from option_auditor.common.data_utils import get_cached_market_data
+from option_auditor.config import BACKTEST_INITIAL_CAPITAL
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -181,7 +183,7 @@ def analyze_journal(entries: list[dict]) -> dict:
     except Exception as e:
         print(f"Psychology Alert Error: {e}")
 
-    # Revenge Trading Detection
+    # Revenge Trading Detection & Size Tilting
     try:
         # We need exit_time to detect if a trade was opened shortly after a loss
         if 'exit_date' in df.columns and 'exit_time' in df.columns:
@@ -203,6 +205,7 @@ def analyze_journal(entries: list[dict]) -> dict:
             # Group by Symbol to track sequence per asset
             if 'symbol' in sorted_by_entry.columns:
                 revenge_count = 0
+                size_tilt_count = 0
                 grouped = sorted_by_entry.groupby('symbol')
 
                 for sym, group in grouped:
@@ -210,9 +213,11 @@ def analyze_journal(entries: list[dict]) -> dict:
 
                     prev_exit = None
                     prev_pnl = 0.0
+                    prev_qty = 0.0
 
                     for idx, row in group.iterrows():
                         curr_entry = row['entry_ts_calc']
+                        curr_qty = abs(row.get('qty', 0) or 0)
 
                         if prev_exit and curr_entry:
                             # Check gap
@@ -221,21 +226,90 @@ def analyze_journal(entries: list[dict]) -> dict:
                             # If previous was loss AND gap <= 30 mins
                             if prev_pnl < 0 and 0 <= diff_mins <= 30:
                                 revenge_count += 1
+                                # Check Size Tilt (>50% increase)
+                                if prev_qty > 0 and curr_qty >= (prev_qty * 1.5):
+                                    size_tilt_count += 1
 
                         # Update state
                         # Only update if this trade has a valid exit
                         if row['exit_ts_calc'] is not pd.NaT and row['exit_ts_calc'] is not None:
                             prev_exit = row['exit_ts_calc']
                             prev_pnl = row['pnl']
+                            prev_qty = curr_qty
 
                 if revenge_count > 0:
                     suggestions.append(f"<b>Revenge Trading Warning:</b> Detected {revenge_count} trades opened within 30 minutes of a loss on the same symbol.")
+                if size_tilt_count > 0:
+                    suggestions.append(f"<b>Size Tilting Warning:</b> Detected {size_tilt_count} trades where position size increased >50% immediately after a loss.")
 
     except Exception as e:
         print(f"Revenge Trading Detection Error: {e}")
 
+    # FOMO Detection (Price > 3SD from 20SMA)
+    try:
+        fomo_count = 0
+        if 'symbol' in df.columns and 'entry_date' in df.columns:
+            unique_symbols = [s for s in df['symbol'].dropna().unique().tolist() if isinstance(s, str)]
+            if unique_symbols:
+                min_date = pd.to_datetime(df['entry_date']).min()
+                days_diff = (datetime.now() - min_date).days
+                period = "2y"
+                if days_diff > 700: period = "5y"
+                if days_diff > 1800: period = "10y"
+
+                market_data = get_cached_market_data(unique_symbols, period=period, cache_name="journal_fomo")
+
+                if not market_data.empty:
+                    symbol_data = {}
+                    is_multi = isinstance(market_data.columns, pd.MultiIndex)
+
+                    for sym in unique_symbols:
+                        try:
+                            closes = None
+                            if is_multi:
+                                if sym in market_data.columns.get_level_values(0):
+                                    if 'Close' in market_data[sym].columns:
+                                        closes = market_data[sym]['Close']
+                                elif sym in market_data.columns.get_level_values(1):
+                                     cols = [c for c in market_data.columns if c[1] == sym and c[0] == 'Close']
+                                     if cols:
+                                         closes = market_data[cols[0]]
+                            else:
+                                if sym in market_data.columns:
+                                    closes = market_data[sym]
+                                elif 'Close' in market_data.columns and len(unique_symbols) == 1:
+                                    closes = market_data['Close']
+
+                            if closes is not None and not closes.empty:
+                                closes = closes.sort_index()
+                                sma = closes.rolling(window=20).mean()
+                                std = closes.rolling(window=20).std()
+                                upper_band = sma + (3 * std)
+                                symbol_data[sym] = pd.DataFrame({'Close': closes, 'Upper': upper_band})
+                        except Exception:
+                            pass
+
+                    for idx, row in df.iterrows():
+                        sym = row.get('symbol')
+                        entry_date = pd.to_datetime(row.get('entry_date'))
+                        if sym in symbol_data:
+                            data = symbol_data[sym]
+                            # Find data point on or before entry date
+                            idx_loc = data.index.asof(entry_date)
+                            if pd.notna(idx_loc):
+                                rec = data.loc[idx_loc]
+                                if rec['Close'] > rec['Upper']:
+                                    fomo_count += 1
+
+            if fomo_count > 0:
+                suggestions.append(f"<b>FOMO Warning:</b> Detected {fomo_count} trades entered when price was >3 Standard Deviations from 20-day SMA.")
+
+    except Exception as e:
+        print(f"FOMO Detection Error: {e}")
+
     # Equity Curve Calculation
     equity_curve = []
+    df_sorted = pd.DataFrame() # Ensure variable exists for Discipline Score
     try:
         # Fill NaN dates/times
         df['temp_date'] = df['entry_date'].fillna(datetime.now().date().isoformat())
@@ -271,6 +345,36 @@ def analyze_journal(entries: list[dict]) -> dict:
         print(f"Equity Curve Error: {e}")
         pass
 
+    # Discipline Score (1% Risk Rule)
+    discipline_score = 100.0
+    try:
+        if not df_sorted.empty and total_trades > 0:
+            account_balance = BACKTEST_INITIAL_CAPITAL
+            discipline_violations = 0
+
+            for _, row in df_sorted.iterrows():
+                pnl = row['pnl']
+                # Risk Limit is 1% of current balance
+                risk_limit = account_balance * 0.01
+
+                # If loss exceeds limit
+                if pnl < 0 and abs(pnl) > risk_limit:
+                    discipline_violations += 1
+
+                # Update balance (floor at 0 to avoid weird math, though debt is possible)
+                account_balance += pnl
+                if account_balance < 1000: account_balance = 1000 # Minimum floor to prevent 0 division or strict lockout
+
+            discipline_score = ((total_trades - discipline_violations) / total_trades) * 100.0
+
+            if discipline_score < 80:
+                suggestions.append(f"<b>Discipline Alert:</b> Your score is {discipline_score:.1f}%. You frequently violate the 1% risk rule.")
+            else:
+                suggestions.append(f"<b>Discipline Score:</b> {discipline_score:.1f}% (Based on adherence to 1% risk rule).")
+
+    except Exception as e:
+        print(f"Discipline Score Error: {e}")
+
     # Return structure
     return {
         "total_trades": total_trades,
@@ -283,5 +387,6 @@ def analyze_journal(entries: list[dict]) -> dict:
         "patterns": pattern_stats.to_dict(orient='records'),
         "time_analysis": time_stats.to_dict(orient='records'),
         "equity_curve": equity_curve,
-        "psychology_alert": psychology_alert
+        "psychology_alert": psychology_alert,
+        "discipline_score": round(discipline_score, 1)
     }
