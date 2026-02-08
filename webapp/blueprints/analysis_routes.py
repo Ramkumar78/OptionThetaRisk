@@ -16,6 +16,7 @@ from option_auditor.analysis_worker import AnalysisWorker
 from webapp.storage import get_storage_provider as _get_storage_provider
 from webapp.utils import _allowed_filename, handle_api_error
 from option_auditor.common.serialization import serialize_ohlc_data
+from webapp.reporting_service import generate_trade_audit_pdf
 from webapp.validation import validate_schema
 from webapp.schemas import (
     PortfolioAnalysisRequest, ScenarioAnalysisRequest, CorrelationRequest,
@@ -217,16 +218,20 @@ def analyze():
         storage.save_report(token, "report.xlsx", res["excel_report"].getvalue())
 
     username = session.get('username')
-    if username and "error" not in res:
+    if "error" not in res:
         to_save = res.copy()
         if "excel_report" in to_save:
             del to_save["excel_report"]
 
-        to_save["saved_at"] = datetime.now().isoformat()
-        to_save["token"] = token
-        to_save["style"] = style
+        # Save JSON Report for PDF generation (Available to anyone with token)
+        storage.save_report(token, "report.json", json.dumps(to_save).encode('utf-8'))
 
-        storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
+        if username:
+            to_save["saved_at"] = datetime.now().isoformat()
+            to_save["token"] = token
+            to_save["style"] = style
+
+            storage.save_portfolio(username, json.dumps(to_save).encode('utf-8'))
 
     if "excel_report" in res:
         del res["excel_report"]
@@ -238,6 +243,26 @@ def analyze():
 @analysis_bp.route("/download/<token>/<filename>")
 def download(token: str, filename: str):
     storage = get_db()
+
+    if filename == "report.pdf":
+        # Generate PDF on the fly from stored JSON
+        json_data = storage.get_report(token, "report.json")
+        if not json_data:
+            return "Report not found", 404
+
+        try:
+            data = json.loads(json_data)
+            pdf_buffer = generate_trade_audit_pdf(data)
+            return send_file(
+                pdf_buffer,
+                as_attachment=True,
+                download_name="Trade_Audit_Report.pdf",
+                mimetype='application/pdf'
+            )
+        except Exception as e:
+            current_app.logger.error(f"Failed to generate PDF: {e}")
+            return "Error generating PDF", 500
+
     data = storage.get_report(token, filename)
 
     if not data:
