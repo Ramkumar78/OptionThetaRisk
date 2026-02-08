@@ -225,7 +225,7 @@ class TastytradeFillsParser(TransactionParser):
                     "contract_id": contract_id, "datetime": leg['datetime'], "symbol": leg['symbol'],
                     "expiry": leg['expiry'], "strike": leg['strike'], "right": leg['right'],
                     "qty": leg['qty'], "proceeds": leg_proceeds,
-                    "fees": float(row.get("Commissions", 0) or 0) + float(row.get("Fees", 0) or 0) * ratio,
+                    "fees": (float(row.get("Commissions", 0) or 0) + float(row.get("Fees", 0) or 0)) * ratio,
                     "asset_type": "OPT"
                 })
         return pd.DataFrame(rows)
