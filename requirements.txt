@@ -34,3 +34,7 @@ tenacity>=8.0.0
 pytest-mock
 pytest-playwright
 reportlab==4.4.9
+Flask-Limiter
+Flask-Compress
+psutil
+hypothesis
