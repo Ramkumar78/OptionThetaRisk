@@ -39,6 +39,7 @@ class BacktestReporter:
         # Max Drawdown
         equity_values = [item['strategy_equity'] for item in equity_curve]
         max_drawdown_pct = self._calculate_max_drawdown(equity_values)
+        max_drawdown_duration = self._calculate_max_drawdown_duration(equity_curve)
 
         structured_trades = []
         current_trade = {}
@@ -79,6 +80,7 @@ class BacktestReporter:
             "trades": len(trade_log) // 2,
             "win_rate": self._calculate_win_rate(trade_log),
             "max_drawdown_pct": max_drawdown_pct,
+            "max_drawdown_duration": max_drawdown_duration,
             "final_equity": round(final_equity, 2),
             "log": trade_log,
             "trade_list": structured_trades,
@@ -112,3 +114,36 @@ class BacktestReporter:
         total = wins + losses
         if total == 0: return "0%"
         return f"{round((wins/total)*100)}%"
+
+    def _calculate_max_drawdown_duration(self, equity_curve: List[Dict[str, Any]]) -> int:
+        if not equity_curve:
+            return 0
+
+        peak_equity = -1.0
+        peak_date = None
+        max_duration = 0
+
+        for item in equity_curve:
+            current_equity = item['strategy_equity']
+            current_date = pd.to_datetime(item['date'])
+
+            if peak_date is None:
+                peak_equity = current_equity
+                peak_date = current_date
+                continue
+
+            if current_equity >= peak_equity:
+                # Recovered or New Peak
+                duration = (current_date - peak_date).days
+                if duration > max_duration:
+                    max_duration = duration
+
+                peak_equity = current_equity
+                peak_date = current_date
+            else:
+                # In Drawdown
+                duration = (current_date - peak_date).days
+                if duration > max_duration:
+                    max_duration = duration
+
+        return max_duration
