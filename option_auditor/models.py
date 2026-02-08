@@ -107,36 +107,139 @@ class StressTestResult:
     portfolio_value_change_pct: float
     details: List[str] = field(default_factory=list)
 
-def calculate_regulatory_fees(symbol: str, price: float, qty: float, action: str = 'BUY', asset_class: str = 'stock') -> float:
+def calculate_regulatory_fees(symbol: str, price: float, qty: float, action: str = 'BUY', asset_class: str = 'stock', multiplier: float = 1.0) -> float:
     """
-    Calculates regulatory fees (Stamp Duty, STT) based on the market.
+    Calculates regulatory fees (Stamp Duty, STT, SEC, TAF) based on the market.
 
     :param symbol: Ticker symbol (e.g. REL.L, INF.NS)
     :param price: Price per share
-    :param qty: Quantity traded
+    :param qty: Quantity traded (shares or contracts)
     :param action: 'BUY', 'SELL', etc.
     :param asset_class: 'stock', 'option', etc.
+    :param multiplier: Contract multiplier (default 1.0, use 100.0 for standard US options)
     :return: Calculated tax/fee amount.
     """
     fees = 0.0
-    val = abs(price * qty)
+    val = abs(price * qty * multiplier)
     symbol = symbol.upper()
     action = action.upper()
+    asset_class = asset_class.lower()
+
+    # Determine direction
+    # If action is vague, use qty sign if available?
+    # Current usages pass positive qty. Rely on action string.
+    is_buy = action.startswith('BUY') or action == 'OPEN' or (action == 'BOT')
+    is_sell = action.startswith('SELL') or action == 'CLOSE' or (action == 'SLD')
 
     # India STT (0.1% on Equity Delivery)
     # Applied on both Buy and Sell for Delivery.
     if symbol.endswith('.NS') or symbol.endswith('.BO'):
-        if asset_class.lower() == 'stock':
+        if asset_class == 'stock':
             fees += val * 0.001
 
     # UK Stamp Duty (0.5% on Buy only)
     # Applied on LSE stocks (.L)
-    if symbol.endswith('.L'):
-        if asset_class.lower() == 'stock':
-            # Check for Buy action.
-            # Also assume positive qty with unspecified action implies Buy if needed, but here we check action string.
-            is_buy = action.startswith('BUY') or action == 'OPEN' # loose heuristic, caller should pass BUY
+    elif symbol.endswith('.L'):
+        if asset_class == 'stock':
             if is_buy:
                 fees += val * 0.005
 
+    # US Markets (Default/fallback if no suffix, or check against known US exchanges if possible)
+    # Assuming anything else is US for now, or check for absence of suffix
+    else:
+        # US Regulatory Fees apply to SELL orders only (SEC, TAF)
+        if is_sell:
+            # SEC Fee: $27.80 per million (2024 rate) = 0.0000278 * Value
+            # Applied to all sales of equities and options
+            sec_rate = 0.0000278
+            fees += val * sec_rate
+
+            # TAF (Trading Activity Fee)
+            # Equity: $0.000166 per share (max $8.30 per trade)
+            # Options: $0.00244 per contract (max usually same or similar per trade execution? FINRA says max $8.30)
+            taf_cap = 8.30
+            taf_fee = 0.0
+
+            abs_qty = abs(qty)
+
+            if asset_class == 'stock':
+                taf_fee = abs_qty * 0.000166
+            elif asset_class == 'option':
+                taf_fee = abs_qty * 0.00244
+
+            # Cap TAF fee per trade
+            if taf_fee > taf_cap:
+                taf_fee = taf_cap
+
+            fees += taf_fee
+
     return fees
+
+
+def calculate_commission(qty: float, price: float, asset_class: str = 'stock', symbol: str = '', commission_model: str = 'tiered', multiplier: float = 1.0) -> float:
+    """
+    Calculates trading commission based on the model (e.g. Fixed vs Tiered).
+
+    :param qty: Quantity traded (can be negative, we use abs)
+    :param price: Execution price
+    :param asset_class: 'stock' or 'option'
+    :param symbol: Ticker symbol (used to determine market)
+    :param commission_model: 'fixed' or 'tiered' (IBKR Pro style)
+    :param multiplier: Contract multiplier (default 1.0)
+    :return: Estimated commission.
+    """
+    qty = abs(qty)
+    comm = 0.0
+    asset_class = asset_class.lower()
+    symbol = symbol.upper()
+
+    # Determine Market
+    is_india = symbol.endswith('.NS') or symbol.endswith('.BO')
+    is_uk = symbol.endswith('.L')
+    is_us = not (is_india or is_uk)
+
+    if commission_model == 'fixed':
+        # Simple fixed rate examples
+        if is_us:
+            if asset_class == 'stock':
+                comm = max(1.0, qty * 0.005) # $0.005/share, min $1
+            elif asset_class == 'option':
+                comm = max(1.0, qty * 0.65) # $0.65/contract, min $1
+        elif is_india:
+            comm = 20.0 # Flat Rs 20 per order usually
+        elif is_uk:
+            comm = max(6.0, qty * price * 0.0005) # GBP 6 min or 5 bps
+
+    elif commission_model == 'tiered':
+        # IBKR Pro Tiered (Approximate)
+        if is_us:
+            if asset_class == 'stock':
+                # <= 300,000 shares: $0.0035/share
+                # Min $0.35 per order
+                # Max 1% of trade value
+                base_comm = qty * 0.0035
+                base_comm = max(0.35, base_comm)
+                max_comm = qty * price * multiplier * 0.01
+                comm = min(base_comm, max_comm)
+
+            elif asset_class == 'option':
+                # < 10,000 contracts: $0.65
+                # 10k-50k: $0.50
+                # > 50k: $0.25
+                # Min $1.00 per order
+
+                # Simplified tiered logic
+                rate = 0.65
+                if qty > 10000:
+                    rate = 0.50 # Simplified, normally stepped
+                if qty > 50000:
+                    rate = 0.25
+
+                base_comm = qty * rate
+                base_comm = max(1.00, base_comm)
+                comm = base_comm
+        else:
+             # Fallback to fixed for non-US if tiered data missing
+             return calculate_commission(qty, price, asset_class, symbol, 'fixed')
+
+    return comm
