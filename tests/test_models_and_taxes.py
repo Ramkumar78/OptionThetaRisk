@@ -154,7 +154,7 @@ class TestRegulatoryFees:
             fees = calculate_regulatory_fees(symbol, price, qty, action="BUY", asset_class="option")
             assert fees == 0.0
 
-    def test_us_no_fees(self):
+    def test_us_fees(self):
         symbol = "AAPL"
         price = 150.0
         qty = 10.0
@@ -164,8 +164,11 @@ class TestRegulatoryFees:
         assert fees == 0.0
 
         # US Stock SELL
+        # Value = 1500. SEC: 1500 * 0.0000278 = 0.0417
+        # TAF: 10 * 0.000166 = 0.00166
+        # Total: 0.04336
         fees = calculate_regulatory_fees(symbol, price, qty, action="SELL", asset_class="stock")
-        assert fees == 0.0
+        assert fees == pytest.approx(0.04336, abs=0.0001)
 
         # US Option
         fees = calculate_regulatory_fees(symbol, price, qty, action="BUY", asset_class="option")
