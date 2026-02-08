@@ -3,6 +3,35 @@ import pytest
 from unittest.mock import patch
 from webapp.app import create_app
 
+class SynchronousPool:
+    """Mock for multiprocessing.Pool that runs tasks synchronously."""
+    def __init__(self, processes=None):
+        pass
+
+    def apply_async(self, func, args=(), kwds=None, callback=None, error_callback=None):
+        if kwds is None:
+            kwds = {}
+        try:
+            func(*args, **kwds)
+        except Exception as e:
+            if error_callback:
+                error_callback(e)
+            else:
+                print(f"SyncPool Error: {e}")
+        return None
+
+    def close(self):
+        pass
+
+    def join(self):
+        pass
+
+@pytest.fixture(autouse=True)
+def mock_multiprocessing_pool():
+    """Mock multiprocessing.Pool to run tasks synchronously during tests."""
+    with patch("multiprocessing.Pool", side_effect=SynchronousPool) as mock:
+        yield mock
+
 @pytest.fixture(autouse=True)
 def prevent_background_scheduler():
     """Prevent the background scheduler from starting during tests."""
@@ -27,9 +56,3 @@ def app():
 def client(app):
     """A test client for the app."""
     return app.test_client()
-
-@pytest.fixture(autouse=True)
-def prevent_background_scheduler():
-    """Prevent the background scheduler from starting during tests."""
-    with patch('webapp.services.scheduler_service.start_scheduler') as mock:
-        yield mock
