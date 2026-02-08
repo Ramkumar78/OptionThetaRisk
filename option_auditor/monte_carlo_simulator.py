@@ -74,21 +74,10 @@ class MonteCarloSimulator:
         # Max Drawdown for each simulation (min value since drawdowns are negative or 0)
         max_dds = np.min(drawdowns, axis=1) # e.g., -0.20 for 20% DD
 
-        # Risk of Ruin (> 50% Drawdown)
-        ruin_mask = max_dds < -0.50
-        prob_ruin = (np.sum(ruin_mask) / simulations) * 100.0
-        # Risk of Ruin (Equity < 0 or DD > 50%? Usually Ruin is losing everything or hitting a hard stop)
-        # Let's define Ruin as hitting < 50% of starting capital (severe) or 0
-        # Common def: Ruin is blowing up account. Let's say < 0.
-        # But in pure compounding, it never hits < 0 unless return is <= -100%.
-        # If returns are simple PnL added, it can go < 0. Backtester uses simple compounding logic?
-        # UnifiedBacktester: self.equity -= (shares * price); self.equity += proceeds.
-        # It buys shares. If price goes to 0, you lose 100% of trade.
-        # So return is -1. 1 + (-1) = 0. Equity becomes 0.
-
-        # Let's define Ruin as > ruin_threshold_pct Drawdown
+        # Risk of Ruin (> ruin_threshold_pct Drawdown)
+        # We use the passed threshold (default 50%) to determine ruin
         ruin_mask = max_dds < -ruin_threshold_pct
-        ruin_count = np.sum(ruin_mask)
+        prob_ruin = (np.sum(ruin_mask) / simulations) * 100.0
 
         # Stats from Percentiles (last column corresponds to final equity distribution)
         # 0: p5, 1: p25, 2: p50 (median), 3: p75, 4: p95
